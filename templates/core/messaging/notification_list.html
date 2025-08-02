@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Notifications</h5>
+            <div>
+                <button id="markAllReadBtn" class="btn btn-sm btn-success me-2">
+                    <i class="bi bi-check-all"></i> Mark all as read
+                </button>
+                <a href="{% url 'notification_list' %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if notifications %}
+            <div class="list-group">
+                {% for notification in notifications %}
+                <a href="{{ notification.link|default:'#' }}" 
+                   class="list-group-item list-group-item-action {% if not notification.is_read %}list-group-item-primary{% endif %}"
+                   onclick="markAsRead(event, {{ notification.id }})">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">
+                            <i class="bi 
+                                {% if notification.notification_type == 'info' %}bi-info-circle
+                                {% elif notification.notification_type == 'warning' %}bi-exclamation-triangle
+                                {% elif notification.notification_type == 'alert' %}bi-exclamation-octagon
+                                {% else %}bi-check-circle{% endif %}"></i>
+                            {{ notification.title }}
+                        </h6>
+                        <small>{{ notification.created_at|timesince }} ago</small>
+                    </div>
+                    <p class="mb-1">{{ notification.message }}</p>
+                    <small class="text-muted">{{ notification.get_notification_type_display }}</small>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info">No notifications found.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Mark single notification as read
+function markAsRead(event, notificationId) {
+    event.preventDefault();
+    const link = event.currentTarget.href;
+    
+    fetch(`/notifications/${notificationId}/mark-read/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    }).then(response => {
+        if (response.ok) {
+            window.location.href = link;
+        }
+    });
+}
+
+// Mark all notifications as read
+document.getElementById('markAllReadBtn').addEventListener('click', function() {
+    fetch('{% url "notification_list" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    }).then(response => response.json())
+      .then(data => {
+          if (data.status === 'success') {
+              // Update UI
+              document.querySelectorAll('.list-group-item-primary').forEach(item => {
+                  item.classList.remove('list-group-item-primary');
+              });
+              // Update badge count in navbar
+              const badge = document.querySelector('.notification-badge');
+              if (badge) badge.remove();
+          }
+      });
+});
+</script>
+{% endblock %}

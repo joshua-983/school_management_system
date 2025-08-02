@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Submit Assignment: {{ assignment.title }}</h3>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <!-- Status Field -->
+                <div class="mb-3">
+                    <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+                    {{ form.status }}
+                    {% if form.status.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.status.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- File Upload Field -->
+                <div class="mb-3">
+                    <label for="{{ form.file.id_for_label }}" class="form-label">Assignment File</label>
+                    {{ form.file }}
+                    {% if form.file.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.file.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                    {% if form.instance.file %}
+                        <div class="mt-2">
+                            <small>Current file: <a href="{{ form.instance.file.url }}" target="_blank">{{ form.instance.file.name }}</a></small>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Submission Date Field -->
+                <div class="mb-3">
+                    <label for="{{ form.submitted_date.id_for_label }}" class="form-label">Submission Date</label>
+                    {{ form.submitted_date }}
+                    {% if form.submitted_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.submitted_date.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Score Field (visible only for teachers) -->
+                {% if request.user.is_teacher or request.user.is_superuser %}
+                <div class="mb-3">
+                    <label for="{{ form.score.id_for_label }}" class="form-label">Score</label>
+                    {{ form.score }}
+                    <small class="text-muted">Max score: {{ assignment.max_score }}</small>
+                    {% if form.score.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.score.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Feedback Field -->
+                <div class="mb-3">
+                    <label for="{{ form.feedback.id_for_label }}" class="form-label">Feedback</label>
+                    {{ form.feedback }}
+                    {% if form.feedback.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.feedback.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'assignment_detail' pk=assignment.id %}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Back to Assignment
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Submit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for dynamic field behavior -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusField = document.getElementById('{{ form.status.id_for_label }}');
+    const fileField = document.getElementById('{{ form.file.id_for_label }}');
+    const dateField = document.getElementById('{{ form.submitted_date.id_for_label }}');
+    
+    // Set current datetime when status changes to submitted/late/graded
+    statusField.addEventListener('change', function() {
+        if (['SUBMITTED', 'LATE', 'GRADED'].includes(this.value) && !dateField.value) {
+            const now = new Date();
+            const localDateTime = now.toISOString().slice(0, 16);
+            dateField.value = localDateTime;
+        }
+    });
+    
+    // Show/hide fields based on user role
+    {% if not request.user.is_teacher and not request.user.is_superuser %}
+        document.getElementById('{{ form.score.id_for_label }}').closest('.mb-3').style.display = 'none';
+        document.getElementById('{{ form.feedback.id_for_label }}').closest('.mb-3').style.display = 'none';
+    {% endif %}
+});
+</script>
+
+<style>
+    /* Custom styling for file input */
+    .custom-file-input ~ .custom-file-label::after {
+        content: "Browse";
+    }
+    /* Make sure form controls look good */
+    .form-control, .form-select {
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}

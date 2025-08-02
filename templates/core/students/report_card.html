@@ -1,0 +1,467 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ student.get_full_name }} - Report Card{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card shadow-lg">
+        <!-- Report Card Header -->
+        <div class="card-header bg-primary text-white text-center py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="school-logo">
+                    {% if school.logo %}
+                    <img src="{{ school.logo.url }}" alt="School Logo" height="60">
+                    {% endif %}
+                </div>
+                <div class="school-info">
+                    <h2 class="mb-0">{{ school.name|default:"SCHOOL MANAGEMENT SYSTEM" }}</h2>
+                    <h4 class="mb-0">OFFICIAL REPORT CARD</h4>
+                    <p class="mb-0">{{ school.address|default:"" }}</p>
+                </div>
+                <div class="report-card-id">
+                    <p class="mb-0">ID: {{ report_card.id|default:"DRAFT" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Information Section -->
+        <div class="card-body">
+            <div class="row mb-4 border-bottom pb-3">
+                <div class="col-md-6">
+                    <div class="info-item">
+                        <span class="info-label"><strong>Student Name:</strong></span>
+                        <span class="info-value">{{ student.get_full_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label"><strong>Student ID:</strong></span>
+                        <span class="info-value">{{ student.student_id }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label"><strong>Class:</strong></span>
+                        <span class="info-value">{{ student.get_class_level_display }}</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-item">
+                        <span class="info-label"><strong>Gender:</strong></span>
+                        <span class="info-value">{{ student.get_gender_display }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label"><strong>Academic Year:</strong></span>
+                        <span class="info-value">{{ academic_year }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label"><strong>Term:</strong></span>
+                        <span class="info-value">{{ term }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Academic Performance Table -->
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th>Subject</th>
+                            <th class="text-center">Homework<br><small>(20%)</small></th>
+                            <th class="text-center">Classwork<br><small>(30%)</small></th>
+                            <th class="text-center">Test<br><small>(10%)</small></th>
+                            <th class="text-center">Exam<br><small>(40%)</small></th>
+                            <th class="text-center">Total<br><small>(100%)</small></th>
+                            <th class="text-center">Grade</th>
+                            <th class="text-center">Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for grade in grades %}
+                        <tr>
+                            <td>{{ grade.subject.name }}</td>
+                            <td class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
+                            <td class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
+                            <td class="text-center">{{ grade.test_score|floatformat:1 }}</td>
+                            <td class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
+                            <td class="text-center">{{ grade.total_score|floatformat:1 }}</td>
+                            <td class="text-center">
+                                <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
+                                    {{ grade.grade }}
+                                </span>
+                            </td>
+                            <td class="text-center">{{ grade.remarks|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">No grades available for this period</td>
+                        </tr>
+                        {% endfor %}
+                        {% if grades %}
+                        <tr class="table-active font-weight-bold">
+                            <td colspan="5" class="text-right">OVERALL AVERAGE:</td>
+                            <td class="text-center">{{ average_score|floatformat:1 }}</td>
+                            <td class="text-center">
+                                <span class="badge grade-badge grade-{{ overall_grade|cut:'+'|cut:' ' }}">
+                                    {{ overall_grade }}
+                                </span>
+                            </td>
+                            <td class="text-center">-</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Additional Information Sections -->
+            <div class="row mb-4">
+                <!-- Grading Scale -->
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Grading Scale</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm table-striped mb-0">
+                                <thead>
+                                    <tr class="bg-light">
+                                        <th>Grade</th>
+                                        <th>Score Range</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for grade_choice in GRADE_CHOICES %}
+                                    <tr>
+                                        <td>{{ grade_choice.0 }}</td>
+                                        <td>
+                                            {% if grade_choice.0 == 'A+' %}90 - 100
+                                            {% elif grade_choice.0 == 'A' %}80 - 89
+                                            {% elif grade_choice.0 == 'B+' %}70 - 79
+                                            {% elif grade_choice.0 == 'B' %}60 - 69
+                                            {% elif grade_choice.0 == 'C+' %}50 - 59
+                                            {% elif grade_choice.0 == 'C' %}40 - 49
+                                            {% elif grade_choice.0 == 'D+' %}30 - 39
+                                            {% elif grade_choice.0 == 'D' %}20 - 29
+                                            {% else %}0 - 19
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if grade_choice.0 == 'A+' or grade_choice.0 == 'A' %}Excellent
+                                            {% elif grade_choice.0 == 'B+' or grade_choice.0 == 'B' %}Good
+                                            {% elif grade_choice.0 == 'C+' %}Average
+                                            {% elif grade_choice.0 == 'C' %}Below Average
+                                            {% elif grade_choice.0 == 'D+' or grade_choice.0 == 'D' %}Poor
+                                            {% else %}Fail
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Chart -->
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Performance Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if grades %}
+                            <canvas id="performanceChart" height="220"></canvas>
+                            {% else %}
+                            <div class="text-center text-muted py-4">
+                                No data available for chart
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Summary -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Attendance Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="attendance-metric text-center">
+                                <h3 class="text-success">{{ attendance.days_present|default:0 }}</h3>
+                                <p class="text-muted">Days Present</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="attendance-metric text-center">
+                                <h3 class="text-danger">{{ attendance.days_absent|default:0 }}</h3>
+                                <p class="text-muted">Days Absent</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="attendance-metric text-center">
+                                <h3 class="text-info">{{ attendance.attendance_percentage|default:0 }}%</h3>
+                                <p class="text-muted">Attendance Rate</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comments Section -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">Class Teacher's Remarks</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if report_card and report_card.teacher_remarks %}
+                                <p>{{ report_card.teacher_remarks }}</p>
+                            {% else %}
+                                <p class="text-muted">No remarks provided</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">Principal's Remarks</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if report_card and report_card.principal_remarks %}
+                                <p>{{ report_card.principal_remarks }}</p>
+                            {% else %}
+                                <p class="text-muted">No remarks provided</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signature Section -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="signature-line">
+                        <p>Class Teacher's Signature: _________________________</p>
+                        <p>Date: _________________________</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="signature-line">
+                        <p>Principal's Signature: _________________________</p>
+                        <p>Date: _________________________</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-between mt-4 no-print">
+                <div>
+                    {% if not report_card and is_teacher %}
+                    <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="academic_year" value="{{ academic_year }}">
+                        <input type="hidden" name="term" value="{{ term }}">
+                        <button type="submit" class="btn btn-success mr-2">
+                            <i class="fas fa-save"></i> Save Report Card
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    {% if report_card and is_teacher and not report_card.is_published %}
+                    <form method="post" action="{% url 'publish_report_card' report_card.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary mr-2">
+                            <i class="fas fa-check-circle"></i> Publish
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <button onclick="window.print()" class="btn btn-info mr-2">
+                        <i class="fas fa-print"></i> Print Report
+                    </button>
+                    <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
+                       class="btn btn-info mr-2">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </a>
+                    <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+
+            {% if not report_card %}
+            <div class="alert alert-warning mt-3 no-print">
+                <i class="fas fa-exclamation-triangle"></i> This is a preview of the report card. 
+                {% if is_teacher %}Please save it to make it permanent.{% else %}This is not an official document.{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        border-bottom: none;
+    }
+    
+    .info-item {
+        margin-bottom: 10px;
+    }
+    
+    .info-label {
+        display: inline-block;
+        width: 120px;
+        font-weight: 500;
+    }
+    
+    .grade-badge {
+        font-size: 0.9rem;
+        padding: 5px 10px;
+        min-width: 40px;
+        border-radius: 4px;
+    }
+    
+    .grade-Aplus { background-color: #28a745; color: white; }
+    .grade-A { background-color: #28a745; color: white; }
+    .grade-Bplus { background-color: #17a2b8; color: white; }
+    .grade-B { background-color: #17a2b8; color: white; }
+    .grade-Cplus { background-color: #ffc107; color: #212529; }
+    .grade-C { background-color: #ffc107; color: #212529; }
+    .grade-Dplus { background-color: #fd7e14; color: white; }
+    .grade-D { background-color: #fd7e14; color: white; }
+    .grade-E { background-color: #dc3545; color: white; }
+    
+    .attendance-metric {
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+    
+    .signature-line {
+        border-top: 1px solid #dee2e6;
+        padding-top: 15px;
+        margin-top: 15px;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        body {
+            background-color: white !important;
+            color: black !important;
+            font-size: 12pt;
+        }
+        
+        .container-fluid {
+            padding: 0 !important;
+        }
+        
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
+        
+        .grade-badge {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+        }
+        
+        .table {
+            font-size: 10pt;
+        }
+        
+        .card-header {
+            padding: 10px !important;
+        }
+        
+        h2, h3, h4, h5 {
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize chart if grades exist
+    {% if grades %}
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}],
+            datasets: [{
+                label: 'Score (%)',
+                data: [{% for grade in grades %}{{ grade.total_score }},{% endfor %}],
+                backgroundColor: [
+                    {% for grade in grades %}
+                    '{% if grade.grade == "A+" or grade.grade == "A" %}#28a745{% elif grade.grade == "B+" or grade.grade == "B" %}#17a2b8{% elif grade.grade == "C+" or grade.grade == "C" %}#ffc107{% elif grade.grade == "D+" or grade.grade == "D" %}#fd7e14{% else %}#dc3545{% endif %}',
+                    {% endfor %}
+                ],
+                borderColor: [
+                    {% for grade in grades %}
+                    '{% if grade.grade == "A+" or grade.grade == "A" %}#218838{% elif grade.grade == "B+" or grade.grade == "B" %}#138496{% elif grade.grade == "C+" or grade.grade == "C" %}#e0a800{% elif grade.grade == "D+" or grade.grade == "D" %}#d66a0a{% else %}#c82333{% endif %}',
+                    {% endfor %}
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Score (%)'
+                    },
+                    ticks: {
+                        stepSize: 10
+                    }
+                },
+                x: {
+                    ticks: {
+                        autoSkip: false,
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y.toFixed(1) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}

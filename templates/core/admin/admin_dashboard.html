@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <h5 class="card-title">Total Students</h5>
+                <p class="display-4">{{ total_students }}</p>
+                <a href="{% url 'student_list' %}" class="text-white">View Students</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <h5 class="card-title">Total Teachers</h5>
+                <p class="display-4">{{ total_teachers }}</p>
+                <a href="{% url 'teacher_list' %}" class="text-white">View Teachers</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body">
+                <h5 class="card-title">Total Subjects</h5>
+                <p class="display-4">{{ total_subjects }}</p>
+                <a href="{% url 'subject_list' %}" class="text-white">View Subjects</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Recent Activities</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>User</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td>{{ log.timestamp }}</td>
+                        <td>{{ log.user|default:"System" }}</td>
+                        <td>{{ log.get_action_display }}</td>
+                        <td>{{ log.model_name }} (ID: {{ log.object_id }})</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4">No recent activities</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <a href="{% url 'audit_log_list' %}" class="btn btn-outline-primary">View All Logs</a>
+    </div>
+</div>
+{% endblock %}

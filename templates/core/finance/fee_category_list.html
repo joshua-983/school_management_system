@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Fee Categories{% endblock %}
+
+{% block extra_css %}
+<style>
+    .category-card {
+        transition: all 0.3s ease;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .category-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .category-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+    .table-actions {
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-tags me-2"></i>Fee Categories</h2>
+                {% if is_admin %}
+                <a href="{% url 'fee_category_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Add Category
+                </a>
+                {% endif %}
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Finance</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Categories</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    {% if object_list %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Default Amount</th>
+                                    <th>Frequency</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category in object_list %}
+                                <tr>
+                                    <td>{{ category.name }}</td>
+                                    <td>{{ category.description|default:"-" }}</td>
+                                    <td>{{ category.default_amount|floatformat:2 }}</td>
+                                    <td>{{ category.get_frequency_display }}</td>
+                                    <td class="table-actions">
+                                        {% if is_admin %}
+                                        <a href="{% url 'fee_category_update' pk=category.pk %}" 
+                                           class="btn btn-sm btn-outline-primary me-1"
+                                           title="Edit">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'fee_category_delete' pk=category.pk %}" 
+                                           class="btn btn-sm btn-outline-danger"
+                                           title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i> No fee categories found.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

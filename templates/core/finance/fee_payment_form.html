@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+
+{% block title %}Record Payment{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-cash-coin me-2"></i>
+                    Record Payment - {{ fee.student.get_full_name }}
+                </h2>
+                <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Fee
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_detail' pk=fee.pk %}">Details</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Record Payment</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle fs-4 me-3"></i>
+                            <div>
+                                <h5 class="mb-1">{{ fee.category.name }}</h5>
+                                <p class="mb-1">Balance: ${{ fee.balance|floatformat:2 }}</p>
+                                <small>Due: {{ fee.due_date|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.amount.id_for_label }}" class="form-label">
+                                    {{ form.amount.label }} <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.amount }}
+                                </div>
+                                {% if form.amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.amount.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Maximum: ${{ fee.balance|floatformat:2 }}</small>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.payment_method.id_for_label }}" class="form-label">
+                                    {{ form.payment_method.label }} <span class="text-danger">*</span>
+                                </label>
+                                {{ form.payment_method }}
+                                {% if form.payment_method.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.payment_method.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.payment_date.id_for_label }}" class="form-label">
+                                    {{ form.payment_date.label }} <span class="text-danger">*</span>
+                                </label>
+                                {{ form.payment_date }}
+                                {% if form.payment_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.payment_date.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.receipt_number.id_for_label }}" class="form-label">
+                                    {{ form.receipt_number.label }}
+                                </label>
+                                {{ form.receipt_number }}
+                                {% if form.receipt_number.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.receipt_number.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                {{ form.notes.label }}
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.notes.errors.0 }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle me-1"></i> Record Payment
+                            </button>
+                            <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Payment Summary</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Fee Category:</span>
+                            <span>{{ fee.category.name }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Student:</span>
+                            <span>{{ fee.student.get_full_name }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Amount Payable:</span>
+                            <span>${{ fee.amount_payable|floatformat:2 }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Amount Paid:</span>
+                            <span>${{ fee.amount_paid|floatformat:2 }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Balance:</span>
+                            <span class="fw-bold">${{ fee.balance|floatformat:2 }}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Payments</h5>
+                </div>
+                <div class="card-body">
+                    {% with recent_payments=fee.payments.all|slice:":3" %}
+                    {% if recent_payments %}
+                    <div class="list-group">
+                        {% for payment in recent_payments %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${{ payment.amount|floatformat:2 }}</h6>
+                                <small>{{ payment.payment_date|date:"M d" }}</small>
+                            </div>
+                            <p class="mb-1">{{ payment.get_payment_method_display }}</p>
+                            {% if payment.notes %}
+                            <small class="text-muted">{{ payment.notes|truncatechars:30 }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i> No recent payments found.
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize datepicker
+    $('#id_payment_date').datepicker({
+        format: 'yyyy-mm-dd',
+        autoclose: true,
+        todayHighlight: true
+    });
+    
+    // Validate amount doesn't exceed balance
+    $('form').submit(function(e) {
+        const amount = parseFloat($('#id_amount').val());
+        const balance = parseFloat('{{ fee.balance }}');
+        
+        if (amount > balance) {
+            alert('Payment amount cannot exceed the remaining balance of $' + balance.toFixed(2));
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Attendance Summary for {{ student.get_full_name }}</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="term_id" class="form-label">Term</label>
+                    <select name="term_id" id="term_id" class="form-select">
+                        <option value="">All Terms</option>
+                        {% for term in terms %}
+                        <option value="{{ term.id }}" {% if request.GET.term_id == term.id|stringformat:"s" %}selected{% endif %}>
+                            {{ term.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="period_type" class="form-label">Period Type</label>
+                    <select name="period_type" id="period_type" class="form-select">
+                        <option value="">All Periods</option>
+                        {% for period_type in period_types %}
+                        <option value="{{ period_type.0 }}" {% if request.GET.period_type == period_type.0 %}selected{% endif %}>
+                            {{ period_type.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Term</th>
+                    <th>Period</th>
+                    <th>Present</th>
+                    <th>Absent</th>
+                    <th>Late</th>
+                    <th>Excused</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for summary in summaries %}
+                <tr>
+                    <td>{{ summary.term.name }}</td>
+                    <td>{{ summary.period.name if summary.period else "Term Total" }}</td>
+                    <td>{{ summary.days_present }}</td>
+                    <td>{{ summary.days_absent }}</td>
+                    <td>{{ summary.days_late }}</td>
+                    <td>{{ summary.days_excused }}</td>
+                    <td>{{ summary.total_days }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center">No attendance records found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

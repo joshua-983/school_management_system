@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Fee Category{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-tag me-2"></i>
+                    {% if form.instance.pk %}Edit{% else %}Create{% endif %} Fee Category
+                </h2>
+                <a href="{% url 'fee_category_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to List
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Finance</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_category_list' %}">Categories</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        {% if form.instance.pk %}Edit{% else %}Create{% endif %}
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    {{ form.name.label }} <span class="text-danger">*</span>
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.name.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.default_amount.id_for_label }}" class="form-label">
+                                    {{ form.default_amount.label }} <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.default_amount }}
+                                </div>
+                                {% if form.default_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.default_amount.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.frequency.id_for_label }}" class="form-label">
+                                    {{ form.frequency.label }} <span class="text-danger">*</span>
+                                </label>
+                                {{ form.frequency }}
+                                {% if form.frequency.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.frequency.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.is_active.id_for_label }}" class="form-label">
+                                    {{ form.is_active.label }}
+                                </label>
+                                <div class="form-check form-switch">
+                                    {{ form.is_active }}
+                                </div>
+                                {% if form.is_active.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.is_active.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                {{ form.description.label }}
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.description.errors.0 }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-1"></i> Save
+                            </button>
+                            <a href="{% url 'fee_category_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Guidelines</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle text-primary me-2"></i>
+                            Use clear and descriptive names for categories
+                        </li>
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle text-primary me-2"></i>
+                            Set appropriate default amounts for each category
+                        </li>
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle text-primary me-2"></i>
+                            Choose the correct frequency (one-time, monthly, termly, etc.)
+                        </li>
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle text-primary me-2"></i>
+                            Inactive categories won't be available for new fees
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

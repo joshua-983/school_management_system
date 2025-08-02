@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Attendance Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .attendance-card {
+        transition: all 0.3s ease;
+        border-radius: 10px;
+        overflow: hidden;
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .attendance-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .attendance-card .card-header {
+        background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        color: white;
+        font-weight: 600;
+    }
+    
+    .status-badge {
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .status-present {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-absent {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-late {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .student-avatar {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+    }
+    
+    @media (max-width: 768px) {
+        .mobile-stack {
+            flex-direction: column;
+            gap: 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Attendance Dashboard</h1>
+        <div class="mobile-stack">
+            <a href="{% url 'attendance_record' %}" class="btn btn-outline-primary mb-2 mb-md-0">
+                <i class="bi bi-list-check me-1"></i> View Records
+            </a>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
+                <i class="bi bi-plus-circle me-1"></i> Take Attendance
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        {% for stat in stats %}
+        <div class="col-md-3 mb-3">
+            <div class="card h-100 attendance-card">
+                <div class="card-body text-center">
+                    <i class="bi bi-{{ stat.icon }} text-{{ stat.color }} fs-1 mb-2"></i>
+                    <h5 class="text-muted">{{ stat.label }}</h5>
+                    <h2 class="mb-0">{{ stat.value }}</h2>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Today's Attendance -->
+    <div class="card shadow mb-4 attendance-card">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Today's Attendance</h6>
+            <span class="badge bg-primary">{{ today|date:"F j, Y" }}</span>
+        </div>
+        <div class="card-body">
+            {% if today_attendance %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Status</th>
+                            <th>Time</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in today_attendance %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if record.student.user.profile_picture %}
+                                    <img src="{{ record.student.user.profile_picture.url }}" 
+                                         class="rounded-circle student-avatar me-3" alt="Profile">
+                                    {% else %}
+                                    <div class="rounded-circle student-avatar bg-secondary d-flex align-items-center justify-content-center me-3">
+                                        <i class="bi bi-person-fill text-white"></i>
+                                    </div>
+                                    {% endif %}
+                                    <div>
+                                        <h6 class="mb-0">{{ record.student.get_full_name }}</h6>
+                                        <small class="text-muted">{{ record.student.student_id }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>{{ record.student.get_class_level_display }}</td>
+                            <td>
+                                <span class="status-badge status-{{ record.status|lower }}">
+                                    {{ record.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ record.created_at|time }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#editAttendanceModal{{ record.id }}">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-calendar-x fs-1 text-muted"></i>
+                <h5 class="mt-3">No attendance recorded today</h5>
+                <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
+                    <i class="bi bi-plus-circle me-1"></i> Take Attendance
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Class Breakdown -->
+    <div class="row">
+        {% for class_level, stats in class_stats.items %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 attendance-card">
+                <div class="card-header">
+                    <h5 class="mb-0">Class {{ class_level }}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar bg-success" style="width: {{ stats.present_percentage }}%">
+                            {{ stats.present_percentage }}%
+                        </div>
+                        <div class="progress-bar bg-warning" style="width: {{ stats.late_percentage }}%">
+                            {{ stats.late_percentage }}%
+                        </div>
+                        <div class="progress-bar bg-danger" style="width: {{ stats.absent_percentage }}%">
+                            {{ stats.absent_percentage }}%
+                        </div>
+                    </div>
+                    <a href="{% url 'attendance_record' %}?class_level={{ class_level }}" 
+                       class="btn btn-outline-primary btn-sm w-100">
+                        View Class Details
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- New Attendance Modal -->
+<div class="modal fade" id="newAttendanceModal" tabindex="-1" aria-labelledby="newAttendanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newAttendanceModalLabel">Take Attendance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="get" action="{% url 'attendance_record' %}">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="date" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="date" name="date" 
+                                   value="{{ today|date:'Y-m-d' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="term" class="form-label">Term</label>
+                            <select class="form-select" id="term" name="term" required>
+                                {% for term in terms %}
+                                <option value="{{ term.id }}" {% if term.is_active %}selected{% endif %}>
+                                    {{ term }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="period" class="form-label">Period (Optional)</label>
+                            <select class="form-select" id="period" name="period">
+                                <option value="">-- Select Period --</option>
+                                {% for period in periods %}
+                                <option value="{{ period.id }}">{{ period }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="class_level" class="form-label">Class</label>
+                            <select class="form-select" id="class_level" name="class_level" required>
+                                <option value="">-- Select Class --</option>
+                                {% for level in class_levels %}
+                                <option value="{{ level.0 }}">{{ level.1 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Attendance Modals -->
+{% for record in today_attendance %}
+<div class="modal fade" id="editAttendanceModal{{ record.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Attendance Record</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'attendance_record' %}">
+                {% csrf_token %}
+                <input type="hidden" name="student_id" value="{{ record.student.id }}">
+                <input type="hidden" name="date" value="{{ record.date|date:'Y-m-d' }}">
+                <input type="hidden" name="term" value="{{ record.term.id }}">
+                {% if record.period %}<input type="hidden" name="period" value="{{ record.period.id }}">{% endif %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Student</label>
+                        <p class="form-control-static">{{ record.student.get_full_name }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status{{ record.id }}" class="form-label">Status</label>
+                        <select class="form-select" id="status{{ record.id }}" name="status" required>
+                            {% for status in status_choices %}
+                            <option value="{{ status.0 }}" {% if status.0 == record.status %}selected{% endif %}>
+                                {{ status.1 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes{{ record.id }}" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes{{ record.id }}" name="notes" rows="3">{{ record.notes }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load periods when term changes
+    document.getElementById('term').addEventListener('change', function() {
+        const termId = this.value;
+        const periodSelect = document.getElementById('period');
+        
+        if (termId) {
+            fetch(`{% url 'load_periods' %}?term_id=${termId}`)
+                .then(response => response.text())
+                .then(html => {
+                    periodSelect.innerHTML = '<option value="">-- Select Period --</option>' + html;
+                });
+        } else {
+            periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
+        }
+    });
+    
+    // Initialize date picker to today
+    document.getElementById('date').value = new Date().toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load attendance_filters %}
+
+{% block title %}{{ student.get_full_name }} - Details{% endblock %}
+
+{% block content %}
+<!-- Debug Output - Remove in production -->
+<div class="alert alert-info mt-3">
+    <h5>Debug Information</h5>
+    <div class="mb-2"><strong>Student ID:</strong> {{ student.id }}</div>
+    <div class="mb-2"><strong>Parent Count:</strong> {{ student.parents.count }}</div>
+    <div><strong>Parents:</strong>
+        <ul>
+            {% for parent in student.parents.all %}
+            <li>{{ parent.full_name }} (ID: {{ parent.id }})</li>
+            {% empty %}
+            <li>No parents found</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Student Profile</h5>
+            </div>
+            <div class="card-body text-center">
+                {% if student.profile_picture %}
+                    <img src="{{ student.profile_picture.url }}" alt="{{ student.get_full_name }}" 
+                         class="img-thumbnail mb-3" style="max-width: 200px;">
+                {% else %}
+                    <div class="bg-light mb-3 d-flex align-items-center justify-content-center" 
+                         style="width: 200px; height: 200px; margin: 0 auto;">
+                        <i class="bi bi-person text-muted" style="font-size: 4rem;"></i>
+                    </div>
+                {% endif %}
+                
+                <h4>{{ student.get_full_name }}</h4>
+                <p class="text-muted">{{ student.student_id }}</p>
+                
+                <div class="d-flex justify-content-center gap-2 mb-3">
+                    <a href="{% url 'student_update' student.pk %}" class="btn btn-warning btn-sm">
+                        <i class="bi bi-pencil"></i> Edit
+                    </a>
+                    <a href="{% url 'student_delete' student.pk %}" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash"></i> Delete
+                    </a>
+                </div>
+                
+                <hr>
+                
+                <div class="text-start">
+                    <p><strong>Class:</strong> {{ student.get_class_level_display }}</p>
+                    <p><strong>Gender:</strong> {{ student.get_gender_display }}</p>
+                    <p><strong>Age:</strong> {{ student.get_age }}</p>
+                    <p><strong>Date of Birth:</strong> {{ student.date_of_birth|date:"M d, Y" }}</p>
+                    <p><strong>Nationality:</strong> {{ student.nationality }}</p>
+                    {% if student.ethnicity %}
+                        <p><strong>Ethnicity:</strong> {{ student.ethnicity }}</p>
+                    {% endif %}
+                    {% if student.religion %}
+                        <p><strong>Religion:</strong> {{ student.religion }}</p>
+                    {% endif %}
+                    <p><strong>Place of Birth:</strong> {{ student.place_of_birth }}</p>
+                    <p><strong>Address:</strong> {{ student.residential_address }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Parents/Guardians</h5>
+                <a href="{% url 'parent_create' student_id=student.pk %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if student.parents.all %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Relationship</th>
+                                <th>Contact</th>
+                                <th>Emergency</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for parent in student.parents.all %}
+                            <tr>
+                                <td>{{ parent.full_name }}</td>
+                                <td>{{ parent.get_relationship_display }}</td>
+                                <td>
+                                    {{ parent.phone_number }}<br>
+                                    {% if parent.email %}<small>{{ parent.email }}</small>{% endif %}
+                                </td>
+                                <td>
+                                    {% if parent.is_emergency_contact %}
+                                        <span class="badge bg-danger">Yes</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'parent_update' parent.pk %}" class="btn btn-warning">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'parent_delete' parent.pk %}" class="btn btn-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> No parents/guardians found in database
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Attendance Summary Card -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Attendance Summary</h5>
+                {% url 'attendance_summary' student.pk as attendance_url %}
+                {% if attendance_url %}
+                <a href="{{ attendance_url }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-eye"></i> View Details
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="card text-white bg-success mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Days Present</h5>
+                                <p class="card-text display-4">
+                                    {{ student.attendances|attendance_count:'present'|default:0 }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-danger mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Days Absent</h5>
+                                <p class="card-text display-4">
+                                    {{ student.attendances|attendance_count:'absent'|default:0 }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-info mb-3">
+                            <div class="card-body">
+                                <h5 class="card-title">Attendance Rate</h5>
+                                <p class="card-text display-4">
+                                    {% with present=student.attendances|attendance_count:'present' total=student.attendances.count %}
+                                        {% if total > 0 %}
+                                            {{ present|floatformat:0 }}/{{ total }} ({{ present|divide:total|multiply:100|floatformat:2 }}%)
+                                        {% else %}
+                                            0/0 (0%)
+                                        {% endif %}
+                                    {% endwith %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Attendance -->
+                <h6 class="mt-3">Recent Attendance</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Term</th>
+                                <th>Recorded By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in student.attendances.all|dictsortreversed:"date"|slice:":5" %}
+                            <tr>
+                                <td>{{ attendance.date|date:"M d, Y" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if attendance.status == 'present' %}success{% elif attendance.status == 'absent' %}danger{% elif attendance.status == 'late' %}warning{% else %}info{% endif %}">
+                                        {{ attendance.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ attendance.get_term_display }}</td>
+                                <td>{{ attendance.recorded_by.get_full_name|default:"System" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No attendance records found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Fee Payments</h5>
+                <a href="{% url 'fee_create' student_id=student.pk %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus"></i> Add
+                </a>
+            </div>
+            <div class="card-body">
+                {% if student.fees.all %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Academic Year</th>
+                                <th>Term</th>
+                                <th>Amount Payable</th>
+                                <th>Amount Paid</th>
+                                <th>Status</th>
+                                <th>Due Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fee in student.fees.all %}
+                            <tr>
+                                <td>{{ fee.academic_year }}</td>
+                                <td>{{ fee.get_term_display }}</td>
+                                <td>${{ fee.amount_payable|intcomma }}</td>
+                                <td>${{ fee.amount_paid|intcomma }}</td>
+                                <td>
+                                    <span class="badge bg-{% if fee.payment_status == 'PAID' %}success{% elif fee.payment_status == 'PARTIAL' %}warning{% else %}danger{% endif %}">
+                                        {{ fee.get_payment_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ fee.due_date|date:"M d, Y" }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'fee_update' fee.pk %}" class="btn btn-warning">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'fee_delete' fee.pk %}" class="btn btn-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">No fee records added yet.</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Academic Performance</h5>
+            </div>
+            <div class="card-body">
+                {% if grades %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Homework (20%)</th>
+                                <th>Classwork (30%)</th>
+                                <th>Test (10%)</th>
+                                <th>Exam (40%)</th>
+                                <th>Total</th>
+                                <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grade in grades %}
+                            <tr>
+                                <td>{{ grade.subject.name }}</td>
+                                <td>{{ grade.homework_score }}</td>
+                                <td>{{ grade.classwork_score }}</td>
+                                <td>{{ grade.test_score }}</td>
+                                <td>{{ grade.exam_score }}</td>
+                                <td>{{ grade.total_score }}</td>
+                                <td>
+                                    <span class="badge bg-{% if grade.grade == 'A+' or grade.grade == 'A' %}success{% elif grade.grade == 'B+' or grade.grade == 'B' %}info{% elif grade.grade == 'C+' or grade.grade == 'C' %}warning{% else %}danger{% endif %}">
+                                        {{ grade.grade }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-4">
+                    <canvas id="performanceChart" height="200"></canvas>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <a href="{% url 'report_card_pdf' student.pk %}" class="btn btn-primary">
+                        <i class="bi bi-download"></i> Download Report Card (PDF)
+                    </a>
+                </div>
+                {% else %}
+                <div class="alert alert-info">No academic records available yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if grades %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [{% for grade in grades %}'{{ grade.subject.name }}',{% endfor %}],
+            datasets: [{
+                label: 'Total Score',
+                data: [{% for grade in grades %}{{ grade.total_score }},{% endfor %}],
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Score (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Subjects'
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

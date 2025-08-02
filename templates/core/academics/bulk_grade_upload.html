@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Grade Upload{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Bulk Grade Upload</h5>
+    </div>
+    <div class="card-body">
+        {% if messages %}
+        <div class="alert alert-info">
+            {% for message in messages %}
+            <div{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="alert alert-info">
+            <h6>Instructions:</h6>
+            <ol>
+                <li>Download the <a href="{% url 'grade_upload_template' %}">template file</a> (CSV or Excel)</li>
+                <li>Fill in the student IDs and scores</li>
+                <li>Select the correct assignment and term</li>
+                <li>Upload the completed file below</li>
+            </ol>
+            <p class="mb-0">Required columns: <code>student_id</code> and <code>score</code></p>
+            <p class="mt-2"><strong>Note:</strong> Scores must be between 0 and the assignment's maximum score.</p>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label for="{{ form.assignment.id_for_label }}" class="form-label">Assignment *</label>
+                {{ form.assignment }}
+                {% if form.assignment.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.assignment.errors.as_text }}
+                    </div>
+                {% endif %}
+                <small class="text-muted">Filtered by your teaching assignments</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.term.id_for_label }}" class="form-label">Term *</label>
+                {{ form.term }}
+                {% if form.term.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.term.errors.as_text }}
+                    </div>
+                {% endif %}
+                <small class="text-muted">Select the current academic term</small>
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.file.id_for_label }}" class="form-label">Grade File *</label>
+                {{ form.file }}
+                {% if form.file.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.file.errors.as_text }}
+                    </div>
+                {% endif %}
+                <small class="text-muted">Accepted formats: .csv, .xlsx, .xls (Max 5MB)</small>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Back to Grades
+                </a>
+                <button type="submit" class="btn btn-primary" id="uploadBtn">
+                    <span class="upload-text">
+                        <i class="fas fa-upload me-1"></i> Upload Grades
+                    </span>
+                    <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('bulkUploadForm');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('{{ form.file.id_for_label }}');
+    
+    // Form submission handler
+    form.addEventListener('submit', function() {
+        // Validate file is selected
+        if (!fileInput.files.length) {
+            alert('Please select a file to upload');
+            return false;
+        }
+        
+        // Show loading state
+        uploadBtn.disabled = true;
+        uploadBtn.querySelector('.upload-text').classList.add('d-none');
+        uploadBtn.querySelector('.spinner-border').classList.remove('d-none');
+        return true;
+    });
+    
+    // Initialize select2 for assignment selection
+    $('#{{ form.assignment.id_for_label }}').select2({
+        placeholder: "Select an assignment",
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#bulkUploadForm')
+    });
+    
+    // File size validation
+    fileInput.addEventListener('change', function() {
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (this.files[0] && this.files[0].size > maxSize) {
+            alert('File size exceeds 5MB limit');
+            this.value = '';
+        }
+    });
+});
+</script>
+
+<style>
+/* Improved form styling */
+.card {
+    max-width: 800px;
+    margin: 0 auto;
+}
+.alert-info {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+/* Select2 adjustments */
+.select2-container--default .select2-selection--single {
+    height: 38px;
+    padding: 5px 10px;
+    border: 1px solid #ced4da;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+}
+/* Button improvements */
+.btn-primary {
+    min-width: 150px;
+}
+.invalid-feedback {
+    font-size: 0.875em;
+}
+</style>
+{% endblock %}

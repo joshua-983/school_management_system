@@ -1,0 +1,388 @@
+{% extends 'base.html' %}
+
+{% block title %}Report Cards Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="card shadow-lg mb-4">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h3 class="mb-0">Report Cards Dashboard</h3>
+                {% if is_teacher or is_admin %}
+                <a href="{% url 'create_report_card' %}" class="btn btn-light">
+                    <i class="fas fa-plus"></i> Create New Report Card
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <!-- Filter Form -->
+            <form method="get" class="mb-4">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="academic_year" class="form-label">Academic Year</label>
+                        <select name="academic_year" id="academic_year" class="form-select">
+                            <option value="">All Years</option>
+                            {% for year in academic_years %}
+                            <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="term" class="form-label">Term</label>
+                        <select name="term" id="term" class="form-select">
+                            <option value="">All Terms</option>
+                            <option value="1" {% if selected_term == 1 %}selected{% endif %}>Term 1</option>
+                            <option value="2" {% if selected_term == 2 %}selected{% endif %}>Term 2</option>
+                            <option value="3" {% if selected_term == 3 %}selected{% endif %}>Term 3</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="class_level" class="form-label">Class</label>
+                        <select name="class_level" id="class_level" class="form-select">
+                            <option value="">All Classes</option>
+                            {% for level in class_levels %}
+                            <option value="{{ level.0 }}" {% if level.0 == selected_class %}selected{% endif %}>{{ level.1 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                        <a href="{% url 'report_card_dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-sync-alt"></i> Reset
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Report Cards Table -->
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Academic Year</th>
+                            <th>Term</th>
+                            <th>Average Score</th>
+                            <th>Overall Grade</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report_card in report_cards %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'report_card_detail' report_card.student.id report_card.id %}">
+                                    {{ report_card.student.get_full_name }}
+                                </a>
+                            </td>
+                            <td>{{ report_card.student.get_class_level_display }}</td>
+                            <td>{{ report_card.academic_year }}</td>
+                            <td>Term {{ report_card.term }}</td>
+                            <td>{{ report_card.average_score|floatformat:1 }}</td>
+                            <td>
+                                <span class="badge grade-badge grade-{{ report_card.overall_grade|cut:'+'|cut:' ' }}">
+                                    {{ report_card.overall_grade }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if report_card.is_published %}
+                                <span class="badge bg-success">Published</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Draft</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'report_card_detail' report_card.student.id report_card.id %}" 
+                                       class="btn btn-info" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'report_card_pdf_detail' report_card.student.id report_card.id %}" 
+                                       class="btn btn-secondary" title="Download PDF">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% if is_admin or is_teacher %}
+                                    <a href="{% url 'edit_report_card' report_card.id %}" 
+                                       class="btn btn-primary" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                No report cards found matching your criteria
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if report_cards.has_other_pages %}
+            <nav aria-label="Report cards pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if report_cards.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if selected_year %}&academic_year={{ selected_year }}{% endif %}{% if selected_term %}&term={{ selected_term }}{% endif %}{% if selected_class %}&class_level={{ selected_class }}{% endif %}">
+                            &laquo; First
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ report_cards.previous_page_number }}{% if selected_year %}&academic_year={{ selected_year }}{% endif %}{% if selected_term %}&term={{ selected_term }}{% endif %}{% if selected_class %}&class_level={{ selected_class }}{% endif %}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in report_cards.paginator.page_range %}
+                        {% if report_cards.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > report_cards.number|add:'-3' and num < report_cards.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if selected_year %}&academic_year={{ selected_year }}{% endif %}{% if selected_term %}&term={{ selected_term }}{% endif %}{% if selected_class %}&class_level={{ selected_class }}{% endif %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if report_cards.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ report_cards.next_page_number }}{% if selected_year %}&academic_year={{ selected_year }}{% endif %}{% if selected_term %}&term={{ selected_term }}{% endif %}{% if selected_class %}&class_level={{ selected_class }}{% endif %}">
+                            Next
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ report_cards.paginator.num_pages }}{% if selected_year %}&academic_year={{ selected_year }}{% endif %}{% if selected_term %}&term={{ selected_term }}{% endif %}{% if selected_class %}&class_level={{ selected_class }}{% endif %}">
+                            Last &raquo;
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Total Report Cards</h5>
+                    <h2 class="card-text">{{ stats.total_report_cards }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Published</h5>
+                    <h2 class="card-text">{{ stats.published_report_cards }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Drafts</h5>
+                    <h2 class="card-text">{{ stats.draft_report_cards }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Average Score</h5>
+                    <h2 class="card-text">{{ stats.avg_score|floatformat:1 }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Charts -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Grade Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="gradeDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Performance Trend</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .grade-badge {
+        font-size: 0.9rem;
+        padding: 5px 10px;
+        min-width: 40px;
+        border-radius: 4px;
+    }
+    
+    .grade-Aplus { background-color: #28a745; color: white; }
+    .grade-A { background-color: #28a745; color: white; }
+    .grade-Bplus { background-color: #17a2b8; color: white; }
+    .grade-B { background-color: #17a2b8; color: white; }
+    .grade-Cplus { background-color: #ffc107; color: #212529; }
+    .grade-C { background-color: #ffc107; color: #212529; }
+    .grade-Dplus { background-color: #fd7e14; color: white; }
+    .grade-D { background-color: #fd7e14; color: white; }
+    .grade-E { background-color: #dc3545; color: white; }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .card-header h3 {
+        font-size: 1.25rem;
+    }
+    
+    .card-header .btn {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Grade Distribution Chart
+    const gradeCtx = document.getElementById('gradeDistributionChart').getContext('2d');
+    const gradeChart = new Chart(gradeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                {% for grade in grade_distribution %}
+                    '{{ grade.grade }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for grade in grade_distribution %}
+                        {{ grade.count }},
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#28a745', // A+
+                    '#28a745', // A
+                    '#17a2b8', // B+
+                    '#17a2b8', // B
+                    '#ffc107', // C+
+                    '#ffc107', // C
+                    '#fd7e14', // D+
+                    '#fd7e14', // D
+                    '#dc3545'  // E
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Performance Trend Chart
+    const trendCtx = document.getElementById('performanceTrendChart').getContext('2d');
+    const trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: [
+                {% for trend in performance_trend %}
+                    '{{ trend.academic_year }} T{{ trend.term }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Average Score',
+                data: [
+                    {% for trend in performance_trend %}
+                        {{ trend.avg_score|default:0 }},
+                    {% endfor %}
+                ],
+                backgroundColor: 'rgba(23, 162, 184, 0.2)',
+                borderColor: 'rgba(23, 162, 184, 1)',
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 0,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'Average Score'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Academic Period'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.raw.toFixed(1)}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

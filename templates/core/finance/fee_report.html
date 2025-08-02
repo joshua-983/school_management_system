@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+
+{% block title %}Fee Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        border-left: 4px solid #3a7bd5;
+    }
+    .summary-card {
+        border-radius: 10px;
+    }
+    .summary-value {
+        font-size: 2rem;
+        font-weight: 600;
+    }
+    .summary-label {
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .export-btn {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+    }
+    .table th {
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-file-earmark-bar-graph me-2"></i>Fee Reports</h2>
+                <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Fees
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Reports</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card report-card shadow-sm">
+                <div class="card-body">
+                    <form method="get" class="mb-4">
+                        <div class="row g-3">
+                            <div class="col-md-2">
+                                {{ form.academic_year.label_tag }}
+                                {{ form.academic_year }}
+                            </div>
+                            <div class="col-md-2">
+                                {{ form.term.label_tag }}
+                                {{ form.term }}
+                            </div>
+                            <div class="col-md-2">
+                                {{ form.payment_status.label_tag }}
+                                {{ form.payment_status }}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.category.label_tag }}
+                                {{ form.category }}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.student.label_tag }}
+                                {{ form.student }}
+                            </div>
+                            <div class="col-md-12 d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="bi bi-funnel me-1"></i> Generate Report
+                                </button>
+                                <a href="{% url 'fee_report' %}" class="btn btn-outline-secondary me-2">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                                </a>
+                                <button type="submit" name="export" value="excel" class="btn btn-success">
+                                    <i class="bi bi-file-earmark-excel me-1"></i> Export to Excel
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if fees %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card summary-card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="summary-value text-primary">${{ summary.total_payable|default:0|floatformat:2 }}</div>
+                    <div class="summary-label text-muted">Total Payable</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card summary-card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="summary-value text-success">${{ summary.total_paid|default:0|floatformat:2 }}</div>
+                    <div class="summary-label text-muted">Total Paid</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card summary-card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="summary-value text-danger">${{ summary.total_balance|default:0|floatformat:2 }}</div>
+                    <div class="summary-label text-muted">Total Balance</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th>Fee Category</th>
+                                    <th class="text-end">Amount Payable</th>
+                                    <th class="text-end">Amount Paid</th>
+                                    <th class="text-end">Balance</th>
+                                    <th>Status</th>
+                                    <th>Due Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fee in fees %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if fee.student.photo %}
+                                            <img src="{{ fee.student.photo.url }}" class="student-photo me-2" alt="{{ fee.student.get_full_name }}">
+                                            {% else %}
+                                            <div class="student-photo bg-light text-center me-2">
+                                                <i class="bi bi-person fs-5 text-muted"></i>
+                                            </div>
+                                            {% endif %}
+                                            <div>
+                                                <div>{{ fee.student.get_full_name }}</div>
+                                                <small class="text-muted">{{ fee.student.student_id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ fee.student.class_level }}</td>
+                                    <td>{{ fee.category.name }}</td>
+                                    <td class="text-end">${{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td class="text-end">${{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="text-end">${{ fee.balance|floatformat:2 }}</td>
+                                    <td>
+                                        {% if fee.payment_status == 'PAID' %}
+                                        <span class="badge bg-success">Paid</span>
+                                        {% elif fee.payment_status == 'PARTIAL' %}
+                                        <span class="badge bg-warning text-dark">Partial</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Unpaid</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ fee.due_date|date:"M d, Y" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Payment Status Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Category Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i> No fee records found matching your criteria.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if fees %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Payment Status Chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Paid', 'Partial', 'Unpaid'],
+            datasets: [{
+                data: [
+                    {{ summary.paid_count|default:0 }}, 
+                    {{ summary.count|add:-summary.paid_count|add:-summary.overdue_count|default:0 }}, 
+                    {{ summary.overdue_count|default:0 }}
+                ],
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.7)',
+                    'rgba(255, 193, 7, 0.7)',
+                    'rgba(220, 53, 69, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(40, 167, 69, 1)',
+                    'rgba(255, 193, 7, 1)',
+                    'rgba(220, 53, 69, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                }
+            }
+        }
+    });
+
+    // Category Breakdown Chart
+    const categoryData = {};
+    {% for fee in fees %}
+        const categoryName = '{{ fee.category.name }}';
+        categoryData[categoryName] = (categoryData[categoryName] || 0) + {{ fee.amount_payable }};
+    {% endfor %}
+
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(categoryData),
+            datasets: [{
+                label: 'Amount Payable',
+                data: Object.values(categoryData),
+                backgroundColor: 'rgba(58, 123, 213, 0.7)',
+                borderColor: 'rgba(58, 123, 213, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return '$' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

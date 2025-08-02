@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <h5 class="card-title">Pending Assignments</h5>
+                <p class="display-4">{{ pending_assignments }}</p>
+                <a href="{% url 'assignment_list' %}" class="text-white">View Assignments</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <h5 class="card-title">Average Grade</h5>
+                <p class="display-4">{{ average_grade|default:"N/A" }}</p>
+                <a href="{% url 'report_card' student.pk %}" class="text-white">View Report Card</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body">
+                <h5 class="card-title">Fee Status</h5>
+                <p class="display-4">
+                    {% if fee_status == 'PAID' %}
+                        <span class="badge bg-success">Paid</span>
+                    {% elif fee_status == 'PARTIAL' %}
+                        <span class="badge bg-warning">Partial</span>
+                    {% else %}
+                        <span class="badge bg-danger">Unpaid</span>
+                    {% endif %}
+                </p>
+                <a href="{% url 'student_detail' student.pk %}" class="text-white">View Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Current Assignments</h5>
+    </div>
+    <div class="card-body">
+        {% if current_assignments %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Subject</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Score</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in current_assignments %}
+                    <tr>
+                        <td>{{ assignment.assignment.title }}</td>
+                        <td>{{ assignment.assignment.subject.name }}</td>
+                        <td>{{ assignment.assignment.due_date }}</td>
+                        <td>
+                            <span class="badge bg-{% if assignment.status == 'SUBMITTED' %}success{% elif assignment.status == 'LATE' %}warning{% elif assignment.status == 'GRADED' %}info{% else %}danger{% endif %}">
+                                {{ assignment.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if assignment.score is not None %}
+                                {{ assignment.score }}/{{ assignment.assignment.max_score }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'assignment_detail' assignment.assignment.pk %}" class="btn btn-sm btn-info">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No current assignments found.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Recent Grades</h5>
+    </div>
+    <div class="card-body">
+        {% if recent_grades %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Homework</th>
+                        <th>Classwork</th>
+                        <th>Test</th>
+                        <th>Exam</th>
+                        <th>Total</th>
+                        <th>Grade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grade in recent_grades %}
+                    <tr>
+                        <td>{{ grade.subject.name }}</td>
+                        <td>{{ grade.homework_score }}</td>
+                        <td>{{ grade.classwork_score }}</td>
+                        <td>{{ grade.test_score }}</td>
+                        <td>{{ grade.exam_score }}</td>
+                        <td>{{ grade.total_score }}</td>
+                        <td>
+                            <span class="badge bg-{% if grade.grade == 'A+' or grade.grade == 'A' %}success{% elif grade.grade == 'B+' or grade.grade == 'B' %}info{% elif grade.grade == 'C+' or grade.grade == 'C' %}warning{% else %}danger{% endif %}">
+                                {{ grade.grade }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="text-end">
+            <a href="{% url 'report_card' student.pk %}" class="btn btn-primary">View Full Report Card</a>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No recent grades found.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

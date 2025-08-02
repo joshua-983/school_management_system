@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} Teacher{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h4>{% if object %}Edit{% else %}Add{% endif %} Teacher</h4>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- Display form-wide errors -->
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="{{ form.first_name.id_for_label }}" 
+                               name="{{ form.first_name.name }}" value="{{ form.first_name.value|default_if_none:'' }}">
+                        {% if form.first_name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.first_name.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="{{ form.last_name.id_for_label }}" 
+                               name="{{ form.last_name.name }}" value="{{ form.last_name.value|default_if_none:'' }}">
+                        {% if form.last_name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.last_name.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.date_of_birth.id_for_label }}" class="form-label">Date of Birth</label>
+                        <input type="date" class="form-control" id="{{ form.date_of_birth.id_for_label }}" 
+                               name="{{ form.date_of_birth.name }}" value="{{ form.date_of_birth.value|date:'Y-m-d' }}">
+                        {% if form.date_of_birth.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.date_of_birth.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.gender.id_for_label }}" class="form-label">Gender</label>
+                        <select class="form-select" id="{{ form.gender.id_for_label }}" name="{{ form.gender.name }}">
+                            {% for value, label in form.gender.field.choices %}
+                                <option value="{{ value }}" {% if form.gender.value == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.gender.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.gender.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="{{ form.phone_number.id_for_label }}" 
+                               name="{{ form.phone_number.name }}" value="{{ form.phone_number.value|default_if_none:'' }}">
+                        {% if form.phone_number.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.phone_number.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="{{ form.email.id_for_label }}" 
+                               name="{{ form.email.name }}" value="{{ form.email.value|default_if_none:'' }}">
+                        {% if form.email.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.email.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
+                <textarea class="form-control" id="{{ form.address.id_for_label }}" 
+                          name="{{ form.address.name }}">{{ form.address.value|default_if_none:'' }}</textarea>
+                {% if form.address.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.address.errors.as_text }}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.subjects.id_for_label }}" class="form-label">Subjects</label>
+                <select multiple class="form-select" id="{{ form.subjects.id_for_label }}" 
+                        name="{{ form.subjects.name }}">
+                    {% for value, label in form.subjects.field.choices %}
+                        <option value="{{ value }}" {% if value in form.subjects.value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+                {% if form.subjects.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.subjects.errors.as_text }}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.class_levels.id_for_label }}" class="form-label">Class Levels</label>
+                <input type="text" class="form-control" id="{{ form.class_levels.id_for_label }}" 
+                       name="{{ form.class_levels.name }}" value="{{ form.class_levels.value|default_if_none:'' }}">
+                {% if form.class_levels.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.class_levels.errors.as_text }}
+                    </div>
+                {% endif %}
+                <small class="text-muted">Comma-separated list of class levels (e.g., P1,P2,J1)</small>
+            </div>
+            
+            {% if not object %}
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="id_password1" class="form-label">Password</label>
+                        <input type="password" class="form-control" name="password1" id="id_password1" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="id_password2" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" name="password2" id="id_password2" required>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'teacher_list' %}" class="btn btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    {% if object %}Update{% else %}Create{% endif %} Teacher
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

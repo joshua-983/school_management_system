@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Enter Student Grade{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'grade_list' %}">Grades</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">New Grade</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-graduation-cap me-2"></i>Grade Entry Form
+                        </h3>
+                        <span class="badge bg-light text-dark">
+                            {% if request.user.is_superuser %}
+                                Admin Mode
+                            {% else %}
+                                Teacher Mode
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post" id="gradeForm" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Student and Subject Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.student|as_crispy_field }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    {{ form.subject|as_crispy_field }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Info Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    {{ form.academic_year|as_crispy_field }}
+                                    <small class="form-text text-muted">Format: YYYY/YYYY</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    {{ form.term|as_crispy_field }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Scores Section -->
+                        <div class="card mb-4 border-primary">
+                            <div class="card-header bg-light-primary">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-calculator me-2"></i>Score Components
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 border-0 shadow-sm">
+                                            <div class="card-body text-center">
+                                                {{ form.homework_score|as_crispy_field }}
+                                                <small class="text-muted">(20% weight)</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 border-0 shadow-sm">
+                                            <div class="card-body text-center">
+                                                {{ form.classwork_score|as_crispy_field }}
+                                                <small class="text-muted">(30% weight)</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 border-0 shadow-sm">
+                                            <div class="card-body text-center">
+                                                {{ form.test_score|as_crispy_field }}
+                                                <small class="text-muted">(10% weight)</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card h-100 border-0 shadow-sm">
+                                            <div class="card-body text-center">
+                                                {{ form.exam_score|as_crispy_field }}
+                                                <small class="text-muted">(40% weight)</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Calculated Total (JavaScript will update this) -->
+                                <div class="row mt-4">
+                                    <div class="col-md-6 offset-md-3">
+                                        <div class="card bg-light">
+                                            <div class="card-body text-center">
+                                                <h5 class="mb-2">Projected Total Score</h5>
+                                                <div class="display-4 text-primary" id="totalScoreDisplay">--</div>
+                                                <div class="text-muted small" id="gradeLetterDisplay"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Remarks Section -->
+                        <div class="mb-4">
+                            {{ form.remarks|as_crispy_field }}
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="fas fa-save me-2"></i>Save Grade
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Calculate and display total score as user types
+    const scoreInputs = document.querySelectorAll('input[type="number"]');
+    const totalScoreDisplay = document.getElementById('totalScoreDisplay');
+    const gradeLetterDisplay = document.getElementById('gradeLetterDisplay');
+    
+    function calculateTotal() {
+        let homework = parseFloat(document.getElementById('id_homework_score').value) || 0;
+        let classwork = parseFloat(document.getElementById('id_classwork_score').value) || 0;
+        let test = parseFloat(document.getElementById('id_test_score').value) || 0;
+        let exam = parseFloat(document.getElementById('id_exam_score').value) || 0;
+        
+        // Apply weights
+        let total = (homework * 0.2) + (classwork * 0.3) + (test * 0.1) + (exam * 0.4);
+        total = Math.round(total * 10) / 10; // Round to 1 decimal place
+        
+        // Update display
+        totalScoreDisplay.textContent = total;
+        
+        // Calculate grade letter
+        let gradeLetter = '';
+        if (total >= 90) gradeLetter = 'A+';
+        else if (total >= 80) gradeLetter = 'A';
+        else if (total >= 70) gradeLetter = 'B+';
+        else if (total >= 60) gradeLetter = 'B';
+        else if (total >= 50) gradeLetter = 'C+';
+        else if (total >= 40) gradeLetter = 'C';
+        else if (total >= 30) gradeLetter = 'D+';
+        else if (total >= 20) gradeLetter = 'D';
+        else gradeLetter = 'E';
+        
+        gradeLetterDisplay.textContent = `Projected Grade: ${gradeLetter}`;
+    }
+    
+    // Add event listeners to all score inputs
+    scoreInputs.forEach(input => {
+        input.addEventListener('input', calculateTotal);
+    });
+    
+    // Initial calculation
+    calculateTotal();
+    
+    // Form validation
+    const form = document.getElementById('gradeForm');
+    form.addEventListener('submit', function(event) {
+        let isValid = true;
+        
+        // Validate scores are within range
+        const homework = parseFloat(document.getElementById('id_homework_score').value);
+        if (homework < 0 || homework > 20) {
+            isValid = false;
+            alert('Homework score must be between 0 and 20');
+        }
+        
+        // Add similar validation for other scores...
+        
+        if (!isValid) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

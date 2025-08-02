@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} Class Assignment{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">{% if object %}Edit{% else %}Add{% endif %} Class Assignment</h4>
+    </div>
+    <div class="card-body">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="form-floating">
+                        {{ form.class_level }}
+                        <label for="{{ form.class_level.id_for_label }}">Class Level</label>
+                        {% if form.class_level.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.class_level.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-floating">
+                        {{ form.subject }}
+                        <label for="{{ form.subject.id_for_label }}">Subject</label>
+                        {% if form.subject.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.subject.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="form-floating">
+                        {{ form.teacher }}
+                        <label for="{{ form.teacher.id_for_label }}">Teacher</label>
+                        {% if form.teacher.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.teacher.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-12">
+                    <div class="form-floating">
+                        {{ form.academic_year }}
+                        <label for="{{ form.academic_year.id_for_label }}">Academic Year</label>
+                        <small class="text-muted">Format: YYYY-YYYY (e.g., 2023-2024)</small>
+                        {% if form.academic_year.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.academic_year.errors.as_text }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to List
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Add Bootstrap validation classes
+(function () {
+    'use strict'
+    
+    const forms = document.querySelectorAll('.needs-validation')
+    
+    Array.from(forms).forEach(form => {
+        form.addEventListener('submit', event => {
+            if (!form.checkValidity()) {
+                event.preventDefault()
+                event.stopPropagation()
+            }
+            
+            form.classList.add('was-validated')
+        }, false)
+    })
+})()
+</script>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block title %}Teacher Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <h5 class="card-title">My Classes</h5>
+                <p class="display-4">{{ current_classes.count }}</p>
+                <a href="{% url 'class_assignment_list' %}" class="text-white">View Classes</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <h5 class="card-title">Pending Assignments</h5>
+                <p class="display-4">{{ pending_assignments }}</p>
+                <a href="{% url 'assignment_list' %}?status=PENDING" class="text-white">View Assignments</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body">
+                <h5 class="card-title">Students</h5>
+                <p class="display-4">{{ total_students }}</p>
+                <a href="{% url 'student_list' %}" class="text-white">View Students</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>Recent Assignments</h5>
+    </div>
+    <div class="card-body">
+        {% if recent_assignments %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Subject</th>
+                        <th>Class</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in recent_assignments %}
+                    <tr>
+                        <td>{{ assignment.title }}</td>
+                        <td>{{ assignment.subject.name }}</td>
+                        <td>{{ assignment.class_assignment.get_class_level_display }}</td>
+                        <td>{{ assignment.due_date }}</td>
+                        <td>
+                            <span class="badge bg-{% if assignment.due_date < time_now %}danger{% else %}success{% endif %}">
+                                {% if assignment.due_date < time_now %}Overdue{% else %}Active{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'assignment_detail' assignment.pk %}" class="btn btn-sm btn-info">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="text-end">
+            <a href="{% url 'assignment_list' %}" class="btn btn-primary">View All Assignments</a>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No recent assignments found.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>My Classes</h5>
+    </div>
+    <div class="card-body">
+        {% if current_classes %}
+        <div class="row">
+            {% for class_assignment in current_classes %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ class_assignment.get_class_level_display }}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">{{ class_assignment.subject.name }}</h6>
+                        <p class="card-text">
+                            <strong>Academic Year:</strong> {{ class_assignment.academic_year }}
+                        </p>
+                        <a href="{% url 'grade_list' %}?class_level={{ class_assignment.class_level }}&subject={{ class_assignment.subject.pk }}" 
+                           class="btn btn-sm btn-primary">
+                            View Grades
+                        </a>
+                        <a href="{% url 'assignment_add' %}?class_assignment={{ class_assignment.pk }}" 
+                           class="btn btn-sm btn-success">
+                            Add Assignment
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">You are not currently assigned to any classes.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

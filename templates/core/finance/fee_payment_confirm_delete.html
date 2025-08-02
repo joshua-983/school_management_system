@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Payment Record{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body text-center py-4">
+                    <h2 class="mb-4"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirm Deletion</h2>
+                    
+                    <div class="alert alert-danger mb-4">
+                        <p class="lead mb-0">Are you sure you want to delete this payment record?</p>
+                        <p class="mb-0">This will adjust the fee balance accordingly.</p>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-body text-start">
+                            <h5 class="card-title">Payment #{{ object.receipt_number }}</h5>
+                            <p class="card-text">
+                                <strong>Amount:</strong> ${{ object.amount|floatformat:2 }}<br>
+                                <strong>Method:</strong> {{ object.get_payment_method_display }}<br>
+                                <strong>Date:</strong> {{ object.payment_date|date:"M d, Y" }}<br>
+                                <strong>Recorded By:</strong> {{ object.recorded_by.get_full_name }}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <button type="submit" class="btn btn-danger me-md-2">
+                                <i class="bi bi-trash me-1"></i> Yes, Delete
+                            </button>
+                            <a href="{% url 'fee_detail' pk=object.fee.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

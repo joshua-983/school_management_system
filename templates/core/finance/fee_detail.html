@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Fee Details - {{ fee.student.get_full_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-card {
+        border-left: 4px solid #28a745;
+        transition: all 0.3s ease;
+    }
+    .payment-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .progress {
+        height: 10px;
+    }
+    .student-profile {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .student-photo-lg {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 20px;
+    }
+    .payment-status {
+        font-weight: 600;
+    }
+    .paid {
+        color: #28a745;
+    }
+    .partial {
+        color: #ffc107;
+    }
+    .unpaid {
+        color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-cash-stack me-2"></i>
+                    Fee Details - {{ fee.student.get_full_name }}
+                </h2>
+                <div>
+                    {% if is_admin or is_teacher %}
+                    <a href="{% url 'fee_payment_create' fee_id=fee.pk %}" class="btn btn-success me-2">
+                        <i class="bi bi-cash-coin me-1"></i> Record Payment
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Back to List
+                    </a>
+                </div>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Details</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="student-profile">
+                        {% if fee.student.photo %}
+                        <img src="{{ fee.student.photo.url }}" class="student-photo-lg" alt="{{ fee.student.get_full_name }}">
+                        {% else %}
+                        <div class="student-photo-lg bg-light text-center">
+                            <i class="bi bi-person fs-1 text-muted"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h4 class="mb-1">{{ fee.student.get_full_name }}</h4>
+                            <p class="text-muted mb-1">
+                                {{ fee.student.class_level }} • {{ fee.student.student_id }}
+                            </p>
+                            <p class="mb-0">
+                                <span class="payment-status 
+                                    {% if fee.payment_status == 'PAID' %}paid
+                                    {% elif fee.payment_status == 'PARTIAL' %}partial
+                                    {% else %}unpaid{% endif %}">
+                                    {{ fee.get_payment_status_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-1">Amount Payable</h6>
+                                    <h4 class="mb-0">${{ fee.amount_payable|floatformat:2 }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-1">Amount Paid</h6>
+                                    <h4 class="mb-0">${{ fee.amount_paid|floatformat:2 }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-1">Balance</h6>
+                                    <h4 class="mb-0">${{ fee.balance|floatformat:2 }}</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress mb-3">
+                        <div class="progress-bar bg-success" 
+                             role="progressbar" 
+                             style="width: {{ fee.payment_percentage }}%" 
+                             aria-valuenow="{{ fee.payment_percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ fee.payment_percentage }}%
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Fee Category:</span>
+                                    <span>{{ fee.category.name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Academic Year:</span>
+                                    <span>{{ fee.academic_year }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Term:</span>
+                                    <span>{{ fee.get_term_display }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Due Date:</span>
+                                    <span>{{ fee.due_date|date:"M d, Y" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Recorded On:</span>
+                                    <span>{{ fee.date_recorded|date:"M d, Y" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between">
+                                    <span>Recorded By:</span>
+                                    <span>{{ fee.recorded_by.get_full_name }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    {% if fee.notes %}
+                    <div class="mt-4">
+                        <h5>Notes</h5>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                {{ fee.notes|linebreaks }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Payment History</h5>
+                    <span class="badge bg-primary rounded-pill">{{ payments.count }}</span>
+                </div>
+                <div class="card-body">
+                    {% if payments %}
+                    <div class="list-group">
+                        {% for payment in payments %}
+                        <div class="list-group-item mb-2 payment-card">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">Payment #{{ payment.receipt_number }}</h6>
+                                <small class="text-muted">{{ payment.payment_date|date:"M d, Y" }}</small>
+                            </div>
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <p class="mb-1">${{ payment.amount|floatformat:2 }}</p>
+                                <div>
+                                    <span class="badge bg-light text-dark">{{ payment.get_payment_method_display }}</span>
+                                    {% if is_admin %}
+                                    <a href="{% url 'fee_payment_delete' pk=payment.pk %}" 
+                                       class="btn btn-sm btn-outline-danger ms-2"
+                                       title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if payment.notes %}
+                            <small class="text-muted">{{ payment.notes }}</small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i> No payment records found.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
