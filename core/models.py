@@ -246,10 +246,7 @@ class Fee(models.Model):
         if '-' in self.academic_year:
             self.academic_year = self.academic_year.replace('-', '/')
         
-        if self.payment_status == 'PAID' and not self.receipt_number:
-            pass  # This will trigger save() to generate receipt number
-        elif self.payment_status != 'PAID' and self.receipt_number:
-            raise ValidationError("Receipt number can only be generated for PAID payments")
+        # Remove receipt number validation from clean() since we'll handle it in save()
         
         # Validate due date is within academic year
         try:
@@ -267,12 +264,23 @@ class Fee(models.Model):
     
     @classmethod
     def generate_receipt_number(cls):
-        """Generate a unique sequential receipt number"""
-        current_year = str(timezone.now().year)[2:]  # Last 2 digits of year
-        prefix = f"RCPT{current_year}"
+        """
+        Generate a professional receipt number with:
+        - Institution code (optional)
+        - Year and term
+        - Sequential number
+        - Check digit for validation
+        
+        Format: SCH/{year}/{term}/XXXXX-C
+        Example: SCH/2023/2/00042-5
+        """
+        now = timezone.now()
+        current_year = now.year
+        current_term = cls.determine_current_term()
         
         with transaction.atomic():
-            # Lock the table to prevent concurrent number generation issues
+            # Get the last receipt for this year/term combination
+            prefix = f"SCH/{current_year}/{current_term}/"
             last_receipt = (
                 cls.objects
                 .select_for_update()
@@ -283,23 +291,40 @@ class Fee(models.Model):
             
             if last_receipt:
                 try:
-                    last_num = int(last_receipt.receipt_number[len(prefix):])
+                    # Extract the sequential number part
+                    sequence_part = last_receipt.receipt_number.split('/')[-1].split('-')[0]
+                    last_num = int(sequence_part)
                     new_num = last_num + 1
-                except (ValueError, IndexError):
-                    # If existing receipt number is malformed, start fresh
+                except (ValueError, IndexError, AttributeError):
                     new_num = 1
             else:
                 new_num = 1
                 
-            return f"{prefix}{new_num:05d}"  # 5-digit number with leading zeros
+            # Format with leading zeros
+            sequence_str = f"{new_num:05d}"
+            
+            # Calculate check digit (simple modulus 10 for example)
+            check_digit = sum(int(d) for d in sequence_str) % 10
+            
+            return f"{prefix}{sequence_str}-{check_digit}"
+    
+    @staticmethod
+    def determine_current_term():
+        """Determine current term based on date"""
+        today = timezone.now().date()
+        month = today.month
+        
+        if month in [1, 2, 3, 4]:  # Jan-Apr
+            return 1
+        elif month in [5, 6, 7, 8]:  # May-Aug
+            return 2
+        else:  # Sep-Dec
+            return 3
     
     def save(self, *args, **kwargs):
         """Override save to handle receipt number generation and balance calculation"""
         # Calculate balance first
         self.balance = self.calculate_balance()
-        
-        # Validate the model before saving
-        self.full_clean()
         
         # Update payment status based on balance
         if self.amount_paid >= self.amount_payable:
@@ -327,14 +352,23 @@ class Fee(models.Model):
         if not self.recorded_by and hasattr(self, '_current_user'):
             self.recorded_by = self._current_user
         
-        super().save(*args, **kwargs)
+        # Validate the model before saving
+        try:
+            self.full_clean()
+            super().save(*args, **kwargs)
+        except ValidationError as e:
+            if 'receipt_number' in e.message_dict:
+                # Regenerate receipt number if duplicate (shouldn't happen with this system)
+                self.receipt_number = self.generate_receipt_number()
+                super().save(*args, **kwargs)
+            else:
+                raise
     
     def calculate_balance(self):
         """Calculate the remaining balance with proper null handling"""
         payable = self.amount_payable if self.amount_payable is not None else Decimal('0')
         paid = self.amount_paid if self.amount_paid is not None else Decimal('0')
         return payable - paid
-
 class FeePayment(models.Model):
     """Detailed record of individual payments"""
     fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='payments')
