@@ -15,6 +15,7 @@
                         Welcome back, 
                         {% if user.teacher %}{{ user.teacher.get_full_name }}
                         {% elif user.student %}{{ user.student.get_full_name }}
+                        {% elif user.parentguardian %}{{ user.parentguardian.get_full_name }}
                         {% else %}{{ user.username }}
                         {% endif %}
                     </p>
@@ -23,7 +24,8 @@
                         <a href="
                             {% if user.is_superuser %}{% url 'admin_dashboard' %}
                             {% elif user.teacher %}{% url 'teacher_dashboard' %}
-                            {% else %}{% url 'student_dashboard' %}
+                            {% elif user.student %}{% url 'student_dashboard' %}
+                            {% elif user.parentguardian %}{% url 'parent_dashboard' %}
                             {% endif %}" 
                             class="btn btn-primary btn-lg px-4">
                             <i class="bi bi-speedometer2 me-2"></i>Go to Dashboard
@@ -33,6 +35,11 @@
                         <a href="{% url 'report_card' pk=user.student.pk %}" 
                            class="btn btn-outline-primary btn-lg px-4">
                             <i class="bi bi-card-checklist me-2"></i>View Report Card
+                        </a>
+                        {% elif user.parentguardian %}
+                        <a href="{% url 'parent_report_card_list' %}" 
+                           class="btn btn-outline-primary btn-lg px-4">
+                            <i class="bi bi-card-checklist me-2"></i>View Report Cards
                         </a>
                         {% endif %}
                     </div>
@@ -61,6 +68,48 @@
             </div>
             <div class="card-body">
                 <canvas id="gradesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if user.is_authenticated and user.parentguardian %}
+<div class="row mt-5 justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h3 class="mb-0"><i class="bi bi-people-fill me-2"></i>Your Children</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for child in user.parentguardian.student.all %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card card-hover">
+                            <div class="card-body text-center">
+                                <div class="bg-light rounded-circle p-3 mb-2 mx-auto" style="width: 80px;">
+                                    <i class="bi bi-person-circle fs-3 text-primary"></i>
+                                </div>
+                                <h5>{{ child.get_full_name }}</h5>
+                                <p class="text-muted mb-2">{{ child.get_class_level_display }}</p>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <a href="{% url 'parent_child_detail' pk=child.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <a href="{% url 'parent_report_card_detail' student_id=child.pk %}" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-card-checklist"></i> Report
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12 text-center py-4">
+                        <i class="bi bi-people fs-1 text-muted"></i>
+                        <p class="text-muted">No children registered</p>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>

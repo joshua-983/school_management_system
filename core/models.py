@@ -897,3 +897,52 @@ class AttendanceSummary(models.Model):
             present_days = self.days_present + self.days_excused  # Excused counts as present for rate
             self.attendance_rate = (present_days / self.total_days) * 100
         super().save(*args, **kwargs)
+
+#analytics
+class AnalyticsCache(models.Model):
+    """Cache for pre-computed analytics data"""
+    name = models.CharField(max_length=100, unique=True)
+    data = models.JSONField()
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    @classmethod
+    def get_cached_data(cls, name, default=None):
+        try:
+            return cls.objects.get(name=name).data
+        except cls.DoesNotExist:
+            return default or {}
+
+class GradeAnalytics(models.Model):
+    """Model to store grade-related analytics"""
+    class_level = models.CharField(max_length=20, choices=Student.CLASS_LEVEL_CHOICES)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    average_score = models.FloatField()
+    highest_score = models.FloatField()
+    lowest_score = models.FloatField()
+    date_calculated = models.DateField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('class_level', 'subject', 'date_calculated')
+
+class AttendanceAnalytics(models.Model):
+    """Model to store attendance analytics"""
+    class_level = models.CharField(max_length=20, choices=Student.CLASS_LEVEL_CHOICES)
+    date = models.DateField()
+    present_count = models.IntegerField()
+    absent_count = models.IntegerField()
+    late_count = models.IntegerField()
+    attendance_rate = models.FloatField()
+    
+    class Meta:
+        unique_together = ('class_level', 'date')
+
+class FinancialAnalytics(models.Model):
+    """Model to store financial analytics"""
+    date = models.DateField()
+    total_fees_payable = models.DecimalField(max_digits=10, decimal_places=2)
+    total_fees_paid = models.DecimalField(max_digits=10, decimal_places=2)
+    collection_rate = models.FloatField()
+    outstanding_balance = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    class Meta:
+        unique_together = ('date',)

@@ -117,11 +117,20 @@
                             <a class="nav-link" href="
                                 {% if user.is_superuser %}{% url 'admin_dashboard' %}
                                 {% elif user.teacher %}{% url 'teacher_dashboard' %}
-                                {% else %}{% url 'student_dashboard' %}
+                                {% elif user.student %}{% url 'student_dashboard' %}
+                                {% elif user.parentguardian %}{% url 'parent_dashboard' %}
                                 {% endif %}">
                                 <i class="bi bi-speedometer2 me-1"></i>Dashboard
                             </a>
                         </li>
+                        <!-- Analytics Link (for admin/teachers) -->
+                        {% if is_admin or is_teacher %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'analytics_dashboard' %}">
+                                <i class="bi bi-graph-up me-1"></i>Analytics
+                            </a>
+                        </li>
+                        {% endif %}
                         
                         <!-- Academics Dropdown -->
                         <li class="nav-item dropdown">
@@ -129,20 +138,28 @@
                                 <i class="bi bi-journal-bookmark me-1"></i>Academics
                             </a>
                             <ul class="dropdown-menu">
+                                {% if user.student or user.parentguardian %}
                                 <li><a class="dropdown-item" href="{% url 'assignment_list' %}">
                                     <i class="bi bi-journal-text me-1"></i>Assignments
                                 </a></li>
                                 <li><a class="dropdown-item" href="{% url 'grade_list' %}">
                                     <i class="bi bi-clipboard-data me-1"></i>Grades
                                 </a></li>
+                                {% endif %}
+                                
                                 {% if user.is_superuser or user.teacher %}
                                 <li><a class="dropdown-item" href="{% url 'attendance_dashboard' %}">
                                     <i class="bi bi-calendar-event me-1"></i>Attendance
                                 </a></li>
                                 {% endif %}
+                                
                                 {% if user.student %}
                                 <li><a class="dropdown-item" href="{% url 'report_card' pk=user.student.pk %}">
                                     <i class="bi bi-card-checklist me-1"></i>Report Card
+                                </a></li>
+                                {% elif user.parentguardian %}
+                                <li><a class="dropdown-item" href="{% url 'parent_report_card_list' %}">
+                                    <i class="bi bi-card-checklist me-1"></i>Report Cards
                                 </a></li>
                                 {% endif %}
                             </ul>
@@ -168,13 +185,14 @@
                         </li>
                         {% endif %}
                         
-                        <!-- Finance (Admin Only) -->
-                        {% if user.is_superuser %}
+                        <!-- Finance -->
+                        {% if user.is_superuser or user.parentguardian %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="financeMenu">
                                 <i class="bi bi-cash-stack me-1"></i>Finance
                             </a>
                             <ul class="dropdown-menu">
+                                {% if user.is_superuser %}
                                 <li><a class="dropdown-item" href="{% url 'fee_list' %}">
                                     <i class="bi bi-credit-card me-1"></i>Fee Records
                                 </a></li>
@@ -183,6 +201,28 @@
                                 </a></li>
                                 <li><a class="dropdown-item" href="#">
                                     <i class="bi bi-graph-up me-1"></i>Reports
+                                </a></li>
+                                {% elif user.parentguardian %}
+                                <li><a class="dropdown-item" href="{% url 'parent_fee_list' %}">
+                                    <i class="bi bi-credit-card me-1"></i>Fee Payments
+                                </a></li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                        {% endif %}
+                        
+                        <!-- Parent Specific Menu -->
+                        {% if user.parentguardian %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="parentMenu">
+                                <i class="bi bi-people-fill me-1"></i>My Children
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{% url 'parent_children_list' %}">
+                                    <i class="bi bi-list-ul me-1"></i>View All
+                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'parent_attendance_list' %}">
+                                    <i class="bi bi-calendar-check me-1"></i>Attendance
                                 </a></li>
                             </ul>
                         </li>
@@ -230,6 +270,7 @@
                                 <i class="bi bi-person-circle me-1"></i>
                                 {% if user.teacher %}{{ user.teacher.get_full_name }}
                                 {% elif user.student %}{{ user.student.get_full_name }}
+                                {% elif user.parentguardian %}{{ user.parentguardian.get_full_name }}
                                 {% else %}{{ user.username }}
                                 {% endif %}
                             </a>
@@ -304,7 +345,7 @@
                     <ul class="list-unstyled">
                         <li><a href="{% url 'home' %}" class="text-white">Home</a></li>
                         {% if user.is_authenticated %}
-                        <li><a href="{% url 'attendance_dashboard' %}" class="text-white">Attendance</a></li>
+                        <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
                         <li><a href="{% url 'grade_list' %}" class="text-white">Grades</a></li>
                         {% endif %}
                     </ul>

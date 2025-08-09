@@ -871,5 +871,67 @@ class AttendanceSummaryFilterForm(forms.Form):
             )
 
 
+# Add to your forms.py
 
+class ParentFeePaymentForm(forms.Form):
+    PAYMENT_METHODS = [
+        ('CASH', 'Cash'),
+        ('MPESA', 'M-Pesa'),
+        ('CARD', 'Credit/Debit Card'),
+        ('BANK', 'Bank Transfer'),
+    ]
+    
+    amount = forms.DecimalField(
+        label="Amount to Pay",
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    
+    payment_method = forms.ChoiceField(
+        label="Payment Method",
+        choices=PAYMENT_METHODS,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+class ParentAttendanceFilterForm(forms.Form):
+    STATUS_CHOICES = [
+        ('', 'All Statuses'),
+        ('PRESENT', 'Present'),
+        ('ABSENT', 'Absent'),
+        ('LATE', 'Late'),
+        ('EXCUSED', 'Excused'),
+    ]
+    
+    student = forms.ModelChoiceField(
+        queryset=Student.objects.none(),
+        required=False,
+        label="Child",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        label="From Date",
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        label="To Date",
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        if user and hasattr(user, 'parentguardian'):
+            self.fields['student'].queryset = user.parentguardian.student.all()
 

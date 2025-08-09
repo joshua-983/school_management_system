@@ -1,4 +1,8 @@
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+from decimal import Decimal
 from django.views import View
+from django.db.models import Count, Sum, Avg, Max, Min, Q
 from .forms import ClassAssignmentForm, AssignmentForm
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -30,7 +34,7 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
 from django.views.generic import TemplateView  # Add this import
-from django.db.models import Q
+
 from .models import Student, Grade, ClassAssignment, ReportCard
 from .forms import ReportCardFilterForm
 from django.utils.decorators import method_decorator
@@ -42,6 +46,8 @@ from .forms import GradeEntryForm
 
 
 
+
+
 def is_admin(user):
     return user.is_superuser
 
@@ -50,6 +56,12 @@ def is_teacher(user):
 
 def is_student(user):
     return hasattr(user, 'student')
+
+
+
+def is_parent(user):
+    return hasattr(user, 'parentguardian')
+
 
 def home(request):
     if request.user.is_authenticated:
@@ -2161,4 +2173,597 @@ def load_periods(request):
         'periods': periods
     })
 
+@login_required
+def parent_dashboard(request):
+    if not is_parent(request.user):
+        raise PermissionDenied
+    
+    parent = request.user.parentguardian
+    children = parent.student.all()
+    
+    # Get recent activities
+    recent_grades = Grade.objects.filter(student__in=children).order_by('-updated_at')[:5]
+    recent_attendances = StudentAttendance.objects.filter(student__in=children).order_by('-date')[:5]
+    unpaid_fees = Fee.objects.filter(student__in=children, payment_status='UNPAID').order_by('due_date')
+    
+    context = {
+        'parent': parent,
+        'children': children,
+        'recent_grades': recent_grades,
+        'recent_attendances': recent_attendances,
+        'unpaid_fees': unpaid_fees,
+    }
+    return render(request, 'core/parents/parent_dashboard.html', context)
 
+class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Student
+    template_name = 'core/parents/children_list.html'
+    context_object_name = 'children'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        return self.request.user.parentguardian.student.all()
+
+class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Student
+    template_name = 'core/parents/child_detail.html'
+    context_object_name = 'child'
+    
+    def test_func(self):
+        parent = self.request.user.parentguardian
+        return parent.student.filter(pk=self.kwargs['pk']).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        child = self.get_object()
+        
+        # Attendance stats
+        context['present_count'] = child.attendances.filter(status='present').count()
+        context['absent_count'] = child.attendances.filter(status='absent').count()
+        context['late_count'] = child.attendances.filter(status='late').count()
+        
+        # Recent grades
+        context['recent_grades'] = Grade.objects.filter(student=child).order_by('-updated_at')[:5]
+        
+        # Fee summary
+        fees = Fee.objects.filter(student=child)
+        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        context['total_balance'] = context['total_payable'] - context['total_paid']
+        
+        return context
+
+class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Fee
+    template_name = 'core/parents/fee_list.html'
+    context_object_name = 'fees'
+    paginate_by = 10
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        queryset = Fee.objects.filter(student__in=children).select_related('student', 'category')
+        
+        # Apply filters
+        payment_status = self.request.GET.get('payment_status')
+        if payment_status:
+            queryset = queryset.filter(payment_status=payment_status)
+            
+        return queryset.order_by('-date_recorded')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        children = self.request.user.parentguardian.student.all()
+        
+        # Summary statistics
+        fees = Fee.objects.filter(student__in=children)
+        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        context['total_balance'] = context['total_payable'] - context['total_paid']
+        
+        return context
+
+class ParentFeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Fee
+    template_name = 'core/parents/fee_detail.html'
+    
+    def test_func(self):
+        parent = self.request.user.parentguardian
+        return parent.student.filter(pk=self.get_object().student.pk).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['payments'] = self.object.payments.all().order_by('-payment_date')
+        return context
+
+class ParentFeePaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
+    template_name = 'core/parents/fee_payment.html'
+    
+    def test_func(self):
+        if not is_parent(self.request.user):
+            return False
+        fee = get_object_or_404(Fee, pk=self.kwargs['pk'])
+        return self.request.user.parentguardian.student.filter(pk=fee.student.pk).exists()
+    
+    def get(self, request, pk):
+        fee = get_object_or_404(Fee, pk=pk)
+        form = ParentFeePaymentForm(initial={'amount': fee.balance})
+        return render(request, self.template_name, {'fee': fee, 'form': form})
+    
+    def post(self, request, pk):
+        fee = get_object_or_404(Fee, pk=pk)
+        form = ParentFeePaymentForm(request.POST)
+        
+        if form.is_valid():
+            amount = form.cleaned_data['amount']
+            payment_method = form.cleaned_data['payment_method']
+            
+            if amount > fee.balance:
+                form.add_error('amount', 'Payment amount cannot exceed the balance')
+            else:
+                with transaction.atomic():
+                    # Create payment record
+                    payment = FeePayment.objects.create(
+                        fee=fee,
+                        amount=amount,
+                        payment_method=payment_method,
+                        recorded_by=request.user,
+                        notes=f"Online payment by parent {request.user.get_full_name()}"
+                    )
+                    
+                    # Update fee record
+                    fee.amount_paid += amount
+                    fee.save()
+                    
+                    messages.success(request, f'Payment of {amount} successfully recorded')
+                    return redirect('parent_fee_detail', pk=fee.pk)
+        
+        return render(request, self.template_name, {'fee': fee, 'form': form})
+
+class ParentAttendanceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = StudentAttendance
+    template_name = 'core/parents/attendance_list.html'
+    context_object_name = 'attendances'
+    paginate_by = 20
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        queryset = StudentAttendance.objects.filter(
+            student__in=children
+        ).select_related('student', 'term', 'period').order_by('-date')
+        
+        # Apply filters
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        student_id = self.request.GET.get('student')
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+            
+        date_from = self.request.GET.get('date_from')
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+            
+        date_to = self.request.GET.get('date_to')
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+            
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        children = self.request.user.parentguardian.student.all()
+        
+        # Add filter form
+        context['filter_form'] = ParentAttendanceFilterForm(
+            initial={
+                'student': self.request.GET.get('student'),
+                'status': self.request.GET.get('status'),
+                'date_from': self.request.GET.get('date_from'),
+                'date_to': self.request.GET.get('date_to'),
+            }
+        )
+        context['children'] = children
+        
+        # Calculate summary statistics
+        attendances = self.get_queryset()
+        context['present_count'] = attendances.filter(status='present').count()
+        context['absent_count'] = attendances.filter(status='absent').count()
+        context['late_count'] = attendances.filter(status='late').count()
+        context['excused_count'] = attendances.filter(status='excused').count()
+        
+        return context
+
+class ParentReportCardListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ReportCard
+    template_name = 'core/parents/report_card_list.html'
+    context_object_name = 'report_cards'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        return ReportCard.objects.filter(
+            student__in=children
+        ).order_by('-academic_year', '-term')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['children'] = self.request.user.parentguardian.student.all()
+        return context
+
+class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def get(self, request, student_id, report_card_id=None):
+        parent = request.user.parentguardian
+        student = get_object_or_404(Student, pk=student_id)
+        
+        # Check if student belongs to parent
+        if not parent.student.filter(pk=student_id).exists():
+            raise PermissionDenied
+        
+        # Get report card if specified
+        report_card = None
+        if report_card_id:
+            report_card = get_object_or_404(ReportCard, pk=report_card_id, student=student)
+        
+        # Get filtered grades
+        grades = Grade.objects.filter(student=student)
+        if report_card:
+            grades = grades.filter(
+                academic_year=report_card.academic_year,
+                term=report_card.term
+            )
+        else:
+            # Apply filters from GET parameters
+            form = ReportCardFilterForm(request.GET)
+            if form.is_valid():
+                if form.cleaned_data.get('academic_year'):
+                    grades = grades.filter(academic_year=form.cleaned_data['academic_year'])
+                if form.cleaned_data.get('term'):
+                    grades = grades.filter(term=form.cleaned_data['term'])
+        
+        grades = grades.order_by('subject')
+        
+        # Calculate average
+        aggregates = grades.aggregate(avg_score=Avg('total_score'))
+        average_score = aggregates['avg_score'] or 0
+        overall_grade = Grade.calculate_grade(average_score) if hasattr(Grade, 'calculate_grade') else 'N/A'
+        
+        context = {
+            'student': student,
+            'grades': grades,
+            'average_score': round(float(average_score), 2),
+            'overall_grade': overall_grade,
+            'report_card': report_card,
+            'form': ReportCardFilterForm(request.GET) if not report_card else None,
+        }
+        
+        if 'pdf' in request.GET:
+            return self.generate_pdf(context)
+        
+        return render(request, 'core/parents/report_card_detail.html', context)
+    
+    def generate_pdf(self, context):
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Report_Card_{context['student'].student_id}"
+        if context['report_card']:
+            filename += f"_{context['report_card'].academic_year}_Term{context['report_card'].term}"
+        response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
+        
+        p = canvas.Canvas(response, pagesize=letter)
+        width, height = letter
+        
+        # PDF content
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(100, height - 100, f"Report Card for {context['student'].get_full_name()}")
+        
+        # Add more content as needed
+        p.showPage()
+        p.save()
+        return response
+
+#analytics views
+class DecimalJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Decimal objects"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
+
+class AnalyticsDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/analytics/dashboard.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = is_admin(self.request.user)
+        context['is_teacher'] = is_teacher(self.request.user)
+        # Get date range for analytics (last 30 days)
+        end_date = timezone.now().date()
+        start_date = end_date - timezone.timedelta(days=30)
+        
+        context.update({
+            'attendance_stats': self._get_attendance_stats(start_date, end_date),
+            'grade_stats': self._get_grade_stats(),
+            'fee_stats': self._get_fee_stats(start_date, end_date),
+            'start_date': start_date,
+            'end_date': end_date,
+        })
+        return context
+
+    def _get_attendance_stats(self, start_date, end_date):
+        """Get attendance statistics with caching"""
+        cache_key = f"attendance_stats_{start_date}_{end_date}"
+        cached_data = AnalyticsCache.get_cached_data(cache_key)
+
+        if cached_data:
+            return cached_data
+        
+        # Calculate fresh data if not cached
+        if is_admin(self.request.user):
+            attendance_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date)
+            )
+        else:
+            # For teachers, only show their classes
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            
+            attendance_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date),
+                student__class_level__in=teacher_classes
+            )
+        
+        stats = attendance_data.aggregate(
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late')),
+            excused=Count('id', filter=Q(status='excused')),
+        )
+        
+        total = sum(stats.values())
+        attendance_rate = round((stats['present'] / total) * 100, 2) if total > 0 else 0
+        
+        result = {
+            'stats': stats,
+            'attendance_rate': attendance_rate,
+            'trend_data': self._get_attendance_trend(start_date, end_date),
+            'class_breakdown': self._get_class_attendance(start_date, end_date),
+        }
+        
+        # Cache the result with proper Decimal handling
+        AnalyticsCache.objects.update_or_create(
+            name=cache_key,
+            defaults={'data': json.loads(json.dumps(result, cls=DecimalJSONEncoder))}
+        )
+        
+        return result
+    
+    def _get_attendance_trend(self, start_date, end_date):
+        """Get attendance trend data by day"""
+        if is_admin(self.request.user):
+            trend_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date)
+            ).values('date').annotate(
+                present=Count('id', filter=Q(status='present')),
+                absent=Count('id', filter=Q(status='absent')),
+                late=Count('id', filter=Q(status='late')),
+            ).order_by('date')
+        else:
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            
+            trend_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date),
+                student__class_level__in=teacher_classes
+            ).values('date').annotate(
+                present=Count('id', filter=Q(status='present')),
+                absent=Count('id', filter=Q(status='absent')),
+                late=Count('id', filter=Q(status='late')),
+            ).order_by('date')
+        
+        return list(trend_data)
+    
+    def _get_class_attendance(self, start_date, end_date):
+        """Get attendance breakdown by class"""
+        if is_admin(self.request.user):
+            class_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date)
+            ).values('student__class_level').annotate(
+                present=Count('id', filter=Q(status='present')),
+                absent=Count('id', filter=Q(status='absent')),
+                late=Count('id', filter=Q(status='late')),
+                total=Count('id'),
+            ).order_by('student__class_level')
+        else:
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            
+            class_data = StudentAttendance.objects.filter(
+                date__range=(start_date, end_date),
+                student__class_level__in=teacher_classes
+            ).values('student__class_level').annotate(
+                present=Count('id', filter=Q(status='present')),
+                absent=Count('id', filter=Q(status='absent')),
+                late=Count('id', filter=Q(status='late')),
+                total=Count('id'),
+            ).order_by('student__class_level')
+        
+        # Calculate percentages
+        for item in class_data:
+            item['present_pct'] = round((item['present'] / item['total']) * 100, 1) if item['total'] > 0 else 0
+            item['absent_pct'] = round((item['absent'] / item['total']) * 100, 1) if item['total'] > 0 else 0
+            item['late_pct'] = round((item['late'] / item['total']) * 100, 1) if item['total'] > 0 else 0
+        
+        return list(class_data)
+    
+    def _get_grade_stats(self):
+        """Get grade statistics with caching"""
+        cache_key = "grade_stats"
+        cached_data = AnalyticsCache.get_cached_data(cache_key)
+        
+        if cached_data:
+            return cached_data
+        
+        # Calculate fresh data if not cached
+        if is_admin(self.request.user):
+            grade_data = Grade.objects.all()
+        else:
+            # For teachers, only show their classes
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            
+            grade_data = Grade.objects.filter(
+                class_assignment__class_level__in=teacher_classes
+            )
+        
+        stats = grade_data.aggregate(
+            avg_score=Avg('total_score'),
+            max_score=Max('total_score'),
+            min_score=Min('total_score'),
+            count=Count('id'),
+        )
+        
+        # Get grade distribution
+        grade_distribution = grade_data.values(
+            'student__class_level'
+        ).annotate(
+            avg_score=Avg('total_score'),
+            count=Count('id'),
+        ).order_by('student__class_level')
+        
+        # Get subject performance
+        subject_performance = grade_data.values(
+            'subject__name'
+        ).annotate(
+            avg_score=Avg('total_score'),
+            count=Count('id'),
+        ).order_by('-avg_score')
+        
+        # Convert Decimal to float for JSON serialization
+        result = {
+            'overall': {
+                'avg_score': float(stats['avg_score']) if stats['avg_score'] else 0,
+                'max_score': float(stats['max_score']) if stats['max_score'] else 0,
+                'min_score': float(stats['min_score']) if stats['min_score'] else 0,
+                'count': stats['count']
+            },
+            'grade_distribution': [
+                {
+                    **item,
+                    'avg_score': float(item['avg_score']) if item['avg_score'] else 0
+                }
+                for item in grade_distribution
+            ],
+            'subject_performance': [
+                {
+                    **item,
+                    'avg_score': float(item['avg_score']) if item['avg_score'] else 0
+                }
+                for item in subject_performance
+            ],
+        }
+        
+        AnalyticsCache.objects.update_or_create(
+            name=cache_key,
+            defaults={'data': json.loads(json.dumps(result, cls=DecimalJSONEncoder))}
+        )
+        return result
+
+    def _get_fee_stats(self, start_date, end_date):
+        """Get fee statistics with caching"""
+        cache_key = f"fee_stats_{start_date}_{end_date}"
+        cached_data = AnalyticsCache.get_cached_data(cache_key)
+        
+        if cached_data:
+            return cached_data
+        
+        # Calculate fresh data if not cached
+        if is_admin(self.request.user):
+            fee_data = Fee.objects.filter(
+                date_recorded__range=(start_date, end_date)
+            )
+        else:
+            # Teachers can only see their classes' fees
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            
+            fee_data = Fee.objects.filter(
+                date_recorded__range=(start_date, end_date),
+                student__class_level__in=teacher_classes
+            )
+        
+        stats = fee_data.aggregate(
+            total_payable=Sum('amount_payable'),
+            total_paid=Sum('amount_paid'),
+            count=Count('id'),
+        )
+        
+        # Calculate collection rate
+        total_payable = stats['total_payable'] or Decimal('0')
+        total_paid = stats['total_paid'] or Decimal('0')
+        collection_rate = round((total_paid / total_payable) * 100, 2) if total_payable > 0 else 0
+        
+        # Get payment status distribution
+        status_distribution = fee_data.values(
+            'payment_status'
+        ).annotate(
+            count=Count('id'),
+            amount=Sum('amount_payable'),
+        ).order_by('payment_status')
+        
+        # Get fee category breakdown
+        category_breakdown = fee_data.values(
+            'category__name'
+        ).annotate(
+            total_payable=Sum('amount_payable'),
+            total_paid=Sum('amount_paid'),
+            count=Count('id'),
+        ).order_by('-total_payable')
+        
+        # Convert Decimal to float for JSON serialization
+        result = {
+            'stats': {
+                'total_payable': float(stats['total_payable']) if stats['total_payable'] else 0,
+                'total_paid': float(stats['total_paid']) if stats['total_paid'] else 0,
+                'count': stats['count']
+            },
+            'collection_rate': collection_rate,
+            'status_distribution': [
+                {
+                    **item,
+                    'amount': float(item['amount']) if item['amount'] else 0
+                }
+                for item in status_distribution
+            ],
+            'category_breakdown': [
+                {
+                    **item,
+                    'total_payable': float(item['total_payable']) if item['total_payable'] else 0,
+                    'total_paid': float(item['total_paid']) if item['total_paid'] else 0
+                }
+                for item in category_breakdown
+            ],
+        }
+        
+        AnalyticsCache.objects.update_or_create(
+            name=cache_key,
+            defaults={'data': json.loads(json.dumps(result, cls=DecimalJSONEncoder))}
+        )
+        return result

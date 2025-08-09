@@ -27,6 +27,12 @@
     .table th {
         white-space: nowrap;
     }
+    .student-photo {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
 </style>
 {% endblock %}
 
@@ -138,6 +144,7 @@
                                     <th class="text-end">Balance</th>
                                     <th>Status</th>
                                     <th>Due Date</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -173,6 +180,11 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ fee.due_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        <a href="{% url 'fee_detail' fee.id %}" class="btn btn-sm btn-outline-primary" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -231,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [{
                 data: [
                     {{ summary.paid_count|default:0 }}, 
-                    {{ summary.count|add:-summary.paid_count|add:-summary.overdue_count|default:0 }}, 
+                    {{ summary.partial_count|default:0 }}, 
                     {{ summary.overdue_count|default:0 }}
                 ],
                 backgroundColor: [
@@ -252,6 +264,17 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: {
                     position: 'bottom',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             }
         }
@@ -261,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const categoryData = {};
     {% for fee in fees %}
         const categoryName = '{{ fee.category.name }}';
-        categoryData[categoryName] = (categoryData[categoryName] || 0) + {{ fee.amount_payable }};
+        categoryData[categoryName] = (categoryData[categoryName] || 0) + parseFloat({{ fee.amount_payable }});
     {% endfor %}
 
     const categoryCtx = document.getElementById('categoryChart').getContext('2d');
@@ -284,7 +307,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return '$' + value;
+                            return '$' + value.toLocaleString();
                         }
                     }
                 }

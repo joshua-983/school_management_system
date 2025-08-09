@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Report Card - {{ student.get_full_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'parent_dashboard' %}">Parent Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'parent_report_card_list' %}">Report Cards</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ student.get_full_name }}</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2>
+                    <i class="bi bi-card-checklist me-2"></i>
+                    Report Card - {{ student.get_full_name }}
+                    <small class="text-muted fs-5">({{ student.student_id }})</small>
+                </h2>
+                <div>
+                    <a href="{% url 'parent_report_card_detail' student_id=student.pk %}?pdf=1" 
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-download me-1"></i>Download PDF
+                    </a>
+                </div>
+            </div>
+            
+            {% if report_card %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Report Card Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-1">Academic Year</h6>
+                                <p class="mb-0">{{ report_card.academic_year }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-1">Term</h6>
+                                <p class="mb-0">Term {{ report_card.term }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-1">Average Score</h6>
+                                <p class="mb-0">{{ report_card.average_score|default:"-" }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6 class="text-muted mb-1">Overall Grade</h6>
+                                <p class="mb-0">
+                                    {% if report_card.overall_grade %}
+                                    <span class="badge 
+                                        {% if report_card.overall_grade == 'A' or report_card.overall_grade == 'A+' %}bg-success
+                                        {% elif report_card.overall_grade == 'B' or report_card.overall_grade == 'B+' %}bg-primary
+                                        {% elif report_card.overall_grade == 'C' or report_card.overall_grade == 'C+' %}bg-warning
+                                        {% else %}bg-danger{% endif %}">
+                                        {{ report_card.overall_grade }}
+                                    </span>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Filter Form -->
+            {% if not report_card %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Generate Report Card</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-6">
+                            {{ form.academic_year|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.term|as_crispy_field }}
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-filter me-1"></i>Generate
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Grades Table -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Subject Grades</h5>
+                </div>
+                <div class="card-body">
+                    {% if grades %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Homework</th>
+                                    <th>Classwork</th>
+                                    <th>Test</th>
+                                    <th>Exam</th>
+                                    <th>Total</th>
+                                    <th>Grade</th>
+                                    <th>Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for grade in grades %}
+                                <tr>
+                                    <td>{{ grade.subject }}</td>
+                                    <td>{{ grade.homework_score }}</td>
+                                    <td>{{ grade.classwork_score }}</td>
+                                    <td>{{ grade.test_score }}</td>
+                                    <td>{{ grade.exam_score }}</td>
+                                    <td><strong>{{ grade.total_score }}</strong></td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if grade.total_score >= 80 %}bg-success
+                                            {% elif grade.total_score >= 60 %}bg-primary
+                                            {% elif grade.total_score >= 40 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ grade.grade }}
+                                        </span>
+                                    </td>
+                                    <td>{{ grade.remarks|default:"-" }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-primary">
+                                    <th colspan="5">Overall Performance</th>
+                                    <th><strong>{{ average_score }}</strong></th>
+                                    <th>
+                                        <span class="badge 
+                                            {% if overall_grade == 'A' or overall_grade == 'A+' %}bg-success
+                                            {% elif overall_grade == 'B' or overall_grade == 'B+' %}bg-primary
+                                            {% elif overall_grade == 'C' or overall_grade == 'C+' %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ overall_grade }}
+                                        </span>
+                                    </th>
+                                    <td>-</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-journal-x fs-1 text-muted"></i>
+                        <p class="text-muted">No grade records found</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Comments and Signatures -->
+            {% if report_card %}
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0">Class Teacher's Comments</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>{{ report_card.teacher_comments|default:"No comments provided" }}</p>
+                            <div class="mt-4 pt-2 border-top">
+                                <p class="mb-1 text-muted">Class Teacher:</p>
+                                <p class="mb-0 fw-bold">{{ report_card.teacher.get_full_name|default:"-" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0">Head Teacher's Comments</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>{{ report_card.head_teacher_comments|default:"No comments provided" }}</p>
+                            <div class="mt-4 pt-2 border-top">
+                                <p class="mb-1 text-muted">Head Teacher:</p>
+                                <p class="mb-0 fw-bold">{{ report_card.head_teacher.get_full_name|default:"-" }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

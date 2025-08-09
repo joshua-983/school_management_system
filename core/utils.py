@@ -43,3 +43,10 @@ def is_admin(user):
 
 def is_teacher(user):
     return user.is_authenticated and hasattr(user, 'teacher')
+
+
+def is_admin(user):
+    return user.is_superuser
+
+def is_teacher(user):
+    return hasattr(user, 'teacher')
