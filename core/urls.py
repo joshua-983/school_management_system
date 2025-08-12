@@ -1,3 +1,7 @@
+from django.urls import path, include
+from .api import FeeCategoryViewSet
+from rest_framework.routers import DefaultRouter
+from .views import fee_category_detail
 from urllib.parse import urlencode
 from . import views
 from .views import AnalyticsDashboardView
@@ -49,7 +53,13 @@ from .views import (
     AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
 )
 
+router = DefaultRouter()
+router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
+
+
 urlpatterns = [
+    # API endpoints
+    path('api/', include(router.urls)),
     # Home and dashboards
     path('', home, name='home'),
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
@@ -157,4 +167,7 @@ urlpatterns = [
     
     # Analytics Dashboard
     path('analytics/', views.AnalyticsDashboardView.as_view(), name='analytics_dashboard'),
+    path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
+    
+    
 ]

@@ -2,46 +2,70 @@
 
 {% block title %}Record Payment{% endblock %}
 
+{% block extra_css %}
+<style>
+    .payment-summary-card {
+        border-left: 4px solid #28a745;
+    }
+    .payment-alert {
+        border-left: 4px solid #17a2b8;
+    }
+    .amount-input-group {
+        max-width: 250px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
-                <h2>
+                <h2 class="mb-0">
                     <i class="bi bi-cash-coin me-2"></i>
-                    Record Payment - {{ fee.student.get_full_name }}
+                    Record Payment - {% firstof fee.student.get_full_name "Student" %}
                 </h2>
+                {% if fee.pk %}
                 <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left me-1"></i> Back to Fee
                 </a>
+                {% endif %}
             </div>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    {% if fee.pk %}
                     <li class="breadcrumb-item"><a href="{% url 'fee_detail' pk=fee.pk %}">Details</a></li>
+                    {% endif %}
                     <li class="breadcrumb-item active" aria-current="page">Record Payment</li>
                 </ol>
             </nav>
         </div>
     </div>
 
+    {% if not fee or not fee.pk %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        The requested fee record could not be found or is invalid.
+    </div>
+    {% else %}
     <div class="row">
         <div class="col-lg-8">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-4">
                 <div class="card-body">
-                    <div class="alert alert-info mb-4">
+                    <div class="alert payment-alert mb-4">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-info-circle fs-4 me-3"></i>
                             <div>
-                                <h5 class="mb-1">{{ fee.category.name }}</h5>
-                                <p class="mb-1">Balance: ${{ fee.balance|floatformat:2 }}</p>
-                                <small>Due: {{ fee.due_date|date:"M d, Y" }}</small>
+                                <h5 class="mb-1">{{ fee.category.name|default:"Fee" }}</h5>
+                                <p class="mb-1">Current Balance: <strong>${{ fee.balance|default:0|floatformat:2 }}</strong></p>
+                                <small>Due: {{ fee.due_date|date:"M d, Y"|default:"Not specified" }}</small>
                             </div>
                         </div>
                     </div>
 
-                    <form method="post" novalidate>
+                    <form method="post" novalidate id="payment-form">
                         {% csrf_token %}
                         
                         {% if form.non_field_errors %}
@@ -55,11 +79,14 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="{{ form.amount.id_for_label }}" class="form-label">
-                                    {{ form.amount.label }} <span class="text-danger">*</span>
+                                    Payment Amount <span class="text-danger">*</span>
                                 </label>
-                                <div class="input-group">
+                                <div class="input-group amount-input-group">
                                     <span class="input-group-text">$</span>
                                     {{ form.amount }}
+                                    <button type="button" class="btn btn-outline-secondary" id="pay-full-amount">
+                                        Full Amount
+                                    </button>
                                 </div>
                                 {% if form.amount.errors %}
                                 <div class="invalid-feedback d-block">
@@ -71,7 +98,7 @@
                             
                             <div class="col-md-6">
                                 <label for="{{ form.payment_method.id_for_label }}" class="form-label">
-                                    {{ form.payment_method.label }} <span class="text-danger">*</span>
+                                    Payment Method <span class="text-danger">*</span>
                                 </label>
                                 {{ form.payment_method }}
                                 {% if form.payment_method.errors %}
@@ -85,7 +112,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="{{ form.payment_date.id_for_label }}" class="form-label">
-                                    {{ form.payment_date.label }} <span class="text-danger">*</span>
+                                    Payment Date <span class="text-danger">*</span>
                                 </label>
                                 {{ form.payment_date }}
                                 {% if form.payment_date.errors %}
@@ -97,7 +124,7 @@
                             
                             <div class="col-md-6">
                                 <label for="{{ form.receipt_number.id_for_label }}" class="form-label">
-                                    {{ form.receipt_number.label }}
+                                    Receipt Number
                                 </label>
                                 {{ form.receipt_number }}
                                 {% if form.receipt_number.errors %}
@@ -105,12 +132,13 @@
                                     {{ form.receipt_number.errors.0 }}
                                 </div>
                                 {% endif %}
+                                <small class="text-muted">Optional reference number</small>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
+                        <div class="mb-4">
                             <label for="{{ form.notes.id_for_label }}" class="form-label">
-                                {{ form.notes.label }}
+                                Payment Notes
                             </label>
                             {{ form.notes }}
                             {% if form.notes.errors %}
@@ -118,13 +146,14 @@
                                 {{ form.notes.errors.0 }}
                             </div>
                             {% endif %}
+                            <small class="text-muted">Optional notes about this payment</small>
                         </div>
                         
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <button type="submit" class="btn btn-success">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-3">
+                            <button type="submit" class="btn btn-success px-4">
                                 <i class="bi bi-check-circle me-1"></i> Record Payment
                             </button>
-                            <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-secondary">
+                            <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-outline-secondary px-4">
                                 <i class="bi bi-x-circle me-1"></i> Cancel
                             </a>
                         </div>
@@ -134,89 +163,113 @@
         </div>
         
         <div class="col-lg-4">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Payment Summary</h5>
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Fee Summary</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>Fee Category:</span>
-                            <span>{{ fee.category.name }}</span>
+                            <span>{{ fee.category.name|default:"-" }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>Student:</span>
-                            <span>{{ fee.student.get_full_name }}</span>
+                            <span>{{ fee.student.get_full_name|default:"-" }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>Amount Payable:</span>
-                            <span>${{ fee.amount_payable|floatformat:2 }}</span>
+                            <span>${{ fee.amount_payable|default:0|floatformat:2 }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>Amount Paid:</span>
-                            <span>${{ fee.amount_paid|floatformat:2 }}</span>
+                            <span>${{ fee.amount_paid|default:0|floatformat:2 }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>Balance:</span>
-                            <span class="fw-bold">${{ fee.balance|floatformat:2 }}</span>
+                            <span class="fw-bold {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                ${{ fee.balance|default:0|floatformat:2 }}
+                            </span>
                         </li>
                     </ul>
                 </div>
             </div>
             
-            <div class="card shadow-sm mt-4">
+            {% if fee.payments.exists %}
+            <div class="card shadow-sm">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Payments</h5>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Recent Payments</h5>
                 </div>
                 <div class="card-body">
-                    {% with recent_payments=fee.payments.all|slice:":3" %}
-                    {% if recent_payments %}
                     <div class="list-group">
-                        {% for payment in recent_payments %}
+                        {% for payment in fee.payments.all|slice:":3" %}
                         <div class="list-group-item">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">${{ payment.amount|floatformat:2 }}</h6>
-                                <small>{{ payment.payment_date|date:"M d" }}</small>
+                                <small>{{ payment.payment_date|date:"M d, Y" }}</small>
                             </div>
-                            <p class="mb-1">{{ payment.get_payment_method_display }}</p>
+                            <p class="mb-1 text-muted">
+                                {{ payment.get_payment_method_display }}
+                                {% if payment.receipt_number %}({{ payment.receipt_number }}){% endif %}
+                            </p>
                             {% if payment.notes %}
-                            <small class="text-muted">{{ payment.notes|truncatechars:30 }}</small>
+                            <small class="d-block text-truncate">{{ payment.notes }}</small>
                             {% endif %}
                         </div>
                         {% endfor %}
                     </div>
-                    {% else %}
-                    <div class="alert alert-info mb-0">
-                        <i class="bi bi-info-circle me-2"></i> No recent payments found.
+                    {% if fee.payments.count > 3 %}
+                    <div class="text-center mt-2">
+                        <a href="{% url 'fee_detail' pk=fee.pk %}#payments" class="text-decoration-none">
+                            View all {{ fee.payments.count }} payments
+                        </a>
                     </div>
                     {% endif %}
-                    {% endwith %}
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize datepicker
+    // Initialize datepicker with current date as default
     $('#id_payment_date').datepicker({
         format: 'yyyy-mm-dd',
         autoclose: true,
-        todayHighlight: true
+        todayHighlight: true,
+        orientation: 'bottom auto',
+        endDate: '0d' // Can't select future dates
+    }).datepicker('setDate', new Date());
+
+    // Set full amount button
+    $('#pay-full-amount').click(function() {
+        const balance = parseFloat('{{ fee.balance|default:0 }}');
+        $('#id_amount').val(balance.toFixed(2));
     });
-    
-    // Validate amount doesn't exceed balance
-    $('form').submit(function(e) {
-        const amount = parseFloat($('#id_amount').val());
-        const balance = parseFloat('{{ fee.balance }}');
+
+    // Form validation
+    $('#payment-form').submit(function(e) {
+        const amount = parseFloat($('#id_amount').val()) || 0;
+        const balance = parseFloat('{{ fee.balance|default:0 }}');
+        
+        if (amount <= 0) {
+            alert('Please enter a valid payment amount');
+            e.preventDefault();
+            return false;
+        }
         
         if (amount > balance) {
             alert('Payment amount cannot exceed the remaining balance of $' + balance.toFixed(2));
             e.preventDefault();
+            return false;
         }
+        
+        return true;
     });
 });
 </script>

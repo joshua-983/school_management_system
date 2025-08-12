@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -9,6 +10,8 @@ from django.core.validators import RegexValidator
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.conf import settings
+from django.utils.safestring import mark_safe
 
 
 User = get_user_model()
@@ -175,6 +178,7 @@ class FeeCategory(models.Model):
     name = models.CharField(max_length=100, choices=CATEGORY_TYPES)
     description = models.TextField(blank=True)
     is_mandatory = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)  # Added this field
     applies_to_all = models.BooleanField(default=True)
     class_levels = models.CharField(
         max_length=100, 
@@ -184,198 +188,186 @@ class FeeCategory(models.Model):
     
     def __str__(self):
         return self.get_name_display()
-
 class Fee(models.Model):
-    PAYMENT_MODE_CHOICES = [
-        ('CASH', 'Cash'),
-        ('BANK', 'Bank Transfer'),
-        ('CARD', 'Credit Card'),
-        ('CHECK', 'Check'),
-        ('MOBILE', 'Mobile Money'),
-    ]
-    
     PAYMENT_STATUS_CHOICES = [
-        ('PAID', 'Paid'),
-        ('UNPAID', 'Unpaid'),
-        ('PARTIAL', 'Part Payment'),
-        ('OVERDUE', 'Overdue'),
+        ('paid', 'Paid'),
+        ('unpaid', 'Unpaid'),
+        ('partial', 'Part Payment'),
+        ('overdue', 'Overdue'),
     ]
     
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fees')
-    category = models.ForeignKey(FeeCategory, on_delete=models.PROTECT)
-    amount_payable = models.DecimalField(max_digits=10, decimal_places=2)
-    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    balance = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        editable=False,
-        default=0  # Critical fix - add default value
+    PAYMENT_MODE_CHOICES = [
+        ('cash', 'Cash'),
+        ('check', 'Check'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('mobile_money', 'Mobile Money'),
+        ('other', 'Other'),
+    ]
+    
+    TERM_CHOICES = [
+        (1, 'Term 1'),
+        (2, 'Term 2'),
+        (3, 'Term 3'),
+    ]
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.PROTECT,
+        related_name='fees'
     )
-    payment_mode = models.CharField(max_length=10, choices=PAYMENT_MODE_CHOICES, blank=True)
-    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='UNPAID')
-    payment_date = models.DateTimeField(null=True, blank=True)
-    receipt_number = models.CharField(max_length=20, unique=True, blank=True, editable=False)
+    category = models.ForeignKey(
+        FeeCategory,
+        on_delete=models.PROTECT,
+        related_name='fees'
+    )
     academic_year = models.CharField(max_length=9)
-    term = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(3)])
-    due_date = models.DateField()
-    date_recorded = models.DateTimeField(auto_now_add=True)
-    last_updated = models.DateTimeField(auto_now=True)
-    recorded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='recorded_fees'
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    
+    amount_payable = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
     )
+    amount_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
+    )
+    
+    payment_status = models.CharField(
+        max_length=10,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='unpaid'
+    )
+    payment_mode = models.CharField(
+        max_length=15,  # Increased from 13 to 15 to accommodate 'bank_transfer'
+        choices=PAYMENT_MODE_CHOICES,
+        blank=True,
+        null=True
+    )
+    payment_date = models.DateField(blank=True, null=True)
+    due_date = models.DateField()
+    
+    receipt_number = models.CharField(max_length=20, blank=True)
     notes = models.TextField(blank=True)
     
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,  # Changed from 'accounts.User' to use Django's auth system
+        on_delete=models.PROTECT,
+        related_name='recorded_fees'
+    )
+    date_recorded = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
     class Meta:
-        ordering = ['-date_recorded', 'student']
+        ordering = ['-date_recorded']
+        verbose_name_plural = 'Fees'
         indexes = [
-            models.Index(fields=['receipt_number']),
+            models.Index(fields=['student']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['due_date']),
         ]
-        verbose_name_plural = "Fees"
-    
+
+
     def __str__(self):
-        return f"{self.student} - {self.category} ({self.amount_paid}/{self.amount_payable})"
-    
-    def clean(self):
-        """Validate payment status and receipt number consistency"""
-        # Convert academic year format if needed
-        if '-' in self.academic_year:
-            self.academic_year = self.academic_year.replace('-', '/')
-        
-        # Remove receipt number validation from clean() since we'll handle it in save()
-        
-        # Validate due date is within academic year
-        try:
-            academic_year_parts = self.academic_year.split('/')
-            if len(academic_year_parts) != 2:
-                raise ValidationError("Academic year must be in format YYYY/YYYY or YYYY-YYYY")
-                
-            academic_year_start = int(academic_year_parts[0])
-            academic_year_end = int(academic_year_parts[1])
-            
-            if not (date(academic_year_start, 9, 1) <= self.due_date <= date(academic_year_end, 8, 31)):
-                raise ValidationError("Due date must be within the academic year")
-        except (ValueError, IndexError):
-            raise ValidationError("Academic year must be in format YYYY/YYYY or YYYY-YYYY")
-    
-    @classmethod
-    def generate_receipt_number(cls):
-        """
-        Generate a professional receipt number with:
-        - Institution code (optional)
-        - Year and term
-        - Sequential number
-        - Check digit for validation
-        
-        Format: SCH/{year}/{term}/XXXXX-C
-        Example: SCH/2023/2/00042-5
-        """
-        now = timezone.now()
-        current_year = now.year
-        current_term = cls.determine_current_term()
-        
-        with transaction.atomic():
-            # Get the last receipt for this year/term combination
-            prefix = f"SCH/{current_year}/{current_term}/"
-            last_receipt = (
-                cls.objects
-                .select_for_update()
-                .filter(receipt_number__startswith=prefix)
-                .order_by('-receipt_number')
-                .first()
-            )
-            
-            if last_receipt:
-                try:
-                    # Extract the sequential number part
-                    sequence_part = last_receipt.receipt_number.split('/')[-1].split('-')[0]
-                    last_num = int(sequence_part)
-                    new_num = last_num + 1
-                except (ValueError, IndexError, AttributeError):
-                    new_num = 1
-            else:
-                new_num = 1
-                
-            # Format with leading zeros
-            sequence_str = f"{new_num:05d}"
-            
-            # Calculate check digit (simple modulus 10 for example)
-            check_digit = sum(int(d) for d in sequence_str) % 10
-            
-            return f"{prefix}{sequence_str}-{check_digit}"
-    
-    @staticmethod
-    def determine_current_term():
-        """Determine current term based on date"""
-        today = timezone.now().date()
-        month = today.month
-        
-        if month in [1, 2, 3, 4]:  # Jan-Apr
-            return 1
-        elif month in [5, 6, 7, 8]:  # May-Aug
-            return 2
-        else:  # Sep-Dec
-            return 3
-    
+        return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
+
     def save(self, *args, **kwargs):
-        """Override save to handle receipt number generation and balance calculation"""
-        # Calculate balance first
-        self.balance = self.calculate_balance()
+        # Calculate balance before saving
+        self.balance = self.amount_payable - self.amount_paid
         
-        # Update payment status based on balance
-        if self.amount_paid >= self.amount_payable:
-            self.payment_status = 'PAID'
-        elif self.amount_paid > 0:
-            self.payment_status = 'PARTIAL'
+        # Auto-update payment status
+        self.update_payment_status()
+            
+        # Set payment date if status is paid and no date exists
+        if self.payment_status == 'paid' and not self.payment_date:
+            self.payment_date = timezone.now().date()
+            
+        super().save(*args, **kwargs)
+
+    def update_payment_status(self):
+        """Improved payment status calculation with tolerance"""
+        today = timezone.now().date()
+        tolerance = Decimal('1.00')  # Consider $1 difference as paid
+        
+        # Calculate the difference with tolerance
+        difference = abs(self.amount_payable - self.amount_paid)
+        
+        if difference <= tolerance:
+            self.payment_status = 'paid'
+        elif self.amount_paid >= self.amount_payable:
+            self.payment_status = 'paid'
+        elif self.amount_paid > Decimal('0.00'):
+            self.payment_status = 'partial'
+        elif self.due_date < today:
+            self.payment_status = 'overdue'
         else:
-            self.payment_status = 'UNPAID'
+            self.payment_status = 'unpaid'
+
+    def get_payment_status_html(self):
+        """Improved HTML display for payment status"""
+        status_display = self.get_payment_status_display()
+        color_map = {
+            'paid': 'success',
+            'unpaid': 'danger',
+            'partial': 'warning',
+            'overdue': 'dark'
+        }
+        color = color_map.get(self.payment_status, 'primary')
+        return mark_safe(
+            f'<span class="badge bg-{color}">{status_display}</span>'
+        )
+
+    def clean(self):
+        """Add model-level validation"""
+        super().clean()
         
-        # Check if payment is overdue
-        if self.due_date < timezone.now().date() and self.payment_status != 'PAID':
-            self.payment_status = 'OVERDUE'
+        if self.amount_paid > self.amount_payable:
+            raise ValidationError({
+                'amount_paid': 'Amount paid cannot exceed amount payable'
+            })
         
-        # Generate receipt number only when payment is marked as PAID and no receipt exists
-        if self.payment_status == 'PAID' and not self.receipt_number:
-            self.receipt_number = self.generate_receipt_number()
-            if not self.payment_date:
-                self.payment_date = timezone.now()
-        
-        # Clear receipt number if payment status changes from PAID
-        elif self.payment_status != 'PAID' and self.receipt_number:
-            self.receipt_number = ''
-        
-        # Set recorded_by if not set
-        if not self.recorded_by and hasattr(self, '_current_user'):
-            self.recorded_by = self._current_user
-        
-        # Validate the model before saving
-        try:
-            self.full_clean()
-            super().save(*args, **kwargs)
-        except ValidationError as e:
-            if 'receipt_number' in e.message_dict:
-                # Regenerate receipt number if duplicate (shouldn't happen with this system)
-                self.receipt_number = self.generate_receipt_number()
-                super().save(*args, **kwargs)
-            else:
-                raise
-    
-    def calculate_balance(self):
-        """Calculate the remaining balance with proper null handling"""
-        payable = self.amount_payable if self.amount_payable is not None else Decimal('0')
-        paid = self.amount_paid if self.amount_paid is not None else Decimal('0')
-        return payable - paid
+        if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
+            raise ValidationError({
+                'payment_status': 'Cannot mark as paid when amount paid is less than payable'
+            })
 class FeePayment(models.Model):
     """Detailed record of individual payments"""
-    fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='payments')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    PAYMENT_MODE_CHOICES = [
+        ('cash', 'Cash'),
+        ('check', 'Check'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('mobile_money', 'Mobile Money'),
+        ('other', 'Other'),
+    ]
+    
+    fee = models.ForeignKey(
+        'Fee', 
+        on_delete=models.CASCADE, 
+        related_name='payments'
+    )
+    amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
     payment_date = models.DateTimeField(default=timezone.now)
-    payment_mode = models.CharField(max_length=10, choices=Fee.PAYMENT_MODE_CHOICES)
-    receipt_number = models.CharField(max_length=20, unique=True, blank=True)
+    payment_mode = models.CharField(
+        max_length=15,  # Increased from 10 to 15 to accommodate 'bank_transfer'
+        choices=PAYMENT_MODE_CHOICES
+    )
+    receipt_number = models.CharField(
+        max_length=20, 
+        unique=True, 
+        blank=True
+    )
     recorded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -388,15 +380,25 @@ class FeePayment(models.Model):
     
     class Meta:
         ordering = ['-payment_date']
+        verbose_name = 'Fee Payment'
+        verbose_name_plural = 'Fee Payments'
     
     def __str__(self):
         return f"Payment of {self.amount} for {self.fee}"
     
     def save(self, *args, **kwargs):
         if not self.receipt_number:
-            self.receipt_number = Fee.generate_receipt_number()
+            self.receipt_number = self.generate_receipt_number()
         super().save(*args, **kwargs)
-
+    
+    @classmethod
+    def generate_receipt_number(cls):
+        """Generate a unique receipt number"""
+        from django.utils.crypto import get_random_string
+        while True:
+            receipt_number = f"RCPT-{get_random_string(10, '0123456789')}"
+            if not cls.objects.filter(receipt_number=receipt_number).exists():
+                return receipt_number
 
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [

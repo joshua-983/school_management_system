@@ -118,28 +118,29 @@ class FeeForm(forms.ModelForm):
         validators=[RegexValidator(r'^\d{4}[/-]\d{4}$', 'Enter a valid year in format YYYY/YYYY or YYYY-YYYY')]
     )
     
+    payment_status = forms.ChoiceField(
+        choices=[
+            ('paid', 'Paid'),
+            ('unpaid', 'Unpaid'),
+            ('partial', 'Part Payment'),
+            ('overdue', 'Overdue')
+        ],
+        initial='unpaid'
+    )
+    
     class Meta:
         model = Fee
         exclude = ['balance', 'receipt_number', 'recorded_by', 'last_updated']
         widgets = {
-            'due_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
+            'due_date': forms.TextInput(attrs={'readonly': True}),
+            'payment_date': forms.TextInput(attrs={'readonly': True}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
             'amount_payable': forms.NumberInput(attrs={'step': '0.01'}),
             'amount_paid': forms.NumberInput(attrs={'step': '0.01'}),
-        }
-        help_texts = {
-            'amount_payable': 'The total amount the student needs to pay',
-            'amount_paid': 'Amount already paid (leave 0 if unpaid)',
-            'due_date': 'When the payment is due',
+            'student': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):
-        # Debug check
-        if not hasattr(self.__class__, 'Meta'):
-            raise ValueError("FeeForm class is missing Meta inner class")
-        if not hasattr(self.__class__.Meta, 'model'):
-            raise ValueError("FeeForm Meta is missing model specification")
-
         student_id = kwargs.pop('student_id', None)
         super().__init__(*args, **kwargs)
         
@@ -147,7 +148,6 @@ class FeeForm(forms.ModelForm):
             student = get_object_or_404(Student, pk=student_id)
             self.student = student
             self.fields['student'].initial = student
-            self.fields['student'].widget = forms.HiddenInput()
             
             self.fields['category'].queryset = self.get_applicable_categories(student)
             self.fields['category'].empty_label = "--- Select Fee Type ---"
@@ -155,6 +155,7 @@ class FeeForm(forms.ModelForm):
             if not self.initial.get('academic_year'):
                 current_year = timezone.now().year
                 self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+
     def get_applicable_categories(self, student):
         """Get categories that apply to this student's class level"""
         student_class = str(student.class_level)
@@ -169,45 +170,46 @@ class FeeForm(forms.ModelForm):
         
         return (qs | specific_categories).distinct().order_by('name')
     
-def clean(self):
-    cleaned_data = super().clean()
-    student = cleaned_data.get('student')
-    category = cleaned_data.get('category')
-    
-    # Validate that category is applicable to student's class
-    if student and category:
-        if not category.applies_to_all:
-            student_class = str(student.class_level)
-            if not (category.class_levels and student_class in [x.strip() for x in category.class_levels.split(',')]):
-                raise forms.ValidationError(
-                    f"The selected category '{category.name}' is not applicable to {student}'s class level."
-                )
-    
-    # Get amounts with proper defaults
-    amount_payable = cleaned_data.get('amount_payable', Decimal('0.00'))
-    amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
-    
-    # Calculate and set balance
-    cleaned_data['balance'] = amount_payable - amount_paid
-    
-    # Validate payment status consistency
-    payment_status = cleaned_data.get('payment_status')
-    
-    if payment_status == 'PAID' and amount_paid != amount_payable:
-        raise forms.ValidationError(
-            "For 'PAID' status, amount paid must equal amount payable."
-        )
-    elif payment_status == 'UNPAID' and amount_paid > 0:
-        raise forms.ValidationError(
-            "For 'UNPAID' status, amount paid must be zero."
-        )
-    elif payment_status == 'PARTIAL' and (amount_paid <= 0 or amount_paid >= amount_payable):
-        raise forms.ValidationError(
-            "For 'PARTIAL' status, amount paid must be between 0 and the payable amount."
-        )
-    
-    return cleaned_data
-
+    def clean(self):
+        cleaned_data = super().clean()
+        student = cleaned_data.get('student')
+        category = cleaned_data.get('category')
+        
+        # Validate that category is applicable to student's class
+        if student and category:
+            if not category.applies_to_all:
+                student_class = str(student.class_level)
+                if not (category.class_levels and student_class in [x.strip() for x in category.class_levels.split(',')]):
+                    raise forms.ValidationError(
+                        f"The selected category '{category.name}' is not applicable to {student}'s class level."
+                    )
+        
+        amount_payable = cleaned_data.get('amount_payable', Decimal('0.00'))
+        amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
+        payment_status = cleaned_data.get('payment_status')
+        
+        # Calculate and set balance
+        cleaned_data['balance'] = amount_payable - amount_paid
+        
+        # Validate payment status consistency
+        if payment_status == 'paid' and amount_paid != amount_payable:
+            raise forms.ValidationError(
+                "For 'Paid' status, amount paid must equal amount payable."
+            )
+        elif payment_status == 'unpaid' and amount_paid > 0:
+            raise forms.ValidationError(
+                "For 'Unpaid' status, amount paid must be zero."
+            )
+        elif payment_status == 'partial' and (amount_paid <= 0 or amount_paid >= amount_payable):
+            raise forms.ValidationError(
+                "For 'Part Payment' status, amount paid must be between 0 and the payable amount."
+            )
+        elif payment_status == 'overdue' and amount_paid >= amount_payable:
+            raise forms.ValidationError(
+                "For 'Overdue' status, amount paid must be less than amount payable."
+            )
+        
+        return cleaned_data
 
     def clean_academic_year(self):
         academic_year = self.cleaned_data['academic_year']
@@ -223,22 +225,6 @@ def clean(self):
             raise forms.ValidationError("Invalid academic year format. Use YYYY/YYYY or YYYY-YYYY.")
         
         return academic_year
-
-    class Meta:
-        model = Fee
-        exclude = ['balance', 'receipt_number', 'recorded_by', 'last_updated']
-        widgets = {
-            'due_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
-            'amount_payable': forms.NumberInput(attrs={'step': '0.01'}),
-            'amount_paid': forms.NumberInput(attrs={'step': '0.01'}),
-        }
-        help_texts = {
-            'amount_payable': 'The total amount the student needs to pay',
-            'amount_paid': 'Amount already paid (leave 0 if unpaid)',
-            'due_date': 'When the payment is due',
-        }
-
 class FeePaymentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         fee_id = kwargs.pop('fee_id', None)

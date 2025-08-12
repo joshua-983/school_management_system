@@ -6,13 +6,21 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
+    /* Improved dashboard styles */
+    .dashboard-container {
+        background-color: #f8f9fa;
+        min-height: 100vh;
+    }
+    
     .analytics-card {
         border-radius: 0.5rem;
         box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
         transition: all 0.3s ease;
         height: 100%;
         border: none;
+        background-color: white;
     }
     
     .analytics-card:hover {
@@ -104,6 +112,25 @@
         overflow-y: auto;
     }
     
+    /* Loading spinner */
+    .spinner-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    /* Data table styles */
+    .data-table-container {
+        overflow-x: auto;
+    }
+    
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .summary-card .display-4 {
@@ -118,7 +145,14 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4">
+<div class="container-fluid dashboard-container px-4 py-3">
+    <!-- Loading overlay (initially hidden) -->
+    <div id="loadingOverlay" class="spinner-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-0 text-gray-800">Analytics Dashboard</h1>
@@ -127,19 +161,32 @@
         <div class="dropdown">
             <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dateRangeDropdown" data-bs-toggle="dropdown">
                 <i class="bi bi-calendar-range me-2"></i>
-                {{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}
+                <span id="dateRangeDisplay">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li><h6 class="dropdown-header">Quick Range</h6></li>
-                <li><a class="dropdown-item" href="?range=today"><i class="bi bi-calendar-day me-2"></i>Today</a></li>
-                <li><a class="dropdown-item" href="?range=week"><i class="bi bi-calendar-week me-2"></i>This Week</a></li>
-                <li><a class="dropdown-item" href="?range=month"><i class="bi bi-calendar-month me-2"></i>This Month</a></li>
-                <li><a class="dropdown-item" href="?range=year"><i class="bi bi-calendar me-2"></i>This Year</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="today"><i class="bi bi-calendar-day me-2"></i>Today</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="week"><i class="bi bi-calendar-week me-2"></i>This Week</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="month"><i class="bi bi-calendar-month me-2"></i>This Month</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="year"><i class="bi bi-calendar me-2"></i>This Year</a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#customRangeModal">
+                <li><a class="dropdown-item" href="#" id="customRangeOption">
                     <i class="bi bi-calendar-plus me-2"></i>Custom Range
                 </a></li>
             </ul>
+        </div>
+    </div>
+
+    <!-- Custom Range Picker (hidden by default) -->
+    <div id="customRangePicker" class="card mb-4" style="display: none;">
+        <div class="card-body">
+            <div class="date-range-picker">
+                <input type="text" class="form-control datepicker" id="startDatePicker" placeholder="Start Date" value="{{ start_date|date:'Y-m-d' }}">
+                <span class="separator">to</span>
+                <input type="text" class="form-control datepicker" id="endDatePicker" placeholder="End Date" value="{{ end_date|date:'Y-m-d' }}">
+                <button class="btn btn-primary" id="applyDateRange">Apply</button>
+                <button class="btn btn-outline-secondary" id="cancelDateRange">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -211,8 +258,18 @@
                     </button>
                 </li>
                 <li class="nav-item ms-auto">
-                    <button class="btn btn-sm btn-outline-secondary" id="exportBtn">
-                        <i class="bi bi-download me-1"></i> Export Report
+                    <div class="dropdown d-inline-block me-2">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown">
+                            <i class="bi bi-download me-1"></i> Export
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item export-option" href="#" data-format="pdf"><i class="bi bi-file-earmark-pdf me-2"></i>PDF Report</a></li>
+                            <li><a class="dropdown-item export-option" href="#" data-format="excel"><i class="bi bi-file-earmark-excel me-2"></i>Excel Data</a></li>
+                            <li><a class="dropdown-item export-option" href="#" data-format="csv"><i class="bi bi-file-earmark-text me-2"></i>CSV Data</a></li>
+                        </ul>
+                    </div>
+                    <button class="btn btn-sm btn-primary" id="refreshBtn">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh
                     </button>
                 </li>
             </ul>
@@ -225,8 +282,16 @@
                     <div class="row">
                         <div class="col-md-8">
                             <div class="card analytics-card mb-4">
-                                <div class="card-header">
+                                <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">Attendance Trend</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="attendanceTrendChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="attendanceTrendChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
@@ -267,8 +332,16 @@
                     <div class="row">
                         <div class="col-md-12">
                             <div class="card analytics-card">
-                                <div class="card-header">
+                                <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">Attendance by Class</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="attendanceClassChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="attendanceClassChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
@@ -285,8 +358,16 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="card analytics-card mb-4">
-                                <div class="card-header">
+                                <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">Performance by Class</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="gradeClassChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="gradeClassChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
@@ -297,8 +378,16 @@
                         </div>
                         <div class="col-md-6">
                             <div class="card analytics-card mb-4">
-                                <div class="card-header">
+                                <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">Performance by Subject</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="gradeSubjectChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="gradeSubjectChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
@@ -331,69 +420,83 @@
                                         <div class="col-md-4">
                                             <div class="stat-card">
                                                 <h6>Lowest Score</h6>
-                                                <h3>{{ grade_stats.overall.min_score|default:"0"|floatformat:1 }}</h3>
-                                            </div>
-                                        </div>
+                                        <h3>{{ grade_stats.overall.min_score|default:"0"|floatformat:1 }}</h3>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Finance Tab Content -->
-                <div class="tab-pane fade" id="finance" role="tabpanel">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card analytics-card mb-4">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Payment Status</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="chart-container">
-                                        <canvas id="financeStatusChart"></canvas>
-                                    </div>
+            <!-- Finance Tab Content -->
+            <div class="tab-pane fade" id="finance" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card analytics-card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Payment Status</h5>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary chart-reset" data-chart="financeStatusChart">
+                                        <i class="bi bi-zoom-out"></i> Reset Zoom
+                                    </button>
+                                    <button class="btn btn-outline-secondary chart-export" data-chart="financeStatusChart">
+                                        <i class="bi bi-download"></i> Export
+                                    </button>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card analytics-card mb-4">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Fee Categories</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="chart-container">
-                                        <canvas id="financeCategoryChart"></canvas>
-                                    </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="financeStatusChart"></canvas>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="card analytics-card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Financial Summary</h5>
+                    <div class="col-md-6">
+                        <div class="card analytics-card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Fee Categories</h5>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary chart-reset" data-chart="financeCategoryChart">
+                                        <i class="bi bi-zoom-out"></i> Reset Zoom
+                                    </button>
+                                    <button class="btn btn-outline-secondary chart-export" data-chart="financeCategoryChart">
+                                        <i class="bi bi-download"></i> Export
+                                    </button>
                                 </div>
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="stat-card">
-                                                <h6>Total Payable</h6>
-                                                <h3>₦{{ fee_stats.stats.total_payable|default:"0"|floatformat:2 }}</h3>
-                                            </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="financeCategoryChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card analytics-card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Financial Summary</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="stat-card">
+                                            <h6>Total Payable</h6>
+                                            <h3>₦{{ fee_stats.stats.total_payable|default:"0"|floatformat:2 }}</h3>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="stat-card">
-                                                <h6>Total Paid</h6>
-                                                <h3>₦{{ fee_stats.stats.total_paid|default:"0"|floatformat:2 }}</h3>
-                                            </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="stat-card">
+                                            <h6>Total Paid</h6>
+                                            <h3>₦{{ fee_stats.stats.total_paid|default:"0"|floatformat:2 }}</h3>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="stat-card">
-                                                <h6>Collection Rate</h6>
-                                                <h3>{{ fee_stats.collection_rate|default:"0" }}%</h3>
-                                            </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="stat-card">
+                                            <h6>Collection Rate</h6>
+                                            <h3>{{ fee_stats.collection_rate|default:"0" }}%</h3>
                                         </div>
                                     </div>
                                 </div>
@@ -402,129 +505,438 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Custom Range Modal -->
-<div class="modal fade" id="customRangeModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Select Custom Date Range</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="get" action="">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="startDate" class="form-label">Start Date</label>
-                        <input type="date" class="form-control" id="startDate" name="start_date" required
-                               value="{{ start_date|date:'Y-m-d' }}">
-                    </div>
-                    <div class="mb-3">
-                        <label for="endDate" class="form-label">End Date</label>
-                        <input type="date" class="form-control" id="endDate" name="end_date" required
-                               value="{{ end_date|date:'Y-m-d' }}">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Apply Date Range</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Loading Spinner -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-    <div id="loadingToast" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="d-flex">
-            <div class="toast-body">
-                <div class="spinner-border spinner-border-sm me-2" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                Loading analytics data...
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js and plugins -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2/dist/chartjs-plugin-annotation.min.js"></script>
+
+<!-- Export libraries -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <script>
+    // Global variables to store chart instances and current date range
+    const charts = {};
+    let currentDateRange = {
+        start: '{{ start_date|date:"Y-m-d" }}',
+        end: '{{ end_date|date:"Y-m-d" }}'
+    };
+
     // Show loading indicator
-    const loadingToast = new bootstrap.Toast(document.getElementById('loadingToast'));
-    loadingToast.show();
-    
-    // Initialize all charts after page load
-    document.addEventListener('DOMContentLoaded', function() {
-        // Common chart options
-        const commonOptions = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                zoom: {
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true
-                        },
-                        mode: 'xy',
-                    },
-                    pan: {
-                        enabled: true,
-                        mode: 'xy',
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    // Hide loading indicator
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // Common chart options
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top',
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (context.parsed.y !== null) {
+                            label += context.parsed.y;
+                            if (context.chart.config.type === 'bar' && context.dataset.label.includes('%')) {
+                                label += '%';
+                            }
+                        }
+                        return label;
                     }
                 }
             },
-            interaction: {
-                intersect: false,
-                mode: 'nearest',
+            zoom: {
+                zoom: {
+                    wheel: {
+                        enabled: true,
+                    },
+                    pinch: {
+                        enabled: true
+                    },
+                    mode: 'xy',
+                },
+                pan: {
+                    enabled: true,
+                    mode: 'xy',
+                }
             }
-        };
-        
+        },
+        interaction: {
+            intersect: false,
+            mode: 'nearest',
+        }
+    };
+
+    // Initialize all charts after page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize date pickers
+        flatpickr(".datepicker", {
+            dateFormat: "Y-m-d",
+            allowInput: true
+        });
+
         // Initialize all charts
         initializeAttendanceCharts();
         initializeGradeCharts();
         initializeFinanceCharts();
         
-        // Hide loading indicator when all charts are loaded
-        setTimeout(() => {
-            loadingToast.hide();
-        }, 1000);
-        
-        // Export button functionality
-        document.getElementById('exportBtn').addEventListener('click', function() {
-            // Implement export functionality
-            alert('Export functionality will be implemented here');
-        });
+        // Set up event listeners
+        setupEventListeners();
     });
-    
+
+    function setupEventListeners() {
+        // Date range selection
+        document.querySelectorAll('.date-range-option').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const range = this.getAttribute('data-range');
+                updateDateRange(range);
+            });
+        });
+
+        // Custom range picker
+        document.getElementById('customRangeOption').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('customRangePicker').style.display = 'block';
+        });
+
+        // Apply custom date range
+        document.getElementById('applyDateRange').addEventListener('click', function() {
+            const startDate = document.getElementById('startDatePicker').value;
+            const endDate = document.getElementById('endDatePicker').value;
+            
+            if (startDate && endDate) {
+                updateDateRange('custom', startDate, endDate);
+                document.getElementById('customRangePicker').style.display = 'none';
+            } else {
+                alert('Please select both start and end dates');
+            }
+        });
+
+        // Cancel custom date range
+        document.getElementById('cancelDateRange').addEventListener('click', function() {
+            document.getElementById('customRangePicker').style.display = 'none';
+        });
+
+        // Refresh button
+        document.getElementById('refreshBtn').addEventListener('click', function() {
+            refreshDashboard();
+        });
+
+        // Export options
+        document.querySelectorAll('.export-option').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const format = this.getAttribute('data-format');
+                exportDashboard(format);
+            });
+        });
+
+        // Chart reset buttons
+        document.querySelectorAll('.chart-reset').forEach(button => {
+            button.addEventListener('click', function() {
+                const chartId = this.getAttribute('data-chart');
+                if (charts[chartId]) {
+                    charts[chartId].resetZoom();
+                }
+            });
+        });
+
+        // Chart export buttons
+        document.querySelectorAll('.chart-export').forEach(button => {
+            button.addEventListener('click', function() {
+                const chartId = this.getAttribute('data-chart');
+                if (charts[chartId]) {
+                    exportChart(chartId);
+                }
+            });
+        });
+
+        // Tab change event to resize charts
+        document.querySelectorAll('[data-bs-toggle="pill"]').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function() {
+                Object.values(charts).forEach(chart => {
+                    if (chart) {
+                        chart.resize();
+                    }
+                });
+            });
+        });
+    }
+
+    function updateDateRange(range, startDate = null, endDate = null) {
+        showLoading();
+        
+        let url = window.location.pathname;
+        let params = new URLSearchParams(window.location.search);
+        
+        if (range === 'custom') {
+            params.set('start_date', startDate);
+            params.set('end_date', endDate);
+            params.delete('range');
+            currentDateRange = { start: startDate, end: endDate };
+        } else {
+            params.set('range', range);
+            params.delete('start_date');
+            params.delete('end_date');
+            currentDateRange = { range: range };
+        }
+        
+        // Update the display
+        updateDateRangeDisplay(range, startDate, endDate);
+        
+        // Reload the dashboard with new parameters
+        fetch(`${url}?${params.toString()}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Replace the content
+            document.getElementById('analyticsTabsContent').innerHTML = 
+                new DOMParser().parseFromString(html, 'text/html')
+                .getElementById('analyticsTabsContent').innerHTML;
+            
+            // Reinitialize charts
+            initializeAttendanceCharts();
+            initializeGradeCharts();
+            initializeFinanceCharts();
+            
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            hideLoading();
+        });
+    }
+
+    function updateDateRangeDisplay(range, startDate = null, endDate = null) {
+        const displayElement = document.getElementById('dateRangeDisplay');
+        
+        if (range === 'today') {
+            displayElement.textContent = 'Today';
+        } else if (range === 'week') {
+            displayElement.textContent = 'This Week';
+        } else if (range === 'month') {
+            displayElement.textContent = 'This Month';
+        } else if (range === 'year') {
+            displayElement.textContent = 'This Year';
+        } else if (range === 'custom') {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            displayElement.textContent = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }
+    }
+
+    function refreshDashboard() {
+        showLoading();
+        
+        // Reload the current view
+        fetch(window.location.href, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('analyticsTabsContent').innerHTML = 
+                new DOMParser().parseFromString(html, 'text/html')
+                .getElementById('analyticsTabsContent').innerHTML;
+            
+            initializeAttendanceCharts();
+            initializeGradeCharts();
+            initializeFinanceCharts();
+            
+            hideLoading();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            hideLoading();
+        });
+    }
+
+    function exportDashboard(format) {
+        showLoading();
+        
+        switch (format) {
+            case 'pdf':
+                exportToPDF();
+                break;
+            case 'excel':
+                exportToExcel();
+                break;
+            case 'csv':
+                exportToCSV();
+                break;
+            default:
+                alert('Unsupported export format');
+                hideLoading();
+        }
+    }
+
+    function exportToPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape');
+        
+        // Add title
+        doc.setFontSize(18);
+        doc.text('School Analytics Dashboard Report', 14, 20);
+        
+        // Add date range
+        doc.setFontSize(12);
+        doc.text(`Date Range: ${document.getElementById('dateRangeDisplay').textContent}`, 14, 30);
+        
+        // Add generated date
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 40);
+        
+        // Capture each chart as image and add to PDF
+        const chartPromises = Object.keys(charts).map(chartId => {
+            return new Promise(resolve => {
+                const canvas = document.getElementById(chartId);
+                html2canvas(canvas).then(canvasImage => {
+                    const imgData = canvasImage.toDataURL('image/png');
+                    resolve({
+                        chartId,
+                        imgData
+                    });
+                });
+            });
+        });
+        
+        Promise.all(chartPromises).then(chartImages => {
+            let yPosition = 50;
+            const pageWidth = doc.internal.pageSize.getWidth() - 20;
+            
+            chartImages.forEach((chart, index) => {
+                // Add chart title
+                doc.setFontSize(14);
+                doc.text(chart.chartId.replace('Chart', '').replace(/([A-Z])/g, ' $1').trim(), 14, yPosition);
+                yPosition += 10;
+                
+                // Add chart image
+                const imgProps = doc.getImageProperties(chart.imgData);
+                const imgWidth = pageWidth;
+                const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+                
+                // Add new page if needed
+                if (yPosition + imgHeight > doc.internal.pageSize.getHeight() - 20) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                doc.addImage(chart.imgData, 'PNG', 10, yPosition, imgWidth, imgHeight);
+                yPosition += imgHeight + 10;
+                
+                // Add page break after every 2 charts
+                if (index % 2 === 1 && index < chartImages.length - 1) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+            });
+            
+            doc.save('analytics_dashboard_report.pdf');
+            hideLoading();
+        });
+    }
+
+    function exportToExcel() {
+        const wb = XLSX.utils.book_new();
+        
+        // Add attendance data
+        const attendanceWS = XLSX.utils.json_to_sheet({{ attendance_stats.trend_data|safe }});
+        XLSX.utils.book_append_sheet(wb, attendanceWS, "Attendance");
+        
+        // Add grade data
+        const gradeWS = XLSX.utils.json_to_sheet({{ grade_stats.subject_performance|safe }});
+        XLSX.utils.book_append_sheet(wb, gradeWS, "Grades");
+        
+        // Add finance data
+        const financeWS = XLSX.utils.json_to_sheet({{ fee_stats.category_breakdown|safe }});
+        XLSX.utils.book_append_sheet(wb, financeWS, "Finance");
+        
+        XLSX.writeFile(wb, "analytics_dashboard.xlsx");
+        hideLoading();
+    }
+
+    function exportToCSV() {
+        // Create CSV content
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // Add attendance data
+        csvContent += "Attendance Data\n";
+        csvContent += "Date,Present,Absent,Late\n";
+        {{ attendance_stats.trend_data|safe }}.forEach(row => {
+            csvContent += `${row.date},${row.present},${row.absent},${row.late}\n`;
+        });
+        
+        // Add separator
+        csvContent += "\nGrade Data\n";
+        csvContent += "Subject,Average Score,Count\n";
+        {{ grade_stats.subject_performance|safe }}.forEach(row => {
+            csvContent += `${row.subject__name},${row.avg_score},${row.count}\n`;
+        });
+        
+        // Add separator
+        csvContent += "\nFinance Data\n";
+        csvContent += "Category,Total Payable,Total Paid,Balance\n";
+        {{ fee_stats.category_breakdown|safe }}.forEach(row => {
+            csvContent += `${row.category__name},${row.total_payable},${row.total_paid},${row.total_payable - row.total_paid}\n`;
+        });
+        
+        // Create download link
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "analytics_dashboard.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        hideLoading();
+    }
+
+    function exportChart(chartId) {
+        const canvas = document.getElementById(chartId);
+        const link = document.createElement('a');
+        link.download = `${chartId}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
     function initializeAttendanceCharts() {
         // Attendance Trend Chart
         const attendanceTrendCtx = document.getElementById('attendanceTrendChart').getContext('2d');
-        new Chart(attendanceTrendCtx, {
+        charts.attendanceTrendChart = new Chart(attendanceTrendCtx, {
             type: 'line',
             data: {
-                labels: [{% for item in attendance_stats.trend_data %}"{{ item.date|date:'M d' }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ attendance_stats.trend_data|safe }}.map(item => item.date),
                 datasets: [
                     {
                         label: 'Present',
-                        data: [{% for item in attendance_stats.trend_data %}{{ item.present }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ attendance_stats.trend_data|safe }}.map(item => item.present),
                         borderColor: '#28a745',
                         backgroundColor: 'rgba(40, 167, 69, 0.1)',
                         tension: 0.3,
@@ -533,7 +945,7 @@
                     },
                     {
                         label: 'Absent',
-                        data: [{% for item in attendance_stats.trend_data %}{{ item.absent }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ attendance_stats.trend_data|safe }}.map(item => item.absent),
                         borderColor: '#dc3545',
                         backgroundColor: 'rgba(220, 53, 69, 0.1)',
                         tension: 0.3,
@@ -542,7 +954,7 @@
                     },
                     {
                         label: 'Late',
-                        data: [{% for item in attendance_stats.trend_data %}{{ item.late }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ attendance_stats.trend_data|safe }}.map(item => item.late),
                         borderColor: '#ffc107',
                         backgroundColor: 'rgba(255, 193, 7, 0.1)',
                         tension: 0.3,
@@ -566,14 +978,14 @@
 
         // Attendance Class Chart
         const attendanceClassCtx = document.getElementById('attendanceClassChart').getContext('2d');
-        new Chart(attendanceClassCtx, {
+        charts.attendanceClassChart = new Chart(attendanceClassCtx, {
             type: 'bar',
             data: {
-                labels: [{% for item in attendance_stats.class_breakdown %}"Class {{ item.student__class_level }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ attendance_stats.class_breakdown|safe }}.map(item => `Class ${item.student__class_level}`),
                 datasets: [
                     {
                         label: 'Present %',
-                        data: [{% for item in attendance_stats.class_breakdown %}{{ item.present_pct }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ attendance_stats.class_breakdown|safe }}.map(item => item.present_pct),
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
                         borderColor: '#28a745',
                         borderWidth: 1
@@ -615,14 +1027,14 @@
     function initializeGradeCharts() {
         // Grade Class Chart
         const gradeClassCtx = document.getElementById('gradeClassChart').getContext('2d');
-        new Chart(gradeClassCtx, {
+        charts.gradeClassChart = new Chart(gradeClassCtx, {
             type: 'bar',
             data: {
-                labels: [{% for item in grade_stats.grade_distribution %}"Class {{ item.student__class_level }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ grade_stats.grade_distribution|safe }}.map(item => `Class ${item.student__class_level}`),
                 datasets: [
                     {
                         label: 'Average Score',
-                        data: [{% for item in grade_stats.grade_distribution %}{{ item.avg_score|floatformat:1 }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ grade_stats.grade_distribution|safe }}.map(item => item.avg_score),
                         backgroundColor: 'rgba(23, 162, 184, 0.7)',
                         borderColor: '#17a2b8',
                         borderWidth: 1
@@ -659,14 +1071,14 @@
 
         // Grade Subject Chart
         const gradeSubjectCtx = document.getElementById('gradeSubjectChart').getContext('2d');
-        new Chart(gradeSubjectCtx, {
+        charts.gradeSubjectChart = new Chart(gradeSubjectCtx, {
             type: 'bar',
             data: {
-                labels: [{% for item in grade_stats.subject_performance %}"{{ item.subject__name }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ grade_stats.subject_performance|safe }}.map(item => item.subject__name),
                 datasets: [
                     {
                         label: 'Average Score',
-                        data: [{% for item in grade_stats.subject_performance %}{{ item.avg_score|floatformat:1 }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ grade_stats.subject_performance|safe }}.map(item => item.avg_score),
                         backgroundColor: 'rgba(108, 117, 125, 0.7)',
                         borderColor: '#6c757d',
                         borderWidth: 1
@@ -706,13 +1118,13 @@
     function initializeFinanceCharts() {
         // Finance Status Chart
         const financeStatusCtx = document.getElementById('financeStatusChart').getContext('2d');
-        new Chart(financeStatusCtx, {
+        charts.financeStatusChart = new Chart(financeStatusCtx, {
             type: 'doughnut',
             data: {
-                labels: [{% for item in fee_stats.status_distribution %}"{{ item.payment_status }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ fee_stats.status_distribution|safe }}.map(item => item.payment_status),
                 datasets: [
                     {
-                        data: [{% for item in fee_stats.status_distribution %}{{ item.count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ fee_stats.status_distribution|safe }}.map(item => item.count),
                         backgroundColor: [
                             'rgba(40, 167, 69, 0.7)',
                             'rgba(220, 53, 69, 0.7)',
@@ -758,13 +1170,13 @@
 
         // Finance Category Chart
         const financeCategoryCtx = document.getElementById('financeCategoryChart').getContext('2d');
-        new Chart(financeCategoryCtx, {
+        charts.financeCategoryChart = new Chart(financeCategoryCtx, {
             type: 'pie',
             data: {
-                labels: [{% for item in fee_stats.category_breakdown %}"{{ item.category__name }}"{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ fee_stats.category_breakdown|safe }}.map(item => item.category__name),
                 datasets: [
                     {
-                        data: [{% for item in fee_stats.category_breakdown %}{{ item.total_payable }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                        data: {{ fee_stats.category_breakdown|safe }}.map(item => item.total_payable),
                         backgroundColor: [
                             'rgba(0, 123, 255, 0.7)',
                             'rgba(23, 162, 184, 0.7)',

@@ -1,3 +1,8 @@
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import FeeCategory
+from .serializers import FeeCategorySerializer
+
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from decimal import Decimal
@@ -383,6 +388,15 @@ class FeeCategoryCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView)
     def form_valid(self, form):
         messages.success(self.request, 'Fee category created successfully')
         return super().form_valid(form)
+    
+@api_view(['GET'])
+def fee_category_detail(request, pk):
+    try:
+        category = FeeCategory.objects.get(pk=pk)
+        serializer = FeeCategorySerializer(category)
+        return Response(serializer.data)
+    except FeeCategory.DoesNotExist:
+        return Response(status=404)
 
 class FeeCategoryUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = FeeCategory
@@ -491,26 +505,62 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     template_name = 'core/finance/fee_form.html'
     
     def test_func(self):
+        """Check if user has permission to create fees"""
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_form_kwargs(self):
+        """Add student_id to form kwargs"""
         kwargs = super().get_form_kwargs()
         kwargs['student_id'] = self.kwargs.get('student_id')
         return kwargs
     
     def form_valid(self, form):
-        form.instance._current_user = self.request.user
-        messages.success(self.request, 'Fee record created successfully')
+        """Handle valid form submission"""
+        student = get_object_or_404(Student, pk=self.kwargs['student_id'])
+        form.instance.student = student
+        form.instance.created_by = self.request.user
+        form.instance.recorded_by = self.request.user  # Add this line to set recorded_by
+        form.instance.balance = form.cleaned_data['amount_payable'] - form.cleaned_data['amount_paid']
+        
+        # Set payment date if status is paid and no date provided
+        if form.instance.payment_status == 'paid' and not form.instance.payment_date:
+            form.instance.payment_date = timezone.now().date()
+        
+        messages.success(
+            self.request,
+            f'Fee record for {student.get_full_name()} created successfully'
+        )
         return super().form_valid(form)
     
     def get_success_url(self):
+        """Redirect to student detail page after creation"""
         return reverse_lazy('student_detail', kwargs={'pk': self.object.student.pk})
     
     def get_context_data(self, **kwargs):
+        """Add student and other context data to template"""
         context = super().get_context_data(**kwargs)
-        context['student'] = get_object_or_404(Student, pk=self.kwargs['student_id'])
+        student_id = self.kwargs.get('student_id')
+        
+        if student_id:
+            student = get_object_or_404(Student, pk=student_id)
+            context['student'] = student
+            
+            # Add existing fees for reference
+            context['existing_fees'] = Fee.objects.filter(student=student).order_by('-due_date')[:5]
+            context['total_fees'] = Fee.objects.filter(student=student).count()
+            
         return context
-
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Add student verification"""
+        student_id = kwargs.get('student_id')
+        if student_id:
+            student = get_object_or_404(Student, pk=student_id)
+            if not student.is_active:
+                messages.warning(request, 'Cannot create fee for inactive student')
+                return redirect('student_detail', pk=student_id)
+                
+        return super().dispatch(request, *args, **kwargs)
 
 class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Fee
@@ -521,6 +571,14 @@ class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return is_admin(self.request.user)
     
     def form_valid(self, form):
+        form.instance.balance = form.cleaned_data['amount_payable'] - form.cleaned_data['amount_paid']
+        
+        # Update payment date if status changed to paid and no date exists
+        if (form.instance.payment_status == 'paid' and 
+            not form.instance.payment_date and
+            self.get_object().payment_status != 'paid'):
+            form.instance.payment_date = timezone.now().date()
+            
         messages.success(self.request, 'Fee record updated successfully')
         return super().form_valid(form)
     
@@ -2472,11 +2530,13 @@ class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
         return response
 
 #analytics views
+
 class DecimalJSONEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles Decimal objects"""
     def default(self, obj):
         if isinstance(obj, Decimal):
             return float(obj)
+        elif isinstance(obj, date):
+            return obj.isoformat()  # Convert date to ISO format string
         return super().default(obj)
 
 class AnalyticsDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
