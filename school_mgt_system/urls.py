@@ -8,6 +8,7 @@ from school_mgt_system import consumers
 from core.views import NotificationListView, mark_notification_read
 
 urlpatterns = [
+
     path('admin/', admin.site.urls),
     path('core/', include('core.urls')),
     path('accounts/', include('accounts.urls')),

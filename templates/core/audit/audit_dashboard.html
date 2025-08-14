@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+  <h1 class="mt-4">Audit Log Dashboard</h1>
+  
+  <!-- Filter Form -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="fas fa-filter me-1"></i>
+      Filters
+    </div>
+    <div class="card-body">
+      <form method="get">
+        <div class="row">
+          <div class="col-md-3">
+            <label for="id_date_range_after">Date Range</label>
+            {{ filter.form.date_range }}
+          </div>
+          <div class="col-md-2">
+            <label for="id_action">Action</label>
+            {{ filter.form.action }}
+          </div>
+          <div class="col-md-2">
+            <label for="id_user">User</label>
+            {{ filter.form.user }}
+          </div>
+          <div class="col-md-2">
+            <label for="id_model_name">Model</label>
+            {{ filter.form.model_name }}
+          </div>
+          <div class="col-md-3 align-self-end">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="?" class="btn btn-secondary">Reset</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Audit Log Table -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="fas fa-table me-1"></i>
+      Audit Logs
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-bordered" id="auditTable">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Model</th>
+              <th>Object</th>
+              <th>IP</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in object_list %}
+            <tr>
+              <td>{{ log.timestamp|date:"Y-m-d H:i" }}</td>
+              <td>{{ log.user.get_full_name|default:log.user.username }}</td>
+              <td><span class="badge bg-{{ log.get_action_class }}">{{ log.action }}</span></td>
+              <td>{{ log.model_name }}</td>
+              <td>
+                <a href="#" data-bs-toggle="modal" data-bs-target="#detailsModal{{ log.id }}">
+                  View Details
+                </a>
+              </td>
+              <td>{{ log.ip_address }}</td>
+              <td>
+                {% if log.location %}
+                  <i class="fas fa-map-marker-alt"></i> {{ log.location }}
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Details Modal -->
+            <div class="modal fade" id="detailsModal{{ log.id }}" tabindex="-1">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Audit Log Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <h6>Basic Info</h6>
+                        <p><strong>Timestamp:</strong> {{ log.timestamp }}</p>
+                        <p><strong>User Agent:</strong> {{ log.user_agent }}</p>
+                        <p><strong>Location:</strong> {{ log.location }}</p>
+                      </div>
+                      <div class="col-md-6">
+                        <h6>Changes</h6>
+                        <pre>{{ log.details|pprint }}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Pagination -->
+      {% include 'includes/pagination.html' %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#auditTable').DataTable({
+        ordering: false,
+        dom: 'Bfrtip',
+        buttons: ['csv', 'excel']
+    });
+});
+</script>
+{% endblock %}

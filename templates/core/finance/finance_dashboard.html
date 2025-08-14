@@ -1,0 +1,316 @@
+<!-- finance_dashboard.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Finance Dashboard{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .finance-card {
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .finance-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .kpi-card {
+        border-left: 4px solid;
+        border-radius: 8px;
+    }
+    .kpi-card.primary { border-left-color: #3a7bd5; }
+    .kpi-card.success { border-left-color: #28a745; }
+    .kpi-card.danger { border-left-color: #dc3545; }
+    .kpi-card.warning { border-left-color: #ffc107; }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    .revenue-trend {
+        height: 400px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Finance Analytics Dashboard</h1>
+            <p class="mb-0 text-muted">Comprehensive financial overview and insights</p>
+        </div>
+        <div class="dropdown">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dateRangeDropdown" data-bs-toggle="dropdown">
+                <i class="bi bi-calendar-range me-2"></i>
+                <span id="dateRangeDisplay">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><h6 class="dropdown-header">Quick Range</h6></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="today">Today</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="week">This Week</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="month">This Month</a></li>
+                <li><a class="dropdown-item date-range-option" href="#" data-range="year">This Year</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" id="customRangeOption">Custom Range</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card finance-card kpi-card primary">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Total Revenue</h6>
+                    <h3 class="mb-0">${{ total_collected|floatformat:2 }}</h3>
+                    <small class="text-muted">{{ collection_rate|floatformat:1 }}% of expected</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card finance-card kpi-card success">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Budget Utilization</h6>
+                    <h3 class="mb-0">{{ budget_utilization|floatformat:1 }}%</h3>
+                    <small class="text-muted">{{ budget_variance|floatformat:2 }} variance</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card finance-card kpi-card warning">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Outstanding Fees</h6>
+                    <h3 class="mb-0">${{ outstanding_total|floatformat:2 }}</h3>
+                    <small class="text-muted">{{ outstanding_count }} students</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card finance-card kpi-card danger">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">Net Profit</h6>
+                    <h3 class="mb-0">${{ net_profit|floatformat:2 }}</h3>
+                    <small class="text-muted">{{ profit_margin|floatformat:1 }}% margin</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Revenue Section -->
+        <div class="col-lg-8">
+            <div class="card finance-card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Revenue Trends</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container revenue-trend">
+                        <canvas id="revenueTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Payment Methods -->
+        <div class="col-lg-4">
+            <div class="card finance-card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Payment Methods</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="paymentMethodsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Outstanding -->
+            <div class="card finance-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Top Outstanding Fees</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for fee in outstanding_payments %}
+                        <a href="{% url 'fee_detail' fee.id %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ fee.student.get_full_name }}</h6>
+                                <small>${{ fee.balance|floatformat:2 }}</small>
+                            </div>
+                            <small class="text-muted">{{ fee.category.name }} • Due {{ fee.due_date|date:"M d" }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Budget Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card finance-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Budget vs Actual Spend</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 400px;">
+                        <canvas id="budgetChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date pickers
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        allowInput: true
+    });
+
+    // Revenue Trend Chart
+    const revenueCtx = document.getElementById('revenueTrendChart').getContext('2d');
+    new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: {{ daily_revenue|safe }}.map(item => item.payment_date),
+            datasets: [{
+                label: 'Daily Revenue',
+                data: {{ daily_revenue|safe }}.map(item => item.total),
+                borderColor: '#3a7bd5',
+                backgroundColor: 'rgba(58, 123, 213, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return '$' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Payment Methods Chart
+    const paymentCtx = document.getElementById('paymentMethodsChart').getContext('2d');
+    new Chart(paymentCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ payment_methods|safe }}.map(item => item.payment_method),
+            datasets: [{
+                data: {{ payment_methods|safe }}.map(item => item.total),
+                backgroundColor: [
+                    '#28a745', '#17a2b8', '#ffc107', '#6c757d', '#343a40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': $' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Budget Chart
+    const budgetCtx = document.getElementById('budgetChart').getContext('2d');
+    new Chart(budgetCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ budget_data|safe }}.map(item => item.category),
+            datasets: [
+                {
+                    label: 'Budget',
+                    data: {{ budget_data|safe }}.map(item => item.budget),
+                    backgroundColor: 'rgba(58, 123, 213, 0.7)'
+                },
+                {
+                    label: 'Actual',
+                    data: {{ budget_data|safe }}.map(item => item.actual),
+                    backgroundColor: 'rgba(40, 167, 69, 0.7)'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': $' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Date range handling
+    document.querySelectorAll('.date-range-option').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const range = this.getAttribute('data-range');
+            updateDateRange(range);
+        });
+    });
+
+    function updateDateRange(range) {
+        let url = window.location.pathname;
+        let params = new URLSearchParams(window.location.search);
+        params.set('range', range);
+        window.location.href = url + '?' + params.toString();
+    }
+});
+</script>
+{% endblock %}

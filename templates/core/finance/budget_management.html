@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Budget Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>Budget Management - {{ current_year }}</h2>
+        </div>
+    </div>
+
+    <!-- Budget vs Actual -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Budget vs Actual Spending</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Budget</th>
+                                    <th>Actual</th>
+                                    <th>Variance</th>
+                                    <th>Variance %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in budget_data %}
+                                <tr>
+                                    <td>{{ item.category.name }}</td>
+                                    <td>Ksh {{ item.budget|intcomma }}</td>
+                                    <td>Ksh {{ item.actual|intcomma }}</td>
+                                    <td class="{% if item.variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        Ksh {{ item.variance|intcomma }}
+                                    </td>
+                                    <td class="{% if item.variance_percent < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ item.variance_percent|floatformat:2 }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historical Spending -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Historical Spending</h5>
+                </div>
+                <div class="card-body">
+                    <div id="historicalSpendingChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Historical Spending Chart
+    const historicalCtx = document.getElementById('historicalSpendingChart').getContext('2d');
+    const historicalChart = new Chart(historicalCtx, {
+        type: 'bar',
+        data: {
+            labels: [{% for year in historical_spending %}"{{ year.date__year }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                label: 'Total Spending',
+                data: [{% for year in historical_spending %}{{ year.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -31,6 +31,10 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django.contrib.humanize',
     'rest_framework',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
+    'guardian',
+    'django_filters',
     
     
 ]
@@ -45,6 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_otp.middleware.OTPMiddleware',
 ]
 
 ROOT_URLCONF = 'school_mgt_system.urls'
@@ -149,6 +154,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.CustomUser'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = 'two_factor:login'
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
@@ -174,4 +180,51 @@ if DEBUG:
 # In settings.py
 CSRF_COOKIE_SECURE = True  # If using HTTPS
 CSRF_COOKIE_HTTPONLY = True  # Recommended for security
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend',
+    'guardian.backends.ObjectPermissionBackend',
+)
+
+ANONYMOUS_USER_NAME = None  # Disable anonymous user
+
+AUTH_PASSWORD_VALIDATORS = [
+    # ... existing validators ...
+    {
+        'NAME': 'core.validators.ComplexityValidator',
+    },
+]
+
+# Password rotation (90 days)
+PASSWORD_ROTATION_DAYS = 90
+
+# Add to your settings
+TWILIO_ACCOUNT_SID = 'your_account_sid'
+TWILIO_AUTH_TOKEN = 'your_auth_token'
+TWILIO_PHONE_NUMBER = '+1234567890'
+OTP_TWILIO_NO_DELIVERY = False
+OTP_TWILIO_CHALLENGE_MESSAGE = 'Your verification code is {token}'
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "school_"
+    }
+}
+
+# Session engine
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+
+# Cache timeouts
+CACHE_MIDDLEWARE_SECONDS = 60 * 15  # 15 minutes
+
+# settings.py
+GEOIP_PATH = '/mnt/e/projects/school/data/geoip/GeoLite2-City/GeoLite2-City.mmdb'  # Full path to file
+GEOIP_CITY = 'GeoLite2-City.mmdb'
+GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
     

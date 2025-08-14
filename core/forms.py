@@ -921,3 +921,13 @@ class ParentAttendanceFilterForm(forms.Form):
         if user and hasattr(user, 'parentguardian'):
             self.fields['student'].queryset = user.parentguardian.student.all()
 
+
+
+
+
+
+
+
+
+
+

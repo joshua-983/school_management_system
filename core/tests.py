@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from core.models import Assignment, ClassAssignment, Subject
 from users.models import Teacher
+from core.models import AuditLog
 
 class AssignmentCreationTests(TestCase):
     @classmethod
@@ -32,3 +33,13 @@ class AssignmentCreationTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Assignment.objects.exists())
+
+
+class AuditLogTestCase(TestCase):
+    def test_details_storage(self):
+        log = AuditLog.objects.create(
+            # ... required fields ...,
+            details={"test": "value"}
+        )
+        self.assertIsInstance(log.details, dict)
+        self.assertEqual(log.details["test"], "value")

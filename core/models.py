@@ -1,3 +1,5 @@
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 from decimal import Decimal
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -273,7 +275,13 @@ class Fee(models.Model):
             models.Index(fields=['student']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['due_date']),
-        ]
+    ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.created_by:
+            assign_perm('view_fee', self.created_by, self)
+            assign_perm('change_fee', self.created_by, self)
 
 
     def __str__(self):
@@ -292,24 +300,65 @@ class Fee(models.Model):
             
         super().save(*args, **kwargs)
 
-    def update_payment_status(self):
-        """Improved payment status calculation with tolerance"""
-        today = timezone.now().date()
-        tolerance = Decimal('1.00')  # Consider $1 difference as paid
+    # In Fee model
+def update_payment_status(self):
+    """Enhanced payment status calculation with tolerance and grace period"""
+    tolerance = Decimal('1.00')  # Consider $1 difference as paid
+    grace_period = 5  # Days after due date before marking overdue
+    
+    today = timezone.now().date()
+    effective_due_date = self.due_date + timedelta(days=grace_period)
+    
+    difference = abs(self.amount_payable - self.amount_paid)
+    
+    if difference <= tolerance:
+        self.payment_status = 'paid'
+    elif self.amount_paid >= self.amount_payable:
+        self.payment_status = 'paid'
+    elif self.amount_paid > Decimal('0.00'):
+        self.payment_status = 'partial'
+    elif today > effective_due_date:
+        self.payment_status = 'overdue'
+    else:
+        self.payment_status = 'unpaid'
+
+class FeeInstallment(models.Model):
+    fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='installments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    due_date = models.DateField()
+    is_paid = models.BooleanField(default=False)
+    payment_date = models.DateField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['due_date']
         
-        # Calculate the difference with tolerance
-        difference = abs(self.amount_payable - self.amount_paid)
-        
-        if difference <= tolerance:
-            self.payment_status = 'paid'
-        elif self.amount_paid >= self.amount_payable:
-            self.payment_status = 'paid'
-        elif self.amount_paid > Decimal('0.00'):
-            self.payment_status = 'partial'
-        elif self.due_date < today:
-            self.payment_status = 'overdue'
-        else:
-            self.payment_status = 'unpaid'
+    def __str__(self):
+        return f"Installment of {self.amount} due {self.due_date}"
+
+
+class FeeDiscount(models.Model):
+    DISCOUNT_TYPES = [
+        ('PERCENT', 'Percentage'),
+        ('FIXED', 'Fixed Amount'),
+    ]
+    
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='discounts')
+    category = models.ForeignKey(FeeCategory, on_delete=models.CASCADE)
+    discount_type = models.CharField(max_length=10, choices=DISCOUNT_TYPES)
+    amount = models.DecimalField(max_digits=5, decimal_places=2)
+    reason = models.TextField()
+    approved_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    
+    def apply_discount(self, fee_amount):
+        if self.discount_type == 'PERCENT':
+            return fee_amount * (self.amount / 100)
+        return min(fee_amount, self.amount)
+
+
+
+
 
     def get_payment_status_html(self):
         """Improved HTML display for payment status"""
@@ -698,21 +747,74 @@ class AuditLog(models.Model):
         ('DELETE', 'Delete'),
         ('LOGIN', 'Login'),
         ('LOGOUT', 'Logout'),
+        ('ACCESS', 'Access'),
+        ('OTHER', 'Other'),
     ]
     
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
-    model_name = models.CharField(max_length=50)
-    object_id = models.CharField(max_length=50)
-    details = models.TextField(blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        blank=True,
+        related_name='audit_logs'
+    )
+    action = models.CharField(
+        max_length=10, 
+        choices=ACTION_CHOICES,
+        db_index=True
+    )
+    model_name = models.CharField(
+        max_length=50,
+        db_index=True
+    )
+    object_id = models.CharField(
+        max_length=50,
+        db_index=True,
+        blank=True,
+        null=True
+    )
+    details = models.JSONField(
+        blank=True,
+        null=True,
+        default=dict
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True, 
+        blank=True,
+        db_index=True
+    )
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True
+    )
     
-    class Meta:
-        ordering = ['-timestamp']
-    
+class Meta:
+    ordering = ['-timestamp']
+    verbose_name = 'Audit Log'
+    verbose_name_plural = 'Audit Logs'
+    indexes = [
+        models.Index(fields=['model_name', 'object_id']),
+        models.Index(fields=['action', 'timestamp']),
+        models.Index(fields=['-timestamp']),
+        models.Index(fields=['user']),
+        models.Index(fields=['action']),
+    ]
     def __str__(self):
-        return f"{self.user} {self.action}d {self.model_name} at {self.timestamp}"
+        return f"{self.user or 'System'} {self.action}d {self.model_name} at {self.timestamp}"
+
+    @classmethod
+    def log_action(cls, user, action, model_name=None, object_id=None, details=None, ip_address=None):
+        """
+        Helper method to create audit log entries
+        """
+        return cls.objects.create(
+            user=user,
+            action=action,
+            model_name=model_name or '',
+            object_id=str(object_id) if object_id else None,
+            details=details or {},
+            ip_address=ip_address
+        )
     
 class Announcement(models.Model):
     TARGET_CHOICES = [
@@ -938,13 +1040,3 @@ class AttendanceAnalytics(models.Model):
     class Meta:
         unique_together = ('class_level', 'date')
 
-class FinancialAnalytics(models.Model):
-    """Model to store financial analytics"""
-    date = models.DateField()
-    total_fees_payable = models.DecimalField(max_digits=10, decimal_places=2)
-    total_fees_paid = models.DecimalField(max_digits=10, decimal_places=2)
-    collection_rate = models.FloatField()
-    outstanding_balance = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    class Meta:
-        unique_together = ('date',)

@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Revenue Analytics{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>Revenue Analytics</h2>
+            <p class="text-muted">Showing data from {{ start_date }} to {{ end_date }}</p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Collected</h5>
+                    <h3 class="card-text">Ksh {{ total_collected|intcomma }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Expected</h5>
+                    <h3 class="card-text">Ksh {{ total_expected|intcomma }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Collection Rate</h5>
+                    <h3 class="card-text">{{ collection_rate|floatformat:2 }}%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Daily Revenue Trend</h5>
+                    <div id="revenueChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Payment Methods</h5>
+                    <div id="paymentMethodsChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outstanding Payments -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Top Outstanding Payments</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Fee Category</th>
+                                    <th>Amount Due</th>
+                                    <th>Amount Paid</th>
+                                    <th>Balance</th>
+                                    <th>Status</th>
+                                    <th>Due Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fee in outstanding_payments %}
+                                <tr>
+                                    <td>{{ fee.student.get_full_name }}</td>
+                                    <td>{{ fee.category.name }}</td>
+                                    <td>Ksh {{ fee.amount_payable|intcomma }}</td>
+                                    <td>Ksh {{ fee.amount_paid|intcomma }}</td>
+                                    <td>Ksh {{ fee.balance|intcomma }}</td>
+                                    <td>
+                                        <span class="badge {% if fee.payment_status == 'paid' %}bg-success{% elif fee.payment_status == 'partial' %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ fee.get_payment_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ fee.due_date }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center">No outstanding payments</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Daily Revenue Chart
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    const revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: [{% for day in daily_revenue %}"{{ day.payment_date|date:'M d' }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                label: 'Daily Revenue',
+                data: [{% for day in daily_revenue %}{{ day.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // Payment Methods Chart
+    const methodsCtx = document.getElementById('paymentMethodsChart').getContext('2d');
+    const methodsChart = new Chart(methodsCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for method in payment_methods %}"{{ method.payment_method }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                data: [{% for method in payment_methods %}{{ method.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

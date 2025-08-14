@@ -49,6 +49,9 @@ from urllib.parse import urlencode
 from django.middleware.csrf import get_token
 from .forms import GradeEntryForm
 
+from django_filters.views import FilterView
+from .filters import AuditLogFilter
+from django.views.decorators.cache import cache_page
 
 
 
@@ -131,6 +134,7 @@ def student_dashboard(request):
     }
     return render(request, 'core/students/student_dashboard.html', context)
 
+@method_decorator(cache_page(60*15), name='dispatch')  # 15 minute cache
 class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Student
     template_name = 'core/students/student_list.html'
@@ -748,6 +752,219 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
+
+# fee status report
+class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def get(self, request):
+        # Initialize form with GET parameters
+        form = FeeStatusReportForm(request.GET or None)
+        
+        # Get base queryset
+        fees = Fee.objects.all().select_related('student', 'category')
+        
+        # Apply filters if form is valid
+        if form.is_valid():
+            date_range = form.cleaned_data.get('date_range')
+            class_level = form.cleaned_data.get('class_level')
+            category = form.cleaned_data.get('category')
+            
+            if date_range:
+                start_date, end_date = date_range
+                fees = fees.filter(date_recorded__range=(start_date, end_date))
+            
+            if class_level:
+                fees = fees.filter(student__class_level=class_level)
+                
+            if category:
+                fees = fees.filter(category=category)
+        
+        # Categorize fees by status
+        paid_fees = fees.filter(payment_status='PAID')
+        partial_fees = fees.filter(payment_status='PARTIAL')
+        unpaid_fees = fees.filter(payment_status='UNPAID')
+        overdue_fees = fees.filter(payment_status='OVERDUE')
+        
+        # Calculate summaries
+        summary = {
+            'total_payable': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
+            'total_paid': fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0,
+            'counts': {
+                'paid': paid_fees.count(),
+                'partial': partial_fees.count(),
+                'unpaid': unpaid_fees.count(),
+                'overdue': overdue_fees.count(),
+                'total': fees.count()
+            }
+        }
+        
+        context = {
+            'form': form,
+            'paid_fees': paid_fees,
+            'partial_fees': partial_fees,
+            'unpaid_fees': unpaid_fees,
+            'overdue_fees': overdue_fees,
+            'summary': summary
+        }
+        
+        if request.GET.get('export'):
+            return self.export_report(context)
+            
+        return render(request, 'finance/fee_status_report.html', context)
+    
+    def export_report(self, context):
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="fee_status_report.xlsx"'
+        
+        wb = Workbook()
+        
+        # Create sheets for each status
+        self._create_sheet(wb, 'Paid Fees', context['paid_fees'])
+        self._create_sheet(wb, 'Partial Payments', context['partial_fees'])
+        self._create_sheet(wb, 'Unpaid Fees', context['unpaid_fees'])
+        self._create_sheet(wb, 'Overdue Fees', context['overdue_fees'])
+        
+        wb.save(response)
+        return response
+    
+    def _create_sheet(self, wb, title, queryset):
+        ws = wb.create_sheet(title=title)
+        
+        headers = [
+            'Student ID', 'Student Name', 'Class', 
+            'Fee Category', 'Amount Payable', 'Amount Paid',
+            'Balance', 'Due Date', 'Status'
+        ]
+        
+        ws.append(headers)
+        
+        for fee in queryset:
+            ws.append([
+                fee.student.student_id,
+                fee.student.get_full_name(),
+                fee.student.get_class_level_display(),
+                str(fee.category),
+                float(fee.amount_payable),
+                float(fee.amount_paid),
+                float(fee.balance),
+                fee.due_date.strftime('%Y-%m-%d'),
+                fee.get_payment_status_display()
+            ])
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+
+class FeeDashboardView(LoginRequiredMixin, TemplateView):
+    template_name = 'finance/fee_dashboard.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Current term stats
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        context['current_term'] = current_term
+        
+        if current_term:
+            fees = Fee.objects.filter(
+                academic_year=current_term.academic_year,
+                term=current_term.term
+            )
+            
+            context.update({
+                'total_payable': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
+                'total_paid': fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0,
+                'payment_status_distribution': self.get_payment_status_distribution(fees),
+                'class_level_stats': self.get_class_level_stats(fees),
+                'recent_payments': FeePayment.objects.order_by('-payment_date')[:10]
+            })
+        
+        return context
+    
+    def get_payment_status_distribution(self, fees):
+        return fees.values('payment_status').annotate(
+            count=Count('id'),
+            amount=Sum('amount_payable')
+        ).order_by('payment_status')
+    
+    def get_class_level_stats(self, fees):
+        return fees.values('student__class_level').annotate(
+            payable=Sum('amount_payable'),
+            paid=Sum('amount_paid'),
+            count=Count('id')
+        ).order_by('student__class_level')
+
+
+# Fee generation automation
+def generate_term_fees():
+    """Automatically generate fees for all students for the current term"""
+    current_term = AcademicTerm.objects.filter(is_active=True).first()
+    if not current_term:
+        return
+        
+    # Get all active students
+    students = Student.objects.filter(is_active=True)
+    
+    # Get all mandatory fee categories
+    categories = FeeCategory.objects.filter(
+        is_active=True,
+        is_mandatory=True
+    )
+    
+    created_count = 0
+    
+    with transaction.atomic():
+        for student in students:
+            for category in categories:
+                # Check if category applies to student's class
+                if (category.class_levels and 
+                    student.class_level not in category.class_levels.split(',')):
+                    continue
+                
+                # Check if fee already exists
+                if Fee.objects.filter(
+                    student=student,
+                    category=category,
+                    academic_year=current_term.academic_year,
+                    term=current_term.term
+                ).exists():
+                    continue
+                
+                # Calculate due date (e.g., 2 weeks after term starts)
+                due_date = current_term.start_date + timedelta(days=14)
+                
+                # Create the fee
+                Fee.objects.create(
+                    student=student,
+                    category=category,
+                    academic_year=current_term.academic_year,
+                    term=current_term.term,
+                    amount_payable=category.default_amount,
+                    due_date=due_date,
+                    recorded_by=get_system_user()
+                )
+                created_count += 1
+                
+    return created_count
+
+# Fee statement view for parents
+class ParentFeeStatementView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Student
+    template_name = 'finance/parent_fee_statement.html'
+    
+    def test_func(self):
+        return self.request.user.parentguardian.student.filter(pk=self.kwargs['pk']).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.get_object()
+        
+        context['fees'] = Fee.objects.filter(student=student).order_by('-academic_year', '-term')
+        context['total_payable'] = context['fees'].aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        context['total_paid'] = context['fees'].aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        
+        return context
+
+
+
 
 
 class SubjectListView(LoginRequiredMixin, ListView):
@@ -2827,3 +3044,91 @@ class AnalyticsDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateVi
             defaults={'data': json.loads(json.dumps(result, cls=DecimalJSONEncoder))}
         )
         return result
+
+def generate_receipt_pdf(payment):
+    from reportlab.pdfgen import canvas
+    from io import BytesIO
+    
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer)
+    
+    # Draw receipt content
+    p.drawString(100, 800, f"Receipt #: {payment.receipt_number}")
+    p.drawString(100, 780, f"Date: {payment.payment_date.strftime('%Y-%m-%d')}")
+    p.drawString(100, 760, f"Student: {payment.fee.student.get_full_name()}")
+    p.drawString(100, 740, f"Amount: ${payment.amount:.2f}")
+    
+    p.showPage()
+    p.save()
+    
+    pdf = buffer.getvalue()
+    buffer.close()
+    return pdf
+
+
+def send_payment_reminders():
+    upcoming_due = date.today() + timedelta(days=3)  # 3 days before due
+    overdue_fees = Fee.objects.filter(
+        due_date=upcoming_due,
+        payment_status__in=['unpaid', 'partial']
+    )
+    
+    for fee in overdue_fees:
+        for parent in fee.student.parents.all():
+            send_email(
+                subject=f"Upcoming Fee Payment Due for {fee.student}",
+                message=f"Payment of {fee.balance} is due on {fee.due_date}",
+                recipient=parent.email
+            )
+
+class FinancialReportView(LoginRequiredMixin, View):
+    def get(self, request):
+        form = FinancialReportForm(request.GET)
+        
+        if form.is_valid():
+            start_date = form.cleaned_data['start_date']
+            end_date = form.cleaned_data['end_date']
+            
+            payments = FeePayment.objects.filter(
+                payment_date__range=(start_date, end_date)
+            ).select_related('fee__student', 'fee__category')
+            
+            # Group by payment method
+            by_method = payments.values('payment_mode').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total')
+            
+            # Group by category
+            by_category = payments.values('fee__category__name').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total')
+            
+            return render(request, 'finance/report.html', {
+                'form': form,
+                'by_method': by_method,
+                'by_category': by_category,
+                'total': payments.aggregate(Sum('amount'))['amount__sum'] or 0
+            })
+        
+        return render(request, 'finance/report.html', {'form': form})
+
+#Audit dashboard
+class AuditDashboardView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
+    model = AuditLog
+    template_name = 'core/audit/audit_dashboard.html'
+    filterset_class = AuditLogFilter
+    paginate_by = 50
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_queryset(self):
+        return AuditLog.objects.select_related('user').order_by('-timestamp')
+
+
+
+
+
+

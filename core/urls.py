@@ -50,8 +50,15 @@ from .views import (
     NotificationListView, AuditLogListView,
     
     # Attendance views
-    AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
+    AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView,
+    
+    
+    
 )
+
+
+
+
 
 router = DefaultRouter()
 router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
@@ -168,6 +175,7 @@ urlpatterns = [
     # Analytics Dashboard
     path('analytics/', views.AnalyticsDashboardView.as_view(), name='analytics_dashboard'),
     path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
+    
     
     
 ]
