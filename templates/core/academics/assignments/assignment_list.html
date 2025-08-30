@@ -1,0 +1,392 @@
+{% extends 'base.html' %}
+
+{% block title %}Assignments{% endblock %}
+
+{% block extra_css %}
+<style>
+    .assignment-card {
+        transition: all 0.3s ease;
+        border: none;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .assignment-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    .badge-due {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    .badge-overdue {
+        background-color: #dc3545;
+    }
+    .badge-completed {
+        background-color: #28a745;
+    }
+    .badge-pending {
+        background-color: #6c757d;
+    }
+    .badge-submitted {
+        background-color: #17a2b8;
+    }
+    .badge-graded {
+        background-color: #28a745;
+    }
+    .filter-section {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        border: none;
+    }
+    .assignment-status {
+        min-width: 100px;
+        font-size: 0.85rem;
+    }
+    .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .stats-card {
+        background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+        color: white;
+        border-radius: 10px;
+    }
+    .stats-icon {
+        font-size: 2rem;
+        opacity: 0.8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h3 mb-1"><i class="bi bi-journal-bookmark me-2"></i>Assignments</h2>
+            <p class="text-muted mb-0">Manage and track all assignments</p>
+        </div>
+        {% if is_teacher or is_admin %}
+        <a href="{% url 'assignment_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> Create Assignment
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stats-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-0">Total Assignments</h5>
+                            <h2 class="my-2">{{ assignments_count }}</h2>
+                            <p class="card-text mb-0">Across all classes</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-journal-text stats-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-0">Completed</h5>
+                            <h2 class="my-2">{{ completed_count }}</h2>
+                            <p class="card-text mb-0">Assignments graded</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-check-circle stats-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-0">Pending</h5>
+                            <h2 class="my-2">{{ pending_count }}</h2>
+                            <p class="card-text mb-0">Awaiting submission</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-clock stats-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h5 class="card-title mb-0">Overdue</h5>
+                            <h2 class="my-2">{{ overdue_count }}</h2>
+                            <p class="card-text mb-0">Past due date</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <i class="bi bi-exclamation-triangle stats-icon"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card filter-section mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3"><i class="bi bi-funnel me-2"></i>Filter Assignments</h5>
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="subject" class="form-label">Subject</label>
+                    <select class="form-select" id="subject" name="subject">
+                        <option value="">All Subjects</option>
+                        {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if request.GET.subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                            {{ subject.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="class_level" class="form-label">Class</label>
+                    <select class="form-select" id="class_level" name="class_level">
+                        <option value="">All Classes</option>
+                        {% for level in class_levels %}
+                        <option value="{{ level.0 }}" {% if request.GET.class_level == level.0 %}selected{% endif %}>
+                            {{ level.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="assignment_type" class="form-label">Type</label>
+                    <select class="form-select" id="assignment_type" name="assignment_type">
+                        <option value="">All Types</option>
+                        {% for type in assignment_types %}
+                        <option value="{{ type.0 }}" {% if request.GET.assignment_type == type.0 %}selected{% endif %}>
+                            {{ type.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="sort" class="form-label">Sort By</label>
+                    <select class="form-select" id="sort" name="sort">
+                        <option value="">Default</option>
+                        <option value="due_date" {% if request.GET.sort == "due_date" %}selected{% endif %}>Due Date</option>
+                        <option value="title" {% if request.GET.sort == "title" %}selected{% endif %}>Title</option>
+                        <option value="created" {% if request.GET.sort == "created" %}selected{% endif %}>Recently Created</option>
+                    </select>
+                </div>
+                
+                <div class="col-12 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-funnel me-1"></i> Apply Filters
+                    </button>
+                    <a href="{% url 'assignment_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assignments List -->
+    {% if assignments %}
+    <div class="row">
+        {% for assignment in assignments %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card assignment-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 text-truncate">{{ assignment.title }}</h5>
+                    <span class="badge {% if assignment.due_date.date < time_now.date %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                        Due: {{ assignment.due_date|date:"M d, Y" }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">
+                            <i class="bi bi-book me-1"></i> {{ assignment.subject.name }}
+                        </span>
+                        <span class="text-muted">
+                            <i class="bi bi-people me-1"></i> {{ assignment.class_assignment.get_class_level_display }}
+                        </span>
+                    </div>
+                    
+                    <p class="card-text text-muted">{{ assignment.description|truncatewords:25 }}</p>
+                    
+                    <div class="mb-3">
+                        <span class="badge bg-primary">
+                            <i class="bi bi-star me-1"></i> Max Score: {{ assignment.max_score }}
+                        </span>
+                        <span class="badge bg-secondary ms-2">
+                            <i class="bi bi-percent me-1"></i> Weight: {{ assignment.weight }}%
+                        </span>
+                        <span class="badge bg-info ms-2">
+                            <i class="bi bi-tag me-1"></i> {{ assignment.get_assignment_type_display }}
+                        </span>
+                    </div>
+
+                    <!-- Status Badge -->
+                    <div class="mb-3">
+                        {% if assignment.due_date.date < time_now.date %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-exclamation-triangle me-1"></i> Overdue
+                            </span>
+                        {% else %}
+                            {% if user.is_authenticated and user.student %}
+                                {% for student_assignment in user.student.studentassignment_set.all %}
+                                    {% if student_assignment.assignment_id == assignment.id %}
+                                        {% if student_assignment.status == 'GRADED' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle me-1"></i> Graded
+                                            </span>
+                                        {% elif student_assignment.status == 'SUBMITTED' %}
+                                            <span class="badge bg-info">
+                                                <i class="bi bi-clock-history me-1"></i> Submitted
+                                            </span>
+                                        {% elif student_assignment.status == 'LATE' %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-clock me-1"></i> Late
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-clock me-1"></i> Pending
+                                            </span>
+                                        {% endif %}
+                                    {% endif %}
+                                {% empty %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-clock me-1"></i> Pending
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-clock me-1"></i> Active
+                                </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">
+                            Created: {{ assignment.created_at|date:"M d, Y" }}
+                        </small>
+                        
+                        <div class="btn-group">
+                            <a href="{% url 'assignment_detail' assignment.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            {% if is_teacher or is_admin %}
+                            <a href="{% url 'assignment_update' assignment.pk %}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-journal-x display-4 text-muted"></i>
+        <h4 class="mt-3 text-muted">No assignments found</h4>
+        <p class="text-muted">Try adjusting your filters or create a new assignment</p>
+        {% if is_teacher or is_admin %}
+        <a href="{% url 'assignment_create' %}" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-lg me-1"></i> Create Your First Assignment
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Pagination - FIXED SECTION -->
+    {% if is_paginated %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                    <i class="bi bi-chevron-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                    <i class="bi bi-chevron-double-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-expand the academics menu in sidebar
+        const academicsMenu = document.getElementById('academicsMenu');
+        if (academicsMenu) {
+            academicsMenu.classList.add('show');
+        }
+        
+        // Add active class to assignments nav item
+        const assignmentsNavItem = document.querySelector('a[href="{% url 'assignment_list' %}"]');
+        if (assignmentsNavItem) {
+            assignmentsNavItem.classList.add('active');
+        }
+        
+        // Add active class to academics nav item
+        const academicsNavItem = document.querySelector('a[data-bs-target="#academicsMenu"]');
+        if (academicsNavItem) {
+            academicsNavItem.classList.add('active');
+        }
+
+        // Add tooltips to buttons
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+{% endblock %}

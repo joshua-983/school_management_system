@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Grade Report</h2>
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get">
+                <div class="row">
+                    <div class="col-md-3">
+                        {{ form.subject|as_crispy_field }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.class_level|as_crispy_field }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.academic_year|as_crispy_field }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ form.term|as_crispy_field }}
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary">Generate Report</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% if show_results %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4>Class Performance Summary</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card text-white bg-primary mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Class Average</h5>
+                            <p class="card-text display-4">{{ class_average|floatformat:2 }}%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-white bg-success mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Passing Rate</h5>
+                            <p class="card-text display-4">{{ passing_rate|floatformat:2 }}%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-white bg-info mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Total Students</h5>
+                            <p class="card-text display-4">{{ grades.count }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h5 class="mt-4">Grade Distribution</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>GES Grade</th>
+                            <th>Count</th>
+                            <th>Percentage</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for grade in grade_distribution %}
+                        <tr>
+                            <td>{{ grade.ges_grade }}</td>
+                            <td>{{ grade.count }}</td>
+                            <td>{{ grade.percentage|floatformat:2 }}%</td>
+                            <td>{{ grade.get_ges_grade_display }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h4>Detailed Grades</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Class Exercises (30%)</th>
+                            <th>Homework (10%)</th>
+                            <th>Project Work (10%)</th>
+                            <th>Mid-Term (20%)</th>
+                            <th>End-Term (30%)</th>
+                            <th>Total Score</th>
+                            <th>GES Grade</th>
+                            <th>WASSCE Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for grade in grades %}
+                        <tr>
+                            <td>{{ grade.student.get_full_name }}</td>
+                            <td>{{ grade.class_exercises }}</td>
+                            <td>{{ grade.homework }}</td>
+                            <td>{{ grade.project_work }}</td>
+                            <td>{{ grade.mid_term_exam }}</td>
+                            <td>{{ grade.end_of_term_exam }}</td>
+                            <td>{{ grade.total_score|floatformat:2 }}</td>
+                            <td>{{ grade.get_ges_grade_display }}</td>
+                            <td>{{ grade.get_wassce_grade_display }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

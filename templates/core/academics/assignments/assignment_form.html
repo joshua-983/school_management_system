@@ -1,0 +1,314 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} Assignment - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
+            <!-- Header Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-primary text-white py-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-journal-plus me-3 fs-4"></i>
+                        <div>
+                            <h2 class="h5 mb-0">{% if object %}Edit{% else %}Create New{% endif %} Assignment</h2>
+                            <small class="opacity-75">Manage assignment details and requirements</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Form Card -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <!-- Messages -->
+                    {% if messages %}
+                    <div class="mb-4">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            <i class="bi {% if message.tags == 'success' %}bi-check-circle{% else %}bi-exclamation-triangle{% endif %} me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <form method="post" id="assignmentForm" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Section 1: Basic Information -->
+                        <div class="mb-5">
+                            <h5 class="text-primary mb-4 border-bottom pb-2">
+                                <i class="bi bi-info-circle me-2"></i>Basic Information
+                            </h5>
+                            
+                            <div class="row g-3">
+                                <!-- Title -->
+                                <div class="col-md-12">
+                                    <label for="{{ form.title.id_for_label }}" class="form-label fw-semibold">
+                                        Assignment Title <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.title }}
+                                    {% if form.title.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.title.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Enter a clear and descriptive title for the assignment</div>
+                                </div>
+
+                                <!-- Subject and Class -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.subject.id_for_label }}" class="form-label fw-semibold">
+                                        Subject <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.subject }}
+                                    {% if form.subject.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.subject.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="{{ form.class_assignment.id_for_label }}" class="form-label fw-semibold">
+                                        Class <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.class_assignment }}
+                                    {% if form.class_assignment.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.class_assignment.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Due Date -->
+                                <div class="col-md-6">
+                                    <label for="{{ form.due_date.id_for_label }}" class="form-label fw-semibold">
+                                        Due Date & Time <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.due_date }}
+                                    {% if form.due_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.due_date.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Students will not be able to submit after this date</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Grading Information -->
+                        <div class="mb-5">
+                            <h5 class="text-primary mb-4 border-bottom pb-2">
+                                <i class="bi bi-graph-up me-2"></i>Grading Information
+                            </h5>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="{{ form.assignment_type.id_for_label }}" class="form-label fw-semibold">
+                                        Type <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.assignment_type }}
+                                    {% if form.assignment_type.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.assignment_type.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="{{ form.max_score.id_for_label }}" class="form-label fw-semibold">
+                                        Maximum Score <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.max_score }}
+                                    {% if form.max_score.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.max_score.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Total points possible</div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <label for="{{ form.weight.id_for_label }}" class="form-label fw-semibold">
+                                        Weight (%) <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.weight }}
+                                    {% if form.weight.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ form.weight.errors.0 }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Impact on final grade</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Assignment Details -->
+                        <div class="mb-5">
+                            <h5 class="text-primary mb-4 border-bottom pb-2">
+                                <i class="bi bi-file-text me-2"></i>Assignment Details
+                            </h5>
+                            
+                            <!-- Description -->
+                            <div class="mb-4">
+                                <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">
+                                    Instructions & Description
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ form.description.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <div class="form-text">Provide clear instructions for students</div>
+                            </div>
+
+                            <!-- Attachment -->
+                            <div class="mb-4">
+                                <label for="{{ form.attachment.id_for_label }}" class="form-label fw-semibold">
+                                    Supporting Materials
+                                </label>
+                                {{ form.attachment }}
+                                {% if form.attachment.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ form.attachment.errors.0 }}
+                                </div>
+                                {% endif %}
+                                
+                                {% if object and object.attachment %}
+                                <div class="mt-3 p-3 bg-light rounded">
+                                    <h6 class="mb-2">Current Attachment:</h6>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark me-2 text-primary"></i>
+                                        <a href="{{ object.attachment.url }}" target="_blank" class="text-decoration-none">
+                                            {{ object.attachment.name|cut:"assignments/" }}
+                                        </a>
+                                        <small class="text-muted ms-2">({{ object.attachment.size|filesizeformat }})</small>
+                                    </div>
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" name="attachment-clear" id="attachment-clear">
+                                        <label class="form-check-label text-danger" for="attachment-clear">
+                                            Remove current file
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <a href="{% if object %}{% url 'assignment_detail' object.pk %}{% else %}{% url 'assignment_list' %}{% endif %}" 
+                               class="btn btn-outline-secondary px-4">
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
+                            </a>
+                            
+                            <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                                <i class="bi bi-save me-2"></i>
+                                {% if object %}Update{% else %}Create{% endif %} Assignment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date picker
+    const dueDateField = document.getElementById('id_due_date');
+    if (dueDateField) {
+        flatpickr(dueDateField, {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            minDate: "today",
+            time_24hr: true,
+            minuteIncrement: 5,
+            placeholder: "Select date and time"
+        });
+    }
+
+    // Add Bootstrap validation classes
+    const form = document.getElementById('assignmentForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.checkValidity()) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+            }
+        });
+    });
+
+    // Form submission handler
+    const submitBtn = document.getElementById('submitBtn');
+    
+    form.addEventListener('submit', function(e) {
+        // Client-side validation
+        const requiredFields = form.querySelectorAll('[required]');
+        let isValid = true;
+
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            e.preventDefault();
+            // Scroll to first error
+            const firstError = form.querySelector('.is-invalid');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            Processing...
+        `;
+    });
+
+    // Real-time validation for numeric fields
+    const numericFields = form.querySelectorAll('input[type="number"]');
+    numericFields.forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.value < 0) {
+                this.value = 0;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

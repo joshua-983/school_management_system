@@ -376,56 +376,23 @@ class GradeForm(forms.ModelForm):
     class Meta:
         model = Grade
         fields = ['student', 'subject', 'class_assignment', 'academic_year', 'term',
-                'homework_score', 'classwork_score', 'test_score', 'exam_score', 'remarks']
-        widgets = {
-            'remarks': forms.Textarea(attrs={'rows': 2}),
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'class_assignment' in self.fields and self.instance.pk:
-            self.fields['class_assignment'].disabled = True
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        homework = cleaned_data.get('homework_score', 0)
-        classwork = cleaned_data.get('classwork_score', 0)
-        test = cleaned_data.get('test_score', 0)
-        exam = cleaned_data.get('exam_score', 0)
-        
-        if homework > 20:
-            self.add_error('homework_score', 'Homework score cannot exceed 20')
-        if classwork > 30:
-            self.add_error('classwork_score', 'Classwork score cannot exceed 30')
-        if test > 10:
-            self.add_error('test_score', 'Test score cannot exceed 10')
-        if exam > 40:
-            self.add_error('exam_score', 'Exam score cannot exceed 40')
-        
-        return cleaned_data
-    
-#GRADE ENTRIES FORM
-class GradeEntryForm(forms.ModelForm):
-    class Meta:
-        model = Grade
-        fields = ['student', 'subject', 'academic_year', 'term',
-                'homework_score', 'classwork_score', 'test_score', 'exam_score', 'remarks']
+                 'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks']
         widgets = {
             'academic_year': forms.TextInput(attrs={
                 'placeholder': 'YYYY/YYYY',
                 'class': 'form-control'
             }),
             'term': forms.Select(attrs={'class': 'form-select'}),
-            'homework_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '20',
-                'step': '0.1'
-            }),
             'classwork_score': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': '0',
                 'max': '30',
+                'step': '0.1'
+            }),
+            'homework_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '10',
                 'step': '0.1'
             }),
             'test_score': forms.NumberInput(attrs={
@@ -437,7 +404,116 @@ class GradeEntryForm(forms.ModelForm):
             'exam_score': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': '0',
-                'max': '40',
+                'max': '50',
+                'step': '0.1'
+            }),
+            'remarks': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Optional comments...'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        # Set current academic year as default
+        current_year = timezone.now().year
+        self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+        
+        # Limit students and subjects based on user role
+        if user and hasattr(user, 'teacher'):
+            teacher = user.teacher
+            # Get students in classes taught by this teacher
+            class_levels = ClassAssignment.objects.filter(
+                teacher=teacher
+            ).values_list('class_level', flat=True)
+            self.fields['student'].queryset = Student.objects.filter(
+                class_level__in=class_levels
+            ).order_by('class_level', 'last_name', 'first_name')
+            
+            # Get subjects and class assignments taught by this teacher
+            self.fields['subject'].queryset = teacher.subjects.all()
+            self.fields['class_assignment'].queryset = ClassAssignment.objects.filter(
+                teacher=teacher
+            )
+        else:
+            # Admin sees all students and subjects
+            self.fields['student'].queryset = Student.objects.all().order_by(
+                'class_level', 'last_name', 'first_name'
+            )
+            self.fields['subject'].queryset = Subject.objects.all()
+            self.fields['class_assignment'].queryset = ClassAssignment.objects.all()
+
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data['academic_year']
+        # Validate format (YYYY/YYYY or YYYY-YYYY)
+        if not re.match(r'^\d{4}[/-]\d{4}$', academic_year):
+            raise ValidationError("Academic year must be in YYYY/YYYY or YYYY-YYYY format")
+        
+        # Convert to consistent format
+        academic_year = academic_year.replace('-', '/')
+        
+        # Validate the years are consecutive
+        year1, year2 = map(int, academic_year.split('/'))
+        if year2 != year1 + 1:
+            raise ValidationError("The second year should be exactly one year after the first year")
+        
+        return academic_year
+
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Validate class assignment matches student and subject
+        student = cleaned_data.get('student')
+        subject = cleaned_data.get('subject')
+        class_assignment = cleaned_data.get('class_assignment')
+        
+        if student and subject and class_assignment:
+            if (class_assignment.class_level != student.class_level or 
+                class_assignment.subject != subject):
+                raise ValidationError(
+                    "Class assignment doesn't match the selected student and subject"
+                )
+        
+        return cleaned_data
+    
+#GRADE ENTRIES FORM
+class GradeEntryForm(forms.ModelForm):
+    class Meta:
+        model = Grade
+        fields = ['student', 'subject', 'class_assignment', 'academic_year', 'term',
+                 'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks']
+        
+        widgets = {
+            'academic_year': forms.TextInput(attrs={
+                'placeholder': 'YYYY/YYYY',
+                'class': 'form-control'
+            }),
+            'term': forms.Select(attrs={'class': 'form-select'}),
+            'classwork_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '30',
+                'step': '0.1'
+            }),
+            'homework_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '10',
+                'step': '0.1'
+            }),
+            'test_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '10',
+                'step': '0.1'
+            }),
+            'exam_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '50',
                 'step': '0.1'
             }),
             'remarks': forms.Textarea(attrs={
@@ -468,12 +544,29 @@ class GradeEntryForm(forms.ModelForm):
             
             # Get subjects taught by this teacher
             self.fields['subject'].queryset = teacher.subjects.all()
+            self.fields['class_assignment'].queryset = ClassAssignment.objects.filter(
+                teacher=teacher
+            )
         else:
             # Admin sees all students and subjects
             self.fields['student'].queryset = Student.objects.all().order_by(
                 'class_level', 'last_name', 'first_name'
             )
             self.fields['subject'].queryset = Subject.objects.all()
+            self.fields['class_assignment'].queryset = ClassAssignment.objects.all()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        student = cleaned_data.get('student')
+        class_assignment = cleaned_data.get('class_assignment')
+        
+        # Validate class assignment matches student's class level
+        if student and class_assignment and student.class_level != class_assignment.class_level:
+            raise ValidationError(
+                "The selected class assignment doesn't match the student's class level"
+            )
+        
+        return cleaned_data
 
 class StudentAssignmentForm(forms.ModelForm):
     class Meta:

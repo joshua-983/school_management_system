@@ -113,11 +113,31 @@ class StudentAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(Grade)
 class GradeAdmin(admin.ModelAdmin):
-    list_display = ('student', 'subject', 'academic_year', 'term', 'total_score', 'grade')
+    list_display = ('student', 'subject', 'academic_year', 'term', 'total_score', 'get_grade')
     list_filter = ('academic_year', 'term', 'subject')
     search_fields = ('student__first_name', 'student__last_name')
     raw_id_fields = ('student', 'subject', 'class_assignment')
 
+    def get_grade(self, obj):
+        """
+        Converts total_score to a letter grade (A, B, C, etc.).
+        - Adjust thresholds as needed.
+        - Handles null/0 scores safely.
+        """
+        if obj.total_score is None:  # Handle missing scores
+            return "N/A"
+        if obj.total_score >= 90:
+            return "A"
+        elif obj.total_score >= 80:
+            return "B"
+        elif obj.total_score >= 70:
+            return "C"
+        elif obj.total_score >= 60:
+            return "D"
+        else:
+            return "F"
+    get_grade.short_description = 'Grade'  # Sets column header
+    
 @admin.register(ReportCard)
 class ReportCardAdmin(admin.ModelAdmin):
     list_display = ('student', 'academic_year', 'term', 'is_published')

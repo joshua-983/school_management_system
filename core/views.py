@@ -223,10 +223,11 @@ class StudentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         messages.success(request, 'Student deleted successfully')
         return super().delete(request, *args, **kwargs)
 
+#PARENTS RELATED VIEWS
 class ParentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = ParentGuardian
     form_class = ParentGuardianForm
-    template_name = 'core/students/parent_form.html'
+    template_name = 'core/parents/parent_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -333,7 +334,7 @@ class ParentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 class ParentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = ParentGuardian
     form_class = ParentGuardianForm
-    template_name = 'core/students/parent_form.html'
+    template_name = 'core/parents/parent_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -347,7 +348,7 @@ class ParentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
 class ParentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = ParentGuardian
-    template_name = 'core/students/parent_confirm_delete.html'
+    template_name = 'core/parents/parent_confirm_delete.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -371,7 +372,335 @@ def get_context_data(self, **kwargs):
     context['fees'] = student.fees.all().order_by('-academic_year', '-term')
     context['grades'] = Grade.objects.filter(student=student).order_by('subject')
     return context
+
+# Fee statement view for parents
+class ParentFeeStatementView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Student
+    template_name = 'finance/parent_fee_statement.html'
     
+    def test_func(self):
+        return self.request.user.parentguardian.student.filter(pk=self.kwargs['pk']).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.get_object()
+        
+        # Get all fees ordered by academic year and term
+        fees = Fee.objects.filter(student=student).order_by('-academic_year', '-term')
+        
+        # Calculate totals
+        total_payable = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        total_paid = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        
+        context.update({
+            'fees': fees,
+            'total_payable': total_payable,
+            'total_paid': total_paid,
+        })
+        return context
+
+
+class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Student
+    template_name = 'core/parents/children_list.html'
+    context_object_name = 'children'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        return self.request.user.parentguardian.student.all()
+
+class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Student
+    template_name = 'core/parents/child_detail.html'
+    context_object_name = 'child'
+    
+    def test_func(self):
+        parent = self.request.user.parentguardian
+        return parent.student.filter(pk=self.kwargs['pk']).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        child = self.get_object()
+        
+        # Attendance stats
+        context['present_count'] = child.attendances.filter(status='present').count()
+        context['absent_count'] = child.attendances.filter(status='absent').count()
+        context['late_count'] = child.attendances.filter(status='late').count()
+        
+        # Recent grades
+        context['recent_grades'] = Grade.objects.filter(student=child).order_by('-updated_at')[:5]
+        
+        # Fee summary
+        fees = Fee.objects.filter(student=child)
+        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        context['total_balance'] = context['total_payable'] - context['total_paid']
+        
+        return context
+
+class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Fee
+    template_name = 'core/parents/fee_list.html'
+    context_object_name = 'fees'
+    paginate_by = 10
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        queryset = Fee.objects.filter(student__in=children).select_related('student', 'category')
+        
+        # Apply filters
+        payment_status = self.request.GET.get('payment_status')
+        if payment_status:
+            queryset = queryset.filter(payment_status=payment_status)
+            
+        return queryset.order_by('-date_recorded')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        children = self.request.user.parentguardian.student.all()
+        
+        # Summary statistics
+        fees = Fee.objects.filter(student__in=children)
+        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        context['total_balance'] = context['total_payable'] - context['total_paid']
+        
+        return context
+
+class ParentFeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Fee
+    template_name = 'core/parents/fee_detail.html'
+    
+    def test_func(self):
+        parent = self.request.user.parentguardian
+        return parent.student.filter(pk=self.get_object().student.pk).exists()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['payments'] = self.object.payments.all().order_by('-payment_date')
+        return context
+
+class ParentFeePaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
+    template_name = 'core/parents/fee_payment.html'
+    
+    def test_func(self):
+        if not is_parent(self.request.user):
+            return False
+        fee = get_object_or_404(Fee, pk=self.kwargs['pk'])
+        return self.request.user.parentguardian.student.filter(pk=fee.student.pk).exists()
+    
+    def get(self, request, pk):
+        fee = get_object_or_404(Fee, pk=pk)
+        form = ParentFeePaymentForm(initial={'amount': fee.balance})
+        return render(request, self.template_name, {'fee': fee, 'form': form})
+    
+    def post(self, request, pk):
+        fee = get_object_or_404(Fee, pk=pk)
+        form = ParentFeePaymentForm(request.POST)
+        
+        if form.is_valid():
+            amount = form.cleaned_data['amount']
+            payment_method = form.cleaned_data['payment_method']
+            
+            if amount > fee.balance:
+                form.add_error('amount', 'Payment amount cannot exceed the balance')
+            else:
+                with transaction.atomic():
+                    # Create payment record
+                    payment = FeePayment.objects.create(
+                        fee=fee,
+                        amount=amount,
+                        payment_method=payment_method,
+                        recorded_by=request.user,
+                        notes=f"Online payment by parent {request.user.get_full_name()}"
+                    )
+                    
+                    # Update fee record
+                    fee.amount_paid += amount
+                    fee.save()
+                    
+                    messages.success(request, f'Payment of {amount} successfully recorded')
+                    return redirect('parent_fee_detail', pk=fee.pk)
+        
+        return render(request, self.template_name, {'fee': fee, 'form': form})
+
+class ParentAttendanceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = StudentAttendance
+    template_name = 'core/parents/attendance_list.html'
+    context_object_name = 'attendances'
+    paginate_by = 20
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        queryset = StudentAttendance.objects.filter(
+            student__in=children
+        ).select_related('student', 'term', 'period').order_by('-date')
+        
+        # Apply filters
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+            
+        student_id = self.request.GET.get('student')
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+            
+        date_from = self.request.GET.get('date_from')
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+            
+        date_to = self.request.GET.get('date_to')
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+            
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        children = self.request.user.parentguardian.student.all()
+        
+        # Add filter form
+        context['filter_form'] = ParentAttendanceFilterForm(
+            initial={
+                'student': self.request.GET.get('student'),
+                'status': self.request.GET.get('status'),
+                'date_from': self.request.GET.get('date_from'),
+                'date_to': self.request.GET.get('date_to'),
+            }
+        )
+        context['children'] = children
+        
+        # Calculate summary statistics
+        attendances = self.get_queryset()
+        context['present_count'] = attendances.filter(status='present').count()
+        context['absent_count'] = attendances.filter(status='absent').count()
+        context['late_count'] = attendances.filter(status='late').count()
+        context['excused_count'] = attendances.filter(status='excused').count()
+        
+        return context
+
+class ParentReportCardListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ReportCard
+    template_name = 'core/parents/report_card_list.html'
+    context_object_name = 'report_cards'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        children = self.request.user.parentguardian.student.all()
+        return ReportCard.objects.filter(
+            student__in=children
+        ).order_by('-academic_year', '-term')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['children'] = self.request.user.parentguardian.student.all()
+        return context
+
+class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def get(self, request, student_id, report_card_id=None):
+        parent = request.user.parentguardian
+        student = get_object_or_404(Student, pk=student_id)
+        
+        # Check if student belongs to parent
+        if not parent.student.filter(pk=student_id).exists():
+            raise PermissionDenied
+        
+        # Get report card if specified
+        report_card = None
+        if report_card_id:
+            report_card = get_object_or_404(ReportCard, pk=report_card_id, student=student)
+        
+        # Get filtered grades
+        grades = Grade.objects.filter(student=student)
+        if report_card:
+            grades = grades.filter(
+                academic_year=report_card.academic_year,
+                term=report_card.term
+            )
+        else:
+            # Apply filters from GET parameters
+            form = ReportCardFilterForm(request.GET)
+            if form.is_valid():
+                if form.cleaned_data.get('academic_year'):
+                    grades = grades.filter(academic_year=form.cleaned_data['academic_year'])
+                if form.cleaned_data.get('term'):
+                    grades = grades.filter(term=form.cleaned_data['term'])
+        
+        grades = grades.order_by('subject')
+        
+        # Calculate average
+        aggregates = grades.aggregate(avg_score=Avg('total_score'))
+        average_score = aggregates['avg_score'] or 0
+        overall_grade = Grade.calculate_grade(average_score) if hasattr(Grade, 'calculate_grade') else 'N/A'
+        
+        context = {
+            'student': student,
+            'grades': grades,
+            'average_score': round(float(average_score), 2),
+            'overall_grade': overall_grade,
+            'report_card': report_card,
+            'form': ReportCardFilterForm(request.GET) if not report_card else None,
+        }
+        
+        if 'pdf' in request.GET:
+            return self.generate_pdf(context)
+        
+        return render(request, 'core/parents/report_card_detail.html', context)
+    
+    def generate_pdf(self, context):
+        response = HttpResponse(content_type='application/pdf')
+        filename = f"Report_Card_{context['student'].student_id}"
+        if context['report_card']:
+            filename += f"_{context['report_card'].academic_year}_Term{context['report_card'].term}"
+        response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
+        
+        p = canvas.Canvas(response, pagesize=letter)
+        width, height = letter
+        
+        # PDF content
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(100, height - 100, f"Report Card for {context['student'].get_full_name()}")
+        
+        # Add more content as needed
+        p.showPage()
+        p.save()
+        return response
+    
+@login_required
+def parent_dashboard(request):
+    if not is_parent(request.user):
+        raise PermissionDenied
+    
+    parent = request.user.parentguardian
+    children = parent.student.all()
+    
+    # Get recent activities
+    recent_grades = Grade.objects.filter(student__in=children).order_by('-updated_at')[:5]
+    recent_attendances = StudentAttendance.objects.filter(student__in=children).order_by('-date')[:5]
+    unpaid_fees = Fee.objects.filter(student__in=children, payment_status='UNPAID').order_by('due_date')
+    
+    context = {
+        'parent': parent,
+        'children': children,
+        'recent_grades': recent_grades,
+        'recent_attendances': recent_attendances,
+        'unpaid_fees': unpaid_fees,
+    }
+    return render(request, 'core/parents/parent_dashboard.html', context)
+    
+
+
+
 # Fee management
 class FeeCategoryListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = FeeCategory
@@ -893,12 +1222,13 @@ class FeeDashboardView(LoginRequiredMixin, TemplateView):
         ).order_by('student__class_level')
 
 
+
 # Fee generation automation
-def generate_term_fees():
+def generate_term_fees(request_user=None):
     """Automatically generate fees for all students for the current term"""
     current_term = AcademicTerm.objects.filter(is_active=True).first()
     if not current_term:
-        return
+        return 0
         
     # Get all active students
     students = Student.objects.filter(is_active=True)
@@ -931,7 +1261,16 @@ def generate_term_fees():
                 # Calculate due date (e.g., 2 weeks after term starts)
                 due_date = current_term.start_date + timedelta(days=14)
                 
-                # Create the fee
+                # Create the fee - use the provided user or fallback to a default
+                if request_user and request_user.is_authenticated:
+                    recorded_by = request_user
+                else:
+                    # Fallback: try to find an admin user or use the first superuser
+                    try:
+                        recorded_by = User.objects.filter(is_superuser=True).first()
+                    except:
+                        recorded_by = None
+                
                 Fee.objects.create(
                     student=student,
                     category=category,
@@ -939,31 +1278,11 @@ def generate_term_fees():
                     term=current_term.term,
                     amount_payable=category.default_amount,
                     due_date=due_date,
-                    recorded_by=get_system_user()
+                    recorded_by=recorded_by  # Use actual user instead of system user
                 )
                 created_count += 1
                 
     return created_count
-
-# Fee statement view for parents
-class ParentFeeStatementView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
-    model = Student
-    template_name = 'finance/parent_fee_statement.html'
-    
-    def test_func(self):
-        return self.request.user.parentguardian.student.filter(pk=self.kwargs['pk']).exists()
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        student = self.get_object()
-        
-        context['fees'] = Fee.objects.filter(student=student).order_by('-academic_year', '-term')
-        context['total_payable'] = context['fees'].aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
-        context['total_paid'] = context['fees'].aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-        
-        return context
-
-
 
 
 
@@ -1084,7 +1403,7 @@ class TeacherDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 # Class Assignment Views
 class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = ClassAssignment
-    template_name = 'core/academics/class_assignment_list.html'
+    template_name = 'core/academics/assignments/class_assignment_list.html'
     context_object_name = 'class_assignments'
     
     def test_func(self):
@@ -1153,7 +1472,7 @@ class ClassAssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteV
 # Assignment Views
 class AssignmentListView(LoginRequiredMixin, ListView):
     model = Assignment
-    template_name = 'core/academics/assignment_list.html'
+    template_name = 'core/academics/assignments/assignment_list.html'
     context_object_name = 'assignments'
     paginate_by = 10
     
@@ -1165,14 +1484,14 @@ class AssignmentListView(LoginRequiredMixin, ListView):
         # Apply filters
         subject_id = self.request.GET.get('subject')
         class_level = self.request.GET.get('class_level')
-        status = self.request.GET.get('status')
+        assignment_type = self.request.GET.get('assignment_type')
         
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
         if class_level:
             queryset = queryset.filter(class_assignment__class_level=class_level)
-        if status:
-            queryset = queryset.filter(status=status)
+        if assignment_type:
+            queryset = queryset.filter(assignment_type=assignment_type)
         
         # User-specific filtering
         if is_teacher(self.request.user):
@@ -1184,8 +1503,9 @@ class AssignmentListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['time_now'] = timezone.now()
+        context['time_now'] = timezone.now()  # Keep as datetime for template
         context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        context['assignment_types'] = Assignment.ASSIGNMENT_TYPES
         
         if is_teacher(self.request.user):
             context['subjects'] = Subject.objects.filter(teachers=self.request.user.teacher)
@@ -1196,12 +1516,58 @@ class AssignmentListView(LoginRequiredMixin, ListView):
         else:  # Admin
             context['subjects'] = Subject.objects.all()
         
+        # Add stats for the template
+        queryset = self.get_queryset()
+        context['assignments_count'] = queryset.count()
+        
+        # Get current date for comparison
+        current_date = timezone.now().date()
+        
+        # Get student assignments for status counts
+        if self.request.user.is_authenticated:
+            if is_student(self.request.user):
+                student_assignments = StudentAssignment.objects.filter(
+                    student=self.request.user.student,
+                    assignment__in=queryset
+                )
+                context['completed_count'] = student_assignments.filter(status='GRADED').count()
+                context['pending_count'] = student_assignments.filter(status='PENDING').count()
+                
+                # Calculate overdue count - FIXED: Compare date parts only
+                overdue_count = 0
+                for assignment in queryset:
+                    if (assignment.due_date.date() < current_date and 
+                        not student_assignments.filter(assignment=assignment, status='GRADED').exists()):
+                        overdue_count += 1
+                context['overdue_count'] = overdue_count
+            else:
+                # For teachers/admins, show general stats
+                context['completed_count'] = StudentAssignment.objects.filter(
+                    assignment__in=queryset, status='GRADED'
+                ).count()
+                context['pending_count'] = StudentAssignment.objects.filter(
+                    assignment__in=queryset, status='PENDING'
+                ).count()
+                
+                # Calculate overdue count - FIXED: Compare date parts only
+                overdue_count = 0
+                for assignment in queryset:
+                    if (assignment.due_date.date() < current_date and 
+                        not StudentAssignment.objects.filter(assignment=assignment, status='GRADED').exists()):
+                        overdue_count += 1
+                context['overdue_count'] = overdue_count
+        else:
+            context['completed_count'] = 0
+            context['pending_count'] = 0
+            context['overdue_count'] = 0
+        
         return context
-
+    
+    
 class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Assignment
     form_class = AssignmentForm
-    template_name = 'core/academics/assignment_form.html'
+    template_name = 'core/academics/assignments/assignment_form.html'  # Fixed path
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -1223,7 +1589,7 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 
 class AssignmentDetailView(LoginRequiredMixin, DetailView):
     model = Assignment
-    template_name = 'core/academics/assignment_detail.html'
+    template_name = 'core/academics/assignments/assignment_detail.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1234,13 +1600,20 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
 class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Assignment
     form_class = AssignmentForm
-    template_name = 'core/academics/assignment_form.html'
+    template_name = 'core/academics/assignments/assignment_form.html'  # Same template for create/update
     
     def test_func(self):
-        if is_admin(self.request.user):
+        assignment = self.get_object()
+        user = self.request.user
+        
+        # Admin can edit any assignment
+        if is_admin(user):
             return True
-        if is_teacher(self.request.user):
-            return self.get_object().teacher == self.request.user.teacher
+        
+        # Teacher can only edit their own assignments
+        if is_teacher(user) and assignment.teacher == user.teacher:
+            return True
+        
         return False
     
     def get_form_kwargs(self):
@@ -1273,13 +1646,35 @@ class AssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 
 class GradeListView(LoginRequiredMixin, ListView):
     model = Grade
-    template_name = 'core/academics/grade_list.html'
+    template_name = 'core/academics/grades/grade_list.html'
     context_object_name = 'grades'
+    paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'student', 'subject', 'class_assignment'
+        )
+        
+        # Apply filters
+        student_id = self.request.GET.get('student')
+        subject_id = self.request.GET.get('subject')
+        class_level = self.request.GET.get('class_level')
+        academic_year = self.request.GET.get('academic_year')
+        term = self.request.GET.get('term')
+        
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if subject_id:
+            queryset = queryset.filter(subject_id=subject_id)
+        if class_level:
+            queryset = queryset.filter(class_assignment__class_level=class_level)
+        if academic_year:
+            queryset = queryset.filter(academic_year=academic_year)
+        if term:
+            queryset = queryset.filter(term=term)
+        
+        # Role-based filtering
         if is_teacher(self.request.user):
-            # Get classes taught by this teacher
             class_assignments = ClassAssignment.objects.filter(
                 teacher=self.request.user.teacher
             ).values_list('class_level', flat=True)
@@ -1288,14 +1683,60 @@ class GradeListView(LoginRequiredMixin, ListView):
             )
         elif is_student(self.request.user):
             queryset = queryset.filter(student=self.request.user.student)
-        return queryset
+        
+        return queryset.order_by('-academic_year', '-term', 'student__last_name')
 
-logger = logging.getLogger(__name__)
-
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add filter options
+        context['students'] = Student.objects.all().order_by('last_name', 'first_name')
+        context['subjects'] = Subject.objects.all().order_by('name')
+        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        
+        # Add statistics
+        queryset = self.get_queryset()
+        context['total_grades'] = queryset.count()
+        context['total_students'] = Student.objects.count()
+        context['total_subjects'] = Subject.objects.count()
+        
+        # Calculate average score
+        if context['total_grades'] > 0:
+            total_score = sum(float(grade.total_score or 0) for grade in queryset if grade.total_score is not None)
+            context['average_grade'] = total_score / context['total_grades']
+        else:
+            context['average_grade'] = 0
+        
+        # Current filter values
+        context['current_filters'] = {
+            'student': self.request.GET.get('student', ''),
+            'subject': self.request.GET.get('subject', ''),
+            'class_level': self.request.GET.get('class_level', ''),
+            'academic_year': self.request.GET.get('academic_year', ''),
+            'term': self.request.GET.get('term', ''),
+        }
+        
+        return context
+    
+def grade_delete(request, pk):
+    grade = get_object_or_404(Grade, pk=pk)
+    if request.method == 'POST':
+        grade.delete()
+        messages.success(request, 'Grade record deleted successfully.')
+        return redirect('grade_list')
+    
+    # For GET requests, you might want to show a confirmation page
+    # If you want a confirmation page, create it and render it here
+    # return render(request, 'core/grades/confirm_delete.html', {'grade': grade})
+    
+    # Or directly delete on GET (not recommended for production)
+    grade.delete()
+    messages.success(request, 'Grade record deleted successfully.')
+    return redirect('grade_list')
 class GradeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Grade
     form_class = GradeForm
-    template_name = 'core/academics/grade_form.html'
+    template_name = 'core/academics/grades/grade_form.html'
     
     def get_object(self, queryset=None):
         """Get the grade object with proper error handling"""
@@ -1427,7 +1868,7 @@ class GradeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return context
 
 class BulkGradeUploadView(LoginRequiredMixin, UserPassesTestMixin, View):
-    template_name = 'core/academics/bulk_grade_upload.html'
+    template_name = 'core/academics/grades/bulk_grade_upload.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -1579,7 +2020,7 @@ class GradeUploadTemplateView(View):
 class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
-    template_name = 'core/academics/grade_entry.html'
+    template_name = 'core/academics/grades/grade_entry.html'
     success_url = reverse_lazy('grade_list')
 
     def test_func(self):
@@ -1588,12 +2029,25 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
+        
+        # Pass initial data if student is selected in GET parameters
+        if self.request.method == 'GET':
+            initial = kwargs.get('initial', {})
+            student_id = self.request.GET.get('student')
+            if student_id:
+                try:
+                    initial['student'] = Student.objects.get(pk=student_id)
+                except (Student.DoesNotExist, ValueError):
+                    pass
+            kwargs['initial'] = initial
+        
         return kwargs
 
     def form_valid(self, form):
         # Set the class_assignment automatically based on student's class and subject
         student = form.cleaned_data['student']
         subject = form.cleaned_data['subject']
+        assignment = form.cleaned_data['assignment']
         
         try:
             class_assignment = ClassAssignment.objects.get(
@@ -1605,18 +2059,129 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             form.add_error(None, "No class assignment exists for this student's class and subject")
             return self.form_invalid(form)
         
-        # Calculate total score (optional - could also do this in model save)
-        form.instance.total_score = (
-            form.cleaned_data['homework_score'] * 0.2 +
-            form.cleaned_data['classwork_score'] * 0.3 +
-            form.cleaned_data['test_score'] * 0.1 +
-            form.cleaned_data['exam_score'] * 0.4
-        )
+        # Set recorded by
+        form.instance.recorded_by = self.request.user
+        
+        # Auto-calculate grade if not provided
+        if not form.instance.grade and form.instance.score is not None:
+            form.instance.grade = self.calculate_grade(form.instance.score)
         
         messages.success(self.request, 'Grade successfully recorded!')
         return super().form_valid(form)
 
+    def calculate_grade(self, score):
+        """Calculate letter grade based on score"""
+        if score >= 90:
+            return 'A'
+        elif score >= 80:
+            return 'B'
+        elif score >= 70:
+            return 'C'
+        elif score >= 60:
+            return 'D'
+        else:
+            return 'F'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add student's previous grades if student is selected
+        student_id = self.request.GET.get('student')
+        if student_id:
+            try:
+                student = Student.objects.get(pk=student_id)
+                context['previous_grades'] = Grade.objects.filter(
+                    student=student
+                ).select_related('subject', 'assignment').order_by('-academic_year', '-term')[:10]
+            except (Student.DoesNotExist, ValueError):
+                context['previous_grades'] = Grade.objects.none()
+        else:
+            context['previous_grades'] = Grade.objects.none()
+                
+        return context
+
+    def get_success_url(self):
+        messages.success(self.request, 'Grade recorded successfully!')
+        return super().get_success_url()
+#grade reports
+class GradeReportView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/academics/grades/grade_report.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get filter parameters
+        subject_id = self.request.GET.get('subject')
+        class_level = self.request.GET.get('class_level')
+        academic_year = self.request.GET.get('academic_year')
+        term = self.request.GET.get('term')
+        
+        # Get available filter options
+        if is_teacher(self.request.user):
+            context['subjects'] = self.request.user.teacher.subjects.all()
+            context['class_levels'] = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True).distinct()
+        else:
+            context['subjects'] = Subject.objects.all()
+            context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        
+        # Apply filters if provided
+        if subject_id and class_level and academic_year and term:
+            subject = get_object_or_404(Subject, pk=subject_id)
+            
+            # Get grades
+            grades = Grade.objects.filter(
+                subject=subject,
+                student__class_level=class_level,
+                academic_year=academic_year,
+                term=term
+            ).select_related('student').order_by('student__last_name')
+            
+            # Calculate statistics
+            class_average = grades.aggregate(Avg('total_score'))['total_score__avg']
+            grade_distribution = grades.values('ges_grade').annotate(
+                count=Count('id'),
+                percentage=ExpressionWrapper(
+                    Count('id') * 100.0 / grades.count(),
+                    output_field=FloatField()
+                )
+            ).order_by('ges_grade')
+            
+            passing_rate = grades.filter(is_passing=True).count() / grades.count() * 100 if grades.count() > 0 else 0
+            
+            context.update({
+                'selected_subject': subject,
+                'selected_class_level': class_level,
+                'selected_academic_year': academic_year,
+                'selected_term': term,
+                'grades': grades,
+                'class_average': class_average,
+                'grade_distribution': grade_distribution,
+                'passing_rate': passing_rate,
+                'show_results': True
+            })
+        
+        return context
+
+#best students view
+class BestStudentsView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/academics/grades/best_students.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        top_students = Student.objects.annotate(
+            avg_grade=Avg('grades__score')
+        ).order_by('-avg_grade')[:10]
+        
+        context.update({
+            'top_students': top_students,
+            'current_year': timezone.now().year
+        })
+        return context
 
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/students/report_card_dashboard.html'
@@ -2448,303 +3013,6 @@ def load_periods(request):
         'periods': periods
     })
 
-@login_required
-def parent_dashboard(request):
-    if not is_parent(request.user):
-        raise PermissionDenied
-    
-    parent = request.user.parentguardian
-    children = parent.student.all()
-    
-    # Get recent activities
-    recent_grades = Grade.objects.filter(student__in=children).order_by('-updated_at')[:5]
-    recent_attendances = StudentAttendance.objects.filter(student__in=children).order_by('-date')[:5]
-    unpaid_fees = Fee.objects.filter(student__in=children, payment_status='UNPAID').order_by('due_date')
-    
-    context = {
-        'parent': parent,
-        'children': children,
-        'recent_grades': recent_grades,
-        'recent_attendances': recent_attendances,
-        'unpaid_fees': unpaid_fees,
-    }
-    return render(request, 'core/parents/parent_dashboard.html', context)
-
-class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    model = Student
-    template_name = 'core/parents/children_list.html'
-    context_object_name = 'children'
-    
-    def test_func(self):
-        return is_parent(self.request.user)
-    
-    def get_queryset(self):
-        return self.request.user.parentguardian.student.all()
-
-class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
-    model = Student
-    template_name = 'core/parents/child_detail.html'
-    context_object_name = 'child'
-    
-    def test_func(self):
-        parent = self.request.user.parentguardian
-        return parent.student.filter(pk=self.kwargs['pk']).exists()
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        child = self.get_object()
-        
-        # Attendance stats
-        context['present_count'] = child.attendances.filter(status='present').count()
-        context['absent_count'] = child.attendances.filter(status='absent').count()
-        context['late_count'] = child.attendances.filter(status='late').count()
-        
-        # Recent grades
-        context['recent_grades'] = Grade.objects.filter(student=child).order_by('-updated_at')[:5]
-        
-        # Fee summary
-        fees = Fee.objects.filter(student=child)
-        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
-        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-        context['total_balance'] = context['total_payable'] - context['total_paid']
-        
-        return context
-
-class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    model = Fee
-    template_name = 'core/parents/fee_list.html'
-    context_object_name = 'fees'
-    paginate_by = 10
-    
-    def test_func(self):
-        return is_parent(self.request.user)
-    
-    def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
-        queryset = Fee.objects.filter(student__in=children).select_related('student', 'category')
-        
-        # Apply filters
-        payment_status = self.request.GET.get('payment_status')
-        if payment_status:
-            queryset = queryset.filter(payment_status=payment_status)
-            
-        return queryset.order_by('-date_recorded')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        children = self.request.user.parentguardian.student.all()
-        
-        # Summary statistics
-        fees = Fee.objects.filter(student__in=children)
-        context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
-        context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-        context['total_balance'] = context['total_payable'] - context['total_paid']
-        
-        return context
-
-class ParentFeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
-    model = Fee
-    template_name = 'core/parents/fee_detail.html'
-    
-    def test_func(self):
-        parent = self.request.user.parentguardian
-        return parent.student.filter(pk=self.get_object().student.pk).exists()
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['payments'] = self.object.payments.all().order_by('-payment_date')
-        return context
-
-class ParentFeePaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
-    template_name = 'core/parents/fee_payment.html'
-    
-    def test_func(self):
-        if not is_parent(self.request.user):
-            return False
-        fee = get_object_or_404(Fee, pk=self.kwargs['pk'])
-        return self.request.user.parentguardian.student.filter(pk=fee.student.pk).exists()
-    
-    def get(self, request, pk):
-        fee = get_object_or_404(Fee, pk=pk)
-        form = ParentFeePaymentForm(initial={'amount': fee.balance})
-        return render(request, self.template_name, {'fee': fee, 'form': form})
-    
-    def post(self, request, pk):
-        fee = get_object_or_404(Fee, pk=pk)
-        form = ParentFeePaymentForm(request.POST)
-        
-        if form.is_valid():
-            amount = form.cleaned_data['amount']
-            payment_method = form.cleaned_data['payment_method']
-            
-            if amount > fee.balance:
-                form.add_error('amount', 'Payment amount cannot exceed the balance')
-            else:
-                with transaction.atomic():
-                    # Create payment record
-                    payment = FeePayment.objects.create(
-                        fee=fee,
-                        amount=amount,
-                        payment_method=payment_method,
-                        recorded_by=request.user,
-                        notes=f"Online payment by parent {request.user.get_full_name()}"
-                    )
-                    
-                    # Update fee record
-                    fee.amount_paid += amount
-                    fee.save()
-                    
-                    messages.success(request, f'Payment of {amount} successfully recorded')
-                    return redirect('parent_fee_detail', pk=fee.pk)
-        
-        return render(request, self.template_name, {'fee': fee, 'form': form})
-
-class ParentAttendanceListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    model = StudentAttendance
-    template_name = 'core/parents/attendance_list.html'
-    context_object_name = 'attendances'
-    paginate_by = 20
-    
-    def test_func(self):
-        return is_parent(self.request.user)
-    
-    def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
-        queryset = StudentAttendance.objects.filter(
-            student__in=children
-        ).select_related('student', 'term', 'period').order_by('-date')
-        
-        # Apply filters
-        status = self.request.GET.get('status')
-        if status:
-            queryset = queryset.filter(status=status)
-            
-        student_id = self.request.GET.get('student')
-        if student_id:
-            queryset = queryset.filter(student_id=student_id)
-            
-        date_from = self.request.GET.get('date_from')
-        if date_from:
-            queryset = queryset.filter(date__gte=date_from)
-            
-        date_to = self.request.GET.get('date_to')
-        if date_to:
-            queryset = queryset.filter(date__lte=date_to)
-            
-        return queryset
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        children = self.request.user.parentguardian.student.all()
-        
-        # Add filter form
-        context['filter_form'] = ParentAttendanceFilterForm(
-            initial={
-                'student': self.request.GET.get('student'),
-                'status': self.request.GET.get('status'),
-                'date_from': self.request.GET.get('date_from'),
-                'date_to': self.request.GET.get('date_to'),
-            }
-        )
-        context['children'] = children
-        
-        # Calculate summary statistics
-        attendances = self.get_queryset()
-        context['present_count'] = attendances.filter(status='present').count()
-        context['absent_count'] = attendances.filter(status='absent').count()
-        context['late_count'] = attendances.filter(status='late').count()
-        context['excused_count'] = attendances.filter(status='excused').count()
-        
-        return context
-
-class ParentReportCardListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    model = ReportCard
-    template_name = 'core/parents/report_card_list.html'
-    context_object_name = 'report_cards'
-    
-    def test_func(self):
-        return is_parent(self.request.user)
-    
-    def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
-        return ReportCard.objects.filter(
-            student__in=children
-        ).order_by('-academic_year', '-term')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['children'] = self.request.user.parentguardian.student.all()
-        return context
-
-class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
-    def get(self, request, student_id, report_card_id=None):
-        parent = request.user.parentguardian
-        student = get_object_or_404(Student, pk=student_id)
-        
-        # Check if student belongs to parent
-        if not parent.student.filter(pk=student_id).exists():
-            raise PermissionDenied
-        
-        # Get report card if specified
-        report_card = None
-        if report_card_id:
-            report_card = get_object_or_404(ReportCard, pk=report_card_id, student=student)
-        
-        # Get filtered grades
-        grades = Grade.objects.filter(student=student)
-        if report_card:
-            grades = grades.filter(
-                academic_year=report_card.academic_year,
-                term=report_card.term
-            )
-        else:
-            # Apply filters from GET parameters
-            form = ReportCardFilterForm(request.GET)
-            if form.is_valid():
-                if form.cleaned_data.get('academic_year'):
-                    grades = grades.filter(academic_year=form.cleaned_data['academic_year'])
-                if form.cleaned_data.get('term'):
-                    grades = grades.filter(term=form.cleaned_data['term'])
-        
-        grades = grades.order_by('subject')
-        
-        # Calculate average
-        aggregates = grades.aggregate(avg_score=Avg('total_score'))
-        average_score = aggregates['avg_score'] or 0
-        overall_grade = Grade.calculate_grade(average_score) if hasattr(Grade, 'calculate_grade') else 'N/A'
-        
-        context = {
-            'student': student,
-            'grades': grades,
-            'average_score': round(float(average_score), 2),
-            'overall_grade': overall_grade,
-            'report_card': report_card,
-            'form': ReportCardFilterForm(request.GET) if not report_card else None,
-        }
-        
-        if 'pdf' in request.GET:
-            return self.generate_pdf(context)
-        
-        return render(request, 'core/parents/report_card_detail.html', context)
-    
-    def generate_pdf(self, context):
-        response = HttpResponse(content_type='application/pdf')
-        filename = f"Report_Card_{context['student'].student_id}"
-        if context['report_card']:
-            filename += f"_{context['report_card'].academic_year}_Term{context['report_card'].term}"
-        response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
-        
-        p = canvas.Canvas(response, pagesize=letter)
-        width, height = letter
-        
-        # PDF content
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(100, height - 100, f"Report Card for {context['student'].get_full_name()}")
-        
-        # Add more content as needed
-        p.showPage()
-        p.save()
-        return response
 
 #analytics views
 
@@ -3084,7 +3352,6 @@ def send_payment_reminders():
 class FinancialReportView(LoginRequiredMixin, View):
     def get(self, request):
         form = FinancialReportForm(request.GET)
-        
         if form.is_valid():
             start_date = form.cleaned_data['start_date']
             end_date = form.cleaned_data['end_date']

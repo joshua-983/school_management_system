@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load grade_filters %}
+
+{% block title %}Best Students{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center py-3 mb-4 border-bottom">
+        <h1 class="h2">
+            <i class="fas fa-trophy text-warning"></i> Top Performing Students
+        </h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-download"></i> Export
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-print"></i> Print
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Academic Year {{ current_year }}
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Rank</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Average Grade</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in top_students %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                <strong>{{ student.full_name }}</strong>
+                                <div class="text-muted small">{{ student.admission_number }}</div>
+                            </td>
+                            <td>{{ student.current_class }}</td>
+                            <td>
+                                <span class="badge bg-{{ student.avg_grade|grade_color }} rounded-pill">
+                                    {{ student.avg_grade|floatformat:2 }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'student_detail' student.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center">No student records found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-bar"></i> Performance Distribution
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-school"></i> Class Distribution
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="classDistributionChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Performance Chart
+    const perfCtx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(perfCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Top 1', '2-3', '4-5', '6-10'],
+            datasets: [{
+                label: 'Average Scores',
+                data: [95, 89, 85, 80],
+                backgroundColor: 'rgba(54, 162, 235, 0.7)'
+            }]
+        }
+    });
+
+    // Class Distribution Chart
+    const classCtx = document.getElementById('classDistributionChart').getContext('2d');
+    new Chart(classCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Class A', 'Class B', 'Class C'],
+            datasets: [{
+                data: [4, 3, 3],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)'
+                ]
+            }]
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,3 +1,5 @@
+from .views import BestStudentsView
+from .views import GradeEntryView, GradeReportView
 from django.urls import path, include
 from .api import FeeCategoryViewSet
 from rest_framework.routers import DefaultRouter
@@ -41,7 +43,7 @@ from .views import (
     AssignmentUpdateView, AssignmentDeleteView,
     
     # Grade-related views
-    GradeListView, GradeUpdateView, BulkGradeUploadView, 
+    GradeListView, GradeUpdateView, BulkGradeUploadView, GradeEntryView, GradeReportView, BestStudentsView,
     
     # Report Card views
     ReportCardDashboardView, ReportCardView, ReportCardPDFView,
@@ -80,6 +82,7 @@ urlpatterns = [
     path('students/<int:pk>/edit/', StudentUpdateView.as_view(), name='student_update'),
     path('students/<int:pk>/delete/', StudentDeleteView.as_view(), name='student_delete'),
     path('student/<int:student_id>/attendance/', AttendanceDashboardView.as_view(), name='student_attendance_summary'),
+    
     
     # Parent/Guardian URLs
     path('students/<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create'),
@@ -134,11 +137,14 @@ urlpatterns = [
     path('assignments/add/', AssignmentCreateView.as_view(), name='assignment_add'),
     # Grade URLs
     path('grades/', GradeListView.as_view(), name='grade_list'),
+    path('grades/add/', GradeEntryView.as_view(), name='grade_add'),  # Use this for consistency
     path('grades/<int:pk>/edit/', GradeUpdateView.as_view(), name='grade_edit'),
     path('grades/bulk-upload/', BulkGradeUploadView.as_view(), name='grade_bulk_upload'),
     path('grades/upload-template/', views.GradeUploadTemplateView.as_view(), name='grade_upload_template'),
-    path('grades/add/', GradeEntryView.as_view(), name='grade_add'),
-    
+    path('grades/report/', GradeReportView.as_view(), name='grade_report'),
+    path('best-students/', BestStudentsView.as_view(), name='best_students'),
+    path('grades/delete/<int:pk>/', views.grade_delete, name='grade_delete'),
+    path('grades/delete/<int:pk>/', views.grade_delete, name='grade_delete'),
     # Report Cards
     path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
     path('report-card/<int:student_id>/', ReportCardView.as_view(), name='report_card'),

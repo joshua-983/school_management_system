@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from decimal import Decimal
@@ -11,7 +12,6 @@ from django.urls import reverse
 from django.core.validators import RegexValidator
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from django.conf import settings
 from django.conf import settings
 from django.utils.safestring import mark_safe
 
@@ -40,6 +40,8 @@ class Student(models.Model):
         ('J2', 'JHS 2'),
         ('J3', 'JHS 3'),
     ]
+    
+    CLASS_LEVEL_DISPLAY_MAP = dict(CLASS_LEVEL_CHOICES)
     
     student_id = models.CharField(max_length=20, unique=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student')
@@ -249,7 +251,7 @@ class Fee(models.Model):
         default='unpaid'
     )
     payment_mode = models.CharField(
-        max_length=15,  # Increased from 13 to 15 to accommodate 'bank_transfer'
+        max_length=15,
         choices=PAYMENT_MODE_CHOICES,
         blank=True,
         null=True
@@ -261,7 +263,7 @@ class Fee(models.Model):
     notes = models.TextField(blank=True)
     
     recorded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # Changed from 'accounts.User' to use Django's auth system
+        settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='recorded_fees'
     )
@@ -275,17 +277,31 @@ class Fee(models.Model):
             models.Index(fields=['student']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['due_date']),
-    ]
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        if self.created_by:
-            assign_perm('view_fee', self.created_by, self)
-            assign_perm('change_fee', self.created_by, self)
-
+        ]
 
     def __str__(self):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
+
+    def update_payment_status(self):
+        """Enhanced payment status calculation with tolerance and grace period"""
+        tolerance = Decimal('1.00')  # Consider $1 difference as paid
+        grace_period = 5  # Days after due date before marking overdue
+        
+        today = timezone.now().date()
+        effective_due_date = self.due_date + timedelta(days=grace_period)
+        
+        difference = abs(self.amount_payable - self.amount_paid)
+        
+        if difference <= tolerance:
+            self.payment_status = 'paid'
+        elif self.amount_paid >= self.amount_payable:
+            self.payment_status = 'paid'
+        elif self.amount_paid > Decimal('0.00'):
+            self.payment_status = 'partial'
+        elif today > effective_due_date:
+            self.payment_status = 'overdue'
+        else:
+            self.payment_status = 'unpaid'
 
     def save(self, *args, **kwargs):
         # Calculate balance before saving
@@ -300,28 +316,33 @@ class Fee(models.Model):
             
         super().save(*args, **kwargs)
 
-    # In Fee model
-def update_payment_status(self):
-    """Enhanced payment status calculation with tolerance and grace period"""
-    tolerance = Decimal('1.00')  # Consider $1 difference as paid
-    grace_period = 5  # Days after due date before marking overdue
-    
-    today = timezone.now().date()
-    effective_due_date = self.due_date + timedelta(days=grace_period)
-    
-    difference = abs(self.amount_payable - self.amount_paid)
-    
-    if difference <= tolerance:
-        self.payment_status = 'paid'
-    elif self.amount_paid >= self.amount_payable:
-        self.payment_status = 'paid'
-    elif self.amount_paid > Decimal('0.00'):
-        self.payment_status = 'partial'
-    elif today > effective_due_date:
-        self.payment_status = 'overdue'
-    else:
-        self.payment_status = 'unpaid'
+    def clean(self):
+        """Add model-level validation"""
+        super().clean()
+        
+        if self.amount_paid > self.amount_payable:
+            raise ValidationError({
+                'amount_paid': 'Amount paid cannot exceed amount payable'
+            })
+        
+        if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
+            raise ValidationError({
+                'payment_status': 'Cannot mark as paid when amount paid is less than payable'
+            })
 
+    def get_payment_status_html(self):
+        """Improved HTML display for payment status"""
+        status_display = self.get_payment_status_display()
+        color_map = {
+            'paid': 'success',
+            'unpaid': 'danger',
+            'partial': 'warning',
+            'overdue': 'dark'
+        }
+        color = color_map.get(self.payment_status, 'primary')
+        return mark_safe(
+            f'<span class="badge bg-{color}">{status_display}</span>'
+        )
 class FeeInstallment(models.Model):
     fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='installments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -514,173 +535,179 @@ class StudentAssignment(models.Model):
         super().save(*args, **kwargs)
 
 class Grade(models.Model):
-    GRADE_CHOICES = [
-        ('A+', 'A+ (90-100)'),
-        ('A', 'A (80-89)'),
-        ('B+', 'B+ (70-79)'),
-        ('B', 'B (60-69)'),
-        ('C+', 'C+ (50-59)'),
-        ('C', 'C (40-49)'),
-        ('D+', 'D+ (30-39)'),
-        ('D', 'D (20-29)'),
-        ('E', 'E (0-19)'),
+    # GES Standardized Grading Scale (1-9) with detailed descriptors
+    GES_GRADE_CHOICES = [
+        ('1', '1 (90-100%) - Outstanding'),
+        ('2', '2 (80-89%) - Excellent'),
+        ('3', '3 (70-79%) - Very Good'), 
+        ('4', '4 (60-69%) - Good'),
+        ('5', '5 (50-59%) - Satisfactory'),
+        ('6', '6 (40-49%) - Fair'),
+        ('7', '7 (30-39%) - Weak'),
+        ('8', '8 (20-29%) - Very Weak'),
+        ('9', '9 (0-19%) - Fail'),
         ('N/A', 'Not Available'),
     ]
-    
-    # Relationships
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='grades')
-    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='grades')
-    class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE, related_name='grades')
-    
-    # Academic information
+
+    # Core fields
+    student = models.ForeignKey('Student', on_delete=models.CASCADE)
+    subject = models.ForeignKey('Subject', on_delete=models.CASCADE)
+    class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE)
     academic_year = models.CharField(max_length=9, validators=[RegexValidator(r'^\d{4}/\d{4}$')])
-    term = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(3)])
-    
-    # Scores
-    homework_score = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
-    )
+    term = models.PositiveSmallIntegerField(choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')])
+
+    # Assessment components
     classwork_score = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(30)],
+        verbose_name="Classwork (30%)"
+    )
+    homework_score = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(10)],
+        verbose_name="Homework (10%)"
     )
     test_score = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(10)],
+        verbose_name="Test (10%)"
     )
     exam_score = models.DecimalField(
-        max_digits=5, 
-        decimal_places=2, 
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(100)]
+        max_digits=5, decimal_places=2,
+        validators=[MinValueValidator(0), MaxValueValidator(50)],
+        verbose_name="Exam (50%)"
     )
-    
+
     # Calculated fields
-    total_score = models.DecimalField(max_digits=5, decimal_places=2, editable=False, null=True, blank=True)
-    grade = models.CharField(max_length=3, choices=GRADE_CHOICES, editable=False, default='N/A')
+    total_score = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        editable=False, null=True, blank=True
+    )
+    ges_grade = models.CharField(
+        max_length=3, choices=GES_GRADE_CHOICES,
+        editable=False, default='N/A'
+    )
     remarks = models.TextField(blank=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'subject', 'academic_year', 'term')
+        ordering = ['academic_year', 'term', 'student__last_name']
+
+    def save(self, *args, **kwargs):
+        self.calculate_total_score()
+        self.determine_ges_grade()
+        super().save(*args, **kwargs)
+
+    def calculate_total_score(self):
+        """Calculate total based on component scores"""
+        try:
+            self.total_score = (
+                self.classwork_score + 
+                self.homework_score + 
+                self.test_score + 
+                self.exam_score
+            )
+        except (TypeError, AttributeError):
+            self.total_score = None
+
+    def determine_ges_grade(self):
+        """Convert total score to GES standardized grade (1-9)"""
+        if self.total_score is None:
+            self.ges_grade = 'N/A'
+            return
+
+        score = float(self.total_score)
+        
+        if score >= 90: self.ges_grade = '1'
+        elif score >= 80: self.ges_grade = '2'
+        elif score >= 70: self.ges_grade = '3'
+        elif score >= 60: self.ges_grade = '4'
+        elif score >= 50: self.ges_grade = '5'
+        elif score >= 40: self.ges_grade = '6'
+        elif score >= 30: self.ges_grade = '7'
+        elif score >= 20: self.ges_grade = '8'
+        else: self.ges_grade = '9'
+
+    def __str__(self):
+        return f"{self.student} - {self.subject} ({self.academic_year} Term {self.term}): {self.ges_grade}"
+
+    @classmethod
+    def get_best_students(cls):
+        """
+        Returns a dictionary with:
+        - Best student for each class
+        - Overall best student
+        """
+        from django.db.models import Avg, Max
+        
+        # Get all classes (P1-P6, J1-J3)
+        classes = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
+        results = {}
+        current_year = f"{timezone.now().year}/{timezone.now().year + 1}"
+        
+        # Find best student per class
+        for class_level in classes:
+            # Get the highest average score for this class
+            best_avg = cls.objects.filter(
+                student__class_level=class_level,
+                academic_year=current_year
+            ).values('student').annotate(
+                avg_score=Avg('total_score')
+            ).order_by('-avg_score').first()
+            
+            if best_avg:
+                best_student = Student.objects.get(id=best_avg['student'])
+                results[class_level] = {
+                    'student': best_student,
+                    'average': best_avg['avg_score']
+                }
+        
+        # Find overall best student (highest single score across all classes)
+        overall_best = cls.objects.filter(
+            academic_year=current_year
+        ).order_by('-total_score').first()
+        
+        if overall_best:
+            results['overall'] = {
+                'student': overall_best.student,
+                'average': float(overall_best.total_score),
+                'class_level': overall_best.student.class_level
+            }
+        
+        return results
+
+#school configuration
+class SchoolConfiguration(models.Model):
+    GRADING_SYSTEM_CHOICES = [
+        ('GES', 'Ghana Education System (Primary/JHS)'),
+        ('WASSCE', 'West African Senior School Certificate Exam'),
+    ]
     
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    grading_system = models.CharField(
+        max_length=10,
+        choices=GRADING_SYSTEM_CHOICES,
+        default='GES'
+    )
+    is_locked = models.BooleanField(
+        default=False,
+        help_text="Lock the grading system to prevent changes"
+    )
+    last_updated = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('student', 'subject', 'class_assignment', 'academic_year', 'term')
-        ordering = ['student__last_name', 'student__first_name', 'subject__name']
-        verbose_name = 'Grade'
-        verbose_name_plural = 'Grades'
-    
-    def __str__(self):
-        return f"{self.student} - {self.subject} ({self.academic_year} Term {self.term}): {self.grade}"
-    
-    def clean(self):
-        """Validate the grade before saving"""
-        super().clean()
-        
-        # Validate scores are within valid ranges
-        for score_field in ['homework_score', 'classwork_score', 'test_score', 'exam_score']:
-            score = getattr(self, score_field)
-            if score < 0 or score > 100:
-                raise ValidationError(
-                    {score_field: f"Score must be between 0 and 100 (got {score})"}
-                )
-    
-    def calculate_total_score(self):
-        """
-        Calculate weighted total score based on:
-        - 20% homework
-        - 30% classwork
-        - 10% test
-        - 40% exam
-        
-        Returns None if any required score is missing
-        """
-        try:
-            weights = {
-                'homework_score': 0.2,
-                'classwork_score': 0.3,
-                'test_score': 0.1,
-                'exam_score': 0.4
-            }
-            
-            total = 0
-            for field, weight in weights.items():
-                score = getattr(self, field)
-                if score is None:
-                    return None
-                total += float(score) * weight
-            
-            return round(total, 2)
-        except (TypeError, ValueError):
-            return None
-    
-    @classmethod
-    def calculate_grade(cls, score):
-        """
-        Class method to calculate letter grade from numerical score
-        Returns 'N/A' if score is invalid
-        """
-        if score is None:
-            return 'N/A'
-            
-        try:
-            score = float(score)
-            if score > 100 or score < 0:
-                return 'N/A'
-                
-            if score >= 90: return 'A+'
-            elif score >= 80: return 'A'
-            elif score >= 70: return 'B+'
-            elif score >= 60: return 'B'
-            elif score >= 50: return 'C+'
-            elif score >= 40: return 'C'
-            elif score >= 30: return 'D+'
-            elif score >= 20: return 'D'
-            else: return 'E'
-        except (ValueError, TypeError):
-            return 'N/A'
+        verbose_name = "School Configuration"
+        verbose_name_plural = "School Configuration"
     
     def save(self, *args, **kwargs):
-        """Override save to calculate total score and grade"""
-        self.full_clean()  # Run validation first
-        
-        # Calculate and set totals
-        self.total_score = self.calculate_total_score()
-        self.grade = self.calculate_grade(self.total_score)
-        
-        # Update timestamp if needed
-        if not self.pk:  # New record
-            self.created_at = timezone.now()
-        
+        # Ensure only one configuration exists
+        if SchoolConfiguration.objects.exists() and not self.pk:
+            raise ValidationError("Only one school configuration can exist")
         super().save(*args, **kwargs)
     
-    def get_absolute_url(self):
-        from django.urls import reverse
-        return reverse('grade_detail', kwargs={'pk': self.pk})
-    
-    @property
-    def is_passing(self):
-        """Check if grade is passing (C+ or better)"""
-        return self.grade in ['A+', 'A', 'B+', 'B', 'C+']
-    
-    @classmethod
-    def get_student_grades(cls, student, academic_year=None, term=None):
-        """Helper method to get grades for a student with optional filters"""
-        queryset = cls.objects.filter(student=student)
-        
-        if academic_year:
-            queryset = queryset.filter(academic_year=academic_year)
-        if term:
-            queryset = queryset.filter(term=term)
-            
-        return queryset.order_by('subject__name')
+    def __str__(self):
+        return f"Active Grading System: {self.get_grading_system_display()} {'(Locked)' if self.is_locked else ''}"
+
 
 # Notification System
 class Notification(models.Model):
