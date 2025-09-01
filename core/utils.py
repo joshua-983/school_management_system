@@ -2,7 +2,7 @@
 from django.apps import apps
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-
+from django.contrib.auth.models import Group
 def send_notification(recipient, notification_type, title, message, related_object=None):
     """
     Create and send a notification
@@ -50,3 +50,15 @@ def is_admin(user):
 
 def is_teacher(user):
     return hasattr(user, 'teacher')
+
+def is_admin(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+def is_teacher(user):
+    return user.is_authenticated and hasattr(user, 'teacher_profile')
+
+def is_student(user):
+    return user.is_authenticated and hasattr(user, 'student_profile')
+
+def is_parent(user):
+    return user.is_authenticated and hasattr(user, 'parentguardian')

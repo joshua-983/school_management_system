@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}Time Slots Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-clock-history me-2"></i>
+                    Time Slots Management
+                </h2>
+                <a href="{% url 'timeslot_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Add Time Slot
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'timetable_list' %}">Timetables</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Time Slots</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    {% if timeslots %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Time Range</th>
+                                    <th>Type</th>
+                                    <th>Break Name</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for timeslot in timeslots %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ timeslot.get_period_number_display }}</strong>
+                                    </td>
+                                    <td>
+                                        {{ timeslot.start_time|time:"H:i" }} - {{ timeslot.end_time|time:"H:i" }}
+                                    </td>
+                                    <td>
+                                        {% if timeslot.is_break %}
+                                        <span class="badge bg-warning">Break</span>
+                                        {% else %}
+                                        <span class="badge bg-primary">Class Period</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ timeslot.break_name|default:"-" }}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'timeslot_update' timeslot.pk %}" 
+                                               class="btn btn-outline-primary" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{% url 'timeslot_delete' timeslot.pk %}" 
+                                               class="btn btn-outline-danger" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock display-1 text-muted"></i>
+                        <p class="text-muted mt-3">No time slots configured yet.</p>
+                        <a href="{% url 'timeslot_create' %}" class="btn btn-primary mt-2">
+                            <i class="bi bi-plus-circle me-1"></i> Create First Time Slot
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if not timeslots %}
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>About Time Slots</h5>
+                </div>
+                <div class="card-body">
+                    <p>Time slots define the daily schedule structure for your school. You can configure:</p>
+                    <ul class="mb-0">
+                        <li>Class periods with specific start and end times</li>
+                        <li>Break times (lunch, recess, etc.)</li>
+                        <li>Custom period names and durations</li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add confirmation for delete actions
+    const deleteButtons = document.querySelectorAll('.btn-outline-danger');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (!confirm('Are you sure you want to delete this time slot? This action cannot be undone.')) {
+                e.preventDefault();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

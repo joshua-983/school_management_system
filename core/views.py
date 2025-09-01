@@ -1,8 +1,10 @@
+from django.http import Http404
+import re
+from datetime import timedelta
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import FeeCategory
 from .serializers import FeeCategorySerializer
-
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from decimal import Decimal
@@ -39,7 +41,6 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
 from django.views.generic import TemplateView  # Add this import
-
 from .models import Student, Grade, ClassAssignment, ReportCard
 from .forms import ReportCardFilterForm
 from django.utils.decorators import method_decorator
@@ -48,23 +49,27 @@ from datetime import datetime
 from urllib.parse import urlencode
 from django.middleware.csrf import get_token
 from .forms import GradeEntryForm
-
 from django_filters.views import FilterView
 from .filters import AuditLogFilter
 from django.views.decorators.cache import cache_page
+from .forms import ReportCardForm
+from core.forms import TimeSlotForm, TimetableForm, TimetableEntryForm, TimetableFilterForm
 
 
+logger = logging.getLogger(__name__)
 
-
+# Update the permission functions to match your model structure
 def is_admin(user):
-    return user.is_superuser
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 def is_teacher(user):
-    return hasattr(user, 'teacher')
+    return user.is_authenticated and hasattr(user, 'teacher_profile')
 
 def is_student(user):
-    return hasattr(user, 'student')
+    return user.is_authenticated and hasattr(user, 'student_profile')
 
+def is_parent(user):
+    return user.is_authenticated and hasattr(user, 'parentguardian')
 
 
 def is_parent(user):
@@ -704,7 +709,7 @@ def parent_dashboard(request):
 # Fee management
 class FeeCategoryListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = FeeCategory
-    template_name = 'core/finance/fee_category_list.html'
+    template_name = 'core/Finance/categories/fee_category_list.html'
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -712,7 +717,7 @@ class FeeCategoryListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 class FeeCategoryCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeeCategory
     form_class = FeeCategoryForm
-    template_name = 'core/finance/fee_category_form.html'
+    template_name = 'core/finance/categories/fee_category_form.html'
     success_url = reverse_lazy('fee_category_list')
     
     def test_func(self):
@@ -734,7 +739,7 @@ def fee_category_detail(request, pk):
 class FeeCategoryUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = FeeCategory
     form_class = FeeCategoryForm
-    template_name = 'core/finance/fee_category_form.html'
+    template_name = 'core/finance/categories/fee_category_form.html'
     success_url = reverse_lazy('fee_category_list')
     
     def test_func(self):
@@ -746,7 +751,7 @@ class FeeCategoryUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
 
 class FeeCategoryDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = FeeCategory
-    template_name = 'core/finance/fee_category_confirm_delete.html'
+    template_name = 'core/finance/categories/fee_category_confirm_delete.html'
     success_url = reverse_lazy('fee_category_list')
     
     def test_func(self):
@@ -759,7 +764,7 @@ class FeeCategoryDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView)
 # Fee Views
 class FeeListView(LoginRequiredMixin, ListView):
     model = Fee
-    template_name = 'core/finance/fee_list.html'
+    template_name = 'core/finance/fees/fee_list.html'
     paginate_by = 20
     
     def get_queryset(self):
@@ -807,11 +812,16 @@ class FeeListView(LoginRequiredMixin, ListView):
         context['total_paid'] = queryset.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
         context['total_balance'] = context['total_payable'] - context['total_paid']
         
+        # Add all students for the modal - FIXED
+        if is_admin(self.request.user) or is_teacher(self.request.user):
+            context['all_students'] = Student.objects.filter(is_active=True).order_by('first_name', 'last_name')
+        else:
+            context['all_students'] = Student.objects.none()
+        
         return context
-
 class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Fee
-    template_name = 'core/finance/fee_detail.html'
+    template_name = 'core/finance/fees/fee_detail.html'
     
     def test_func(self):
         fee = self.get_object()
@@ -835,7 +845,7 @@ class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
 class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Fee
     form_class = FeeForm
-    template_name = 'core/finance/fee_form.html'
+    template_name = 'core/finance/fees/fee_form.html'
     
     def test_func(self):
         """Check if user has permission to create fees"""
@@ -844,16 +854,46 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def get_form_kwargs(self):
         """Add student_id to form kwargs"""
         kwargs = super().get_form_kwargs()
-        kwargs['student_id'] = self.kwargs.get('student_id')
+        student_id = self.kwargs.get('student_id')
+        if student_id:
+            kwargs['student_id'] = student_id
         return kwargs
+    
+    def get_initial(self):
+        """Set initial values for the form"""
+        initial = super().get_initial()
+        student_id = self.kwargs.get('student_id')
+        
+        if student_id:
+            try:
+                student = Student.objects.get(pk=student_id)
+                initial['student'] = student
+            except Student.DoesNotExist:
+                pass
+        
+        # Set default academic year to current year
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        initial['academic_year'] = f"{current_year}/{next_year}"
+        
+        return initial
     
     def form_valid(self, form):
         """Handle valid form submission"""
-        student = get_object_or_404(Student, pk=self.kwargs['student_id'])
+        # Get student from form data
+        student = form.cleaned_data.get('student')
+        if not student:
+            form.add_error('student', 'Please select a student')
+            return self.form_invalid(form)
+        
         form.instance.student = student
         form.instance.created_by = self.request.user
-        form.instance.recorded_by = self.request.user  # Add this line to set recorded_by
-        form.instance.balance = form.cleaned_data['amount_payable'] - form.cleaned_data['amount_paid']
+        form.instance.recorded_by = self.request.user
+        
+        # Calculate balance
+        amount_payable = form.cleaned_data.get('amount_payable', 0)
+        amount_paid = form.cleaned_data.get('amount_paid', 0)
+        form.instance.balance = amount_payable - amount_paid
         
         # Set payment date if status is paid and no date provided
         if form.instance.payment_status == 'paid' and not form.instance.payment_date:
@@ -875,30 +915,28 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         student_id = self.kwargs.get('student_id')
         
         if student_id:
-            student = get_object_or_404(Student, pk=student_id)
-            context['student'] = student
-            
-            # Add existing fees for reference
-            context['existing_fees'] = Fee.objects.filter(student=student).order_by('-due_date')[:5]
-            context['total_fees'] = Fee.objects.filter(student=student).count()
+            try:
+                student = Student.objects.get(pk=student_id)
+                context['student'] = student
+                
+                # Add existing fees for reference
+                context['existing_fees'] = Fee.objects.filter(
+                    student=student
+                ).select_related('category').order_by('-due_date')[:5]
+                context['total_fees'] = Fee.objects.filter(student=student).count()
+                
+            except Student.DoesNotExist:
+                messages.error(self.request, 'Selected student does not exist')
+                context['student'] = None
+        else:
+            context['student'] = None
             
         return context
-    
-    def dispatch(self, request, *args, **kwargs):
-        """Add student verification"""
-        student_id = kwargs.get('student_id')
-        if student_id:
-            student = get_object_or_404(Student, pk=student_id)
-            if not student.is_active:
-                messages.warning(request, 'Cannot create fee for inactive student')
-                return redirect('student_detail', pk=student_id)
-                
-        return super().dispatch(request, *args, **kwargs)
 
 class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Fee
     form_class = FeeForm
-    template_name = 'core/finance/fee_form.html'
+    template_name = 'core/finance/fees/fee_form.html'
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -920,7 +958,7 @@ class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
 class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Fee
-    template_name = 'core/finance/fee_confirm_delete.html'
+    template_name = 'core/finance/fees/fee_confirm_delete.html'
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -936,7 +974,7 @@ class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeePayment
     form_class = FeePaymentForm
-    template_name = 'core/finance/fee_payment_form.html'
+    template_name = 'core/finance/fees/fee_payment_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -964,7 +1002,7 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 
 class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = FeePayment
-    template_name = 'core/finance/fee_payment_confirm_delete.html'
+    template_name = 'core/finance/fees/fee_payment_confirm_delete.html'
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -1026,7 +1064,7 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         if 'export' in request.GET:
             return self.export_to_excel(fees)
 
-        return render(request, 'core/finance/fee_report.html', context)
+        return render(request, 'core/finance/fees/fee_report.html', context)
 
     def export_to_excel(self, queryset):
         from openpyxl import Workbook
@@ -1138,7 +1176,7 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         if request.GET.get('export'):
             return self.export_report(context)
             
-        return render(request, 'finance/fee_status_report.html', context)
+        return render(request, 'finance/fees/fee_status_report.html', context)
     
     def export_report(self, context):
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -1183,7 +1221,7 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         return is_admin(self.request.user) or is_teacher(self.request.user)
 
 class FeeDashboardView(LoginRequiredMixin, TemplateView):
-    template_name = 'finance/fee_dashboard.html'
+    template_name = 'finance/fees/fee_dashboard.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1288,19 +1326,19 @@ def generate_term_fees(request_user=None):
 
 class SubjectListView(LoginRequiredMixin, ListView):
     model = Subject
-    template_name = 'core/students/subject_list.html'
+    template_name = 'core/academics/subjects/subject_list.html'
     context_object_name = 'subjects'
     paginate_by = 20
 
 class SubjectDetailView(LoginRequiredMixin, DetailView):
     model = Subject
-    template_name = 'core/students/subject_detail.html'
+    template_name = 'core/academics/subjects/subject_detail.html'
     context_object_name = 'subject'
 
 class SubjectCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Subject
     form_class = SubjectForm
-    template_name = 'core/students/subject_form.html'
+    template_name = 'core/academics/subjects/subject_form.html'
     success_url = reverse_lazy('subject_list')
     
     def test_func(self):
@@ -1318,7 +1356,7 @@ class SubjectCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 class SubjectUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Subject
     form_class = SubjectForm
-    template_name = 'core/students/subject_form.html'
+    template_name = 'core/academics/subjects/subject_form.html'
     success_url = reverse_lazy('subject_list')
     
     def test_func(self):
@@ -1337,7 +1375,7 @@ class SubjectUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
 class SubjectDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Subject
-    template_name = 'core/students/subject_confirm_delete.html'
+    template_name = 'core/academics/subjects/subject_confirm_delete.html'
     success_url = reverse_lazy('subject_list')
     
     def test_func(self):
@@ -1403,7 +1441,7 @@ class TeacherDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 # Class Assignment Views
 class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = ClassAssignment
-    template_name = 'core/academics/assignments/class_assignment_list.html'
+    template_name = 'core/academics/classes/class_assignment_list.html'  # Make sure this path is correct
     context_object_name = 'class_assignments'
     
     def test_func(self):
@@ -1414,11 +1452,27 @@ class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView)
         if is_teacher(self.request.user):
             queryset = queryset.filter(teacher=self.request.user.teacher)
         return queryset
+    
+    def get_queryset(self):
+        print(f"User: {self.request.user}, Is teacher: {is_teacher(self.request.user)}")
+        queryset = super().get_queryset().select_related('teacher', 'subject')
+        if is_teacher(self.request.user):
+            print("Filtering for teacher's classes")
+            queryset = queryset.filter(teacher=self.request.user.teacher)
+        print(f"QuerySet count: {queryset.count()}")
+        return queryset
+    
+    
+    # Add this method to provide context data
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add any additional context you might need
+        return context
 
 class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = ClassAssignment
     form_class = ClassAssignmentForm
-    template_name = 'core/academics/class_assignment_form.html'
+    template_name = 'core/academics/classes/class_assignment_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -1441,7 +1495,7 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
 class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = ClassAssignment
     form_class = ClassAssignmentForm
-    template_name = 'core/academics/class_assignment_form.html'
+    template_name = 'core/academics/classes/class_assignment_form.html'
     
     def test_func(self):
         if is_admin(self.request.user):
@@ -1459,7 +1513,7 @@ class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateV
 
 class ClassAssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = ClassAssignment
-    template_name = 'core/academics/class_assignment_confirm_delete.html'
+    template_name = 'core/academics/classes/class_assignment_confirm_delete.html'
     success_url = reverse_lazy('class_assignment_list')
     
     def test_func(self):
@@ -2177,21 +2231,26 @@ class BestStudentsView(LoginRequiredMixin, TemplateView):
             avg_grade=Avg('grades__score')
         ).order_by('-avg_grade')[:10]
         
+        # Debug output
+        print(f"Found {len(top_students)} top students")
+        for student in top_students:
+            print(f"Student: {student.full_name}, Avg Grade: {student.avg_grade}")
+        
         context.update({
             'top_students': top_students,
             'current_year': timezone.now().year
         })
         return context
-
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
-    template_name = 'core/students/report_card_dashboard.html'
+    template_name = 'core/academics/report_cards/report_card_dashboard.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
+        # Get report cards based on user role
         if is_student(self.request.user):
             student = self.request.user.student
-            context['report_cards'] = ReportCard.objects.filter(
+            report_cards = ReportCard.objects.filter(
                 student=student
             ).order_by('-academic_year', '-term')
         
@@ -2205,11 +2264,35 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
             students = Student.objects.filter(class_level__in=classes)
             
             # Get report cards for those students
-            context['report_cards'] = ReportCard.objects.filter(
+            report_cards = ReportCard.objects.filter(
                 student__in=students
             ).order_by('-academic_year', '-term')
+        else:
+            # Admin or other users see all report cards
+            report_cards = ReportCard.objects.all().order_by('-academic_year', '-term')
         
-        context['form'] = ReportCardFilterForm(self.request.GET or None)
+        # Debug output
+        print(f"Found {report_cards.count()} report cards")
+        for rc in report_cards:
+            print(f"Report Card: {rc.id}, Student: {rc.student.id if rc.student else 'None'}")
+        
+        context['report_cards'] = report_cards
+        return context
+    
+class CreateReportCardView(CreateView):
+    model = ReportCard
+    form_class = ReportCardForm
+    template_name = 'create_report_card.html'
+    success_url = reverse_lazy('report_card_dashboard')
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        messages.success(self.request, f'Report card for {form.instance.student.get_full_name()} created successfully!')
+        return response
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = 'Create New Report Card'
         return context
 
 class ReportCardView(LoginRequiredMixin, View):
@@ -2236,9 +2319,9 @@ class ReportCardView(LoginRequiredMixin, View):
             'report_card': report_card,
             'form': ReportCardFilterForm(request.GET),
         }
-        
-        return render(request, 'core/students/report_card.html', context)
-    
+
+        return render(request, 'core/academics/record_cards/report_card.html', context)
+
     def _has_permission(self, request, student):
         """Check if user has permission to view this report card"""
         if is_admin(request.user):
@@ -2380,6 +2463,21 @@ class SaveReportCardView(LoginRequiredMixin, View):
         academic_year = request.POST.get('academic_year')
         term = request.POST.get('term')
         
+        # Validate academic year format (YYYY/YYYY)
+        if not re.match(r'^\d{4}/\d{4}$', academic_year):
+            messages.error(request, 'Invalid academic year format. Use YYYY/YYYY format.')
+            return redirect('report_card', student_id=student_id)
+        
+        # Validate term
+        try:
+            term = int(term)
+            if term not in [1, 2, 3]:
+                raise ValueError
+        except (ValueError, TypeError):
+            messages.error(request, 'Invalid term. Must be 1, 2, or 3.')
+            return redirect('report_card', student_id=student_id)
+        
+        # Create or get the report card
         report_card, created = ReportCard.objects.get_or_create(
             student=student,
             academic_year=academic_year,
@@ -2390,8 +2488,12 @@ class SaveReportCardView(LoginRequiredMixin, View):
             }
         )
         
+        if created:
+            messages.success(request, 'Report card created successfully!')
+        else:
+            messages.info(request, 'Report card already exists.')
+        
         return redirect('report_card_detail', student_id=student_id, report_card_id=report_card.id)
-
 # Notification system
 class NotificationListView(LoginRequiredMixin, ListView):
     model = Notification
@@ -3394,8 +3496,420 @@ class AuditDashboardView(LoginRequiredMixin, UserPassesTestMixin, FilterView):
     def get_queryset(self):
         return AuditLog.objects.select_related('user').order_by('-timestamp')
 
+#timetable
 
+class TimeSlotListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = TimeSlot
+    template_name = 'core/timetable/timeslot_list.html'
+    context_object_name = 'timeslots'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_queryset(self):
+        return TimeSlot.objects.order_by('period_number')
 
+class TimeSlotCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = TimeSlot
+    form_class = TimeSlotForm
+    template_name = 'core/timetable/timeslot_form.html'
+    success_url = reverse_lazy('timeslot_list')
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Time slot created successfully')
+        return super().form_valid(form)
 
+class TimeSlotUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = TimeSlot
+    form_class = TimeSlotForm
+    template_name = 'core/timetable/timeslot_form.html'
+    success_url = reverse_lazy('timeslot_list')
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Time slot updated successfully')
+        return super().form_valid(form)
 
+class TimeSlotDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = TimeSlot
+    template_name = 'core/timetable/timeslot_confirm_delete.html'
+    success_url = reverse_lazy('timeslot_list')
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, 'Time slot deleted successfully')
+        return super().delete(request, *args, **kwargs)
 
+# Timetable Views
+class TimetableListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Timetable
+    template_name = 'core/timetable/timetable_list.html'
+    context_object_name = 'timetables'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_queryset(self):
+        queryset = Timetable.objects.select_related('created_by').prefetch_related('entries')
+        
+        # Apply filters
+        class_level = self.request.GET.get('class_level')
+        academic_year = self.request.GET.get('academic_year')
+        term = self.request.GET.get('term')
+        day_of_week = self.request.GET.get('day_of_week')
+        
+        if class_level:
+            queryset = queryset.filter(class_level=class_level)
+        if academic_year:
+            queryset = queryset.filter(academic_year=academic_year)
+        if term:
+            queryset = queryset.filter(term=term)
+        if day_of_week:
+            queryset = queryset.filter(day_of_week=day_of_week)
+        
+        # For teachers, only show timetables for classes they teach
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher_profile
+            ).values_list('class_level', flat=True)
+            queryset = queryset.filter(class_level__in=teacher_classes)
+        
+        return queryset.order_by('class_level', 'day_of_week')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        context['current_filters'] = {
+            'class_level': self.request.GET.get('class_level', ''),
+            'academic_year': self.request.GET.get('academic_year', ''),
+            'term': self.request.GET.get('term', ''),
+            'day_of_week': self.request.GET.get('day_of_week', ''),
+        }
+        return context
+
+class TimetableCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = Timetable
+    form_class = TimetableForm
+    template_name = 'core/timetable/timetable_form.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        messages.success(self.request, 'Timetable created successfully')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('timetable_manage', kwargs={'pk': self.object.pk})
+
+class TimetableDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = Timetable
+    template_name = 'core/timetable/timetable_detail.html'
+    context_object_name = 'timetable'
+    
+    def test_func(self):
+        timetable = self.get_object()
+        if is_admin(self.request.user):
+            return True
+        if is_teacher(self.request.user):
+            # Check if teacher teaches this class
+            return ClassAssignment.objects.filter(
+                class_level=timetable.class_level,
+                teacher=self.request.user.teacher_profile
+            ).exists()
+        return False
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['timeslots'] = TimeSlot.objects.order_by('period_number')
+        context['entries'] = self.object.entries.select_related(
+            'time_slot', 'subject', 'teacher'
+        ).order_by('time_slot__period_number')
+        return context
+
+class TimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
+    template_name = 'core/timetable/timetable_manage.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request, pk):
+        timetable = get_object_or_404(Timetable, pk=pk)
+        timeslots = TimeSlot.objects.order_by('period_number')
+        entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
+        
+        # Create forms for each time slot
+        entry_forms = []
+        for timeslot in timeslots:
+            try:
+                entry = entries.get(time_slot=timeslot)
+                form = TimetableEntryForm(instance=entry, timetable=timetable)
+            except TimetableEntry.DoesNotExist:
+                form = TimetableEntryForm(
+                    initial={'time_slot': timeslot},
+                    timetable=timetable
+                )
+            entry_forms.append((timeslot, form))
+        
+        context = {
+            'timetable': timetable,
+            'entry_forms': entry_forms,
+            'timeslots': timeslots,
+        }
+        return render(request, self.template_name, context)
+    
+    def post(self, request, pk):
+        timetable = get_object_or_404(Timetable, pk=pk)
+        timeslots = TimeSlot.objects.order_by('period_number')
+        
+        for timeslot in timeslots:
+            entry_id = request.POST.get(f'entry_{timeslot.id}')
+            if entry_id:
+                # Update existing entry
+                entry = get_object_or_404(TimetableEntry, id=entry_id, timetable=timetable)
+                form = TimetableEntryForm(request.POST, instance=entry, timetable=timetable)
+            else:
+                # Create new entry
+                form = TimetableEntryForm(request.POST, timetable=timetable)
+            
+            if form.is_valid():
+                entry = form.save(commit=False)
+                entry.timetable = timetable
+                entry.time_slot = timeslot
+                entry.save()
+        
+        messages.success(request, 'Timetable updated successfully')
+        return redirect('timetable_detail', pk=timetable.pk)
+
+class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    model = Timetable
+    template_name = 'core/timetable/timetable_confirm_delete.html'
+    success_url = reverse_lazy('timetable_list')
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, 'Timetable deleted successfully')
+        return super().delete(request, *args, **kwargs)
+
+# Student Timetable View
+class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/timetable/student_timetable.html'
+    
+    def test_func(self):
+        return is_student(self.request.user) or is_parent(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        if is_student(self.request.user):
+            student = self.request.user.student_profile
+            class_level = student.class_level
+        else:
+            # For parents, get the first child's class level
+            children = self.request.user.parentguardian.student.all()
+            if children.exists():
+                class_level = children.first().class_level
+            else:
+                class_level = None
+        
+        if class_level:
+            # Get current academic year and term
+            current_year = timezone.now().year
+            next_year = current_year + 1
+            academic_year = f"{current_year}/{next_year}"
+            
+            # Try to get current term
+            current_term = AcademicTerm.objects.filter(is_active=True).first()
+            term = current_term.term if current_term else 1
+            
+            # Get timetable for the week
+            timetables = Timetable.objects.filter(
+                class_level=class_level,
+                academic_year=academic_year,
+                term=term,
+                is_active=True
+            ).prefetch_related(
+                'entries__time_slot',
+                'entries__subject',
+                'entries__teacher'
+            ).order_by('day_of_week')
+            
+            # Organize by day
+            weekly_timetable = {}
+            for day in range(6):  # Monday to Saturday
+                try:
+                    timetable = timetables.get(day_of_week=day)
+                    weekly_timetable[day] = timetable.entries.order_by('time_slot__period_number')
+                except Timetable.DoesNotExist:
+                    weekly_timetable[day] = None
+            
+            context.update({
+                'weekly_timetable': weekly_timetable,
+                'timeslots': TimeSlot.objects.order_by('period_number'),
+                'days_of_week': dict(Timetable.DAYS_OF_WEEK),
+                'class_level': class_level,
+                'academic_year': academic_year,
+                'term': term,
+            })
+        
+        return context
+
+# Teacher Timetable View
+class TeacherTimetableView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/timetable/teacher_timetable.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        if not is_teacher(self.request.user):
+            return context
+        
+        teacher = self.request.user.teacher_profile
+        
+        # Get current academic year and term
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        academic_year = f"{current_year}/{next_year}"
+        
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        term = current_term.term if current_term else 1
+        
+        # Get all timetable entries for this teacher
+        entries = TimetableEntry.objects.filter(
+            teacher=teacher,
+            timetable__academic_year=academic_year,
+            timetable__term=term,
+            timetable__is_active=True
+        ).select_related(
+            'timetable', 'subject', 'time_slot'
+        ).order_by('timetable__day_of_week', 'time_slot__period_number')
+        
+        # Group entries by day of week
+        days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        entries_by_day = {}
+        
+        for entry in entries:
+            day_name = entry.timetable.get_day_of_week_display()
+            if day_name not in entries_by_day:
+                entries_by_day[day_name] = []
+            entries_by_day[day_name].append(entry)
+        
+        context['entries_by_day'] = entries_by_day
+        context['days_order'] = days_order
+        context['teacher'] = teacher
+        
+        # Calculate statistics
+        context['total_periods'] = entries.count()
+        context['classes_teaching'] = list(set([entry.timetable.get_class_level_display() for entry in entries]))
+        context['subjects_teaching'] = list(set([entry.subject.name for entry in entries]))
+        
+        # Generate time slots for weekly overview
+        time_slots = []
+        for entry in entries:
+            time_slot = f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}"
+            if time_slot not in time_slots:
+                time_slots.append(time_slot)
+        
+        context['time_slots'] = sorted(time_slots)
+        
+        return context
+
+@login_required
+def get_timetable_entries(request):
+    """AJAX view to get timetable entries for a specific class and day"""
+    class_level = request.GET.get('class_level')
+    day_of_week = request.GET.get('day_of_week')
+    academic_year = request.GET.get('academic_year')
+    term = request.GET.get('term')
+    
+    if not all([class_level, day_of_week, academic_year, term]):
+        return JsonResponse({'error': 'Missing parameters'}, status=400)
+    
+    try:
+        timetable = Timetable.objects.get(
+            class_level=class_level,
+            day_of_week=day_of_week,
+            academic_year=academic_year,
+            term=term
+        )
+        entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
+        
+        data = {
+            'entries': [
+                {
+                    'id': entry.id,
+                    'time_slot': str(entry.time_slot),
+                    'subject': entry.subject.name,
+                    'teacher': entry.teacher.get_full_name(),
+                    'classroom': entry.classroom,
+                    'is_break': entry.is_break
+                }
+                for entry in entries.order_by('time_slot__period_number')
+            ]
+        }
+        return JsonResponse(data)
+    except Timetable.DoesNotExist:
+        return JsonResponse({'error': 'Timetable not found'}, status=404)
+
+@login_required
+@user_passes_test(is_admin)
+def generate_weekly_timetable(request):
+    """Generate weekly timetable for a class"""
+    if request.method == 'POST':
+        class_level = request.POST.get('class_level')
+        academic_year = request.POST.get('academic_year')
+        term = request.POST.get('term')
+        
+        if not all([class_level, academic_year, term]):
+            messages.error(request, 'Please provide all required fields')
+            return redirect('timetable_list')
+        
+        # Validate academic year format
+        import re
+        if not re.match(r'^\d{4}/\d{4}$', academic_year):
+            messages.error(request, 'Academic year must be in format YYYY/YYYY (e.g., 2024/2025)')
+            return redirect('timetable_list')
+        
+        # Validate term
+        try:
+            term = int(term)
+            if term not in [1, 2, 3]:
+                raise ValueError
+        except ValueError:
+            messages.error(request, 'Term must be 1, 2, or 3')
+            return redirect('timetable_list')
+        
+        # Create timetables for all days of the week
+        created_count = 0
+        for day in range(6):  # Monday to Saturday
+            try:
+                timetable, created = Timetable.objects.get_or_create(
+                    class_level=class_level,
+                    day_of_week=day,
+                    academic_year=academic_year,
+                    term=term,
+                    defaults={
+                        'created_by': request.user,
+                        'is_active': True
+                    }
+                )
+                if created:
+                    created_count += 1
+            except Exception as e:
+                messages.error(request, f'Error creating timetable: {str(e)}')
+                return redirect('timetable_list')
+        
+        messages.success(request, f'Created {created_count} weekly timetables for {class_level}')
+        return redirect('timetable_list')
+    
+    return redirect('timetable_list')

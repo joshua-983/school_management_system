@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Time Slot{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card border-danger shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Confirm Deletion
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading">Warning!</h5>
+                        <p class="mb-0">You are about to delete the following time slot:</p>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ object.get_period_number_display }}</h5>
+                            <p class="card-text mb-1">
+                                <strong>Time:</strong> {{ object.start_time|time:"H:i" }} - {{ object.end_time|time:"H:i" }}
+                            </p>
+                            <p class="card-text mb-1">
+                                <strong>Type:</strong> 
+                                {% if object.is_break %}
+                                <span class="badge bg-warning">Break</span>
+                                {% else %}
+                                <span class="badge bg-primary">Class Period</span>
+                                {% endif %}
+                            </p>
+                            {% if object.break_name %}
+                            <p class="card-text mb-0">
+                                <strong>Break Name:</strong> {{ object.break_name }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">Consequences of deletion:</h6>
+                        <ul class="mb-0">
+                            <li>This time slot will be removed from all timetables</li>
+                            <li>Any scheduled classes during this period will be deleted</li>
+                            <li>This action cannot be undone</li>
+                        </ul>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'timeslot_list' %}" class="btn btn-secondary me-md-2">
+                                <i class="bi bi-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash me-1"></i> Confirm Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Alternative</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">Instead of deleting, consider editing the time slot if you just need to update the times or details.</p>
+                    <a href="{% url 'timeslot_update' object.pk %}" class="btn btn-outline-primary mt-2">
+                        <i class="bi bi-pencil me-1"></i> Edit Instead
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,139 +1,338 @@
-{% extends 'base.html' %}
-{% load static %}
-{% load grade_filters %}
-
-{% block title %}Best Students{% endblock %}
-
-{% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center py-3 mb-4 border-bottom">
-        <h1 class="h2">
-            <i class="fas fa-trophy text-warning"></i> Top Performing Students
-        </h1>
-        <div class="btn-toolbar mb-2 mb-md-0">
-            <div class="btn-group me-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-download"></i> Export
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-print"></i> Print
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
-                Academic Year {{ current_year }}
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>Rank</th>
-                            <th>Student</th>
-                            <th>Class</th>
-                            <th>Average Grade</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for student in top_students %}
-                        <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td>
-                                <strong>{{ student.full_name }}</strong>
-                                <div class="text-muted small">{{ student.admission_number }}</div>
-                            </td>
-                            <td>{{ student.current_class }}</td>
-                            <td>
-                                <span class="badge bg-{{ student.avg_grade|grade_color }} rounded-pill">
-                                    {{ student.avg_grade|floatformat:2 }}
-                                </span>
-                            </td>
-                            <td>
-                                <a href="{% url 'student_detail' student.id %}" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-eye"></i> View
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center">No student records found</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-bar"></i> Performance Distribution
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="performanceChart" height="150"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-school"></i> Class Distribution
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <canvas id="classDistributionChart" height="150"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Performance Chart
-    const perfCtx = document.getElementById('performanceChart').getContext('2d');
-    new Chart(perfCtx, {
-        type: 'bar',
-        data: {
-            labels: ['Top 1', '2-3', '4-5', '6-10'],
-            datasets: [{
-                label: 'Average Scores',
-                data: [95, 89, 85, 80],
-                backgroundColor: 'rgba(54, 162, 235, 0.7)'
-            }]
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Best Students</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4e73df;
+            --secondary: #858796;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --light: #f8f9fc;
+            --dark: #5a5c69;
         }
-    });
-
-    // Class Distribution Chart
-    const classCtx = document.getElementById('classDistributionChart').getContext('2d');
-    new Chart(classCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Class A', 'Class B', 'Class C'],
-            datasets: [{
-                data: [4, 3, 3],
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.7)',
-                    'rgba(54, 162, 235, 0.7)',
-                    'rgba(255, 206, 86, 0.7)'
-                ]
-            }]
+        
+        body {
+            background-color: #f8f9fc;
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
+        
+        .card {
+            border: none;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            background-color: #f8f9fc;
+            border-bottom: 1px solid #e3e6f0;
+            padding: 0.75rem 1.25rem;
+        }
+        
+        .page-header {
+            border-bottom: 1px solid #e3e6f0;
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .grade-badge {
+            font-size: 0.9rem;
+            padding: 0.35em 0.65em;
+            font-weight: 600;
+        }
+        
+        .bg-excellent { background-color: var(--success) !important; }
+        .bg-very-good { background-color: var(--info) !important; }
+        .bg-good { background-color: var(--primary) !important; }
+        .bg-average { background-color: var(--warning) !important; color: #000; }
+        .bg-poor { background-color: var(--danger) !important; }
+        
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: var(--primary);
+            background-color: #f8f9fc;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(78, 115, 223, 0.05);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 150px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar (simulating base.html) -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-graduation-cap"></i> School Management System
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-home"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#"><i class="fas fa-trophy"></i> Best Students</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-cog"></i> Settings</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-user"></i> Profile</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <!-- Header Section -->
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center py-3 mb-4 page-header">
+            <h1 class="h2">
+                <i class="fas fa-trophy text-warning"></i> Top Performing Students
+            </h1>
+            <div class="btn-toolbar mb-2 mb-md-0">
+                <div class="btn-group me-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Card -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Academic Year 2023
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Rank</th>
+                                <th>Student</th>
+                                <th>Class</th>
+                                <th>Average Grade</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Sample Data - Replace with Django template code -->
+                            <tr>
+                                <td>1</td>
+                                <td>
+                                    <strong>John Smith</strong>
+                                    <div class="text-muted small">STU-001</div>
+                                </td>
+                                <td>Grade 10A</td>
+                                <td>
+                                    <span class="badge grade-badge bg-excellent rounded-pill">
+                                        96.50
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>
+                                    <strong>Emma Johnson</strong>
+                                    <div class="text-muted small">STU-002</div>
+                                </td>
+                                <td>Grade 9B</td>
+                                <td>
+                                    <span class="badge grade-badge bg-excellent rounded-pill">
+                                        94.30
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>
+                                    <strong>Michael Brown</strong>
+                                    <div class="text-muted small">STU-003</div>
+                                </td>
+                                <td>Grade 11C</td>
+                                <td>
+                                    <span class="badge grade-badge bg-very-good rounded-pill">
+                                        91.20
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>
+                                    <strong>Sarah Williams</strong>
+                                    <div class="text-muted small">STU-004</div>
+                                </td>
+                                <td>Grade 10B</td>
+                                <td>
+                                    <span class="badge grade-badge bg-very-good rounded-pill">
+                                        89.70
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td>
+                                    <strong>David Miller</strong>
+                                    <div class="text-muted small">STU-005</div>
+                                </td>
+                                <td>Grade 11A</td>
+                                <td>
+                                    <span class="badge grade-badge bg-good rounded-pill">
+                                        87.50
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-chart-bar"></i> Performance Distribution
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-school"></i> Class Distribution
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="classDistributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap & Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Performance Chart
+        const perfCtx = document.getElementById('performanceChart').getContext('2d');
+        new Chart(perfCtx, {
+            type: 'bar',
+            data: {
+                labels: ['90-100', '80-89', '70-79', '60-69', 'Below 60'],
+                datasets: [{
+                    label: 'Number of Students',
+                    data: [5, 12, 8, 3, 2],
+                    backgroundColor: [
+                        '#1cc88a', '#36b9cc', '#4e73df', '#f6c23e', '#e74a3b'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+
+        // Class Distribution Chart
+        const classCtx = document.getElementById('classDistributionChart').getContext('2d');
+        new Chart(classCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Grade 10', 'Grade 9', 'Grade 11', 'Grade 8'],
+                datasets: [{
+                    data: [4, 3, 2, 1],
+                    backgroundColor: [
+                        '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
     });
-});
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

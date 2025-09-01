@@ -6,3 +6,6 @@ register = template.Library()
 def subtract(value, arg):
     return value - arg
 
+@register.filter
+def get_item(dictionary, key):
+    return dictionary.get(key)

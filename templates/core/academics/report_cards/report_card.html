@@ -1,4 +1,6 @@
 {% extends 'base.html' %}
+{% load static %}
+{% load report_card_filters %}
 
 {% block title %}{{ student.get_full_name }} - Report Card{% endblock %}
 
@@ -9,14 +11,12 @@
         <div class="card-header bg-primary text-white text-center py-3">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="school-logo">
-                    {% if school.logo %}
-                    <img src="{{ school.logo.url }}" alt="School Logo" height="60">
-                    {% endif %}
+                    <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="60">
                 </div>
                 <div class="school-info">
-                    <h2 class="mb-0">{{ school.name|default:"SCHOOL MANAGEMENT SYSTEM" }}</h2>
+                    <h2 class="mb-0">SCHOOL MANAGEMENT SYSTEM</h2>
                     <h4 class="mb-0">OFFICIAL REPORT CARD</h4>
-                    <p class="mb-0">{{ school.address|default:"" }}</p>
+                    <p class="mb-0">123 Education Street, City, Country</p>
                 </div>
                 <div class="report-card-id">
                     <p class="mb-0">ID: {{ report_card.id|default:"DRAFT" }}</p>
@@ -127,32 +127,15 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for grade_choice in GRADE_CHOICES %}
-                                    <tr>
-                                        <td>{{ grade_choice.0 }}</td>
-                                        <td>
-                                            {% if grade_choice.0 == 'A+' %}90 - 100
-                                            {% elif grade_choice.0 == 'A' %}80 - 89
-                                            {% elif grade_choice.0 == 'B+' %}70 - 79
-                                            {% elif grade_choice.0 == 'B' %}60 - 69
-                                            {% elif grade_choice.0 == 'C+' %}50 - 59
-                                            {% elif grade_choice.0 == 'C' %}40 - 49
-                                            {% elif grade_choice.0 == 'D+' %}30 - 39
-                                            {% elif grade_choice.0 == 'D' %}20 - 29
-                                            {% else %}0 - 19
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if grade_choice.0 == 'A+' or grade_choice.0 == 'A' %}Excellent
-                                            {% elif grade_choice.0 == 'B+' or grade_choice.0 == 'B' %}Good
-                                            {% elif grade_choice.0 == 'C+' %}Average
-                                            {% elif grade_choice.0 == 'C' %}Below Average
-                                            {% elif grade_choice.0 == 'D+' or grade_choice.0 == 'D' %}Poor
-                                            {% else %}Fail
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                    <tr><td>A+</td><td>90 - 100</td><td>Excellent</td></tr>
+                                    <tr><td>A</td><td>80 - 89</td><td>Excellent</td></tr>
+                                    <tr><td>B+</td><td>70 - 79</td><td>Good</td></tr>
+                                    <tr><td>B</td><td>60 - 69</td><td>Good</td></tr>
+                                    <tr><td>C+</td><td>50 - 59</td><td>Average</td></tr>
+                                    <tr><td>C</td><td>40 - 49</td><td>Below Average</td></tr>
+                                    <tr><td>D+</td><td>30 - 39</td><td>Poor</td></tr>
+                                    <tr><td>D</td><td>20 - 29</td><td>Poor</td></tr>
+                                    <tr><td>E</td><td>0 - 19</td><td>Fail</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -172,67 +155,6 @@
                             <div class="text-center text-muted py-4">
                                 No data available for chart
                             </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Attendance Summary -->
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">Attendance Summary</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="attendance-metric text-center">
-                                <h3 class="text-success">{{ attendance.days_present|default:0 }}</h3>
-                                <p class="text-muted">Days Present</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="attendance-metric text-center">
-                                <h3 class="text-danger">{{ attendance.days_absent|default:0 }}</h3>
-                                <p class="text-muted">Days Absent</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="attendance-metric text-center">
-                                <h3 class="text-info">{{ attendance.attendance_percentage|default:0 }}%</h3>
-                                <p class="text-muted">Attendance Rate</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Comments Section -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header bg-warning">
-                            <h5 class="mb-0">Class Teacher's Remarks</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if report_card and report_card.teacher_remarks %}
-                                <p>{{ report_card.teacher_remarks }}</p>
-                            {% else %}
-                                <p class="text-muted">No remarks provided</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header bg-warning">
-                            <h5 class="mb-0">Principal's Remarks</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if report_card and report_card.principal_remarks %}
-                                <p>{{ report_card.principal_remarks }}</p>
-                            {% else %}
-                                <p class="text-muted">No remarks provided</p>
                             {% endif %}
                         </div>
                     </div>
@@ -265,15 +187,6 @@
                         <input type="hidden" name="term" value="{{ term }}">
                         <button type="submit" class="btn btn-success mr-2">
                             <i class="fas fa-save"></i> Save Report Card
-                        </button>
-                    </form>
-                    {% endif %}
-                    
-                    {% if report_card and is_teacher and not report_card.is_published %}
-                    <form method="post" action="{% url 'publish_report_card' report_card.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-primary mr-2">
-                            <i class="fas fa-check-circle"></i> Publish
                         </button>
                     </form>
                     {% endif %}
@@ -332,21 +245,11 @@
         border-radius: 4px;
     }
     
-    .grade-Aplus { background-color: #28a745; color: white; }
-    .grade-A { background-color: #28a745; color: white; }
-    .grade-Bplus { background-color: #17a2b8; color: white; }
-    .grade-B { background-color: #17a2b8; color: white; }
-    .grade-Cplus { background-color: #ffc107; color: #212529; }
-    .grade-C { background-color: #ffc107; color: #212529; }
-    .grade-Dplus { background-color: #fd7e14; color: white; }
-    .grade-D { background-color: #fd7e14; color: white; }
+    .grade-Aplus, .grade-A { background-color: #28a745; color: white; }
+    .grade-Bplus, .grade-B { background-color: #17a2b8; color: white; }
+    .grade-Cplus, .grade-C { background-color: #ffc107; color: #212529; }
+    .grade-Dplus, .grade-D { background-color: #fd7e14; color: white; }
     .grade-E { background-color: #dc3545; color: white; }
-    
-    .attendance-metric {
-        padding: 15px;
-        border-radius: 8px;
-        background-color: #f8f9fa;
-    }
     
     .signature-line {
         border-top: 1px solid #dee2e6;

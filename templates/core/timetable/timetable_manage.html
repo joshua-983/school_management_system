@@ -1,0 +1,377 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Timetable - {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timeslot-card {
+        transition: all 0.2s ease-in-out;
+    }
+    .timeslot-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .break-card {
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+    }
+    .teacher-select, .subject-select {
+        width: 100%;
+    }
+    .form-switch .form-check-input {
+        width: 3em;
+    }
+    .collapsed .bi-chevron-down {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease-in-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-pencil-square me-2"></i>
+                    Manage Timetable: {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}
+                </h2>
+                <div class="btn-group">
+                    <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-outline-primary">
+                        <i class="bi bi-eye me-1"></i> View
+                    </a>
+                    <button type="button" class="btn btn-primary" onclick="document.querySelector('form').submit()">
+                        <i class="bi bi-check-circle me-1"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'timetable_list' %}">Timetables</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'timetable_detail' timetable.pk %}">{{ timetable.get_class_level_display }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Manage</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Timetable Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Class Level:</strong>
+                            <span class="badge bg-primary">{{ timetable.get_class_level_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Day:</strong>
+                            <span class="badge bg-secondary">{{ timetable.get_day_of_week_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Academic Year:</strong>
+                            {{ timetable.academic_year }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Term:</strong>
+                            Term {{ timetable.term }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="timetable_id" value="{{ timetable.pk }}">
+        
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Daily Schedule Configuration</h5>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                data-bs-toggle="collapse" data-bs-target="#helpCollapse">
+                            <i class="bi bi-question-circle me-1"></i> Help
+                        </button>
+                    </div>
+                    <div class="collapse" id="helpCollapse">
+                        <div class="card-body bg-light">
+                            <p class="mb-2"><strong>Instructions:</strong></p>
+                            <ul class="mb-0">
+                                <li>Select subjects and teachers for each time slot</li>
+                                <li>Mark periods as breaks for lunch, recess, etc.</li>
+                                <li>Assign classrooms if needed</li>
+                                <li>Click "Save Changes" when finished</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            {% for timeslot, form in entry_forms %}
+            <div class="col-xl-6 col-lg-6 mb-4">
+                <div class="card timeslot-card h-100 {% if form.initial.is_break %}break-card{% endif %}" 
+                     id="timeslot-{{ timeslot.id }}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-clock me-1"></i>
+                            {{ timeslot.get_period_number_display }}
+                            <small class="text-muted">
+                                ({{ timeslot.start_time|time:"H:i" }} - {{ timeslot.end_time|time:"H:i" }})
+                            </small>
+                        </h6>
+                        {% if timeslot.is_break %}
+                        <span class="badge bg-warning">Break</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden fields for time slot and entry ID -->
+                        <input type="hidden" name="timeslot_{{ timeslot.id }}_id" value="{{ timeslot.id }}">
+                        {% if form.instance.pk %}
+                        <input type="hidden" name="entry_{{ timeslot.id }}_id" value="{{ form.instance.id }}">
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" 
+                                       name="timeslot_{{ timeslot.id }}_is_break" 
+                                       id="break_{{ timeslot.id }}" 
+                                       value="true" 
+                                       {% if form.initial.is_break %}checked{% endif %}
+                                       onchange="toggleBreakFields({{ timeslot.id }})">
+                                <label class="form-check-label" for="break_{{ timeslot.id }}">
+                                    Mark as break period
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="break_fields_{{ timeslot.id }}" 
+                             style="display: {% if form.initial.is_break %}block{% else %}none{% endif %};">
+                            <div class="mb-3">
+                                <label for="break_name_{{ timeslot.id }}" class="form-label">
+                                    Break Name
+                                </label>
+                                <input type="text" class="form-control" 
+                                       name="timeslot_{{ timeslot.id }}_break_name" 
+                                       id="break_name_{{ timeslot.id }}" 
+                                       value="{{ form.initial.break_name|default:timeslot.break_name }}"
+                                       placeholder="e.g., Lunch Break, Morning Recess">
+                            </div>
+                        </div>
+
+                        <div id="class_fields_{{ timeslot.id }}" 
+                             style="display: {% if form.initial.is_break %}none{% else %}block{% endif %};">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="subject_{{ timeslot.id }}" class="form-label">
+                                            Subject <span class="text-danger">*</span>
+                                        </label>
+                                        <select class="form-select subject-select" 
+                                                name="timeslot_{{ timeslot.id }}_subject" 
+                                                id="subject_{{ timeslot.id }}"
+                                                required>
+                                            <option value="">Select Subject</option>
+                                            {% for subject in form.fields.subject.queryset %}
+                                            <option value="{{ subject.id }}" 
+                                                    {% if form.initial.subject == subject %}selected{% endif %}>
+                                                {{ subject.name }} ({{ subject.code }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="teacher_{{ timeslot.id }}" class="form-label">
+                                            Teacher <span class="text-danger">*</span>
+                                        </label>
+                                        <select class="form-select teacher-select" 
+                                                name="timeslot_{{ timeslot.id }}_teacher" 
+                                                id="teacher_{{ timeslot.id }}"
+                                                required>
+                                            <option value="">Select Teacher</option>
+                                            {% for teacher in form.fields.teacher.queryset %}
+                                            <option value="{{ teacher.id }}" 
+                                                    {% if form.initial.teacher == teacher %}selected{% endif %}>
+                                                {{ teacher.get_full_name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="classroom_{{ timeslot.id }}" class="form-label">
+                                    Classroom
+                                </label>
+                                <input type="text" class="form-control" 
+                                       name="timeslot_{{ timeslot.id }}_classroom" 
+                                       id="classroom_{{ timeslot.id }}" 
+                                       value="{{ form.initial.classroom }}"
+                                       placeholder="e.g., Room 101, Science Lab">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <small class="text-muted">
+                            {% if form.instance.pk %}
+                            Last updated: {{ form.instance.updated_at|timesince }} ago
+                            {% else %}
+                            Not configured yet
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-secondary me-md-2">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-1"></i> Save All Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleBreakFields(timeslotId) {
+    const isBreak = document.getElementById(`break_${timeslotId}`).checked;
+    const breakFields = document.getElementById(`break_fields_${timeslotId}`);
+    const classFields = document.getElementById(`class_fields_${timeslotId}`);
+    const subjectSelect = document.getElementById(`subject_${timeslotId}`);
+    const teacherSelect = document.getElementById(`teacher_${timeslotId}`);
+    
+    if (isBreak) {
+        breakFields.style.display = 'block';
+        classFields.style.display = 'none';
+        subjectSelect.removeAttribute('required');
+        teacherSelect.removeAttribute('required');
+    } else {
+        breakFields.style.display = 'none';
+        classFields.style.display = 'block';
+        subjectSelect.setAttribute('required', 'required');
+        teacherSelect.setAttribute('required', 'required');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Select2 for better dropdowns
+    $('.teacher-select, .subject-select').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Select an option',
+        allowClear: true
+    });
+    
+    // Add form validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        let hasErrors = false;
+        const errorMessages = [];
+        
+        // Check for conflicts (same teacher in multiple periods at same time)
+        const teacherAssignments = {};
+        {% for timeslot, form in entry_forms %}
+        {% if not form.initial.is_break %}
+        const teacherSelect = document.getElementById(`teacher_{{ timeslot.id }}`);
+        const subjectSelect = document.getElementById(`subject_{{ timeslot.id }}`);
+        const isBreak = document.getElementById(`break_{{ timeslot.id }}`).checked;
+        
+        if (!isBreak) {
+            if (teacherSelect.value && subjectSelect.value) {
+                if (teacherAssignments[teacherSelect.value]) {
+                    teacherAssignments[teacherSelect.value].push('{{ timeslot.get_period_number_display }}');
+                } else {
+                    teacherAssignments[teacherSelect.value] = ['{{ timeslot.get_period_number_display }}'];
+                }
+            }
+            
+            // Check if required fields are filled for non-break periods
+            if (!teacherSelect.value || !subjectSelect.value) {
+                hasErrors = true;
+                errorMessages.push(`Please fill all required fields for {{ timeslot.get_period_number_display }}`);
+            }
+        }
+        {% endif %}
+        {% endfor %}
+        
+        // Check for teacher conflicts
+        for (const [teacherId, periods] of Object.entries(teacherAssignments)) {
+            if (periods.length > 1) {
+                hasErrors = true;
+                const teacherName = $(`#teacher_${periods[0].replace(/\D/g, '')} option[value="${teacherId}"]`).text();
+                errorMessages.push(`Teacher ${teacherName} is assigned to multiple periods: ${periods.join(', ')}`);
+            }
+        }
+        
+        if (hasErrors) {
+            e.preventDefault();
+            let errorMessage = 'Please fix the following issues:\n\n' + errorMessages.join('\n');
+            alert(errorMessage);
+        }
+    });
+    
+    // Add auto-save functionality
+    let autoSaveTimer;
+    const inputs = document.querySelectorAll('select, input[type="text"], input[type="checkbox"]');
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                // Show saving indicator
+                const saveBtn = document.querySelector('button[type="submit"]');
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Saving...';
+                saveBtn.disabled = true;
+                
+                // Submit form
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        saveBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Saved!';
+                        setTimeout(() => {
+                            saveBtn.innerHTML = originalText;
+                            saveBtn.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    saveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Error';
+                    saveBtn.disabled = false;
+                });
+            }, 1000);
+        });
+    });
+});
+</script>
+{% endblock %}

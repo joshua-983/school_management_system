@@ -1,3 +1,4 @@
+from .views import SaveReportCardView
 from .views import BestStudentsView
 from .views import GradeEntryView, GradeReportView
 from django.urls import path, include
@@ -46,7 +47,7 @@ from .views import (
     GradeListView, GradeUpdateView, BulkGradeUploadView, GradeEntryView, GradeReportView, BestStudentsView,
     
     # Report Card views
-    ReportCardDashboardView, ReportCardView, ReportCardPDFView,
+    ReportCardDashboardView, ReportCardView, ReportCardPDFView,SaveReportCardView,CreateReportCardView,
     
     # Other views
     NotificationListView, AuditLogListView,
@@ -54,7 +55,12 @@ from .views import (
     # Attendance views
     AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView,
     
-    
+    #timetable
+    TimeSlotListView, TimeSlotCreateView, TimeSlotUpdateView, TimeSlotDeleteView,
+    TimetableListView, TimetableCreateView, TimetableDetailView, 
+    TimetableManageView, TimetableDeleteView,
+    StudentTimetableView, TeacherTimetableView,
+    get_timetable_entries, generate_weekly_timetable
     
 )
 
@@ -146,12 +152,15 @@ urlpatterns = [
     path('grades/delete/<int:pk>/', views.grade_delete, name='grade_delete'),
     path('grades/delete/<int:pk>/', views.grade_delete, name='grade_delete'),
     # Report Cards
-    path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
+    
+    # Report Cards
+    path('report-cards/', views.ReportCardDashboardView.as_view(), name='report_card_dashboard'),
+    path('report-card/create/', views.CreateReportCardView.as_view(), name='create_report_card'), 
     path('report-card/<int:student_id>/', ReportCardView.as_view(), name='report_card'),
     path('report-card/<int:student_id>/<int:report_card_id>/', ReportCardView.as_view(), name='report_card_detail'),
     path('report-card/pdf/<int:student_id>/', ReportCardPDFView.as_view(), name='report_card_pdf'),
     path('report-card/pdf/<int:student_id>/<int:report_card_id>/', ReportCardPDFView.as_view(), name='report_card_pdf_detail'),
-    
+    path('report-card/save/<int:student_id>/', SaveReportCardView.as_view(), name='save_report_card'),
     # Progress Charts
     path('students/<int:student_id>/progress-chart/', student_progress_chart, name='student_progress_chart'),
     path('class/<str:class_level>/performance-chart/', class_performance_chart, name='class_performance_chart'),
@@ -181,7 +190,35 @@ urlpatterns = [
     # Analytics Dashboard
     path('analytics/', views.AnalyticsDashboardView.as_view(), name='analytics_dashboard'),
     path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
+
+    # Add to core/urls.py
+
+# Timetable URLs
+# TimeSlot URLs
+    path('timeslots/', views.TimeSlotListView.as_view(), name='timeslot_list'),
+    path('timeslots/create/', views.TimeSlotCreateView.as_view(), name='timeslot_create'),
+    path('timeslots/<int:pk>/update/', views.TimeSlotUpdateView.as_view(), name='timeslot_update'),
+    path('timeslots/<int:pk>/delete/', views.TimeSlotDeleteView.as_view(), name='timeslot_delete'),
     
+    # Timetable URLs
+    path('timetable/', views.TimetableListView.as_view(), name='timetable_list'),
+    path('timetable/create/', views.TimetableCreateView.as_view(), name='timetable_create'),
+    path('timetable/<int:pk>/', views.TimetableDetailView.as_view(), name='timetable_detail'),
+    path('timetable/<int:pk>/manage/', views.TimetableManageView.as_view(), name='timetable_manage'),
+    path('timetable/<int:pk>/delete/', views.TimetableDeleteView.as_view(), name='timetable_delete'),
     
+    # Student/Parent/Teacher Views
+    path('timetable/student/', views.StudentTimetableView.as_view(), name='student_timetable'),
+    path('timetable/teacher/', views.TeacherTimetableView.as_view(), name='teacher_timetable'),
     
+    # AJAX URLs
+    path('timetable/ajax/entries/', views.get_timetable_entries, name='timetable_ajax_entries'),
+    path('timetable/generate-weekly/', views.generate_weekly_timetable, name='generate_weekly_timetable'),
+    path('teacher-timetable/', views.TeacherTimetableView.as_view(), name='teacher_timetable'),
+    path('api/timetable-entries/', get_timetable_entries, name='get_timetable_entries'),
+
+
+
+
+
 ]

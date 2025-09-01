@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+
+{% block title %}Timetable - {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timetable-grid {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 0.5rem;
+    }
+    .period-time {
+        background-color: #f8f9fa;
+        padding: 0.75rem;
+        border-radius: 0.25rem;
+        font-weight: 500;
+    }
+    .period-content {
+        background-color: white;
+        padding: 0.75rem;
+        border-radius: 0.25rem;
+        border: 1px solid #dee2e6;
+    }
+    .break-period {
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+    }
+    .subject-badge {
+        font-size: 0.75rem;
+    }
+    .print-only {
+        display: none;
+    }
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        .print-only {
+            display: block !important;
+        }
+        .timetable-grid {
+            grid-template-columns: 80px 1fr;
+            gap: 0.25rem;
+        }
+        .period-time, .period-content {
+            padding: 0.5rem;
+            border: 1px solid #000;
+        }
+        body {
+            font-size: 12px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-calendar-week me-2"></i>
+                    {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}
+                </h2>
+                <div class="btn-group no-print">
+                    <button onclick="window.print()" class="btn btn-outline-primary">
+                        <i class="bi bi-printer me-1"></i> Print
+                    </button>
+                    <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-primary">
+                        <i class="bi bi-pencil me-1"></i> Manage
+                    </a>
+                </div>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'timetable_list' %}">Timetables</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Header Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Class Level:</strong>
+                            <span class="badge bg-primary">{{ timetable.get_class_level_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Day:</strong>
+                            <span class="badge bg-secondary">{{ timetable.get_day_of_week_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Academic Year:</strong>
+                            {{ timetable.academic_year }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Term:</strong>
+                            Term {{ timetable.term }}
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-3">
+                            <strong>Status:</strong>
+                            <span class="badge {% if timetable.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if timetable.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </div>
+                        <div class="col-md-9">
+                            <strong>Created by:</strong>
+                            {{ timetable.created_by.get_full_name|default:timetable.created_by.username }}
+                            on {{ timetable.created_at|date:"M d, Y" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Daily Schedule</h5>
+                    <span class="badge bg-info">{{ entries.count }} periods</span>
+                </div>
+                <div class="card-body">
+                    {% if entries %}
+                    <div class="timetable-grid">
+                        {% for entry in entries %}
+                        <div class="period-time">
+                            <strong>{{ entry.time_slot.start_time|time:"H:i" }}</strong><br>
+                            <small>{{ entry.time_slot.end_time|time:"H:i" }}</small>
+                        </div>
+                        <div class="period-content {% if entry.is_break %}break-period{% endif %}">
+                            {% if entry.is_break %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ entry.time_slot.break_name }}</h6>
+                                    <small class="text-muted">Break Period</small>
+                                </div>
+                                <span class="badge bg-warning">Break</span>
+                            </div>
+                            {% else %}
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ entry.subject.name }}</h6>
+                                    <small class="text-muted">
+                                        <i class="bi bi-person me-1"></i>
+                                        {{ entry.teacher.get_full_name }}
+                                    </small>
+                                    {% if entry.classroom %}
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="bi bi-building me-1"></i>
+                                        {{ entry.classroom }}
+                                    </small>
+                                    {% endif %}
+                                </div>
+                                <span class="badge bg-primary subject-badge">{{ entry.subject.code }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-calendar-x display-1 text-muted"></i>
+                        <p class="text-muted mt-3">No periods scheduled for this day</p>
+                        <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-primary no-print">
+                            <i class="bi bi-pencil me-1"></i> Add Periods
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Header (only shows when printing) -->
+    <div class="print-only mt-4">
+        <div class="text-center">
+            <h4>{{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }} Timetable</h4>
+            <p>{{ timetable.academic_year }} - Term {{ timetable.term }}</p>
+            <p>Generated on {% now "F j, Y" %}</p>
+        </div>
+        <hr>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add keyboard shortcut for printing
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            window.print();
+        }
+    });
+    
+    // Add smooth scrolling for better UX
+    const timetableGrid = document.querySelector('.timetable-grid');
+    if (timetableGrid) {
+        timetableGrid.style.opacity = '0';
+        setTimeout(() => {
+            timetableGrid.style.transition = 'opacity 0.3s ease-in-out';
+            timetableGrid.style.opacity = '1';
+        }, 100);
+    }
+});
+</script>
+{% endblock %}

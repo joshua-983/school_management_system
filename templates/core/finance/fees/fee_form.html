@@ -30,12 +30,17 @@
     .bg-unpaid { background-color: #dc3545; }
     .bg-partial { background-color: #fd7e14; }
     .bg-overdue { background-color: #6c757d; }
+    .student-photo {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Header and breadcrumb (unchanged) -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
@@ -64,28 +69,38 @@
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    {% if student %}
+                    {% if not student %}
+                    <div class="alert alert-danger mb-4">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        No student selected. Please go back and select a student first.
+                    </div>
+                    {% else %}
+                    
+                    <!-- Student Info Card -->
                     <div class="card student-info-card mb-4">
                         <div class="card-body">
                             <div class="d-flex align-items-center">
-                                {% if student.photo %}
-                                <img src="{{ student.photo.url }}" class="student-photo me-3" alt="{{ student.get_full_name }}">
+                                {% if student.profile_picture %}
+                                <img src="{{ student.profile_picture.url }}" class="student-photo me-3" alt="{{ student.get_full_name }}">
                                 {% else %}
-                                <div class="student-photo bg-light text-center me-3">
+                                <div class="student-photo bg-light text-center me-3 d-flex align-items-center justify-content-center">
                                     <i class="bi bi-person fs-3 text-muted"></i>
                                 </div>
                                 {% endif %}
                                 <div>
                                     <h5 class="mb-1">{{ student.get_full_name }}</h5>
-                                    <p class="text-muted mb-1">{{ student.class_level }} • {{ student.student_id }}</p>
+                                    <p class="text-muted mb-1">{{ student.get_class_level_display }} • {{ student.student_id }}</p>
+                                    <small class="text-muted">Date of Birth: {{ student.date_of_birth|date:"M d, Y" }}</small>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    {% endif %}
 
                     <form method="post" novalidate>
                         {% csrf_token %}
+                        
+                        <!-- Hidden student field - CRITICAL FIX -->
+                        {{ form.student }}
                         
                         {% if form.non_field_errors %}
                         <div class="alert alert-danger">
@@ -94,20 +109,9 @@
                             {% endfor %}
                         </div>
                         {% endif %}
-                        
-                        <!-- Student Section (unchanged) -->
-                        <h5 class="section-title">Student</h5>
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label class="form-label">Student Name</label>
-                                <input type="text" class="form-control" value="{{ student.get_full_name }}" readonly>
-                                {{ form.student }}
-                            </div>
-                        </div>
 
-                        <!-- Category Section (unchanged) -->
-                        <div class="section-divider"></div>
-                        <h5 class="section-title">Category</h5>
+                        <!-- Category Section -->
+                        <h5 class="section-title">Fee Category</h5>
                         <div class="row mb-3">
                             <div class="col-md-12">
                                 <label for="{{ form.category.id_for_label }}" class="form-label">
@@ -119,14 +123,45 @@
                                     {{ form.category.errors.0 }}
                                 </div>
                                 {% endif %}
+                                <small class="text-muted">Select the appropriate fee category for this student</small>
                             </div>
                         </div>
 
-                        <!-- Payment Details Section (unchanged) -->
+                        <!-- Academic Information Section -->
+                        <div class="section-divider"></div>
+                        <h5 class="section-title">Academic Information</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.academic_year.id_for_label }}" class="form-label">
+                                    Academic Year <span class="text-danger">*</span>
+                                </label>
+                                {{ form.academic_year }}
+                                {% if form.academic_year.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.academic_year.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">Format: YYYY/YYYY (e.g., 2023/2024)</small>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.term.id_for_label }}" class="form-label">
+                                    Term <span class="text-danger">*</span>
+                                </label>
+                                {{ form.term }}
+                                {% if form.term.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.term.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Payment Details Section -->
                         <div class="section-divider"></div>
                         <h5 class="section-title">Payment Details</h5>
                         <div class="row mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label for="{{ form.amount_payable.id_for_label }}" class="form-label">
                                     Amount Payable <span class="text-danger">*</span>
                                 </label>
@@ -141,7 +176,7 @@
                                 {% endif %}
                             </div>
                             
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label for="{{ form.amount_paid.id_for_label }}" class="form-label">
                                     Amount Paid
                                 </label>
@@ -154,18 +189,7 @@
                                     {{ form.amount_paid.errors.0 }}
                                 </div>
                                 {% endif %}
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <label for="{{ form.payment_mode.id_for_label }}" class="form-label">
-                                    Payment Mode
-                                </label>
-                                {{ form.payment_mode }}
-                                {% if form.payment_mode.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.payment_mode.errors.0 }}
-                                </div>
-                                {% endif %}
+                                <small class="text-muted">Leave as 0 if no payment has been made</small>
                             </div>
                         </div>
                         
@@ -192,6 +216,37 @@
                             </div>
                             
                             <div class="col-md-6">
+                                <label for="{{ form.payment_mode.id_for_label }}" class="form-label">
+                                    Payment Mode
+                                </label>
+                                {{ form.payment_mode }}
+                                {% if form.payment_mode.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.payment_mode.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                                    Due Date <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group" id="due-date-picker">
+                                    {{ form.due_date }}
+                                    <button class="btn btn-outline-secondary" type="button" id="calendar-btn-due">
+                                        <i class="bi bi-calendar"></i> Select Date
+                                    </button>
+                                </div>
+                                {% if form.due_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.due_date.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
                                 <label for="{{ form.payment_date.id_for_label }}" class="form-label">
                                     Payment Date
                                 </label>
@@ -209,65 +264,13 @@
                                     {{ form.payment_date.errors.0 }}
                                 </div>
                                 {% endif %}
+                                <small class="text-muted">Required if status is "Paid"</small>
                             </div>
                         </div>
 
-                        <!-- Academic Information Section (unchanged) -->
+                        <!-- Administration Section -->
                         <div class="section-divider"></div>
-                        <h5 class="section-title">Academic Information</h5>
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label for="{{ form.academic_year.id_for_label }}" class="form-label">
-                                    Academic Year <span class="text-danger">*</span>
-                                </label>
-                                {{ form.academic_year }}
-                                {% if form.academic_year.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.academic_year.errors.0 }}
-                                </div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <label for="{{ form.term.id_for_label }}" class="form-label">
-                                    Term <span class="text-danger">*</span>
-                                </label>
-                                {{ form.term }}
-                                {% if form.term.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.term.errors.0 }}
-                                </div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-4">
-                                <label for="{{ form.due_date.id_for_label }}" class="form-label">
-                                    Due Date <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group" id="due-date-picker">
-                                    {{ form.due_date }}
-                                    <button class="btn btn-outline-secondary" type="button" id="calendar-btn-due">
-                                        <i class="bi bi-calendar"></i> Select Date
-                                    </button>
-                                </div>
-                                {% if form.due_date.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.due_date.errors.0 }}
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Administration Section (unchanged) -->
-                        <div class="section-divider"></div>
-                        <h5 class="section-title">Administration</h5>
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label class="form-label">Recorded by</label>
-                                <input type="text" class="form-control" value="{{ request.user.get_full_name }}" readonly>
-                            </div>
-                        </div>
-                        
+                        <h5 class="section-title">Additional Information</h5>
                         <div class="mb-3">
                             <label for="{{ form.notes.id_for_label }}" class="form-label">
                                 Notes
@@ -278,11 +281,17 @@
                                 {{ form.notes.errors.0 }}
                             </div>
                             {% endif %}
+                            <small class="text-muted">Any additional information about this fee</small>
                         </div>
                         
+                        <div class="mb-3">
+                            <label class="form-label">Recorded by</label>
+                            <input type="text" class="form-control" value="{{ request.user.get_full_name }} ({{ request.user.username }})" readonly>
+                        </div>
+
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-1"></i> Save
+                                <i class="bi bi-check-circle me-1"></i> Save Fee Record
                             </button>
                             <a href="{% if form.instance.pk %}{% url 'fee_detail' pk=form.instance.pk %}{% else %}{% url 'fee_list' %}{% endif %}" 
                                class="btn btn-secondary">
@@ -295,11 +304,12 @@
                             {% endif %}
                         </div>
                     </form>
+                    {% endif %} <!-- End of student check -->
                 </div>
             </div>
         </div>
         
-        <!-- Right sidebar (unchanged) -->
+        <!-- Right sidebar -->
         <div class="col-lg-4">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
@@ -309,7 +319,7 @@
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Select the appropriate fee category
+                            Select the appropriate fee category for the student's class level
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
@@ -317,15 +327,15 @@
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Select payment status (Paid, Unpaid, Part Payment, or Overdue)
+                            Payment status will auto-update based on amounts entered
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Use the calendar to select dates (no manual entry)
+                            Use the calendar buttons to select dates (no manual entry)
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Set the academic year and term correctly
+                            Set the academic year and term correctly for reporting
                         </li>
                     </ul>
                 </div>
@@ -337,14 +347,14 @@
                     <h5 class="mb-0"><i class="bi bi-exclamation-circle me-2"></i>Existing Fees</h5>
                 </div>
                 <div class="card-body">
-                    {% with existing_fees=student.fee_set.all %}
+                    {% with existing_fees=student.fees.all %}
                     {% if existing_fees %}
                     <div class="list-group">
                         {% for fee in existing_fees|slice:":5" %}
                         <a href="{% url 'fee_detail' pk=fee.pk %}" class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">{{ fee.category.name }}</h6>
-                                <small>{{ fee.academic_year }} - {{ fee.get_term_display }}</small>
+                                <small>{{ fee.academic_year }} - Term {{ fee.term }}</small>
                             </div>
                             <p class="mb-1">${{ fee.amount_payable }} (Paid: ${{ fee.amount_paid }})</p>
                             <small>
@@ -384,7 +394,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize datepicker for due date (readonly calendar selection)
+    // Initialize datepicker for due date
     $('#id_due_date').datepicker({
         format: 'yyyy-mm-dd',
         autoclose: true,
@@ -392,6 +402,7 @@ document.addEventListener('DOMContentLoaded', function() {
         orientation: 'bottom auto'
     }).on('changeDate', function(e) {
         $(this).datepicker('hide');
+        updatePaymentStatus();
     });
     
     // Calendar button for due date
@@ -399,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#id_due_date').datepicker('show');
     });
     
-    // Initialize datepicker for payment date (readonly calendar selection)
+    // Initialize datepicker for payment date
     $('#id_payment_date').datepicker({
         format: 'yyyy-mm-dd',
         autoclose: true,
@@ -424,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Make date fields readonly to prevent manual entry
     $('#id_due_date, #id_payment_date').attr('readonly', true);
     
-    // Improved payment status calculation with tolerance
+    // Payment status calculation
     function calculatePaymentStatus(amountPaid, amountPayable, dueDate) {
         const tolerance = 1.00; // $1 tolerance
         const today = new Date();
@@ -469,7 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#id_payment_status').val(status);
     }
 
-    // Fetch category details with error handling
+    // Fetch category details
     $('#id_category').change(function() {
         const categoryId = $(this).val();
         if (!categoryId) return;
@@ -485,7 +496,6 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             error: function(xhr) {
                 console.error('Failed to fetch category details:', xhr.statusText);
-                // Optionally show a user-friendly message
                 $('#id_amount_payable').val('');
             }
         });
@@ -493,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize and set up event listeners
     updatePaymentStatus();
-    $('#id_amount_paid, #id_amount_payable, #id_due_date').on('input change', updatePaymentStatus);
+    $('#id_amount_paid, #id_amount_payable').on('input change', updatePaymentStatus);
     
     $('#id_payment_status').change(function() {
         const status = $(this).val();

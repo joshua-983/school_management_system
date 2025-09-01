@@ -865,14 +865,35 @@ class Announcement(models.Model):
         return self.title
 
 class ReportCard(models.Model):
+    TERM_CHOICES = [
+        (1, 'Term 1'),
+        (2, 'Term 2'),
+        (3, 'Term 3'),
+    ]
+    
+    GRADE_CHOICES = [
+        ('A+', 'A+ (90-100)'),
+        ('A', 'A (80-89)'),
+        ('B+', 'B+ (70-79)'),
+        ('B', 'B (60-69)'),
+        ('C+', 'C+ (50-59)'),
+        ('C', 'C (40-49)'),
+        ('D+', 'D+ (30-39)'),
+        ('D', 'D (20-29)'),
+        ('E', 'E (0-19)'),
+    ]
+    
     student = models.ForeignKey('Student', on_delete=models.CASCADE)
     academic_year = models.CharField(max_length=9, validators=[RegexValidator(r'^\d{4}/\d{4}$')])
-    term = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(3)])
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES, validators=[MinValueValidator(1), MaxValueValidator(3)])
+    average_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    overall_grade = models.CharField(max_length=2, choices=GRADE_CHOICES, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_published = models.BooleanField(default=False)
     teacher_remarks = models.TextField(blank=True)
     principal_remarks = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     
     class Meta:
         unique_together = ('student', 'academic_year', 'term')
@@ -880,7 +901,43 @@ class ReportCard(models.Model):
     
     def __str__(self):
         return f"{self.student}'s Report Card - {self.academic_year} Term {self.term}"
-
+    
+    def save(self, *args, **kwargs):
+        # Calculate average score and overall grade if not set
+        if not self.average_score or not self.overall_grade:
+            self.calculate_grades()
+        super().save(*args, **kwargs)
+    
+    def calculate_grades(self):
+        # Get all grades for this student, academic year, and term
+        grades = Grade.objects.filter(
+            student=self.student,
+            academic_year=self.academic_year,
+            term=self.term
+        )
+        
+        if grades.exists():
+            # Calculate average score
+            total_score = sum(grade.total_score for grade in grades)
+            self.average_score = total_score / grades.count()
+            
+            # Calculate overall grade
+            self.overall_grade = self.calculate_grade(self.average_score)
+        else:
+            self.average_score = 0.00
+            self.overall_grade = ''
+    
+    @staticmethod
+    def calculate_grade(score):
+        if score >= 90: return 'A+'
+        elif score >= 80: return 'A'
+        elif score >= 70: return 'B+'
+        elif score >= 60: return 'B'
+        elif score >= 50: return 'C+'
+        elif score >= 40: return 'C'
+        elif score >= 30: return 'D+'
+        elif score >= 20: return 'D'
+        else: return 'E'
 #attendance management
 class AcademicTerm(models.Model):
     TERM_CHOICES = [
@@ -1066,4 +1123,100 @@ class AttendanceAnalytics(models.Model):
     
     class Meta:
         unique_together = ('class_level', 'date')
+
+#timetable
+# Add to core/models.py
+
+class TimeSlot(models.Model):
+    PERIOD_CHOICES = [
+        (1, '1st Period (8:00-9:00)'),
+        (2, '2nd Period (9:00-10:00)'),
+        (3, '3rd Period (10:00-11:00)'),
+        (4, '4th Period (11:00-12:00)'),
+        (5, '5th Period (12:00-1:00)'),
+        (6, '6th Period (1:00-2:00)'),
+        (7, '7th Period (2:00-3:00)'),
+        (8, '8th Period (3:00-4:00)'),
+    ]
+    
+    period_number = models.PositiveSmallIntegerField(choices=PERIOD_CHOICES, unique=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_break = models.BooleanField(default=False)
+    break_name = models.CharField(max_length=50, blank=True, null=True)
+    
+    class Meta:
+        ordering = ['period_number']
+    
+    def __str__(self):
+        if self.is_break:
+            return f"{self.break_name} ({self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')})"
+        return f"Period {self.period_number} ({self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')})"
+
+class Timetable(models.Model):
+    DAYS_OF_WEEK = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+    ]
+    
+    class_level = models.CharField(max_length=2, choices=Student.CLASS_LEVEL_CHOICES)
+    day_of_week = models.PositiveSmallIntegerField(choices=DAYS_OF_WEEK)
+    academic_year = models.CharField(max_length=20)
+    term = models.PositiveSmallIntegerField(choices=AcademicTerm.TERM_CHOICES)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('class_level', 'day_of_week', 'academic_year', 'term')
+        ordering = ['class_level', 'day_of_week']
+    
+    def __str__(self):
+        return f"{self.get_class_level_display()} - {self.get_day_of_week_display()} - {self.academic_year} Term {self.term}"
+
+class TimetableEntry(models.Model):
+    timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='entries')
+    time_slot = models.ForeignKey(TimeSlot, on_delete=models.CASCADE)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    classroom = models.CharField(max_length=100, blank=True)
+    is_break = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['time_slot__period_number']
+        unique_together = ('timetable', 'time_slot')
+    
+    def __str__(self):
+        if self.is_break:
+            return f"{self.time_slot.break_name} - Break"
+        return f"{self.time_slot} - {self.subject.name} - {self.teacher.get_full_name()}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

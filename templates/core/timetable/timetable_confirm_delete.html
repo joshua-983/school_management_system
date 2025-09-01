@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}Delete Timetable{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card border-danger shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Confirm Timetable Deletion
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading">Warning!</h5>
+                        <p class="mb-0">You are about to delete the following timetable:</p>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                {{ object.get_class_level_display }} - {{ object.get_day_of_week_display }}
+                            </h5>
+                            <p class="card-text mb-1">
+                                <strong>Academic Year:</strong> {{ object.academic_year }}
+                            </p>
+                            <p class="card-text mb-1">
+                                <strong>Term:</strong> {{ object.get_term_display }}
+                            </p>
+                            <p class="card-text mb-1">
+                                <strong>Periods Scheduled:</strong> {{ object.entries.count }}
+                            </p>
+                            <p class="card-text mb-0">
+                                <strong>Status:</strong> 
+                                <span class="badge {% if object.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {% if object.is_active %}Active{% else %}Inactive{% endif %}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">This action will permanently delete:</h6>
+                        <ul class="mb-0">
+                            <li>All {{ object.entries.count }} scheduled periods</li>
+                            <li>Teacher assignments for this day</li>
+                            <li>Classroom assignments</li>
+                            <li>All associated timetable data</li>
+                        </ul>
+                        <p class="mt-2 mb-0"><strong>This action cannot be undone.</strong></p>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'timetable_detail' object.pk %}" class="btn btn-secondary me-md-2">
+                                <i class="bi bi-arrow-left me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash me-1"></i> Confirm Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Recommendation</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">Instead of deleting, consider:</p>
+                    <ul class="mb-3">
+                        <li>Deactivating the timetable instead of deleting</li>
+                        <li>Archiving old timetables for record keeping</li>
+                        <li>Updating the schedule instead of removing it</li>
+                    </ul>
+                    <div class="d-grid gap-2 d-md-flex">
+                        <a href="{% url 'timetable_manage' object.pk %}" class="btn btn-outline-primary me-md-2">
+                            <i class="bi bi-pencil me-1"></i> Edit Instead
+                        </a>
+                        <form method="post" action="{% url 'timetable_update' object.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="is_active" value="false">
+                            <button type="submit" class="btn btn-outline-warning">
+                                <i class="bi bi-eye-slash me-1"></i> Deactivate
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add extra confirmation for delete
+    const deleteForm = document.querySelector('form');
+    deleteForm.addEventListener('submit', function(e) {
+        if (!confirm('⚠️ FINAL WARNING: This will permanently delete ALL scheduled classes for this timetable. Are you absolutely sure?')) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

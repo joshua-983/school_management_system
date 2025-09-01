@@ -48,6 +48,81 @@
         padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
     }
+    /* Modal search styles */
+    .modal-search-container {
+        position: relative;
+        margin-bottom: 15px;
+    }
+    .modal-search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 5;
+    }
+    .modal-search-input {
+        padding-left: 40px;
+    }
+    .student-option {
+        padding: 8px 12px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .student-option:hover {
+        background-color: #f8f9fa;
+    }
+    .student-option:last-child {
+        border-bottom: none;
+    }
+    .student-info {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+    }
+    .student-name {
+        font-weight: 500;
+        color: #333;
+    }
+    .student-details {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    .student-class {
+        background-color: #e9ecef;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        color: #495057;
+    }
+    /* Quick actions */
+    .quick-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .quick-action-btn {
+        flex: 1;
+        min-width: 120px;
+        text-align: center;
+        padding: 15px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        text-decoration: none;
+        transition: transform 0.2s;
+    }
+    .quick-action-btn:hover {
+        transform: translateY(-2px);
+        color: white;
+        text-decoration: none;
+    }
+    .quick-action-icon {
+        font-size: 1.5rem;
+        margin-bottom: 5px;
+    }
 </style>
 {% endblock %}
 
@@ -83,6 +158,40 @@
         </div>
     </div>
 
+    <!-- Quick Actions -->
+    {% if is_admin or is_teacher %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="quick-actions">
+                <a href="#" class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-plus-circle"></i>
+                    </div>
+                    <div>Add Fee</div>
+                </a>
+                <a href="{% url 'fee_report' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <div>View Reports</div>
+                </a>
+                <a href="#" class="quick-action-btn" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-download"></i>
+                    </div>
+                    <div>Export Data</div>
+                </a>
+                <a href="#" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </div>
+                    <div>Generate Bills</div>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Summary Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
@@ -92,6 +201,7 @@
                         <div>
                             <h6 class="text-muted mb-2">Total Payable</h6>
                             <h4 class="mb-0">${{ total_payable|floatformat:2 }}</h4>
+                            <small class="text-muted">{{ object_list.count }} fee records</small>
                         </div>
                         <div class="bg-light rounded p-3">
                             <i class="bi bi-cash-coin text-muted fs-4"></i>
@@ -107,6 +217,7 @@
                         <div>
                             <h6 class="text-muted mb-2">Total Paid</h6>
                             <h4 class="mb-0">${{ total_paid|floatformat:2 }}</h4>
+                            <small class="text-muted">{{ paid_count }} paid fees</small>
                         </div>
                         <div class="bg-light rounded p-3">
                             <i class="bi bi-wallet2 text-muted fs-4"></i>
@@ -122,6 +233,7 @@
                         <div>
                             <h6 class="text-muted mb-2">Total Balance</h6>
                             <h4 class="mb-0">${{ total_balance|floatformat:2 }}</h4>
+                            <small class="text-muted">{{ pending_count }} pending fees</small>
                         </div>
                         <div class="bg-light rounded p-3">
                             <i class="bi bi-currency-exchange text-muted fs-4"></i>
@@ -135,38 +247,44 @@
     <div class="row">
         <div class="col-12">
             <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Fee Records</h5>
+                        <span class="badge bg-primary">{{ object_list.count }} records</span>
+                    </div>
+                </div>
                 <div class="card-body">
                     <!-- Filter Form -->
                     <form method="get" class="mb-4">
                         <div class="row g-3">
                             <div class="col-md-2">
-                                {{ filter_form.academic_year.label_tag }}
+                                <label class="form-label">Academic Year</label>
                                 {{ filter_form.academic_year }}
                             </div>
                             <div class="col-md-2">
-                                {{ filter_form.term.label_tag }}
+                                <label class="form-label">Term</label>
                                 {{ filter_form.term }}
                             </div>
                             <div class="col-md-2">
-                                {{ filter_form.payment_status.label_tag }}
+                                <label class="form-label">Status</label>
                                 {{ filter_form.payment_status }}
                             </div>
                             <div class="col-md-3">
-                                {{ filter_form.category.label_tag }}
+                                <label class="form-label">Category</label>
                                 {{ filter_form.category }}
                             </div>
                             {% if is_admin or is_teacher %}
                             <div class="col-md-3">
-                                {{ filter_form.student.label_tag }}
+                                <label class="form-label">Student</label>
                                 {{ filter_form.student }}
                             </div>
                             {% endif %}
                             <div class="col-md-12 d-flex justify-content-end">
                                 <button type="submit" class="btn btn-primary me-2">
-                                    <i class="bi bi-funnel me-1"></i> Filter
+                                    <i class="bi bi-funnel me-1"></i> Apply Filters
                                 </button>
                                 <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Clear
                                 </a>
                             </div>
                         </div>
@@ -175,8 +293,8 @@
                     <!-- Fee Records Table -->
                     {% if object_list %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead class="table-light">
+                        <table class="table table-hover table-striped">
+                            <thead class="table-dark">
                                 <tr>
                                     {% if is_admin or is_teacher %}
                                     <th>Student</th>
@@ -194,57 +312,91 @@
                             </thead>
                             <tbody>
                                 {% for fee in object_list %}
-                                <tr>
+                                <tr class="{% if fee.payment_status == 'OVERDUE' %}table-danger{% elif fee.payment_status == 'PARTIAL' %}table-warning{% elif fee.payment_status == 'PAID' %}table-success{% endif %}">
                                     {% if is_admin or is_teacher %}
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            {% if fee.student.photo %}
-                                            <img src="{{ fee.student.photo.url }}" class="student-photo me-2" alt="{{ fee.student.get_full_name }}">
+                                            {% if fee.student.profile_picture %}
+                                            <img src="{{ fee.student.profile_picture.url }}" class="student-photo me-2" alt="{{ fee.student.get_full_name }}">
                                             {% else %}
-                                            <div class="student-photo bg-light text-center me-2">
-                                                <i class="bi bi-person fs-5 text-muted"></i>
+                                            <div class="student-photo bg-light text-center me-2 d-flex align-items-center justify-content-center">
+                                                <i class="bi bi-person fs-6 text-muted"></i>
                                             </div>
                                             {% endif %}
                                             <div>
-                                                <div>{{ fee.student.get_full_name }}</div>
-                                                <small class="text-muted">{{ fee.student.class_level }}</small>
+                                                <div class="fw-medium">{{ fee.student.get_full_name }}</div>
+                                                <small class="text-muted">{{ fee.student.get_class_level_display }}</small>
                                             </div>
                                         </div>
                                     </td>
                                     {% endif %}
-                                    <td>{{ fee.category.name }}</td>
+                                    <td>
+                                        <span class="badge bg-info text-dark">{{ fee.category.name }}</span>
+                                    </td>
                                     <td>{{ fee.academic_year }}</td>
-                                    <td>{{ fee.get_term_display }}</td>
-                                    <td class="text-end">${{ fee.amount_payable|floatformat:2 }}</td>
-                                    <td class="text-end">${{ fee.amount_paid|floatformat:2 }}</td>
-                                    <td class="text-end">${{ fee.balance|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ fee.get_term_display }}</span>
+                                    </td>
+                                    <td class="text-end fw-bold">${{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td class="text-end text-success">${{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="text-end {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
+                                        ${{ fee.balance|floatformat:2 }}
+                                    </td>
                                     <td>
                                         {% if fee.payment_status == 'PAID' %}
-                                        <span class="status-badge status-paid">Paid</span>
+                                        <span class="status-badge status-paid">
+                                            <i class="bi bi-check-circle me-1"></i>Paid
+                                        </span>
                                         {% elif fee.payment_status == 'PARTIAL' %}
-                                        <span class="status-badge status-unpaid">Partial</span>
+                                        <span class="status-badge status-unpaid">
+                                            <i class="bi bi-clock me-1"></i>Partial
+                                        </span>
+                                        {% elif fee.payment_status == 'OVERDUE' %}
+                                        <span class="status-badge status-overdue">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Overdue
+                                        </span>
                                         {% else %}
-                                        <span class="status-badge status-overdue">Unpaid</span>
+                                        <span class="status-badge status-unpaid">
+                                            <i class="bi bi-x-circle me-1"></i>Unpaid
+                                        </span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ fee.due_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        <span class="{% if fee.is_overdue %}text-danger{% endif %}">
+                                            {{ fee.due_date|date:"M d, Y" }}
+                                            {% if fee.is_overdue %}
+                                            <br><small class="text-danger">Overdue</small>
+                                            {% endif %}
+                                        </span>
+                                    </td>
                                     <td>
                                         <div class="d-flex action-buttons">
                                             <a href="{% url 'fee_detail' pk=fee.pk %}" 
                                                class="btn btn-sm btn-outline-primary me-1"
-                                               title="View Details">
+                                               title="View Details"
+                                               data-bs-toggle="tooltip">
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                             {% if is_admin %}
                                             <a href="{% url 'fee_update' pk=fee.pk %}" 
                                                class="btn btn-sm btn-outline-secondary me-1"
-                                               title="Edit">
+                                               title="Edit"
+                                               data-bs-toggle="tooltip">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
                                             <a href="{% url 'fee_delete' pk=fee.pk %}" 
                                                class="btn btn-sm btn-outline-danger"
-                                               title="Delete">
+                                               title="Delete"
+                                               data-bs-toggle="tooltip">
                                                 <i class="bi bi-trash"></i>
+                                            </a>
+                                            {% endif %}
+                                            {% if fee.balance > 0 %}
+                                            <a href="{% url 'fee_payment_create' fee_id=fee.pk %}" 
+                                               class="btn btn-sm btn-success"
+                                               title="Add Payment"
+                                               data-bs-toggle="tooltip">
+                                                <i class="bi bi-cash"></i>
                                             </a>
                                             {% endif %}
                                         </div>
@@ -257,42 +409,36 @@
 
                     <!-- Pagination -->
                     {% if is_paginated %}
-                    <nav aria-label="Page navigation">
+                    <nav aria-label="Page navigation" class="mt-4">
                         <ul class="pagination justify-content-center">
                             {% if page_obj.has_previous %}
                             <li class="page-item">
                                 <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                    <i class="bi bi-chevron-double-left"></i>
+                                    <i class="bi bi-chevron-double-left"></i> First
                                 </a>
                             </li>
                             <li class="page-item">
                                 <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                    <i class="bi bi-chevron-left"></i>
+                                    <i class="bi bi-chevron-left"></i> Previous
                                 </a>
                             </li>
                             {% endif %}
 
-                            {% for num in page_obj.paginator.page_range %}
-                            {% if page_obj.number == num %}
                             <li class="page-item active">
-                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
                             </li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
-                            </li>
-                            {% endif %}
-                            {% endfor %}
 
                             {% if page_obj.has_next %}
                             <li class="page-item">
                                 <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                    <i class="bi bi-chevron-right"></i>
+                                    Next <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>
                             <li class="page-item">
                                 <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                                    <i class="bi bi-chevron-double-right"></i>
+                                    Last <i class="bi bi-chevron-double-right"></i>
                                 </a>
                             </li>
                             {% endif %}
@@ -300,8 +446,15 @@
                     </nav>
                     {% endif %}
                     {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i> No fee records found matching your criteria.
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox display-1 text-muted"></i>
+                        <h5 class="text-muted mt-3">No fee records found</h5>
+                        <p class="text-muted">Try adjusting your filters or create a new fee record.</p>
+                        {% if is_admin or is_teacher %}
+                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
+                            <i class="bi bi-plus-lg me-1"></i> Create First Fee
+                        </button>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -312,26 +465,57 @@
 
 <!-- Student Selection Modal -->
 <div class="modal fade" id="selectStudentModal" tabindex="-1" aria-labelledby="selectStudentModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="selectStudentModalLabel">Select Student</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="selectStudentModalLabel">
+                    <i class="bi bi-person-plus me-2"></i>Select Student
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label for="studentSelect" class="form-label">Choose Student</label>
-                    <select class="form-select" id="studentSelect" required>
-                        <option value="" selected disabled>Select a student</option>
-                        {% for student in all_students %}
-                        <option value="{{ student.id }}">{{ student.get_full_name }} ({{ student.class_level }})</option>
-                        {% endfor %}
-                    </select>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Select a student to create a new fee record. You can search by name or class.
+                </div>
+
+                <div class="modal-search-container">
+                    <i class="bi bi-search modal-search-icon"></i>
+                    <input type="text" id="studentSearch" class="form-control modal-search-input" 
+                           placeholder="Search students by name or class..." autocomplete="off">
+                </div>
+
+                <div id="studentList" style="max-height: 300px; overflow-y: auto;">
+                    {% for student in all_students %}
+                    <div class="student-option" data-student-id="{{ student.id }}" 
+                         data-student-name="{{ student.get_full_name }}" 
+                         data-student-class="{{ student.get_class_level_display }}">
+                        <div class="student-info">
+                            <div class="flex-grow-1">
+                                <div class="student-name">{{ student.get_full_name }}</div>
+                                <div class="student-details">
+                                    {{ student.student_id }} • {{ student.get_class_level_display }}
+                                    {% if student.gender %} • {{ student.get_gender_display }}{% endif %}
+                                </div>
+                            </div>
+                            <span class="student-class">{{ student.get_class_level_display }}</span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-people display-4 text-muted"></i>
+                        <p class="text-muted mt-2">No students available</p>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirmStudentSelection">Continue</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmStudentSelection" disabled>
+                    <i class="bi bi-check-circle me-1"></i> Continue
+                </button>
             </div>
         </div>
     </div>
@@ -341,19 +525,122 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
     // Handle student selection modal
-    const studentSelectModal = document.getElementById('selectStudentModal');
-    if (studentSelectModal) {
-        const modal = new bootstrap.Modal(studentSelectModal);
-        const studentSelect = document.getElementById('studentSelect');
-        const confirmBtn = document.getElementById('confirmStudentSelection');
-        
-        confirmBtn.addEventListener('click', function() {
-            if (studentSelect.value) {
-                window.location.href = "{% url 'fee_create' student_id=0 %}".replace('/0/', '/' + studentSelect.value + '/');
+    const studentModal = new bootstrap.Modal(document.getElementById('selectStudentModal'));
+    let selectedStudentId = null;
+
+    // Search functionality
+    const studentSearch = document.getElementById('studentSearch');
+    const studentList = document.getElementById('studentList');
+    const studentOptions = studentList.querySelectorAll('.student-option');
+    const confirmBtn = document.getElementById('confirmStudentSelection');
+
+    studentSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        let hasVisibleItems = false;
+
+        studentOptions.forEach(option => {
+            const studentName = option.getAttribute('data-student-name').toLowerCase();
+            const studentClass = option.getAttribute('data-student-class').toLowerCase();
+            
+            if (studentName.includes(searchTerm) || studentClass.includes(searchTerm)) {
+                option.style.display = 'block';
+                hasVisibleItems = true;
+            } else {
+                option.style.display = 'none';
             }
         });
+
+        if (!hasVisibleItems) {
+            studentList.innerHTML = '<div class="text-center py-4"><p class="text-muted">No students found matching your search</p></div>';
+        }
+    });
+
+    // Student selection
+    studentOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            // Remove previous selection
+            studentOptions.forEach(opt => opt.classList.remove('bg-primary', 'text-white'));
+            
+            // Add selection to clicked option
+            this.classList.add('bg-primary', 'text-white');
+            
+            // Get student ID
+            selectedStudentId = this.getAttribute('data-student-id');
+            
+            // Enable confirm button
+            confirmBtn.disabled = false;
+        });
+    });
+
+    // Double-click to select
+    studentOptions.forEach(option => {
+        option.addEventListener('dblclick', function() {
+            selectedStudentId = this.getAttribute('data-student-id');
+            proceedWithSelection();
+        });
+    });
+
+    // Confirm selection
+    confirmBtn.addEventListener('click', proceedWithSelection);
+
+    function proceedWithSelection() {
+        if (selectedStudentId) {
+            const baseUrl = "{% url 'fee_create' student_id=0 %}";
+            const newUrl = baseUrl.replace('0', selectedStudentId);
+            
+            console.log('Redirecting to:', newUrl);
+            window.location.href = newUrl;
+        }
     }
+
+    // Keyboard navigation
+    studentSearch.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedStudentId) {
+                proceedWithSelection();
+            }
+        }
+    });
+
+    // Clear search when modal closes
+    $('#selectStudentModal').on('hidden.bs.modal', function () {
+        studentSearch.value = '';
+        studentOptions.forEach(option => {
+            option.style.display = 'block';
+            option.classList.remove('bg-primary', 'text-white');
+        });
+        selectedStudentId = null;
+        confirmBtn.disabled = true;
+    });
+
+    // Auto-focus on search when modal opens
+    $('#selectStudentModal').on('shown.bs.modal', function () {
+        studentSearch.focus();
+    });
+
+    // Add smooth scrolling to table
+    const table = document.querySelector('.table-responsive');
+    if (table) {
+        table.style.maxHeight = '600px';
+        table.style.overflowY = 'auto';
+    }
+
+    // Add export functionality
+    const exportButtons = document.querySelectorAll('[href="#"]');
+    exportButtons.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Export functionality will be implemented soon!');
+        });
+    });
 });
 </script>
 {% endblock %}

@@ -8,7 +8,7 @@ from django.core.validators import RegexValidator
 from .models import *
 from .models import Announcement  # Add this with your other imports
 from .utils import is_admin, is_teacher
-
+from .models import ReportCard
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from .models import Fee, FeeCategory, Student
@@ -130,42 +130,59 @@ class FeeForm(forms.ModelForm):
     
     class Meta:
         model = Fee
-        exclude = ['balance', 'receipt_number', 'recorded_by', 'last_updated']
+        fields = ['student', 'category', 'academic_year', 'term', 'amount_payable', 
+                 'amount_paid', 'payment_status', 'payment_mode', 'payment_date', 
+                 'due_date', 'notes']
         widgets = {
+            'student': forms.HiddenInput(),
             'due_date': forms.TextInput(attrs={'readonly': True}),
             'payment_date': forms.TextInput(attrs={'readonly': True}),
             'notes': forms.Textarea(attrs={'rows': 3}),
             'amount_payable': forms.NumberInput(attrs={'step': '0.01'}),
             'amount_paid': forms.NumberInput(attrs={'step': '0.01'}),
-            'student': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):
         student_id = kwargs.pop('student_id', None)
         super().__init__(*args, **kwargs)
         
+        # Set up the student field
         if student_id:
-            student = get_object_or_404(Student, pk=student_id)
-            self.student = student
-            self.fields['student'].initial = student
-            
-            self.fields['category'].queryset = self.get_applicable_categories(student)
-            self.fields['category'].empty_label = "--- Select Fee Type ---"
-            
-            if not self.initial.get('academic_year'):
-                current_year = timezone.now().year
-                self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+            try:
+                student = Student.objects.get(pk=student_id)
+                self.fields['student'].initial = student
+                self.fields['student'].queryset = Student.objects.filter(pk=student_id)
+                
+                # Set up category field with applicable categories
+                self.fields['category'].queryset = self.get_applicable_categories(student)
+                self.fields['category'].empty_label = "--- Select Fee Type ---"
+                
+            except Student.DoesNotExist:
+                # If student doesn't exist, show all students (for admin)
+                self.fields['student'].queryset = Student.objects.filter(is_active=True)
+        else:
+            # If no student_id provided, show all active students
+            self.fields['student'].queryset = Student.objects.filter(is_active=True)
+        
+        # Set default academic year if not already set
+        if not self.initial.get('academic_year'):
+            current_year = timezone.now().year
+            self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+        
+        # Make student field required
+        self.fields['student'].required = True
 
     def get_applicable_categories(self, student):
         """Get categories that apply to this student's class level"""
         student_class = str(student.class_level)
         
         # Categories that apply to all classes
-        qs = FeeCategory.objects.filter(applies_to_all=True)
+        qs = FeeCategory.objects.filter(applies_to_all=True, is_active=True)
         
         # Add categories specific to this class level
         specific_categories = FeeCategory.objects.exclude(applies_to_all=True).filter(
-            class_levels__contains=student_class
+            class_levels__contains=student_class,
+            is_active=True
         )
         
         return (qs | specific_categories).distinct().order_by('name')
@@ -179,9 +196,10 @@ class FeeForm(forms.ModelForm):
         if student and category:
             if not category.applies_to_all:
                 student_class = str(student.class_level)
-                if not (category.class_levels and student_class in [x.strip() for x in category.class_levels.split(',')]):
+                class_levels = [x.strip() for x in category.class_levels.split(',')] if category.class_levels else []
+                if student_class not in class_levels:
                     raise forms.ValidationError(
-                        f"The selected category '{category.name}' is not applicable to {student}'s class level."
+                        f"The selected category '{category.name}' is not applicable to {student}'s class level ({student.get_class_level_display()})."
                     )
         
         amount_payable = cleaned_data.get('amount_payable', Decimal('0.00'))
@@ -1015,9 +1033,78 @@ class ParentAttendanceFilterForm(forms.Form):
             self.fields['student'].queryset = user.parentguardian.student.all()
 
 
+class ReportCardForm(forms.ModelForm):
+    class Meta:
+        model = ReportCard
+        fields = ['student', 'academic_year', 'term', 'is_published']
+        widgets = {
+            'academic_year': forms.Select(choices=[
+                ('', 'Select Academic Year'),
+                ('2023/2024', '2023/2024'),
+                ('2024/2025', '2024/2025'),
+            ]),
+            'term': forms.Select(choices=[
+                ('', 'Select Term'),
+                (1, 'Term 1'),
+                (2, 'Term 2'),
+                (3, 'Term 3'),
+            ]),
+        }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['student'].queryset = Student.objects.all().order_by('first_name', 'last_name')
 
+#timetable 
+# Add to core/forms.py
 
+class TimeSlotForm(forms.ModelForm):
+    class Meta:
+        model = TimeSlot
+        fields = ['period_number', 'start_time', 'end_time', 'is_break', 'break_name']
+        widgets = {
+            'start_time': forms.TimeInput(attrs={'type': 'time'}),
+            'end_time': forms.TimeInput(attrs={'type': 'time'}),
+        }
+
+class TimetableForm(forms.ModelForm):
+    class Meta:
+        model = Timetable
+        fields = ['class_level', 'day_of_week', 'academic_year', 'term', 'is_active']
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set current academic year as default
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        self.fields['academic_year'].initial = f"{current_year}/{next_year}"
+
+class TimetableEntryForm(forms.ModelForm):
+    class Meta:
+        model = TimetableEntry
+        fields = ['time_slot', 'subject', 'teacher', 'classroom', 'is_break']
+    
+    def __init__(self, *args, **kwargs):
+        timetable = kwargs.pop('timetable', None)
+        super().__init__(*args, **kwargs)
+        
+        if timetable:
+            # Filter teachers who teach this class level
+            class_assignments = ClassAssignment.objects.filter(
+                class_level=timetable.class_level
+            )
+            self.fields['teacher'].queryset = Teacher.objects.filter(
+                classassignment__in=class_assignments
+            ).distinct()
+            self.fields['subject'].queryset = Subject.objects.filter(
+                classassignment__in=class_assignments
+            ).distinct()
+
+class TimetableFilterForm(forms.Form):
+    class_level = forms.ChoiceField(choices=Student.CLASS_LEVEL_CHOICES, required=False)
+    academic_year = forms.CharField(required=False)
+    term = forms.ChoiceField(choices=AcademicTerm.TERM_CHOICES, required=False)
+    day_of_week = forms.ChoiceField(choices=Timetable.DAYS_OF_WEEK, required=False)
 
 
 
