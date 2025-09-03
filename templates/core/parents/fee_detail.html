@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Fee Details - {{ fee.student.get_full_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.fee-detail-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.payment-history-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.status-badge {
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.payment-item {
+    border-left: 4px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.payment-item:hover {
+    border-left-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.action-btn {
+    border-radius: 8px;
+    padding: 10px 20px;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">Fee Details</h2>
+                    <p class="text-muted mb-0">Fee information for {{ fee.student.get_full_name }}</p>
+                </div>
+                <span class="badge 
+                    {% if fee.payment_status == 'paid' %}bg-success
+                    {% elif fee.payment_status == 'partial' %}bg-warning
+                    {% elif fee.payment_status == 'overdue' %}bg-danger
+                    {% else %}bg-secondary{% endif %} fs-6">
+                    {{ fee.get_payment_status_display }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Fee Information -->
+        <div class="col-lg-6 mb-4">
+            <div class="card fee-detail-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Fee Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Student:</strong>
+                        </div>
+                        <div class="col-6">
+                            {{ fee.student.get_full_name }}
+                            <br>
+                            <small class="text-muted">{{ fee.student.get_class_level_display }}</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Fee Category:</strong>
+                        </div>
+                        <div class="col-6">
+                            {{ fee.category.name }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Academic Year:</strong>
+                        </div>
+                        <div class="col-6">
+                            {{ fee.academic_year }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Term:</strong>
+                        </div>
+                        <div class="col-6">
+                            Term {{ fee.term }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Amount Payable:</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="fw-bold">${{ fee.amount_payable }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Amount Paid:</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="text-success fw-bold">${{ fee.amount_paid }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Balance:</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="{% if fee.balance > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">
+                                ${{ fee.balance }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Due Date:</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="{% if fee.due_date < today %}text-danger{% endif %}">
+                                {{ fee.due_date|date:"M d, Y" }}
+                            </span>
+                            {% if fee.due_date < today and fee.balance > 0 %}
+                            <br>
+                            <small class="text-danger">Overdue</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Payment Status:</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="badge 
+                                {% if fee.payment_status == 'paid' %}bg-success
+                                {% elif fee.payment_status == 'partial' %}bg-warning
+                                {% elif fee.payment_status == 'overdue' %}bg-danger
+                                {% else %}bg-secondary{% endif %} status-badge">
+                                {{ fee.get_payment_status_display }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Action -->
+            {% if fee.balance > 0 %}
+            <div class="card fee-detail-card mt-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Make Payment</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-credit-card fs-1 text-primary"></i>
+                    </div>
+                    <h4 class="text-danger mb-3">Balance: ${{ fee.balance }}</h4>
+                    <a href="{% url 'parent_fee_payment' fee.pk %}" class="btn btn-success btn-lg action-btn w-100">
+                        <i class="bi bi-credit-card me-2"></i>Pay Now
+                    </a>
+                </div>
+            </div>
+            {% else %}
+            <div class="card fee-detail-card mt-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Payment Status</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-check-circle fs-1 text-success"></i>
+                    </div>
+                    <h4 class="text-success mb-3">Fully Paid</h4>
+                    <p class="text-muted">This fee has been completely paid.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Payment History -->
+        <div class="col-lg-6">
+            <div class="card payment-history-card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Payment History</h5>
+                    <span class="badge bg-primary">{{ payments.count }} Payment{{ payments.count|pluralize }}</span>
+                </div>
+                <div class="card-body">
+                    {% if payments %}
+                    <div class="list-group list-group-flush">
+                        {% for payment in payments %}
+                        <div class="list-group-item payment-item border-0">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">Payment #{{ forloop.revcounter }}</h6>
+                                <span class="badge bg-success">${{ payment.amount }}</span>
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">
+                                        <i class="bi bi-calendar me-1"></i>
+                                        {{ payment.payment_date|date:"M d, Y" }}
+                                    </small>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <small class="text-muted">
+                                        {{ payment.get_payment_mode_display }}
+                                    </small>
+                                </div>
+                            </div>
+                            {% if payment.notes %}
+                            <div class="mt-2">
+                                <small class="text-muted">{{ payment.notes }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-receipt fs-1 text-muted"></i>
+                        <p class="text-muted mt-2">No payment history available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Back and Navigation -->
+            <div class="card payment-history-card mt-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Navigation</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'parent_fee_list' %}" class="btn btn-outline-primary action-btn">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Fee List
+                        </a>
+                        <a href="{% url 'parent_fee_list' %}?student={{ fee.student.pk }}" class="btn btn-outline-info action-btn">
+                            <i class="bi bi-person me-2"></i>View All Fees for {{ fee.student.first_name }}
+                        </a>
+                        <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary action-btn">
+                            <i class="bi bi-house me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add today's date for comparison
+    const today = new Date().toISOString().split('T')[0];
+    const dueDateElement = document.querySelector('.row.mb-3:nth-child(7) .col-6 span');
+    
+    if (dueDateElement && dueDateElement.textContent.includes('202')) {
+        const dueDateText = dueDateElement.textContent.trim();
+        if (dueDateText < today && !dueDateElement.classList.contains('text-success')) {
+            dueDateElement.classList.add('text-danger');
+        }
+    }
+});
+</script>
+{% endblock %}

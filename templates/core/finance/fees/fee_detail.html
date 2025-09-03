@@ -27,6 +27,8 @@
         border-radius: 50%;
         object-fit: cover;
         margin-right: 20px;
+        border: 3px solid #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .payment-status {
         font-weight: 600;
@@ -40,7 +42,103 @@
     .unpaid {
         color: #dc3545;
     }
+    .stats-card {
+        transition: transform 0.3s ease;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    .payment-history {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .action-buttons .btn {
+        margin-left: 5px;
+        margin-bottom: 5px;
+    }
+    .notes-container {
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    /* Print styles */
+    @media print {
+        .action-buttons, .btn {
+            display: none !important;
+        }
+        .card {
+            border: 1px solid #ddd !important;
+            box-shadow: none !important;
+        }
+    }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Delete payment confirmation
+        const deleteButtons = document.querySelectorAll('.delete-payment');
+        deleteButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const url = this.getAttribute('data-url');
+                const receiptNumber = this.getAttribute('data-receipt');
+                
+                if (confirm(`Are you sure you want to delete payment #${receiptNumber}? This action cannot be undone.`)) {
+                    window.location.href = url;
+                }
+            });
+        });
+        
+        // Print fee details
+        const printButton = document.getElementById('print-btn');
+        if (printButton) {
+            printButton.addEventListener('click', function() {
+                window.print();
+            });
+        }
+        
+        // Export functionality (placeholder - would need backend implementation)
+        const exportButton = document.getElementById('export-btn');
+        if (exportButton) {
+            exportButton.addEventListener('click', function() {
+                alert('Export functionality would be implemented here. This would typically generate a PDF or Excel file.');
+            });
+        }
+        
+        // Payment reminder (placeholder)
+        const reminderButton = document.getElementById('reminder-btn');
+        if (reminderButton) {
+            reminderButton.addEventListener('click', function() {
+                alert('Payment reminder would be sent to the student/parent. This would typically integrate with an email or SMS service.');
+            });
+        }
+        
+        // Show/hide notes
+        const toggleNotes = document.getElementById('toggle-notes');
+        if (toggleNotes) {
+            toggleNotes.addEventListener('click', function() {
+                const notesContent = document.getElementById('notes-content');
+                if (notesContent.style.display === 'none') {
+                    notesContent.style.display = 'block';
+                    this.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Hide Notes';
+                } else {
+                    notesContent.style.display = 'none';
+                    this.innerHTML = '<i class="bi bi-chevron-down me-1"></i> Show Notes';
+                }
+            });
+        }
+        
+        // Animation for progress bar
+        const progressBar = document.querySelector('.progress-bar');
+        if (progressBar) {
+            // Animate progress bar on page load
+            setTimeout(() => {
+                progressBar.style.transition = 'width 1s ease-in-out';
+            }, 500);
+        }
+    });
+</script>
 {% endblock %}
 
 {% block content %}
@@ -52,14 +150,23 @@
                     <i class="bi bi-cash-stack me-2"></i>
                     Fee Details - {{ fee.student.get_full_name }}
                 </h2>
-                <div>
+                <div class="action-buttons">
                     {% if is_admin or is_teacher %}
-                    <a href="{% url 'fee_payment_create' fee_id=fee.pk %}" class="btn btn-success me-2">
+                    <button id="reminder-btn" class="btn btn-info" title="Send Payment Reminder">
+                        <i class="bi bi-bell me-1"></i> Remind
+                    </button>
+                    <button id="export-btn" class="btn btn-secondary" title="Export Details">
+                        <i class="bi bi-download me-1"></i> Export
+                    </button>
+                    <button id="print-btn" class="btn btn-outline-dark" title="Print Details">
+                        <i class="bi bi-printer me-1"></i> Print
+                    </button>
+                    <a href="{% url 'fee_payment_create' fee_id=fee.pk %}" class="btn btn-success">
                         <i class="bi bi-cash-coin me-1"></i> Record Payment
                     </a>
                     {% endif %}
                     <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-1"></i> Back to List
+                        <i class="bi bi-arrow-left me-1"></i> Back
                     </a>
                 </div>
             </div>
@@ -81,7 +188,7 @@
                         {% if fee.student.photo %}
                         <img src="{{ fee.student.photo.url }}" class="student-photo-lg" alt="{{ fee.student.get_full_name }}">
                         {% else %}
-                        <div class="student-photo-lg bg-light text-center">
+                        <div class="student-photo-lg bg-light d-flex align-items-center justify-content-center">
                             <i class="bi bi-person fs-1 text-muted"></i>
                         </div>
                         {% endif %}
@@ -91,10 +198,10 @@
                                 {{ fee.student.class_level }} • {{ fee.student.student_id }}
                             </p>
                             <p class="mb-0">
-                                <span class="payment-status 
-                                    {% if fee.payment_status == 'PAID' %}paid
-                                    {% elif fee.payment_status == 'PARTIAL' %}partial
-                                    {% else %}unpaid{% endif %}">
+                                <span class="badge payment-status 
+                                    {% if fee.payment_status == 'PAID' %}bg-success
+                                    {% elif fee.payment_status == 'PARTIAL' %}bg-warning
+                                    {% else %}bg-danger{% endif %}">
                                     {{ fee.get_payment_status_display }}
                                 </span>
                             </p>
@@ -102,33 +209,36 @@
                     </div>
 
                     <div class="row mb-4">
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light stats-card">
+                                <div class="card-body text-center py-3">
                                     <h6 class="text-muted mb-1">Amount Payable</h6>
                                     <h4 class="mb-0">${{ fee.amount_payable|floatformat:2 }}</h4>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light stats-card">
+                                <div class="card-body text-center py-3">
                                     <h6 class="text-muted mb-1">Amount Paid</h6>
-                                    <h4 class="mb-0">${{ fee.amount_paid|floatformat:2 }}</h4>
+                                    <h4 class="mb-0 text-success">${{ fee.amount_paid|floatformat:2 }}</h4>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light stats-card">
+                                <div class="card-body text-center py-3">
                                     <h6 class="text-muted mb-1">Balance</h6>
-                                    <h4 class="mb-0">${{ fee.balance|floatformat:2 }}</h4>
+                                    <h4 class="mb-0 {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ fee.balance|floatformat:2 }}
+                                    </h4>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="progress mb-3">
+                    <h5 class="mb-3">Payment Progress</h5>
+                    <div class="progress mb-4" style="height: 15px;">
                         <div class="progress-bar bg-success" 
                              role="progressbar" 
                              style="width: {{ fee.payment_percentage }}%" 
@@ -142,33 +252,36 @@
                     <div class="row">
                         <div class="col-md-6">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Fee Category:</span>
-                                    <span>{{ fee.category.name }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-tag me-2 text-primary"></i>Fee Category:</span>
+                                    <span class="fw-bold">{{ fee.category.name }}</span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Academic Year:</span>
-                                    <span>{{ fee.academic_year }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-calendar-year me-2 text-primary"></i>Academic Year:</span>
+                                    <span class="fw-bold">{{ fee.academic_year }}</span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Term:</span>
-                                    <span>{{ fee.get_term_display }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-journal me-2 text-primary"></i>Term:</span>
+                                    <span class="fw-bold">{{ fee.get_term_display }}</span>
                                 </li>
                             </ul>
                         </div>
                         <div class="col-md-6">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Due Date:</span>
-                                    <span>{{ fee.due_date|date:"M d, Y" }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-calendar-check me-2 text-primary"></i>Due Date:</span>
+                                    <span class="fw-bold {% if fee.is_overdue %}text-danger{% endif %}">
+                                        {{ fee.due_date|date:"M d, Y" }}
+                                        {% if fee.is_overdue %}<span class="badge bg-danger ms-1">Overdue</span>{% endif %}
+                                    </span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Recorded On:</span>
-                                    <span>{{ fee.date_recorded|date:"M d, Y" }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-clock-history me-2 text-primary"></i>Recorded On:</span>
+                                    <span class="fw-bold">{{ fee.date_recorded|date:"M d, Y" }}</span>
                                 </li>
-                                <li class="list-group-item d-flex justify-content-between">
-                                    <span>Recorded By:</span>
-                                    <span>{{ fee.recorded_by.get_full_name }}</span>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-person-circle me-2 text-primary"></i>Recorded By:</span>
+                                    <span class="fw-bold">{{ fee.recorded_by.get_full_name }}</span>
                                 </li>
                             </ul>
                         </div>
@@ -176,9 +289,14 @@
 
                     {% if fee.notes %}
                     <div class="mt-4">
-                        <h5>Notes</h5>
-                        <div class="card bg-light">
-                            <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5>Notes</h5>
+                            <button id="toggle-notes" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-chevron-down me-1"></i> Show Notes
+                            </button>
+                        </div>
+                        <div id="notes-content" class="card bg-light" style="display: none;">
+                            <div class="card-body notes-container">
                                 {{ fee.notes|linebreaks }}
                             </div>
                         </div>
@@ -191,10 +309,10 @@
         <div class="col-lg-4">
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Payment History</h5>
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Payment History</h5>
                     <span class="badge bg-primary rounded-pill">{{ payments.count }}</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body payment-history">
                     {% if payments %}
                     <div class="list-group">
                         {% for payment in payments %}
@@ -204,12 +322,14 @@
                                 <small class="text-muted">{{ payment.payment_date|date:"M d, Y" }}</small>
                             </div>
                             <div class="d-flex w-100 justify-content-between align-items-center">
-                                <p class="mb-1">${{ payment.amount|floatformat:2 }}</p>
+                                <p class="mb-1 fs-5 fw-bold">${{ payment.amount|floatformat:2 }}</p>
                                 <div>
                                     <span class="badge bg-light text-dark">{{ payment.get_payment_method_display }}</span>
                                     {% if is_admin %}
-                                    <a href="{% url 'fee_payment_delete' pk=payment.pk %}" 
-                                       class="btn btn-sm btn-outline-danger ms-2"
+                                    <a href="#" 
+                                       class="btn btn-sm btn-outline-danger ms-2 delete-payment"
+                                       data-receipt="{{ payment.receipt_number }}"
+                                       data-url="{% url 'fee_payment_delete' pk=payment.pk %}"
                                        title="Delete">
                                         <i class="bi bi-trash"></i>
                                     </a>
@@ -223,11 +343,20 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="alert alert-info mb-0">
+                    <div class="alert alert-info mb-0 text-center">
                         <i class="bi bi-info-circle me-2"></i> No payment records found.
                     </div>
                     {% endif %}
                 </div>
+                {% if payments %}
+                <div class="card-footer bg-white">
+                    <div class="d-grid">
+                        <a href="{% url 'fee_payment_create' fee_id=fee.pk %}" class="btn btn-success">
+                            <i class="bi bi-plus-circle me-1"></i> Add New Payment
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

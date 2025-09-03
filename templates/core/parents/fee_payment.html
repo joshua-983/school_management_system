@@ -1,0 +1,397 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Make Payment - {{ fee.student.get_full_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.payment-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.payment-summary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    color: white;
+}
+
+.payment-form {
+    border-radius: 15px;
+}
+
+.submit-btn {
+    border-radius: 10px;
+    padding: 12px 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.amount-input {
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.payment-method {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 15px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.payment-method:hover {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.payment-method.selected {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.payment-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">Make Payment</h2>
+                    <p class="text-muted mb-0">Payment for {{ fee.student.get_full_name }}</p>
+                </div>
+                <span class="badge bg-warning fs-6">Balance: ${{ fee.balance }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Payment Summary -->
+        <div class="col-lg-5 mb-4">
+            <div class="card payment-card payment-summary">
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <i class="bi bi-credit-card payment-icon"></i>
+                        <h4>Payment Summary</h4>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Student:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {{ fee.student.get_full_name }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Fee Category:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {{ fee.category.name }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Academic Year:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {{ fee.academic_year }} Term {{ fee.term }}
+                        </div>
+                    </div>
+                    
+                    <hr style="border-color: rgba(255,255,255,0.3)">
+                    
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <strong>Amount Payable:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            ${{ fee.amount_payable }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <strong>Amount Paid:</strong>
+                        </div>
+                        <div class="col-6 text-end text-success">
+                            ${{ fee.amount_paid }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Balance:</strong>
+                        </div>
+                        <div class="col-6 text-end text-warning fw-bold">
+                            ${{ fee.balance }}
+                        </div>
+                    </div>
+                    
+                    <hr style="border-color: rgba(255,255,255,0.3)">
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Due Date:</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            {{ fee.due_date|date:"M d, Y" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Important Notes -->
+            <div class="card payment-card mt-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>Important Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-lightbulb me-2"></i>Payment Guidelines
+                        </h6>
+                        <ul class="mb-0 ps-3">
+                            <li>Payments are processed securely</li>
+                            <li>Receipts will be generated automatically</li>
+                            <li>Allow 24 hours for payment processing</li>
+                            <li>Contact finance office for any issues</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Form -->
+        <div class="col-lg-7">
+            <div class="card payment-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Payment Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="paymentForm">
+                        {% csrf_token %}
+                        
+                        {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Please correct the errors below
+                            </h6>
+                            <ul class="mb-0 ps-3">
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Amount Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.amount.id_for_label }}" class="form-label fw-bold">
+                                <i class="bi bi-currency-dollar me-2"></i>Payment Amount
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" 
+                                       class="form-control amount-input {% if form.amount.errors %}is-invalid{% endif %}" 
+                                       id="{{ form.amount.id_for_label }}" 
+                                       name="{{ form.amount.name }}" 
+                                       value="{{ form.amount.value|default:fee.balance }}" 
+                                       min="1" 
+                                       max="{{ fee.balance }}" 
+                                       step="0.01"
+                                       required>
+                            </div>
+                            <div class="form-text">
+                                Maximum amount: ${{ fee.balance }}
+                            </div>
+                            {% for error in form.amount.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Payment Method -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-credit-card me-2"></i>Payment Method
+                            </label>
+                            <div class="row">
+                                {% for value, label in form.payment_method.field.choices %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="payment-method {% if form.payment_method.value == value %}selected{% endif %}" 
+                                         onclick="document.querySelector('input[name=\'payment_method\'][value=\'{{ value }}\']').checked = true; 
+                                                 document.querySelectorAll('.payment-method').forEach(el => el.classList.remove('selected')); 
+                                                 this.classList.add('selected');">
+                                        <input type="radio" 
+                                               class="form-check-input" 
+                                               name="{{ form.payment_method.name }}" 
+                                               value="{{ value }}" 
+                                               id="method_{{ value }}"
+                                               {% if form.payment_method.value == value or forloop.first and not form.payment_method.value %}checked{% endif %}
+                                               style="display: none;">
+                                        <div class="text-center">
+                                            {% if value == 'mobile_money' %}
+                                                <i class="bi bi-phone payment-icon text-primary"></i>
+                                                <h6>Mobile Money</h6>
+                                            {% elif value == 'bank_transfer' %}
+                                                <i class="bi bi-bank payment-icon text-info"></i>
+                                                <h6>Bank Transfer</h6>
+                                            {% elif value == 'cash' %}
+                                                <i class="bi bi-cash-coin payment-icon text-success"></i>
+                                                <h6>Cash</h6>
+                                            {% elif value == 'check' %}
+                                                <i class="bi bi-receipt payment-icon text-warning"></i>
+                                                <h6>Check</h6>
+                                            {% else %}
+                                                <i class="bi bi-credit-card payment-icon text-secondary"></i>
+                                                <h6>{{ label }}</h6>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% for error in form.payment_method.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Additional Notes -->
+                        <div class="mb-4">
+                            <label for="notes" class="form-label fw-bold">
+                                <i class="bi bi-chat-left-text me-2"></i>Additional Notes (Optional)
+                            </label>
+                            <textarea class="form-control" 
+                                      id="notes" 
+                                      name="notes" 
+                                      rows="3" 
+                                      placeholder="Any additional information about this payment...">{{ form.notes.value|default:'' }}</textarea>
+                        </div>
+
+                        <!-- Terms Agreement -->
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" id="termsAgreement" required>
+                            <label class="form-check-label" for="termsAgreement">
+                                I agree to the <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">terms and conditions</a>
+                            </label>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'parent_fee_detail' fee.pk %}" class="btn btn-outline-secondary me-md-2">
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success submit-btn">
+                                <i class="bi bi-credit-card me-2"></i>Process Payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terms Modal -->
+<div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="termsModalLabel">Terms and Conditions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <h6>Payment Terms</h6>
+                <p>By proceeding with this payment, you agree to the following terms:</p>
+                <ul>
+                    <li>All payments are final and non-refundable</li>
+                    <li>Payments may take up to 24 hours to process</li>
+                    <li>Receipts will be available for download after processing</li>
+                    <li>Any discrepancies must be reported within 7 days</li>
+                </ul>
+                <h6>Privacy Policy</h6>
+                <p>Your payment information is secure and will not be shared with third parties.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Payment method selection
+    const paymentMethods = document.querySelectorAll('.payment-method');
+    paymentMethods.forEach(method => {
+        method.addEventListener('click', function() {
+            paymentMethods.forEach(m => m.classList.remove('selected'));
+            this.classList.add('selected');
+            const radio = this.querySelector('input[type="radio"]');
+            radio.checked = true;
+        });
+    });
+
+    // Form validation
+    const form = document.getElementById('paymentForm');
+    form.addEventListener('submit', function(e) {
+        const amountInput = document.getElementById('{{ form.amount.id_for_label }}');
+        const maxAmount = parseFloat('{{ fee.balance }}');
+        const enteredAmount = parseFloat(amountInput.value);
+        
+        if (enteredAmount > maxAmount) {
+            e.preventDefault();
+            alert('Payment amount cannot exceed the balance of $' + maxAmount);
+            amountInput.focus();
+        }
+        
+        if (!document.getElementById('termsAgreement').checked) {
+            e.preventDefault();
+            alert('Please agree to the terms and conditions');
+        }
+    });
+
+    // Amount validation
+    const amountInput = document.getElementById('{{ form.amount.id_for_label }}');
+    amountInput.addEventListener('input', function() {
+        const maxAmount = parseFloat('{{ fee.balance }}');
+        const enteredAmount = parseFloat(this.value);
+        
+        if (enteredAmount > maxAmount) {
+            this.value = maxAmount;
+        }
+        
+        if (enteredAmount < 1) {
+            this.value = 1;
+        }
+    });
+});
+</script>
+{% endblock %}

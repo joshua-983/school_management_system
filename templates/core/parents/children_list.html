@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Children{% endblock %}
+
+{% block extra_css %}
+<style>
+.child-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.child-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.action-btn {
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin: 3px;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">My Children</h2>
+                    <p class="text-muted mb-0">Manage and view your children's information</p>
+                </div>
+                <span class="badge bg-primary fs-6">{{ children.count }} Child{{ children.count|pluralize }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Children Grid -->
+    <div class="row">
+        {% for child in children %}
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card child-card h-100">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-person-circle fs-1 text-primary"></i>
+                    </div>
+                    <h4 class="card-title">{{ child.get_full_name }}</h4>
+                    <p class="card-text">
+                        <span class="badge bg-secondary">{{ child.get_class_level_display }}</span>
+                        <br>
+                        <small class="text-muted">ID: {{ child.student_id }}</small>
+                    </p>
+                    
+                    <!-- Quick Stats -->
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="text-center">
+                                <i class="bi bi-journal-check text-success"></i>
+                                <div class="small">Grades</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <i class="bi bi-calendar-check text-info"></i>
+                                <div class="small">Attendance</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <i class="bi bi-cash-coin text-warning"></i>
+                                <div class="small">Fees</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'parent_child_detail' child.pk %}" class="btn btn-primary action-btn">
+                            <i class="bi bi-person me-2"></i>View Profile
+                        </a>
+                        <a href="{% url 'parent_report_card_detail' child.pk %}" class="btn btn-success action-btn">
+                            <i class="bi bi-card-checklist me-2"></i>Report Cards
+                        </a>
+                        <a href="{% url 'parent_attendance_list' %}?student={{ child.pk }}" class="btn btn-info action-btn">
+                            <i class="bi bi-calendar-check me-2"></i>Attendance
+                        </a>
+                        <a href="{% url 'parent_fee_list' %}?student={{ child.pk }}" class="btn btn-warning action-btn">
+                            <i class="bi bi-cash-coin me-2"></i>Fees
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="bi bi-people fs-1 text-muted mb-3"></i>
+                <h4 class="text-muted">No children registered</h4>
+                <p class="text-muted">Please contact the school administration to register your children.</p>
+                <a href="{% url 'parent_dashboard' %}" class="btn btn-primary mt-3">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Back Button -->
+    {% if children %}
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

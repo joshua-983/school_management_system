@@ -6,7 +6,7 @@ from django.utils import timezone
 from datetime import date
 from django.core.validators import RegexValidator
 from .models import *
-from .models import Announcement  # Add this with your other imports
+from .models import Announcement
 from .utils import is_admin, is_teacher
 from .models import ReportCard
 from django.db.models import Q
@@ -316,20 +316,41 @@ class TeacherRegistrationForm(forms.ModelForm):
         
         return cleaned_data
     
-    def save(self, commit=True):
+    def save(self, commit=False):  # ← FIXED: Changed false to False
         teacher = super().save(commit=False)
+        
+        # Get the cleaned data
+        email = self.cleaned_data['email']
+        password = self.cleaned_data['password1']
+        first_name = self.cleaned_data['first_name']
+        last_name = self.cleaned_data['last_name']
+        
+        # Generate a unique username
+        base_username = email.split('@')[0].lower()
+        username = base_username
+        counter = 1
+        
+        # Check if username already exists and find a unique one
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Create the user - use only existing fields
         user = User.objects.create_user(
-            username=f"teacher_{self.cleaned_data['email']}",
-            password=self.cleaned_data['password1'],
-            first_name=self.cleaned_data['first_name'],
-            last_name=self.cleaned_data['last_name'],
-            is_staff=True
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_staff=True  # Teachers get staff access
         )
+        
         teacher.user = user
         if commit:
             teacher.save()
             self.save_m2m()
         return teacher
+
 
 class AssignmentForm(forms.ModelForm):
     class Meta:
@@ -1111,3 +1132,44 @@ class TimetableFilterForm(forms.Form):
 
 
 
+
+class FeeStatusReportForm(forms.Form):
+    start_date = forms.DateField(
+        required=False, 
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label="From Date"
+    )
+    end_date = forms.DateField(
+        required=False, 
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label="To Date"
+    )
+    class_level = forms.ChoiceField(
+        choices=[('', 'All Classes')] + list(Student.CLASS_LEVEL_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Class Level"
+    )
+    fee_category = forms.ModelChoiceField(
+        queryset=FeeCategory.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Fee Category"
+    )
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + list(Fee.PAYMENT_STATUS_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Payment Status"
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default date range to current term if available
+        try:
+            current_term = AcademicTerm.objects.filter(is_active=True).first()
+            if current_term:
+                self.fields['start_date'].initial = current_term.start_date
+                self.fields['end_date'].initial = current_term.end_date
+        except:
+            pass

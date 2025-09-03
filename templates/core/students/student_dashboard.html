@@ -1,142 +1,633 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Student Dashboard{% endblock %}
+{% block title %}Student Dashboard - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        --info-gradient: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    }
+
+    .dashboard-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+
+    .stats-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        color: white;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+
+    .stats-card .card-body {
+        position: relative;
+        z-index: 2;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    }
+
+    .stats-number {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .stats-icon {
+        font-size: 2.5rem;
+        opacity: 0.8;
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .stats-card:hover .stats-icon {
+        transform: scale(1.2) rotate(5deg);
+    }
+
+    .content-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        background: white;
+        transition: all 0.3s ease;
+        margin-bottom: 2rem;
+    }
+
+    .content-card:hover {
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-header {
+        background: var(--primary-gradient);
+        color: white;
+        border-radius: 20px 20px 0 0 !important;
+        padding: 1.5rem 2rem;
+        border: none;
+    }
+
+    .table {
+        border-radius: 15px;
+        overflow: hidden;
+    }
+
+    .table th {
+        background: var(--primary-gradient);
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1.2rem;
+    }
+
+    .table td {
+        padding: 1.2rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+    }
+
+    .table tr {
+        transition: all 0.3s ease;
+    }
+
+    .table tr:hover {
+        background-color: #f8f9fa;
+        transform: translateX(8px);
+    }
+
+    .badge-custom {
+        padding: 0.6rem 1rem;
+        border-radius: 25px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .btn-action {
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .progress {
+        height: 8px;
+        border-radius: 10px;
+        background: #e9ecef;
+    }
+
+    .progress-bar {
+        border-radius: 10px;
+        transition: width 1s ease-in-out;
+    }
+
+    .grade-badge {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.8rem;
+        border-radius: 15px;
+        font-weight: 600;
+    }
+
+    .assignment-status {
+        min-width: 100px;
+        text-align: center;
+    }
+
+    /* Animation classes */
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-in {
+        animation: slideIn 0.8s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .dashboard-container {
+            padding: 1rem;
+        }
+        
+        .stats-card, .content-card {
+            border-radius: 15px;
+        }
+        
+        .stats-number {
+            font-size: 2.5rem;
+        }
+        
+        .stats-icon {
+            font-size: 2rem;
+            top: 1rem;
+            right: 1rem;
+        }
+        
+        .card-header {
+            padding: 1rem;
+        }
+        
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+    }
+
+    /* Custom scrollbar */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--primary-gradient);
+        border-radius: 10px;
+    }
+
+    /* Countdown timer for assignments */
+    .countdown-timer {
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.4rem 0.8rem;
+        border-radius: 15px;
+        background: rgba(255, 193, 7, 0.2);
+        color: #856404;
+    }
+
+    /* Grade progress bars */
+    .grade-progress {
+        height: 20px;
+        border-radius: 10px;
+        background: #e9ecef;
+        overflow: hidden;
+    }
+
+    .grade-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 1s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-4 mb-4">
-        <div class="card text-white bg-primary h-100">
-            <div class="card-body">
-                <h5 class="card-title">Pending Assignments</h5>
-                <p class="display-4">{{ pending_assignments }}</p>
-                <a href="{% url 'assignment_list' %}" class="text-white">View Assignments</a>
+<div class="dashboard-container">
+    <div class="container">
+        <!-- Welcome Header -->
+        <div class="row mb-4 slide-in">
+            <div class="col-12">
+                <div class="card content-card">
+                    <div class="card-body text-center py-4">
+                        <h1 class="h3 mb-2 fw-bold">
+                            <i class="fas fa-user-graduate me-3 text-primary"></i>
+                            Welcome back, {{ student.get_full_name }}!
+                        </h1>
+                        <p class="mb-0 text-muted">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Today is <span id="current-date"></span>
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-4 mb-4">
-        <div class="card text-white bg-success h-100">
-            <div class="card-body">
-                <h5 class="card-title">Average Grade</h5>
-                <p class="display-4">{{ average_grade|default:"N/A" }}</p>
-                <a href="{% url 'report_card' student.pk %}" class="text-white">View Report Card</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4 mb-4">
-        <div class="card text-white bg-info h-100">
-            <div class="card-body">
-                <h5 class="card-title">Fee Status</h5>
-                <p class="display-4">
-                    {% if fee_status == 'PAID' %}
-                        <span class="badge bg-success">Paid</span>
-                    {% elif fee_status == 'PARTIAL' %}
-                        <span class="badge bg-warning">Partial</span>
-                    {% else %}
-                        <span class="badge bg-danger">Unpaid</span>
-                    {% endif %}
-                </p>
-                <a href="{% url 'student_detail' student.pk %}" class="text-white">View Details</a>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="card mb-4">
-    <div class="card-header">
-        <h5>Current Assignments</h5>
-    </div>
-    <div class="card-body">
-        {% if current_assignments %}
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Title</th>
-                        <th>Subject</th>
-                        <th>Due Date</th>
-                        <th>Status</th>
-                        <th>Score</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for assignment in current_assignments %}
-                    <tr>
-                        <td>{{ assignment.assignment.title }}</td>
-                        <td>{{ assignment.assignment.subject.name }}</td>
-                        <td>{{ assignment.assignment.due_date }}</td>
-                        <td>
-                            <span class="badge bg-{% if assignment.status == 'SUBMITTED' %}success{% elif assignment.status == 'LATE' %}warning{% elif assignment.status == 'GRADED' %}info{% else %}danger{% endif %}">
-                                {{ assignment.get_status_display }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if assignment.score is not None %}
-                                {{ assignment.score }}/{{ assignment.assignment.max_score }}
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.1s;">
+                <div class="stats-card" style="background: var(--primary-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-tasks stats-icon"></i>
+                        <h5 class="card-title">Pending Assignments</h5>
+                        <p class="stats-number">{{ pending_assignments }}</p>
+                        <a href="{% url 'assignment_list' %}" class="text-white text-decoration-none d-flex align-items-center">
+                            <span>View Assignments</span>
+                            <i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
+                <div class="stats-card" style="background: var(--success-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-chart-line stats-icon"></i>
+                        <h5 class="card-title">Average Grade</h5>
+                        <p class="stats-number">{{ average_grade|default:"N/A" }}</p>
+                        <a href="{% url 'report_card' student.pk %}" class="text-white text-decoration-none d-flex align-items-center">
+                            <span>View Report Card</span>
+                            <i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
+                <div class="stats-card" style="background: var(--info-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-money-bill-wave stats-icon"></i>
+                        <h5 class="card-title">Fee Status</h5>
+                        <p class="stats-number">
+                            {% if fee_status == 'PAID' %}
+                                <span class="badge bg-success badge-custom">Paid</span>
+                            {% elif fee_status == 'PARTIAL' %}
+                                <span class="badge bg-warning badge-custom">Partial</span>
                             {% else %}
-                                -
+                                <span class="badge bg-danger badge-custom">Unpaid</span>
                             {% endif %}
-                        </td>
-                        <td>
-                            <a href="{% url 'assignment_detail' assignment.assignment.pk %}" class="btn btn-sm btn-info">
-                                <i class="bi bi-eye"></i> View
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </p>
+                        <a href="{% url 'student_detail' student.pk %}" class="text-white text-decoration-none d-flex align-items-center">
+                            <span>View Details</span>
+                            <i class="fas fa-arrow-right ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
-        {% else %}
-        <div class="alert alert-info">No current assignments found.</div>
-        {% endif %}
-    </div>
-</div>
 
-<div class="card">
-    <div class="card-header">
-        <h5>Recent Grades</h5>
-    </div>
-    <div class="card-body">
-        {% if recent_grades %}
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>Subject</th>
-                        <th>Homework</th>
-                        <th>Classwork</th>
-                        <th>Test</th>
-                        <th>Exam</th>
-                        <th>Total</th>
-                        <th>Grade</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for grade in recent_grades %}
-                    <tr>
-                        <td>{{ grade.subject.name }}</td>
-                        <td>{{ grade.homework_score }}</td>
-                        <td>{{ grade.classwork_score }}</td>
-                        <td>{{ grade.test_score }}</td>
-                        <td>{{ grade.exam_score }}</td>
-                        <td>{{ grade.total_score }}</td>
-                        <td>
-                            <span class="badge bg-{% if grade.grade == 'A+' or grade.grade == 'A' %}success{% elif grade.grade == 'B+' or grade.grade == 'B' %}info{% elif grade.grade == 'C+' or grade.grade == 'C' %}warning{% else %}danger{% endif %}">
-                                {{ grade.grade }}
-                            </span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Current Assignments -->
+        <div class="card content-card fade-in" style="animation-delay: 0.4s;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-book-open me-2"></i>
+                    Current Assignments
+                </h5>
+                <span class="badge bg-primary rounded-pill">{{ current_assignments|length }} assignments</span>
+            </div>
+            <div class="card-body">
+                {% if current_assignments %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Subject</th>
+                                <th>Due Date</th>
+                                <th>Time Left</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Progress</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in current_assignments %}
+                            <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:5 }}0.1s">
+                                <td>
+                                    <strong>{{ assignment.assignment.title }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark">{{ assignment.assignment.subject.name }}</span>
+                                </td>
+                                <td>
+                                    {{ assignment.assignment.due_date|date:"M d, Y" }}
+                                </td>
+                                <td>
+                                    <span class="countdown-timer" data-due-date="{{ assignment.assignment.due_date|date:'U' }}">
+                                        <i class="fas fa-clock me-1"></i>
+                                        <span class="countdown-text"></span>
+                                    </span>
+                                </td>
+                                <td class="assignment-status">
+                                    <span class="badge badge-custom bg-{% if assignment.status == 'SUBMITTED' %}success{% elif assignment.status == 'LATE' %}warning{% elif assignment.status == 'GRADED' %}info{% else %}danger{% endif %}">
+                                        {{ assignment.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if assignment.score is not None %}
+                                        <strong>{{ assignment.score }}</strong>/{{ assignment.assignment.max_score }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td style="width: 120px;">
+                                    {% if assignment.score is not None %}
+                                    <div class="grade-progress">
+                                        <div class="grade-progress-bar bg-{% if assignment.score >= assignment.assignment.max_score|multiply:0.8 %}success{% elif assignment.score >= assignment.assignment.max_score|multiply:0.6 %}warning{% else %}danger{% endif %}" 
+                                             style="width: {% widthratio assignment.score assignment.assignment.max_score 100 %}%">
+                                            {% widthratio assignment.score assignment.assignment.max_score 100 %}%
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="progress">
+                                        <div class="progress-bar bg-secondary" style="width: 0%">0%</div>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'assignment_detail' assignment.assignment.pk %}" class="btn btn-sm btn-primary btn-action">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-book-open display-4 text-muted mb-3"></i>
+                    <h5 class="text-muted">No current assignments</h5>
+                    <p class="text-muted">You're all caught up with your assignments!</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-        <div class="text-end">
-            <a href="{% url 'report_card' student.pk %}" class="btn btn-primary">View Full Report Card</a>
+
+        <!-- Recent Grades -->
+        <div class="card content-card fade-in" style="animation-delay: 0.5s;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-graduation-cap me-2"></i>
+                    Recent Grades
+                </h5>
+                <span class="badge bg-primary rounded-pill">{{ recent_grades|length }} grades</span>
+            </div>
+            <div class="card-body">
+                {% if recent_grades %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Homework (20%)</th>
+                                <th>Classwork (30%)</th>
+                                <th>Test (10%)</th>
+                                <th>Exam (40%)</th>
+                                <th>Total</th>
+                                <th>Grade</th>
+                                <th>Performance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grade in recent_grades %}
+                            <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
+                                <td>
+                                    <strong>{{ grade.subject.name }}</strong>
+                                </td>
+                                <td>{{ grade.homework_score }}</td>
+                                <td>{{ grade.classwork_score }}</td>
+                                <td>{{ grade.test_score }}</td>
+                                <td>{{ grade.exam_score }}</td>
+                                <td>
+                                    <strong>{{ grade.total_score }}</strong>
+                                </td>
+                                <td>
+                                    <span class="grade-badge bg-{% if grade.grade == 'A+' or grade.grade == 'A' %}success{% elif grade.grade == 'B+' or grade.grade == 'B' %}info{% elif grade.grade == 'C+' or grade.grade == 'C' %}warning{% else %}danger{% endif %}">
+                                        {{ grade.grade }}
+                                    </span>
+                                </td>
+                                <td style="width: 120px;">
+                                    <div class="grade-progress">
+                                        <div class="grade-progress-bar bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}warning{% else %}danger{% endif %}" 
+                                             style="width: {{ grade.total_score }}%">
+                                            {{ grade.total_score }}%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-end mt-4">
+                    <a href="{% url 'report_card' student.pk %}" class="btn btn-primary btn-action">
+                        <i class="fas fa-download me-2"></i> View Full Report Card
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-graduation-cap display-4 text-muted mb-3"></i>
+                    <h5 class="text-muted">No recent grades</h5>
+                    <p class="text-muted">Your grades will appear here once available</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-        <div class="alert alert-info">No recent grades found.</div>
-        {% endif %}
+
+        <!-- Quick Actions -->
+        <div class="row mt-4 fade-in" style="animation-delay: 0.6s;">
+            <div class="col-md-4 mb-3">
+                <div class="card content-card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-calendar-check display-4 text-primary mb-3"></i>
+                        <h5>View Timetable</h5>
+                        <p class="text-muted">Check your class schedule</p>
+                        <a href="#" class="btn btn-outline-primary btn-action">View Schedule</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card content-card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-chart-bar display-4 text-success mb-3"></i>
+                        <h5>Performance Analytics</h5>
+                        <p class="text-muted">Track your academic progress</p>
+                        <a href="#" class="btn btn-outline-success btn-action">View Analytics</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card content-card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-cog display-4 text-info mb-3"></i>
+                        <h5>Account Settings</h5>
+                        <p class="text-muted">Manage your profile</p>
+                        <a href="#" class="btn btn-outline-info btn-action">Settings</a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update current date
+    function updateCurrentDate() {
+        const now = new Date();
+        const options = { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        };
+        document.getElementById('current-date').textContent = now.toLocaleDateString('en-US', options);
+    }
+    updateCurrentDate();
+
+    // Countdown timers for assignments
+    function updateCountdowns() {
+        const countdownElements = document.querySelectorAll('.countdown-timer');
+        
+        countdownElements.forEach(element => {
+            const dueDate = parseInt(element.getAttribute('data-due-date')) * 1000;
+            const now = new Date().getTime();
+            const distance = dueDate - now;
+            
+            if (distance < 0) {
+                element.querySelector('.countdown-text').textContent = 'Expired';
+                element.style.background = 'rgba(220, 53, 69, 0.2)';
+                element.style.color = '#dc3545';
+            } else {
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                
+                if (days > 0) {
+                    element.querySelector('.countdown-text').textContent = `${days}d ${hours}h`;
+                } else {
+                    element.querySelector('.countdown-text').textContent = `${hours}h left`;
+                }
+            }
+        });
+    }
+
+    // Initial update and set interval
+    updateCountdowns();
+    setInterval(updateCountdowns, 60000); // Update every minute
+
+    // Animate progress bars
+    const progressBars = document.querySelectorAll('.progress-bar, .grade-progress-bar');
+    progressBars.forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0';
+        setTimeout(() => {
+            bar.style.width = width;
+        }, 500);
+    });
+
+    // Add hover effects to table rows
+    const tableRows = document.querySelectorAll('tbody tr');
+    tableRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.zIndex = '10';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.zIndex = '1';
+        });
+    });
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Auto-refresh dashboard every 5 minutes
+    setInterval(() => {
+        showToast('Info', 'Dashboard refreshed', 'info');
+    }, 300000); // 5 minutes
+});
+
+function showToast(title, message, type = 'info') {
+    // Toast implementation would go here
+    console.log(`${title}: ${message} (${type})`);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        window.location.reload();
+    }
+    if (e.altKey && e.key === 'a') {
+        e.preventDefault();
+        window.location.href = "{% url 'assignment_list' %}";
+    }
+    if (e.altKey && e.key === 'g') {
+        e.preventDefault();
+        window.location.href = "{% url 'report_card' student.pk %}";
+    }
+});
+</script>
 {% endblock %}

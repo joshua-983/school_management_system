@@ -1,178 +1,842 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}{% if object %}Edit{% else %}Add{% endif %} Student{% endblock %}
+{% block title %}{% if object %}Edit{% else %}Add{% endif %} Student - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    }
+
+    .student-form-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+
+    .form-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .form-card:hover {
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-header {
+        background: var(--primary-gradient);
+        color: white;
+        border-radius: 20px 20px 0 0 !important;
+        padding: 1.5rem 2rem;
+        border: none;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control, .form-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.3rem rgba(102, 126, 234, 0.2);
+        transform: translateY(-2px);
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    }
+
+    .invalid-feedback {
+        font-weight: 500;
+        color: #e53e3e;
+        margin-top: 0.5rem;
+    }
+
+    .form-text {
+        color: #718096;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        border-radius: 12px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+        border-radius: 12px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    .avatar-upload {
+        text-align: center;
+        padding: 2rem;
+        border: 2px dashed #e2e8f0;
+        border-radius: 15px;
+        transition: all 0.3s ease;
+        background: #fafafa;
+        cursor: pointer;
+    }
+
+    .avatar-upload:hover {
+        border-color: #667eea;
+        background: #f0f4ff;
+    }
+
+    .avatar-upload.dragover {
+        border-color: #667eea;
+        background: #e8f4ff;
+        transform: scale(1.02);
+    }
+
+    .avatar-preview {
+        width: 200px;
+        height: 200px;
+        border-radius: 15px;
+        object-fit: cover;
+        border: 3px solid #fff;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        transition: all 0.3s ease;
+    }
+
+    .avatar-preview:hover {
+        transform: scale(1.05);
+    }
+
+    .avatar-placeholder {
+        width: 200px;
+        height: 200px;
+        border-radius: 15px;
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 3rem;
+        border: 3px solid #fff;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .password-strength {
+        height: 8px;
+        border-radius: 4px;
+        margin-top: 0.5rem;
+        background: #e2e8f0;
+        overflow: hidden;
+    }
+
+    .password-strength-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+
+    .section-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 2rem 0 1rem;
+        border-left: 4px solid #667eea;
+        font-weight: 600;
+        color: #2d3748;
+    }
+
+    /* Animation classes */
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-in {
+        animation: slideIn 0.8s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .student-form-container {
+            padding: 1rem;
+        }
+        
+        .form-card {
+            border-radius: 15px;
+        }
+        
+        .card-header {
+            padding: 1rem;
+        }
+        
+        .avatar-preview, .avatar-placeholder {
+            width: 150px;
+            height: 150px;
+        }
+        
+        .avatar-upload {
+            padding: 1rem;
+        }
+    }
+
+    /* Step indicator */
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+        gap: 1rem;
+    }
+
+    .step {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: #718096;
+        transition: all 0.3s ease;
+    }
+
+    .step.active {
+        background: var(--primary-gradient);
+        color: white;
+        transform: scale(1.1);
+    }
+
+    .step.completed {
+        background: var(--success-gradient);
+        color: white;
+    }
+
+    .form-step {
+        display: none;
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    .form-step.active {
+        display: block;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h4>{% if object %}Edit{% else %}Register{% endif %} Student</h4>
-    </div>
-    <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <div class="text-center mb-3">
-                        {% if object and object.profile_picture %}
-                            <img src="{{ object.profile_picture.url }}" class="img-thumbnail" style="max-width: 200px;">
-                        {% else %}
-                            <div class="bg-light d-flex align-items-center justify-content-center" style="width: 200px; height: 200px;">
-                                <span class="text-muted">No image</span>
-                            </div>
-                        {% endif %}
+<div class="student-form-container">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <!-- Step Indicator -->
+                <div class="step-indicator slide-in">
+                    <div class="step-group">
+                        <div class="step active" data-step="1">1</div>
+                        <div class="step-label">Personal Info</div>
                     </div>
-                    {{ form.profile_picture }}
+                    <div class="step-group">
+                        <div class="step" data-step="2">2</div>
+                        <div class="step-label">Academic Info</div>
+                    </div>
+                    <div class="step-group">
+                        <div class="step" data-step="3">3</div>
+                        <div class="step-label">Additional Info</div>
+                    </div>
+                    {% if not object %}
+                    <div class="step-group">
+                        <div class="step" data-step="4">4</div>
+                        <div class="step-label">Account Setup</div>
+                    </div>
+                    {% endif %}
                 </div>
-                <div class="col-md-8">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
-                                {{ form.first_name }}
-                                {% if form.first_name.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.first_name.errors.as_text }}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.middle_name.id_for_label }}" class="form-label">Middle Name</label>
-                                {{ form.middle_name }}
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
-                                {{ form.last_name }}
-                                {% if form.last_name.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.last_name.errors.as_text }}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
+
+                <!-- Form Card -->
+                <div class="card form-card slide-in">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-user-graduate me-2"></i>
+                            {% if object %}Edit{% else %}Register{% endif %} Student
+                        </h4>
                     </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.student_id.id_for_label }}" class="form-label">Student ID</label>
-                                {{ form.student_id }}
-                                {% if form.student_id.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.student_id.errors.as_text }}
-                                    </div>
-                                {% endif %}
+                    <div class="card-body">
+                        <form method="post" enctype="multipart/form-data" id="studentForm" novalidate>
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger fade-in">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor %}
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.date_of_birth.id_for_label }}" class="form-label">Date of Birth</label>
-                                {{ form.date_of_birth }}
-                                {% if form.date_of_birth.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.date_of_birth.errors.as_text }}
+                            {% endif %}
+
+                            <!-- Step 1: Personal Information -->
+                            <div class="form-step active" id="step1">
+                                <h5 class="section-header">
+                                    <i class="fas fa-user me-2 text-primary"></i>Personal Information
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <!-- Avatar Upload -->
+                                        <div class="avatar-upload mb-4" id="avatarUploadArea">
+                                            {% if object and object.profile_picture %}
+                                                <img src="{{ object.profile_picture.url }}" class="avatar-preview mb-3" id="avatarPreview">
+                                            {% else %}
+                                                <div class="avatar-placeholder mb-3">
+                                                    <i class="fas fa-user"></i>
+                                                </div>
+                                            {% endif %}
+                                            {{ form.profile_picture }}
+                                            <button type="button" class="btn btn-outline-primary mt-2" onclick="document.getElementById('id_profile_picture').click()">
+                                                <i class="fas fa-upload me-2"></i>Choose Image
+                                            </button>
+                                            <div class="form-text">Max file size: 5MB</div>
+                                        </div>
                                     </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.gender.id_for_label }}" class="form-label">Gender</label>
-                                <select name="{{ form.gender.name }}" id="{{ form.gender.id_for_label }}" class="form-select">
-                                    <option value="">Select Gender</option>
-                                    <option value="M" {% if form.gender.value == 'M' %}selected{% endif %}>Male</option>
-                                    <option value="F" {% if form.gender.value == 'F' %}selected{% endif %}>Female</option>
-                                </select>
-                                {% if form.gender.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.gender.errors.as_text }}
+                                    <div class="col-md-8">
+                                        <div class="row">
+                                            <div class="col-md-4 fade-in" style="animation-delay: 0.1s;">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                                                        First Name <span class="text-danger">*</span>
+                                                    </label>
+                                                    {{ form.first_name }}
+                                                    {% if form.first_name.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.first_name.errors.as_text }}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 fade-in" style="animation-delay: 0.2s;">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.middle_name.id_for_label }}" class="form-label">Middle Name</label>
+                                                    {{ form.middle_name }}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4 fade-in" style="animation-delay: 0.3s;">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                                                        Last Name <span class="text-danger">*</span>
+                                                    </label>
+                                                    {{ form.last_name }}
+                                                    {% if form.last_name.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.last_name.errors.as_text }}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6 fade-in" style="animation-delay: 0.4s;">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.student_id.id_for_label }}" class="form-label">
+                                                        Student ID <span class="text-danger">*</span>
+                                                    </label>
+                                                    {{ form.student_id }}
+                                                    {% if form.student_id.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.student_id.errors.as_text }}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6 fade-in" style="animation-delay: 0.5s;">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.date_of_birth.id_for_label }}" class="form-label">
+                                                        Date of Birth <span class="text-danger">*</span>
+                                                    </label>
+                                                    {{ form.date_of_birth }}
+                                                    {% if form.date_of_birth.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.date_of_birth.errors.as_text }}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                {% endif %}
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <div></div>
+                                    <button type="button" class="btn btn-primary next-step" data-next="2">
+                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.class_level.id_for_label }}" class="form-label">Class Level</label>
-                                {{ form.class_level }}
-                                {% if form.class_level.errors %}
-                                    <div class="invalid-feedback d-block">
-                                        {{ form.class_level.errors.as_text }}
+
+                            <!-- Step 2: Academic Information -->
+                            <div class="form-step" id="step2">
+                                <h5 class="section-header">
+                                    <i class="fas fa-graduation-cap me-2 text-info"></i>Academic Information
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.gender.id_for_label }}" class="form-label">
+                                                Gender <span class="text-danger">*</span>
+                                            </label>
+                                            <select name="{{ form.gender.name }}" id="{{ form.gender.id_for_label }}" class="form-select">
+                                                <option value="">Select Gender</option>
+                                                <option value="M" {% if form.gender.value == 'M' %}selected{% endif %}>Male</option>
+                                                <option value="F" {% if form.gender.value == 'F' %}selected{% endif %}>Female</option>
+                                            </select>
+                                            {% if form.gender.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.gender.errors.as_text }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
-                                {% endif %}
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.class_level.id_for_label }}" class="form-label">
+                                                Class Level <span class="text-danger">*</span>
+                                            </label>
+                                            {{ form.class_level }}
+                                            {% if form.class_level.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.class_level.errors.as_text }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary prev-step" data-prev="1">
+                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                    </button>
+                                    <button type="button" class="btn btn-primary next-step" data-next="3">
+                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+
+                            <!-- Step 3: Additional Information -->
+                            <div class="form-step" id="step3">
+                                <h5 class="section-header">
+                                    <i class="fas fa-info-circle me-2 text-warning"></i>Additional Information
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.nationality.id_for_label }}" class="form-label">Nationality</label>
+                                            {{ form.nationality }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.ethnicity.id_for_label }}" class="form-label">Ethnicity</label>
+                                            {{ form.ethnicity }}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.religion.id_for_label }}" class="form-label">Religion</label>
+                                            {{ form.religion }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="{{ form.place_of_birth.id_for_label }}" class="form-label">Place of Birth</label>
+                                            {{ form.place_of_birth }}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="fade-in">
+                                    <div class="mb-3">
+                                        <label for="{{ form.residential_address.id_for_label }}" class="form-label">Residential Address</label>
+                                        {{ form.residential_address }}
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary prev-step" data-prev="2">
+                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                    </button>
+                                    {% if not object %}
+                                    <button type="button" class="btn btn-primary next-step" data-next="4">
+                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                    </button>
+                                    {% else %}
+                                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                                        <i class="fas fa-save me-2"></i> Update Student
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Step 4: Account Setup (Only for new students) -->
+                            {% if not object %}
+                            <div class="form-step" id="step4">
+                                <h5 class="section-header">
+                                    <i class="fas fa-lock me-2 text-success"></i>Account Setup
+                                </h5>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="id_password1" class="form-label">
+                                                Password <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="password" name="password1" class="form-control" id="id_password1" required>
+                                            <div class="password-strength mt-2">
+                                                <div class="password-strength-bar" id="passwordStrengthBar"></div>
+                                            </div>
+                                            <div class="form-text" id="passwordStrengthText">Password strength</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 fade-in">
+                                        <div class="mb-3">
+                                            <label for="id_password2" class="form-label">
+                                                Confirm Password <span class="text-danger">*</span>
+                                            </label>
+                                            <input type="password" name="password2" class="form-control" id="id_password2" required>
+                                            <div class="form-text" id="passwordMatchText"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-between mt-4">
+                                    <button type="button" class="btn btn-outline-secondary prev-step" data-prev="3">
+                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                    </button>
+                                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                                        <i class="fas fa-user-plus me-2"></i> Create Student
+                                    </button>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </form>
                     </div>
                 </div>
             </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="{{ form.nationality.id_for_label }}" class="form-label">Nationality</label>
-                        {{ form.nationality }}
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="{{ form.ethnicity.id_for_label }}" class="form-label">Ethnicity</label>
-                        {{ form.ethnicity }}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="{{ form.religion.id_for_label }}" class="form-label">Religion</label>
-                        {{ form.religion }}
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="{{ form.place_of_birth.id_for_label }}" class="form-label">Place of Birth</label>
-                        {{ form.place_of_birth }}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="mb-3">
-                <label for="{{ form.residential_address.id_for_label }}" class="form-label">Residential Address</label>
-                {{ form.residential_address }}
-            </div>
-            
-            {% if not object %}
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="id_password1" class="form-label">Password</label>
-                        <input type="password" name="password1" class="form-control" id="id_password1" required>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label for="id_password2" class="form-label">Confirm Password</label>
-                        <input type="password" name="password2" class="form-control" id="id_password2" required>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-            
-            <div class="d-flex justify-content-between">
-                <a href="{% if object %}{% url 'student_detail' object.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-secondary">
-                    Cancel
-                </a>
-                <button type="submit" class="btn btn-primary">
-                    {% if object %}Update{% else %}Create{% endif %} Student
-                </button>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date picker
+    const dobField = document.getElementById('id_date_of_birth');
+    if (dobField) {
+        flatpickr(dobField, {
+            dateFormat: "Y-m-d",
+            maxDate: "today",
+            placeholder: "Select date of birth"
+        });
+    }
+
+    // Multi-step form functionality
+    const steps = document.querySelectorAll('.form-step');
+    const stepButtons = document.querySelectorAll('.step');
+    let currentStep = 1;
+
+    function showStep(stepNumber) {
+        steps.forEach(step => step.classList.remove('active'));
+        stepButtons.forEach(btn => {
+            btn.classList.remove('active', 'completed');
+            if (parseInt(btn.dataset.step) < stepNumber) {
+                btn.classList.add('completed');
+            } else if (parseInt(btn.dataset.step) === stepNumber) {
+                btn.classList.add('active');
+            }
+        });
+        
+        document.getElementById(`step${stepNumber}`).classList.add('active');
+        currentStep = stepNumber;
+    }
+
+    // Next/Previous button handlers
+    document.querySelectorAll('.next-step').forEach(button => {
+        button.addEventListener('click', function() {
+            const nextStep = parseInt(this.dataset.next);
+            if (validateStep(currentStep)) {
+                showStep(nextStep);
+                scrollToTop();
+            }
+        });
+    });
+
+    document.querySelectorAll('.prev-step').forEach(button => {
+        button.addEventListener('click', function() {
+            const prevStep = parseInt(this.dataset.prev);
+            showStep(prevStep);
+            scrollToTop();
+        });
+    });
+
+    function validateStep(step) {
+        let isValid = true;
+        const currentStepElement = document.getElementById(`step${step}`);
+        const requiredFields = currentStepElement.querySelectorAll('[required]');
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+                
+                if (!field.nextElementSibling.classList.contains('invalid-feedback')) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'invalid-feedback';
+                    errorDiv.textContent = 'This field is required';
+                    field.parentNode.appendChild(errorDiv);
+                }
+            } else {
+                field.classList.remove('is-invalid');
+                const errorDiv = field.parentNode.querySelector('.invalid-feedback');
+                if (errorDiv) errorDiv.remove();
+            }
+        });
+
+        if (!isValid) {
+            const firstError = currentStepElement.querySelector('.is-invalid');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            currentStepElement.style.animation = 'shake 0.5s ease-in-out';
+            setTimeout(() => {
+                currentStepElement.style.animation = '';
+            }, 500);
+        }
+
+        return isValid;
+    }
+
+    function scrollToTop() {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Avatar upload functionality
+    const avatarUploadArea = document.getElementById('avatarUploadArea');
+    const avatarInput = document.getElementById('id_profile_picture');
+    const avatarPreview = document.getElementById('avatarPreview');
+
+    if (avatarUploadArea && avatarInput) {
+        setupFileUpload(avatarUploadArea, avatarInput);
+    }
+
+    function setupFileUpload(dropArea, input) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('dragover');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('dragover');
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            input.files = files;
+            updateAvatarPreview(files[0]);
+        }
+
+        input.addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                updateAvatarPreview(this.files[0]);
+            }
+        });
+    }
+
+    function updateAvatarPreview(file) {
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Error', 'File size must be less than 5MB', 'error');
+                avatarInput.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (avatarPreview) {
+                    avatarPreview.src = e.target.result;
+                } else {
+                    const placeholder = document.querySelector('.avatar-placeholder');
+                    if (placeholder) {
+                        placeholder.innerHTML = `<img src="${e.target.result}" class="avatar-preview">`;
+                    }
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    // Password strength checker
+    const password1 = document.getElementById('id_password1');
+    const password2 = document.getElementById('id_password2');
+    const strengthBar = document.getElementById('passwordStrengthBar');
+    const strengthText = document.getElementById('passwordStrengthText');
+    const matchText = document.getElementById('passwordMatchText');
+
+    if (password1 && password2) {
+        password1.addEventListener('input', checkPasswordStrength);
+        password2.addEventListener('input', checkPasswordMatch);
+    }
+
+    function checkPasswordStrength() {
+        const password = this.value;
+        let strength = 0;
+        let messages = [];
+
+        if (password.length >= 8) strength += 1;
+        if (password.match(/[a-z]/)) strength += 1;
+        if (password.match(/[A-Z]/)) strength += 1;
+        if (password.match(/[0-9]/)) strength += 1;
+        if (password.match(/[^a-zA-Z0-9]/)) strength += 1;
+
+        let color, width, text;
+        switch(strength) {
+            case 0:
+            case 1:
+                color = '#dc3545'; width = '20%'; text = 'Very Weak';
+                break;
+            case 2:
+                color = '#fd7e14'; width = '40%'; text = 'Weak';
+                break;
+            case 3:
+                color = '#ffc107'; width = '60%'; text = 'Medium';
+                break;
+            case 4:
+                color = '#20c997'; width = '80%'; text = 'Strong';
+                break;
+            case 5:
+                color = '#198754'; width = '100%'; text = 'Very Strong';
+                break;
+        }
+
+        strengthBar.style.width = width;
+        strengthBar.style.background = color;
+        strengthText.textContent = `Password strength: ${text}`;
+        strengthText.style.color = color;
+    }
+
+    function checkPasswordMatch() {
+        const password1Val = password1.value;
+        const password2Val = this.value;
+
+        if (!password2Val) {
+            matchText.textContent = '';
+            return;
+        }
+
+        if (password1Val === password2Val) {
+            matchText.textContent = 'Passwords match!';
+            matchText.style.color = '#198754';
+        } else {
+            matchText.textContent = 'Passwords do not match';
+            matchText.style.color = '#dc3545';
+        }
+    }
+
+    // Form submission handler
+    const form = document.getElementById('studentForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (form && submitBtn) {
+        form.addEventListener('submit', function(e) {
+            if (!validateStep(currentStep)) {
+                e.preventDefault();
+                showStep(currentStep);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Processing...
+            `;
+        });
+    }
+
+    // Add shake animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+    `;
+    document.head.appendChild(style);
+});
+
+function showToast(title, message, type = 'info') {
+    // Toast implementation would go here
+    console.log(`${title}: ${message} (${type})`);
+}
+</script>
 {% endblock %}

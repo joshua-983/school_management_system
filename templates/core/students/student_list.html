@@ -1,121 +1,652 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Student List{% endblock %}
+{% block title %}Student Management - School System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    }
+
+    .student-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+
+    .header-card {
+        background: var(--primary-gradient);
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        color: white;
+        margin-bottom: 2rem;
+    }
+
+    .content-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .content-card:hover {
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    .table-responsive {
+        border-radius: 15px;
+        overflow: hidden;
+    }
+
+    .table {
+        margin-bottom: 0;
+    }
+
+    .table th {
+        background: var(--primary-gradient);
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+    }
+
+    .table td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+    }
+
+    .table tr {
+        transition: all 0.3s ease;
+    }
+
+    .table tr:hover {
+        background-color: #f8f9fa;
+        transform: translateX(4px);
+    }
+
+    .student-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+
+    .student-avatar:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 1.2rem;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .badge-class {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .badge-gender {
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .badge-male {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+    }
+
+    .badge-female {
+        background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);
+        color: white;
+    }
+
+    .badge-other {
+        background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+        color: white;
+    }
+
+    .action-buttons .btn {
+        border-radius: 10px;
+        padding: 0.5rem;
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+
+    .action-buttons .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .filter-section {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .form-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.3rem rgba(102, 126, 234, 0.2);
+    }
+
+    .stats-card {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .stats-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 0.5rem;
+    }
+
+    .stats-label {
+        font-size: 0.9rem;
+        color: #718096;
+        font-weight: 600;
+    }
+
+    .pagination {
+        margin-top: 2rem;
+    }
+
+    .page-link {
+        border-radius: 10px;
+        margin: 0 0.2rem;
+        border: none;
+        color: #4361ee;
+        font-weight: 500;
+        padding: 0.75rem 1rem;
+    }
+
+    .page-item.active .page-link {
+        background: var(--primary-gradient);
+        border: none;
+    }
+
+    .search-box {
+        position: relative;
+    }
+
+    .search-box input {
+        border-radius: 25px;
+        padding-left: 3rem;
+        border: 2px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+    .search-box input:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 1.2rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+    }
+
+    /* Animation classes */
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-in {
+        animation: slideIn 0.8s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .student-container {
+            padding: 1rem;
+        }
+        
+        .header-card, .content-card {
+            border-radius: 12px;
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .stats-card {
+            margin-bottom: 1rem;
+        }
+    }
+
+    /* Custom scrollbar for table */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--primary-gradient);
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Student List</h5>
-        <div>
-            <a href="{% url 'student_add' %}" class="btn btn-primary btn-sm">
-                <i class="bi bi-plus"></i> Add Student
-            </a>
-        </div>
-    </div>
-    <div class="card-body">
-        <form method="get" class="mb-4">
-            <div class="row">
-                <div class="col-md-4">
-                    <select name="class_level" class="form-select">
-                        <option value="">All Classes</option>
-                        {% for value, display in class_levels %}
-                            <option value="{{ value }}" {% if request.GET.class_level == value %}selected{% endif %}>
-                                {{ display }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary">Filter</button>
-                    <a href="{% url 'student_list' %}" class="btn btn-secondary">Reset</a>
+<div class="student-container">
+    <div class="container">
+        <!-- Header Section -->
+        <div class="card header-card slide-in">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="h3 mb-2 fw-bold">
+                            <i class="fas fa-user-graduate me-3"></i>
+                            Student Management
+                        </h1>
+                        <p class="mb-0 opacity-85">Manage all student records and information</p>
+                    </div>
+                    <a href="{% url 'student_add' %}" class="btn btn-light">
+                        <i class="fas fa-plus me-2"></i> Add New Student
+                    </a>
                 </div>
             </div>
-        </form>
-
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>Photo</th>
-                        <th>Student ID</th>
-                        <th>Name</th>
-                        <th>Class</th>
-                        <th>Gender</th>
-                        <th>Age</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for student in students %}
-                    <tr>
-                        <td>
-                            {% if student.profile_picture %}
-                                <img src="{{ student.profile_picture.url }}" alt="{{ student.get_full_name }}" 
-                                     class="rounded-circle" width="40" height="40">
-                            {% else %}
-                                <div class="bg-light rounded-circle d-flex align-items-center justify-content-center" 
-                                     style="width: 40px; height: 40px;">
-                                    <i class="bi bi-person text-muted"></i>
-                                </div>
-                            {% endif %}
-                        </td>
-                        <td>{{ student.student_id }}</td>
-                        <td>{{ student.get_full_name }}</td>
-                        <td>{{ student.get_class_level_display }}</td>
-                        <td>{{ student.get_gender_display }}</td>
-                        <td>{{ student.get_age }}</td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'student_detail' student.pk %}" class="btn btn-info" title="View">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <a href="{% url 'student_update' student.pk %}" class="btn btn-warning btn-sm">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{% url 'student_delete' student.pk %}" class="btn btn-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center">No students found</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
-        
-        {% if is_paginated %}
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1">&laquo; First</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-                    </li>
-                {% endif %}
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4 fade-in" style="animation-delay: 0.1s;">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-primary">{{ total_students }}</div>
+                    <div class="stats-label">Total Students</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-success">{{ male_count }}</div>
+                    <div class="stats-label">Male Students</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-info">{{ female_count }}</div>
+                    <div class="stats-label">Female Students</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="stats-card">
+                    <div class="stats-number text-warning">{{ class_count }}</div>
+                    <div class="stats-label">Active Classes</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter and Search Section -->
+        <div class="card filter-section fade-in" style="animation-delay: 0.2s;">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6 class="mb-3"><i class="fas fa-filter me-2 text-primary"></i>Filter Students</h6>
+                        <form method="get" class="row g-3">
+                            <div class="col-md-8">
+                                <select name="class_level" class="form-select" id="classFilter">
+                                    <option value="">All Classes</option>
+                                    {% for value, display in class_levels %}
+                                        <option value="{{ value }}" {% if request.GET.class_level == value %}selected{% endif %}>
+                                            {{ display }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-filter me-2"></i> Filter
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3"><i class="fas fa-search me-2 text-primary"></i>Search Students</h6>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" class="form-control" placeholder="Search by name or ID..." id="searchInput">
+                        </div>
+                    </div>
+                </div>
+                <div class="text-end mt-3">
+                    <a href="{% url 'student_list' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-sync-alt me-2"></i>Reset Filters
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Students Table -->
+        <div class="card content-card fade-in" style="animation-delay: 0.3s;">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2 text-primary"></i>
+                    Student List
+                    <span class="badge bg-primary ms-2">{{ students|length }} students</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="studentsTable">
+                        <thead>
+                            <tr>
+                                <th>Photo</th>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Class</th>
+                                <th>Gender</th>
+                                <th>Age</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:4 }}0.1s">
+                                <td>
+                                    {% if student.profile_picture %}
+                                        <img src="{{ student.profile_picture.url }}" alt="{{ student.get_full_name }}" 
+                                             class="student-avatar">
+                                    {% else %}
+                                        <div class="avatar-placeholder">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ student.student_id }}</strong>
+                                </td>
+                                <td>
+                                    <div>
+                                        <strong class="d-block">{{ student.get_full_name }}</strong>
+                                        <small class="text-muted">{{ student.email|default:"No email" }}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge badge-class">{{ student.get_class_level_display }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-gender badge-{{ student.gender|lower }}">
+                                        {{ student.get_gender_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>{{ student.get_age }}</strong> years
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if student.is_active %}success{% else %}secondary{% endif %}">
+                                        {% if student.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'student_detail' student.pk %}" class="btn btn-info" 
+                                           title="View Details" data-bs-toggle="tooltip">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{% url 'student_update' student.pk %}" class="btn btn-warning"
+                                           title="Edit Student" data-bs-toggle="tooltip">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{% url 'student_delete' student.pk %}" class="btn btn-danger"
+                                           title="Delete Student" data-bs-toggle="tooltip">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-5">
+                                    <i class="fas fa-user-slash display-4 text-muted mb-3"></i>
+                                    <h5 class="text-muted">No students found</h5>
+                                    <p class="text-muted">Try adjusting your filters or add a new student</p>
+                                    <a href="{% url 'student_add' %}" class="btn btn-primary mt-2">
+                                        <i class="fas fa-plus me-2"></i> Add First Student
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 
-                <li class="page-item active">
-                    <span class="page-link">
-                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-                
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
-                    </li>
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </li>
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
                 {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const studentsTable = document.getElementById('studentsTable');
+    
+    if (searchInput && studentsTable) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const rows = studentsTable.querySelectorAll('tbody tr');
+            
+            rows.forEach(row => {
+                const studentId = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const studentName = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                const studentClass = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
+                
+                if (studentId.includes(searchTerm) || studentName.includes(searchTerm) || studentClass.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Auto-submit filter form when selection changes
+    const classFilter = document.getElementById('classFilter');
+    if (classFilter) {
+        classFilter.addEventListener('change', function() {
+            this.form.submit();
+        });
+    }
+
+    // Add smooth scrolling to top when pagination is clicked
+    const paginationLinks = document.querySelectorAll('.pagination a');
+    paginationLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const href = this.href;
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+            setTimeout(() => {
+                window.location.href = href;
+            }, 500);
+        });
+    });
+
+    // Add animation to table rows on hover
+    const tableRows = document.querySelectorAll('#studentsTable tbody tr');
+    tableRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateX(8px)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateX(0)';
+        });
+    });
+
+    // Export functionality (placeholder)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'e') {
+            e.preventDefault();
+            showToast('Info', 'Export functionality would be implemented here', 'info');
+        }
+    });
+
+    // Quick actions with keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.altKey && e.key === 'n') {
+            e.preventDefault();
+            window.location.href = "{% url 'student_add' %}";
+        }
+    });
+});
+
+function showToast(title, message, type = 'info') {
+    // Toast implementation would go here
+    console.log(`${title}: ${message} (${type})`);
+}
+
+// Function to export table data (placeholder)
+function exportTableToCSV() {
+    showToast('Info', 'CSV export functionality would be implemented here', 'info');
+}
+
+// Function to print table (placeholder)
+function printTable() {
+    showToast('Info', 'Print functionality would be implemented here', 'info');
+}
+</script>
 {% endblock %}

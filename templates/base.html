@@ -220,14 +220,14 @@
                    href="{% if user.is_superuser %}{% url 'admin_dashboard' %}
                    {% elif user.teacher %}{% url 'teacher_dashboard' %}
                    {% elif user.student %}{% url 'student_dashboard' %}
-                   {% elif user.parentguardian %}{% url 'parent_dashboard' %}
+                   {% elif is_parent %}{% url 'parent_dashboard' %}
                    {% endif %}">
                     <i class="bi bi-speedometer2"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
             
-            <!-- Academics Section - FIXED TO SHOW ALL MODULES -->
+            <!-- Academics Section -->
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="collapse" href="#academicsMenu">
                     <i class="bi bi-journal-bookmark"></i>
@@ -236,7 +236,7 @@
                 </a>
                 <div class="sub-menu collapse" id="academicsMenu">
                     <!-- Assignments - Show to students, parents, teachers and admin -->
-                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
+                    {% if user.student or is_parent or user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'assignment_list' %}">
                         <i class="bi bi-journal-text"></i>
                         <span>Assignments</span>
@@ -244,7 +244,7 @@
                     {% endif %}
                     
                     <!-- Attendance - Show to admin, teachers, and parents -->
-                    {% if user.is_superuser or user.teacher or user.parentguardian %}
+                    {% if user.is_superuser or user.teacher or is_parent %}
                     <a class="nav-link" href="{% url 'attendance_dashboard' %}">
                         <i class="bi bi-calendar-event"></i>
                         <span>Attendance</span>
@@ -260,7 +260,7 @@
                     {% endif %}
                     
                     <!-- Grades - Show to students, parents, teachers and admin -->
-                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
+                    {% if user.student or is_parent or user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'grade_list' %}">
                         <i class="bi bi-clipboard-data"></i>
                         <span>Grades</span>
@@ -273,7 +273,7 @@
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Card</span>
                     </a>
-                    {% elif user.parentguardian %}
+                    {% elif is_parent %}
                     <a class="nav-link" href="{% url 'parent_report_card_list' %}">
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Cards</span>
@@ -294,36 +294,37 @@
                     {% endif %}
                 </div>
             </li>
-            <!-- Add to Academics menu -->
-<li class="nav-item">
-    <a class="nav-link" data-bs-toggle="collapse" href="#timetableMenu">
-        <i class="bi bi-calendar-week"></i>
-        <span>Timetable</span>
-        <i class="bi bi-chevron-down float-end"></i>
-    </a>
-    <div class="sub-menu collapse" id="timetableMenu">
-        {% if is_admin or is_teacher %}
-        <a class="nav-link" href="{% url 'timetable_list' %}">
-            <i class="bi bi-gear"></i>
-            <span>Manage Timetables</span>
-        </a>
-        {% endif %}
-        {% if is_teacher %}
-        <a class="nav-link" href="{% url 'teacher_timetable' %}">
-            <i class="bi bi-person"></i>
-            <span>My Schedule</span>
-        </a>
-        {% endif %}
-        {% if is_student %}
-        <a class="nav-link" href="{% url 'student_timetable' %}">
-            <i class="bi bi-calendar"></i>
-            <span>Class Timetable</span>
-        </a>
-        {% endif %}
-    </div>
-</li>
 
-    <!-- HR Management (Admin Only) -->
+            <!-- Timetable Menu -->
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#timetableMenu">
+                    <i class="bi bi-calendar-week"></i>
+                    <span>Timetable</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="timetableMenu">
+                    {% if is_admin or is_teacher %}
+                    <a class="nav-link" href="{% url 'timetable_list' %}">
+                        <i class="bi bi-gear"></i>
+                        <span>Manage Timetables</span>
+                    </a>
+                    {% endif %}
+                    {% if is_teacher %}
+                    <a class="nav-link" href="{% url 'teacher_timetable' %}">
+                        <i class="bi bi-person"></i>
+                        <span>My Schedule</span>
+                    </a>
+                    {% endif %}
+                    {% if is_student %}
+                    <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <i class="bi bi-calendar"></i>
+                        <span>Class Timetable</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </li>
+
+            <!-- HR Management (Admin Only) -->
             {% if user.is_superuser %}
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="collapse" href="#hrMenu">
@@ -345,7 +346,7 @@
             {% endif %}
             
             <!-- Finance -->
-            {% if user.is_superuser or user.parentguardian %}
+            {% if user.is_superuser or is_parent %}
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
                     <i class="bi bi-cash-stack"></i>
@@ -362,7 +363,7 @@
                         <i class="bi bi-graph-up"></i>
                         <span>Reports</span>
                     </a>
-                    {% elif user.parentguardian %}
+                    {% elif is_parent %}
                     <a class="nav-link" href="{% url 'parent_fee_list' %}">
                         <i class="bi bi-credit-card"></i>
                         <span>Fee Payments</span>
@@ -372,22 +373,34 @@
             </li>
             {% endif %}
             
-            <!-- Parent Specific Menu -->
-            {% if user.parentguardian %}
+            <!-- Parent Portal (For Parent Users) -->
+            {% if is_parent %}
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="collapse" href="#parentMenu">
                     <i class="bi bi-people-fill"></i>
-                    <span>My Children</span>
+                    <span>Parent Portal</span>
                     <i class="bi bi-chevron-down float-end"></i>
                 </a>
                 <div class="sub-menu collapse" id="parentMenu">
+                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
+                        <i class="bi bi-speedometer"></i>
+                        <span>Dashboard</span>
+                    </a>
                     <a class="nav-link" href="{% url 'parent_children_list' %}">
                         <i class="bi bi-list-ul"></i>
-                        <span>View All</span>
+                        <span>My Children</span>
                     </a>
                     <a class="nav-link" href="{% url 'parent_attendance_list' %}">
                         <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                        <i class="bi bi-card-checklist"></i>
+                        <span>Report Cards</span>
                     </a>
                 </div>
             </li>
@@ -457,7 +470,7 @@
                             <i class="bi bi-person-circle me-1"></i>
                             {% if user.teacher %}{{ user.teacher.get_full_name }}
                             {% elif user.student %}{{ user.student.get_full_name }}
-                            {% elif user.parentguardian %}{{ user.parentguardian.get_full_name }}
+                            {% elif is_parent %}{{ user_parentguardian.full_name }}
                             {% else %}{{ user.username }}
                             {% endif %}
                         </a>
@@ -532,7 +545,7 @@
                     <ul class="list-unstyled">
                         <li><a href="{% url 'home' %}" class="text-white">Home</a></li>
                         {% if user.is_authenticated %}
-                        <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
+                        <li><a href="{% if is_parent %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
                         <li><a href="{% url 'grade_list' %}" class="text-white">Grades</a></li>
                         {% endif %}
                     </ul>

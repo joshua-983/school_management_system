@@ -14,6 +14,12 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils.safestring import mark_safe
+from django.apps import apps  # Add this import at the top
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
 
 
 User = get_user_model()
@@ -66,6 +72,23 @@ class Student(models.Model):
     def __str__(self):
         return f"{self.get_full_name()} ({self.student_id}) - {self.get_class_level_display()}"
     
+    def get_parents(self):
+        """Get all parents/guardians for this student"""
+        return self.parents.all()
+    
+    def get_emergency_contacts(self):
+        """Get all emergency contacts ordered by priority"""
+        return self.parents.filter(is_emergency_contact=True).order_by('emergency_contact_priority')
+    
+    def get_current_fees(self, academic_year=None, term=None):
+        """Get current fees for the student"""
+        if not academic_year:
+            academic_year = f"{timezone.now().year}/{timezone.now().year + 1}"
+        fees = self.fees.filter(academic_year=academic_year)
+        if term:
+            fees = fees.filter(term=term)
+        return fees
+    
     def get_full_name(self):
         return f"{self.first_name} {self.middle_name} {self.last_name}".strip()
     
@@ -97,6 +120,7 @@ class Student(models.Model):
             
         super().save(*args, **kwargs)   
 
+
 class ParentGuardian(models.Model):
     RELATIONSHIP_CHOICES = [
         ('F', 'Father'),
@@ -107,7 +131,8 @@ class ParentGuardian(models.Model):
         ('G', 'Guardian'),
     ]
     
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parents')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='parentguardian', null=True, blank=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parents')  # Only keep this one
     full_name = models.CharField(max_length=200)
     occupation = models.CharField(max_length=100, blank=True)
     relationship = models.CharField(max_length=1, choices=RELATIONSHIP_CHOICES)
@@ -120,9 +145,54 @@ class ParentGuardian(models.Model):
     class Meta:
         ordering = ['student', 'emergency_contact_priority']
         verbose_name_plural = "Parents/Guardians"
-    
+        # Prevent duplicate emergency contact priorities for same student
+        unique_together = ['student', 'emergency_contact_priority']
+        
+        
     def __str__(self):
-        return f"{self.full_name} ({self.get_relationship_display()}) of {self.student}"
+        return f"{self.full_name} ({self.get_relationship_display()}) - {self.student.get_full_name()}"
+    
+    def clean(self):
+        """Validate that email is unique per student"""
+        if self.email:
+            existing = ParentGuardian.objects.filter(
+                student=self.student, 
+                email=self.email
+            ).exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError({'email': 'This email is already registered for this student'})
+
+@receiver(post_save, sender=ParentGuardian)
+def create_parent_user(sender, instance, created, **kwargs):
+    """Automatically create a user account for parents with email"""
+    if created and instance.email and not instance.user:
+        try:
+            # Check if user already exists with this email
+            user = User.objects.filter(email=instance.email).first()
+            if not user:
+                # Create new user - handle potential username conflicts
+                base_username = instance.email.split('@')[0]
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                user = User.objects.create_user(
+                    username=username,
+                    email=instance.email,
+                    password=User.objects.make_random_password(),
+                    first_name=instance.full_name.split()[0],
+                    last_name=' '.join(instance.full_name.split()[1:]) if len(instance.full_name.split()) > 1 else ""
+                )
+            instance.user = user
+            instance.save(update_fields=['user'])  # Only update user field to avoid recursion
+        except Exception as e:
+            # Use logging instead of print for production
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating user for parent {instance.email}: {e}")
+
 
 class Subject(models.Model):
     name = models.CharField(max_length=100)
@@ -1219,4 +1289,11 @@ class TimetableEntry(models.Model):
 
 
 
+
+
+def get_unread_count(user):
+    """
+    Get count of unread notifications for a user
+    """
+    return Notification.objects.filter(recipient=user, is_read=False).count()
 

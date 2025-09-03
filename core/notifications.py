@@ -1,3 +1,4 @@
+# core/notifications.py (keep only these)
 from django.contrib.auth.models import User
 from .models import Notification
 
@@ -6,7 +7,7 @@ def create_notification(recipient, title, message, notification_type='info', lin
     Create a new notification for a user
     """
     return Notification.objects.create(
-        recipient=recipient,  # Changed from user to recipient for consistency
+        recipient=recipient,
         title=title,
         message=message,
         notification_type=notification_type,
@@ -18,3 +19,9 @@ def get_unread_count(user):
     Get count of unread notifications for a user
     """
     return Notification.objects.filter(recipient=user, is_read=False).count()
+
+def get_user_notifications(user, limit=20):
+    """
+    Get recent notifications for a user
+    """
+    return Notification.objects.filter(recipient=user).order_by('-created_at')[:limit]

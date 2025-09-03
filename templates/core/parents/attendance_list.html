@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Attendance Records{% endblock %}
+
+{% block extra_css %}
+<style>
+.attendance-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.filter-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card {
+    transition: transform 0.3s ease;
+    border: none;
+    border-radius: 10px;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+}
+
+.attendance-badge {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.attendance-item {
+    border-left: 4px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.attendance-item:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.attendance-item.present {
+    border-left-color: #28a745;
+}
+
+.attendance-item.absent {
+    border-left-color: #dc3545;
+}
+
+.attendance-item.late {
+    border-left-color: #ffc107;
+}
+
+.attendance-item.excused {
+    border-left-color: #6c757d;
+}
+
+.filter-btn {
+    border-radius: 8px;
+    padding: 8px 15px;
+    transition: all 0.3s ease;
+}
+
+.filter-btn:hover {
+    transform: scale(1.05);
+}
+
+.attendance-table th {
+    border-top: none;
+    font-weight: 600;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">Attendance Records</h2>
+                    <p class="text-muted mb-0">View your children's attendance history</p>
+                </div>
+                <span class="badge bg-primary fs-6">{{ attendances.count }} Record{{ attendances.count|pluralize }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card bg-success text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-check-circle fs-1 mb-2"></i>
+                    <h5>Present</h5>
+                    <h3>{{ present_count }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card bg-danger text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-x-circle fs-1 mb-2"></i>
+                    <h5>Absent</h5>
+                    <h3>{{ absent_count }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <i class="bi bi-clock fs-1 mb-2"></i>
+                    <h5>Late</h5>
+                    <h3>{{ late_count }}</h3>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card bg-info text-white">
+                <div class="card-body text-center">
+                    <i class="bi bi-percent fs-1 mb-2"></i>
+                    <h5>Attendance Rate</h5>
+                    <h3>{{ attendance_percentage }}%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filter-card mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="bi bi-funnel me-2"></i>Filters
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="student" class="form-label">Student</label>
+                    <select class="form-select" id="student" name="student">
+                        <option value="">All Students</option>
+                        {% for child in children %}
+                        <option value="{{ child.pk }}" {% if request.GET.student == child.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ child.get_full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">All Status</option>
+                        {% for value, label in filter_form.fields.status.choices %}
+                        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">From Date</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">To Date</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+                </div>
+                
+                <div class="col-12">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary filter-btn">
+                            <i class="bi bi-filter me-2"></i>Apply Filters
+                        </button>
+                        <a href="{% url 'parent_attendance_list' %}" class="btn btn-outline-secondary filter-btn">
+                            <i class="bi bi-arrow-repeat me-2"></i>Reset
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Attendance Records -->
+    <div class="card attendance-card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Attendance History</h5>
+            <span class="badge bg-primary">{{ attendances.count }} Record{{ attendances.count|pluralize }}</span>
+        </div>
+        <div class="card-body">
+            {% if attendances %}
+            <div class="table-responsive">
+                <table class="table table-hover attendance-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Student</th>
+                            <th>Class</th>
+                            <th>Status</th>
+                            <th>Term</th>
+                            <th>Period</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attendance in attendances %}
+                        <tr class="attendance-item {{ attendance.status }}">
+                            <td>
+                                <strong>{{ attendance.date|date:"M d, Y" }}</strong>
+                                <br>
+                                <small class="text-muted">{{ attendance.date|date:"l" }}</small>
+                            </td>
+                            <td>
+                                <strong>{{ attendance.student.get_full_name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ attendance.student.student_id }}</small>
+                            </td>
+                            <td>{{ attendance.student.get_class_level_display }}</td>
+                            <td>
+                                <span class="attendance-badge 
+                                    {% if attendance.status == 'present' %}bg-success
+                                    {% elif attendance.status == 'absent' %}bg-danger
+                                    {% elif attendance.status == 'late' %}bg-warning text-dark
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ attendance.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if attendance.term %}
+                                    {{ attendance.term.academic_year }} Term {{ attendance.term.term }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if attendance.period %}
+                                    {{ attendance.period.get_period_type_display }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if attendance.notes %}
+                                    <small class="text-muted">{{ attendance.notes|truncatewords:5 }}</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav aria-label="Attendance pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                    <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-calendar-x fs-1 text-muted mb-3"></i>
+                <h4 class="text-muted">No attendance records found</h4>
+                <p class="text-muted">Try adjusting your filters or check back later.</p>
+                <a href="{% url 'parent_attendance_list' %}" class="btn btn-primary mt-3">
+                    <i class="bi bi-arrow-repeat me-2"></i>Reset Filters
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Back Button -->
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set max date for date filters to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date_to').max = today;
+    document.getElementById('date_from').max = today;
+    
+    // Validate date range
+    const dateFrom = document.getElementById('date_from');
+    const dateTo = document.getElementById('date_to');
+    
+    dateFrom.addEventListener('change', function() {
+        dateTo.min = this.value;
+    });
+    
+    dateTo.addEventListener('change', function() {
+        dateFrom.max = this.value;
+    });
+});
+</script>
+{% endblock %}

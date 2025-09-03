@@ -40,7 +40,7 @@ from .forms import TeacherRegistrationForm
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
-from django.views.generic import TemplateView  # Add this import
+from django.views.generic import TemplateView
 from .models import Student, Grade, ClassAssignment, ReportCard
 from .forms import ReportCardFilterForm
 from django.utils.decorators import method_decorator
@@ -58,23 +58,18 @@ from core.forms import TimeSlotForm, TimetableForm, TimetableEntryForm, Timetabl
 
 logger = logging.getLogger(__name__)
 
-# Update the permission functions to match your model structure
+#Permission
 def is_admin(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 def is_teacher(user):
-    return user.is_authenticated and hasattr(user, 'teacher_profile')
+    return user.is_authenticated and hasattr(user, 'teacher')
 
 def is_student(user):
-    return user.is_authenticated and hasattr(user, 'student_profile')
+    return user.is_authenticated and hasattr(user, 'student')
 
 def is_parent(user):
     return user.is_authenticated and hasattr(user, 'parentguardian')
-
-
-def is_parent(user):
-    return hasattr(user, 'parentguardian')
-
 
 def home(request):
     if request.user.is_authenticated:
@@ -414,7 +409,13 @@ class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return is_parent(self.request.user)
     
     def get_queryset(self):
-        return self.request.user.parentguardian.student.all()
+        # This will work with either ForeignKey or ManyToMany
+        if hasattr(self.request.user.parentguardian, 'student'):
+            # For ManyToMany
+            return self.request.user.parentguardian.student.all()
+        else:
+            # For ForeignKey (single child)
+            return Student.objects.filter(parents=self.request.user.parentguardian)
 
 class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
@@ -687,7 +688,7 @@ def parent_dashboard(request):
         raise PermissionDenied
     
     parent = request.user.parentguardian
-    children = parent.student.all()
+    children = parent.student.all()  # This should work if your relationship is set up correctly
     
     # Get recent activities
     recent_grades = Grade.objects.filter(student__in=children).order_by('-updated_at')[:5]
@@ -1323,7 +1324,7 @@ def generate_term_fees(request_user=None):
     return created_count
 
 
-
+# Subject Views
 class SubjectListView(LoginRequiredMixin, ListView):
     model = Subject
     template_name = 'core/academics/subjects/subject_list.html'

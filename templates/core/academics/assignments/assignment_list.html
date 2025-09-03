@@ -1,60 +1,232 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Assignments{% endblock %}
+{% block title %}Assignments - School Management System{% endblock %}
 
 {% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    }
+
     .assignment-card {
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         border: none;
-        border-radius: 10px;
+        border-radius: 15px;
         overflow: hidden;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        background: white;
     }
+
     .assignment-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
     }
-    .badge-due {
-        background-color: #ffc107;
-        color: #212529;
-    }
-    .badge-overdue {
-        background-color: #dc3545;
-    }
-    .badge-completed {
-        background-color: #28a745;
-    }
-    .badge-pending {
-        background-color: #6c757d;
-    }
-    .badge-submitted {
-        background-color: #17a2b8;
-    }
-    .badge-graded {
-        background-color: #28a745;
-    }
-    .filter-section {
-        background-color: #f8f9fa;
-        border-radius: 10px;
+
+    .stats-card {
+        border-radius: 15px;
         border: none;
+        color: white;
+        position: relative;
+        overflow: hidden;
     }
+
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+
+    .stats-card .card-body {
+        position: relative;
+        z-index: 2;
+    }
+
+    .stats-icon {
+        font-size: 2.5rem;
+        opacity: 0.9;
+        transition: transform 0.3s ease;
+    }
+
+    .stats-card:hover .stats-icon {
+        transform: scale(1.1);
+    }
+
+    .filter-section {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        border: none;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+
+    .badge {
+        font-weight: 500;
+        padding: 0.5em 0.8em;
+        border-radius: 8px;
+        font-size: 0.85rem;
+    }
+
+    .badge-due { background: var(--warning-gradient); }
+    .badge-overdue { background: var(--danger-gradient); }
+    .badge-completed { background: var(--success-gradient); }
+    .badge-pending { background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); }
+    .badge-submitted { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
+    .badge-graded { background: var(--success-gradient); }
+
+    .card-header {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border-bottom: 2px solid rgba(67, 97, 238, 0.1);
+        padding: 1.5rem;
+    }
+
+    .progress-bar {
+        transition: width 1s ease-in-out;
+    }
+
     .assignment-status {
         min-width: 100px;
         font-size: 0.85rem;
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
     }
-    .card-header {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-bottom: 1px solid rgba(0,0,0,0.05);
+
+    .search-box {
+        position: relative;
     }
-    .stats-card {
-        background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+
+    .search-box input {
+        border-radius: 25px;
+        padding-left: 3rem;
+        border: 2px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+
+    .search-box input:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 1.2rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+    }
+
+    .btn-primary {
+        background: var(--primary-gradient);
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(67, 97, 238, 0.3);
+    }
+
+    .pagination .page-link {
+        border-radius: 10px;
+        margin: 0 0.2rem;
+        border: none;
+        color: #4361ee;
+        font-weight: 500;
+    }
+
+    .pagination .page-item.active .page-link {
+        background: var(--primary-gradient);
+        border: none;
+    }
+
+    .assignment-thumbnail {
+        height: 120px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         color: white;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .countdown-timer {
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.3rem 0.8rem;
+        border-radius: 15px;
+        background: rgba(255, 193, 7, 0.2);
+        color: #856404;
+    }
+
+    /* Animation classes */
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-in {
+        animation: slideIn 0.8s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .stats-card .card-body {
+            text-align: center;
+        }
+        
+        .assignment-card {
+            margin-bottom: 1.5rem;
+        }
+        
+        .filter-section .row {
+            margin-bottom: -1rem;
+        }
+        
+        .filter-section .col-md-3 {
+            margin-bottom: 1rem;
+        }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
         border-radius: 10px;
     }
-    .stats-icon {
-        font-size: 2rem;
-        opacity: 0.8;
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #3a0ca3 0%, #4361ee 100%);
     }
 </style>
 {% endblock %}
@@ -62,79 +234,79 @@
 {% block content %}
 <div class="container-fluid">
     <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 slide-in">
         <div>
-            <h2 class="h3 mb-1"><i class="bi bi-journal-bookmark me-2"></i>Assignments</h2>
-            <p class="text-muted mb-0">Manage and track all assignments</p>
+            <h2 class="h3 mb-1"><i class="fas fa-book-open me-2 text-primary"></i>Assignments</h2>
+            <p class="text-muted mb-0">Manage and track all academic assignments</p>
         </div>
         {% if is_teacher or is_admin %}
         <a href="{% url 'assignment_create' %}" class="btn btn-primary">
-            <i class="bi bi-plus-lg me-1"></i> Create Assignment
+            <i class="fas fa-plus me-2"></i> Create Assignment
         </a>
         {% endif %}
     </div>
 
     <!-- Stats Overview -->
     <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card stats-card">
+        <div class="col-xl-3 col-md-6 mb-3 fade-in" style="animation-delay: 0.1s;">
+            <div class="card stats-card" style="background: var(--primary-gradient);">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-grow-1">
-                            <h5 class="card-title mb-0">Total Assignments</h5>
-                            <h2 class="my-2">{{ assignments_count }}</h2>
-                            <p class="card-text mb-0">Across all classes</p>
+                            <h6 class="card-title mb-1">Total Assignments</h6>
+                            <h2 class="my-2 display-5 fw-bold">{{ assignments_count }}</h2>
+                            <p class="card-text mb-0 small">Across all classes</p>
                         </div>
                         <div class="flex-shrink-0">
-                            <i class="bi bi-journal-text stats-icon"></i>
+                            <i class="fas fa-tasks stats-icon"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card bg-success text-white">
+        <div class="col-xl-3 col-md-6 mb-3 fade-in" style="animation-delay: 0.2s;">
+            <div class="card stats-card" style="background: var(--success-gradient);">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-grow-1">
-                            <h5 class="card-title mb-0">Completed</h5>
-                            <h2 class="my-2">{{ completed_count }}</h2>
-                            <p class="card-text mb-0">Assignments graded</p>
+                            <h6 class="card-title mb-1">Completed</h6>
+                            <h2 class="my-2 display-5 fw-bold">{{ completed_count }}</h2>
+                            <p class="card-text mb-0 small">Assignments graded</p>
                         </div>
                         <div class="flex-shrink-0">
-                            <i class="bi bi-check-circle stats-icon"></i>
+                            <i class="fas fa-check-circle stats-icon"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card bg-warning text-dark">
+        <div class="col-xl-3 col-md-6 mb-3 fade-in" style="animation-delay: 0.3s;">
+            <div class="card stats-card" style="background: var(--warning-gradient);">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-grow-1">
-                            <h5 class="card-title mb-0">Pending</h5>
-                            <h2 class="my-2">{{ pending_count }}</h2>
-                            <p class="card-text mb-0">Awaiting submission</p>
+                            <h6 class="card-title mb-1">Pending</h6>
+                            <h2 class="my-2 display-5 fw-bold">{{ pending_count }}</h2>
+                            <p class="card-text mb-0 small">Awaiting submission</p>
                         </div>
                         <div class="flex-shrink-0">
-                            <i class="bi bi-clock stats-icon"></i>
+                            <i class="fas fa-clock stats-icon"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6 mb-3">
-            <div class="card bg-danger text-white">
+        <div class="col-xl-3 col-md-6 mb-3 fade-in" style="animation-delay: 0.4s;">
+            <div class="card stats-card" style="background: var(--danger-gradient);">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-grow-1">
-                            <h5 class="card-title mb-0">Overdue</h5>
-                            <h2 class="my-2">{{ overdue_count }}</h2>
-                            <p class="card-text mb-0">Past due date</p>
+                            <h6 class="card-title mb-1">Overdue</h6>
+                            <h2 class="my-2 display-5 fw-bold">{{ overdue_count }}</h2>
+                            <p class="card-text mb-0 small">Past due date</p>
                         </div>
                         <div class="flex-shrink-0">
-                            <i class="bi bi-exclamation-triangle stats-icon"></i>
+                            <i class="fas fa-exclamation-triangle stats-icon"></i>
                         </div>
                     </div>
                 </div>
@@ -142,11 +314,22 @@
         </div>
     </div>
 
-    <!-- Filter Section -->
-    <div class="card filter-section mb-4">
+    <!-- Search and Filter Section -->
+    <div class="card filter-section mb-4 slide-in">
         <div class="card-body">
-            <h5 class="card-title mb-3"><i class="bi bi-funnel me-2"></i>Filter Assignments</h5>
-            <form method="get" class="row g-3">
+            <div class="row align-items-center mb-3">
+                <div class="col-md-6">
+                    <h5 class="card-title mb-0"><i class="fas fa-filter me-2 text-primary"></i>Filter Assignments</h5>
+                </div>
+                <div class="col-md-6">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="form-control" placeholder="Search assignments..." id="searchInput">
+                    </div>
+                </div>
+            </div>
+
+            <form method="get" class="row g-3" id="filterForm">
                 <div class="col-md-3">
                     <label for="subject" class="form-label">Subject</label>
                     <select class="form-select" id="subject" name="subject">
@@ -193,59 +376,82 @@
                     </select>
                 </div>
                 
-                <div class="col-12 d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary me-2">
-                        <i class="bi bi-funnel me-1"></i> Apply Filters
+                <div class="col-12 d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-1"></i> Apply Filters
                     </button>
-                    <a href="{% url 'assignment_list' %}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
-                    </a>
+                    <button type="button" class="btn btn-outline-secondary" onclick="resetFilters()">
+                        <i class="fas fa-sync-alt me-1"></i> Reset
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Assignments List -->
+    <!-- Assignments Grid -->
     {% if assignments %}
-    <div class="row">
+    <div class="row" id="assignmentsGrid">
         {% for assignment in assignments %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 fade-in" style="animation-delay: {{ forloop.counter|add:2|divisibleby:2 }}0.1s">
             <div class="card assignment-card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 text-truncate">{{ assignment.title }}</h5>
-                    <span class="badge {% if assignment.due_date.date < time_now.date %}bg-danger{% else %}bg-warning text-dark{% endif %}">
-                        Due: {{ assignment.due_date|date:"M d, Y" }}
-                    </span>
+                <div class="assignment-thumbnail">
+                    <i class="fas fa-{% if assignment.assignment_type == 'QUIZ' %}question-circle{% elif assignment.assignment_type == 'PROJECT' %}project-diagram{% else %}file-alt{% endif %}"></i>
                 </div>
+                
                 <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="card-title text-truncate mb-0">{{ assignment.title }}</h5>
+                        <span class="countdown-timer" data-due-date="{{ assignment.due_date|date:'U' }}">
+                            <i class="fas fa-clock me-1"></i>
+                            <span class="countdown-text"></span>
+                        </span>
+                    </div>
+
                     <div class="d-flex justify-content-between mb-3">
                         <span class="text-muted">
-                            <i class="bi bi-book me-1"></i> {{ assignment.subject.name }}
+                            <i class="fas fa-book me-1"></i> {{ assignment.subject.name }}
                         </span>
                         <span class="text-muted">
-                            <i class="bi bi-people me-1"></i> {{ assignment.class_assignment.get_class_level_display }}
+                            <i class="fas fa-users me-1"></i> {{ assignment.class_assignment.get_class_level_display }}
                         </span>
                     </div>
                     
-                    <p class="card-text text-muted">{{ assignment.description|truncatewords:25 }}</p>
+                    <p class="card-text text-muted mb-3">{{ assignment.description|truncatewords:20 }}</p>
                     
                     <div class="mb-3">
-                        <span class="badge bg-primary">
-                            <i class="bi bi-star me-1"></i> Max Score: {{ assignment.max_score }}
-                        </span>
-                        <span class="badge bg-secondary ms-2">
-                            <i class="bi bi-percent me-1"></i> Weight: {{ assignment.weight }}%
-                        </span>
-                        <span class="badge bg-info ms-2">
-                            <i class="bi bi-tag me-1"></i> {{ assignment.get_assignment_type_display }}
-                        </span>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge bg-primary">
+                                <i class="fas fa-star me-1"></i> {{ assignment.max_score }} pts
+                            </span>
+                            <span class="badge bg-secondary">
+                                <i class="fas fa-weight me-1"></i> {{ assignment.weight }}%
+                            </span>
+                            <span class="badge bg-info">
+                                <i class="fas fa-tag me-1"></i> {{ assignment.get_assignment_type_display }}
+                            </span>
+                        </div>
                     </div>
+
+                    <!-- Progress Bar for Students -->
+                    {% if user.is_authenticated and user.student %}
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {% widthratio assignment.completion_percentage 1 100 %}%;"
+                             aria-valuenow="{{ assignment.completion_percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mb-3">
+                        Progress: {{ assignment.completion_percentage }}% complete
+                    </small>
+                    {% endif %}
 
                     <!-- Status Badge -->
                     <div class="mb-3">
                         {% if assignment.due_date.date < time_now.date %}
                             <span class="badge bg-danger">
-                                <i class="bi bi-exclamation-triangle me-1"></i> Overdue
+                                <i class="fas fa-exclamation-triangle me-1"></i> Overdue
                             </span>
                         {% else %}
                             {% if user.is_authenticated and user.student %}
@@ -253,30 +459,30 @@
                                     {% if student_assignment.assignment_id == assignment.id %}
                                         {% if student_assignment.status == 'GRADED' %}
                                             <span class="badge bg-success">
-                                                <i class="bi bi-check-circle me-1"></i> Graded
+                                                <i class="fas fa-check-circle me-1"></i> Graded
                                             </span>
                                         {% elif student_assignment.status == 'SUBMITTED' %}
                                             <span class="badge bg-info">
-                                                <i class="bi bi-clock-history me-1"></i> Submitted
+                                                <i class="fas fa-clock me-1"></i> Submitted
                                             </span>
                                         {% elif student_assignment.status == 'LATE' %}
                                             <span class="badge bg-warning text-dark">
-                                                <i class="bi bi-clock me-1"></i> Late
+                                                <i class="fas fa-clock me-1"></i> Late
                                             </span>
                                         {% else %}
                                             <span class="badge bg-warning text-dark">
-                                                <i class="bi bi-clock me-1"></i> Pending
+                                                <i class="fas fa-clock me-1"></i> Pending
                                             </span>
                                         {% endif %}
                                     {% endif %}
                                 {% empty %}
                                     <span class="badge bg-warning text-dark">
-                                        <i class="bi bi-clock me-1"></i> Pending
+                                        <i class="fas fa-clock me-1"></i> Pending
                                     </span>
                                 {% endfor %}
                             {% else %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="bi bi-clock me-1"></i> Active
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-clock me-1"></i> Active
                                 </span>
                             {% endif %}
                         {% endif %}
@@ -284,16 +490,16 @@
                     
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <small class="text-muted">
-                            Created: {{ assignment.created_at|date:"M d, Y" }}
+                            <i class="fas fa-calendar me-1"></i> {{ assignment.created_at|date:"M d, Y" }}
                         </small>
                         
                         <div class="btn-group">
                             <a href="{% url 'assignment_detail' assignment.pk %}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-eye"></i> View
+                                <i class="fas fa-eye"></i> View
                             </a>
                             {% if is_teacher or is_admin %}
                             <a href="{% url 'assignment_update' assignment.pk %}" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-pencil"></i> Edit
+                                <i class="fas fa-edit"></i> Edit
                             </a>
                             {% endif %}
                         </div>
@@ -304,31 +510,31 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="text-center py-5">
-        <i class="bi bi-journal-x display-4 text-muted"></i>
-        <h4 class="mt-3 text-muted">No assignments found</h4>
-        <p class="text-muted">Try adjusting your filters or create a new assignment</p>
+    <div class="text-center py-5 fade-in">
+        <i class="fas fa-tasks display-1 text-muted mb-4"></i>
+        <h4 class="text-muted mb-3">No assignments found</h4>
+        <p class="text-muted mb-4">Try adjusting your filters or create a new assignment</p>
         {% if is_teacher or is_admin %}
-        <a href="{% url 'assignment_create' %}" class="btn btn-primary mt-2">
-            <i class="bi bi-plus-lg me-1"></i> Create Your First Assignment
+        <a href="{% url 'assignment_create' %}" class="btn btn-primary btn-lg">
+            <i class="fas fa-plus me-2"></i> Create Your First Assignment
         </a>
         {% endif %}
     </div>
     {% endif %}
 
-    <!-- Pagination - FIXED SECTION -->
+    <!-- Pagination -->
     {% if is_paginated %}
     <nav aria-label="Page navigation" class="mt-4">
         <ul class="pagination justify-content-center">
             {% if page_obj.has_previous %}
             <li class="page-item">
                 <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
-                    <i class="bi bi-chevron-double-left"></i>
+                    <i class="fas fa-angle-double-left"></i>
                 </a>
             </li>
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
-                    <i class="bi bi-chevron-left"></i>
+                    <i class="fas fa-angle-left"></i>
                 </a>
             </li>
             {% endif %}
@@ -346,12 +552,12 @@
             {% if page_obj.has_next %}
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
-                    <i class="bi bi-chevron-right"></i>
+                    <i class="fas fa-angle-right"></i>
                 </a>
             </li>
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
-                    <i class="bi bi-chevron-double-right"></i>
+                    <i class="fas fa-angle-double-right"></i>
                 </a>
             </li>
             {% endif %}
@@ -364,28 +570,149 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Auto-expand the academics menu in sidebar
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Auto-expand academics menu
         const academicsMenu = document.getElementById('academicsMenu');
         if (academicsMenu) {
             academicsMenu.classList.add('show');
         }
-        
-        // Add active class to assignments nav item
+
+        // Set active navigation
         const assignmentsNavItem = document.querySelector('a[href="{% url 'assignment_list' %}"]');
         if (assignmentsNavItem) {
             assignmentsNavItem.classList.add('active');
         }
-        
-        // Add active class to academics nav item
+
         const academicsNavItem = document.querySelector('a[data-bs-target="#academicsMenu"]');
         if (academicsNavItem) {
             academicsNavItem.classList.add('active');
         }
 
-        // Add tooltips to buttons
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        const assignmentsGrid = document.getElementById('assignmentsGrid');
+        
+        if (searchInput && assignmentsGrid) {
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const assignmentCards = assignmentsGrid.querySelectorAll('.assignment-card');
+                
+                assignmentCards.forEach(card => {
+                    const title = card.querySelector('.card-title').textContent.toLowerCase();
+                    const description = card.querySelector('.card-text').textContent.toLowerCase();
+                    const subject = card.querySelector('[class*="fa-book"]').parentNode.textContent.toLowerCase();
+                    
+                    if (title.includes(searchTerm) || description.includes(searchTerm) || subject.includes(searchTerm)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // Countdown timers
+        function updateCountdowns() {
+            const countdownElements = document.querySelectorAll('.countdown-timer');
+            
+            countdownElements.forEach(element => {
+                const dueDate = parseInt(element.getAttribute('data-due-date')) * 1000;
+                const now = new Date().getTime();
+                const distance = dueDate - now;
+                
+                if (distance < 0) {
+                    element.querySelector('.countdown-text').textContent = 'Expired';
+                    element.style.background = 'rgba(220, 53, 69, 0.2)';
+                    element.style.color = '#dc3545';
+                } else {
+                    const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    
+                    if (days > 0) {
+                        element.querySelector('.countdown-text').textContent = `${days}d ${hours}h`;
+                    } else {
+                        element.querySelector('.countdown-text').textContent = `${hours}h left`;
+                    }
+                }
+            });
+        }
+
+        // Initial update and set interval
+        updateCountdowns();
+        setInterval(updateCountdowns, 60000); // Update every minute
+
+        // Filter form enhancements
+        const filterForm = document.getElementById('filterForm');
+        if (filterForm) {
+            const selects = filterForm.querySelectorAll('select');
+            selects.forEach(select => {
+                select.addEventListener('change', function() {
+                    // Add visual feedback when filters change
+                    this.style.borderColor = '#4361ee';
+                    setTimeout(() => {
+                        this.style.borderColor = '';
+                    }, 1000);
+                });
+            });
+        }
+
+        // Animate progress bars
+        const progressBars = document.querySelectorAll('.progress-bar');
+        progressBars.forEach(bar => {
+            const width = bar.style.width;
+            bar.style.width = '0';
+            setTimeout(() => {
+                bar.style.width = width;
+            }, 500);
+        });
+
+        // Add hover effects to cards
+        const cards = document.querySelectorAll('.assignment-card');
+        cards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.zIndex = '10';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.zIndex = '1';
+            });
+        });
+    });
+
+    // Reset filters function
+    function resetFilters() {
+        const form = document.getElementById('filterForm');
+        if (form) {
+            form.reset();
+            window.location.href = "{% url 'assignment_list' %}";
+        }
+    }
+
+    // Smooth scrolling for pagination
+    function smoothScrollToTop() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+
+    // Add event listeners to pagination links
+    document.addEventListener('DOMContentLoaded', function() {
+        const paginationLinks = document.querySelectorAll('.pagination a');
+        paginationLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const href = this.href;
+                smoothScrollToTop();
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 500);
+            });
         });
     });
 </script>

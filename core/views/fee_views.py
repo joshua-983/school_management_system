@@ -1,4 +1,9 @@
+from django.utils import timezone
+from datetime import timedelta
+from django.contrib.auth.models import User
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
+from django.shortcuts import render
+from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
 from django.http import JsonResponse, HttpResponse
@@ -11,9 +16,10 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from io import BytesIO
 
-from .base_views import *
-from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student
+from .base_views import is_admin, is_teacher, is_student
+from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment
 from ..forms import FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, FeeStatusReportForm
+from django.contrib import messages
 
 
 # Fee management

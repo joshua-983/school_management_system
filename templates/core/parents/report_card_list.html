@@ -1,90 +1,207 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Report Cards{% endblock %}
 
+{% block extra_css %}
+<style>
+.report-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+}
+
+.grade-badge {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.grade-A { background-color: #28a745; color: white; }
+.grade-B { background-color: #20c997; color: white; }
+.grade-C { background-color: #ffc107; color: black; }
+.grade-D { background-color: #fd7e14; color: white; }
+.grade-E { background-color: #dc3545; color: white; }
+.grade-F { background-color: #6c757d; color: white; }
+
+.download-btn {
+    border-radius: 8px;
+    padding: 8px 15px;
+    transition: all 0.3s ease;
+}
+
+.download-btn:hover {
+    transform: scale(1.05);
+}
+
+.empty-state {
+    border: 2px dashed #dee2e6;
+    border-radius: 15px;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container">
+<div class="container-fluid py-4">
+    <!-- Header -->
     <div class="row mb-4">
-        <div class="col">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'parent_dashboard' %}">Parent Dashboard</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Report Cards</li>
-                </ol>
-            </nav>
-            
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2><i class="bi bi-card-checklist me-2"></i>Report Cards</h2>
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <span class="badge bg-primary">{{ children.count }} child{{ children.count|pluralize:"ren" }}</span>
+                    <h2 class="mb-1">Report Cards</h2>
+                    <p class="text-muted mb-0">View your children's academic progress</p>
                 </div>
+                <span class="badge bg-primary fs-6">{{ report_cards.count }} Report{{ report_cards.count|pluralize }}</span>
             </div>
-            
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">Available Report Cards</h5>
-                </div>
+        </div>
+    </div>
+
+    <!-- Report Cards Grid -->
+    <div class="row">
+        {% for report_card in report_cards %}
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card report-card h-100">
                 <div class="card-body">
-                    {% if report_cards %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Academic Year</th>
-                                    <th>Term</th>
-                                    <th>Average Score</th>
-                                    <th>Overall Grade</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for report_card in report_cards %}
-                                <tr>
-                                    <td>{{ report_card.student.get_full_name }}</td>
-                                    <td>{{ report_card.academic_year }}</td>
-                                    <td>Term {{ report_card.term }}</td>
-                                    <td>{{ report_card.average_score|default:"-" }}</td>
-                                    <td>
-                                        {% if report_card.overall_grade %}
-                                        <span class="badge 
-                                            {% if report_card.overall_grade == 'A' or report_card.overall_grade == 'A+' %}bg-success
-                                            {% elif report_card.overall_grade == 'B' or report_card.overall_grade == 'B+' %}bg-primary
-                                            {% elif report_card.overall_grade == 'C' or report_card.overall_grade == 'C+' %}bg-warning
-                                            {% else %}bg-danger{% endif %}">
-                                            {{ report_card.overall_grade }}
-                                        </span>
-                                        {% else %}
-                                        -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'parent_report_card_detail' student_id=report_card.student.pk report_card_id=report_card.pk %}" 
-                                           class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-eye"></i> View
-                                        </a>
-                                        <a href="{% url 'parent_report_card_detail' student_id=report_card.student.pk report_card_id=report_card.pk %}?pdf=1" 
-                                           class="btn btn-sm btn-outline-secondary ms-1">
-                                            <i class="bi bi-download"></i> PDF
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title">{{ report_card.student.get_full_name }}</h5>
+                            <p class="card-text">
+                                <span class="badge bg-secondary">{{ report_card.student.get_class_level_display }}</span>
+                            </p>
+                        </div>
+                        <span class="grade-badge grade-{{ report_card.overall_grade }}">
+                            {{ report_card.overall_grade }}
+                        </span>
                     </div>
-                    {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-journal-x fs-1 text-muted"></i>
-                        <p class="text-muted">No report cards found</p>
-                        <a href="{% url 'parent_report_card_detail' student_id=children.first.pk %}" class="btn btn-primary">
-                            <i class="bi bi-plus-circle me-1"></i>Generate Report Card
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Academic Year:</strong><br>
+                            {{ report_card.academic_year }}
+                        </div>
+                        <div class="col-6">
+                            <strong>Term:</strong><br>
+                            Term {{ report_card.term }}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <strong>Average Score:</strong><br>
+                            <span class="fw-bold {% if report_card.average_score >= 80 %}text-success{% elif report_card.average_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ report_card.average_score }}
+                            </span>
+                        </div>
+                        <div class="col-6">
+                            <strong>Overall Grade:</strong><br>
+                            <span class="fw-bold">{{ report_card.overall_grade }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Teacher Remarks:</strong>
+                        <p class="text-muted">
+                            {% if report_card.teacher_remarks %}
+                                {{ report_card.teacher_remarks|truncatewords:10 }}
+                            {% else %}
+                                <span class="fst-italic">No remarks yet</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Principal Remarks:</strong>
+                        <p class="text-muted">
+                            {% if report_card.principal_remarks %}
+                                {{ report_card.principal_remarks|truncatewords:10 }}
+                            {% else %}
+                                <span class="fst-italic">No remarks yet</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'parent_report_card_detail' report_card.student.pk report_card.pk %}" class="btn btn-primary download-btn">
+                            <i class="bi bi-eye me-2"></i>View Details
+                        </a>
+                        <a href="{% url 'parent_report_card_detail' report_card.student.pk report_card.pk %}?pdf=1" class="btn btn-outline-success download-btn" target="_blank">
+                            <i class="bi bi-download me-2"></i>Download PDF
                         </a>
                     </div>
-                    {% endif %}
+                </div>
+                <div class="card-footer bg-white">
+                    <small class="text-muted">
+                        {% if report_card.is_published %}
+                            <i class="bi bi-check-circle text-success me-1"></i>Published
+                        {% else %}
+                            <i class="bi bi-clock text-warning me-1"></i>Draft
+                        {% endif %}
+                        on {{ report_card.updated_at|date:"M d, Y" }}
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="card empty-state">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-journal-text fs-1 text-muted mb-3"></i>
+                    <h4 class="text-muted">No report cards available</h4>
+                    <p class="text-muted">Report cards will be available after each term's assessment.</p>
+                    <a href="{% url 'parent_dashboard' %}" class="btn btn-primary mt-3">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Children without report cards -->
+    {% if children and report_cards %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Children Without Report Cards</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for child in children %}
+                            {% if child not in report_cards_students %}
+                            <div class="col-md-4 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-person-circle text-muted me-2"></i>
+                                    <div>
+                                        <strong>{{ child.get_full_name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ child.get_class_level_display }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    {% if report_cards %}
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

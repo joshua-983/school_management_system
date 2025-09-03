@@ -110,9 +110,10 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
-                
                 'core.context_processors.notification_count',  # ADD THIS LINE
                 'core.context_processors.user_permissions',
+                'core.context_processors.parent_status',
+               
             ],
         },
     },
@@ -169,6 +170,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'admin2@gmail.com'
 EMAIL_HOST_PASSWORD = 'Admin@1355'
 """
+DEFAULT_FROM_EMAIL = 'admin2@gmail.com'
 
 # Session settings
 SESSION_COOKIE_AGE = 1209600  # 2 weeks

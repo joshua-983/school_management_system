@@ -5,7 +5,7 @@ from django.views.generic import TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
 from school_mgt_system import consumers
-from core.views import NotificationListView, mark_notification_read
+from core.views.notifications_views import NotificationListView, mark_notification_read
 
 urlpatterns = [
 

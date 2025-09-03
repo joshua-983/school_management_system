@@ -1,6 +1,20 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse
+from django.core.exceptions import PermissionDenied
+from django.db.models import Avg
+
+# Import your models
+from ..models import AuditLog, Student, Grade, ClassAssignment, Assignment, StudentAssignment
+
+# Import your permission functions from base_views
+from .base_views import is_admin, is_student, is_teacher
+
+# Import your forms if needed
+from ..forms import StudentAssignmentForm
+
 class AuditLogListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     template_name = 'core/analytics/audit_log_list.html'
     context_object_name = 'logs'
@@ -68,7 +82,7 @@ def class_performance_chart(request, class_level):
     
     return JsonResponse(data)
 
-
+@login_required
 def submit_assignment(request, assignment_id):
     student = request.user.student
     assignment = get_object_or_404(Assignment, pk=assignment_id)
@@ -86,5 +100,3 @@ def submit_assignment(request, assignment_id):
         form = StudentAssignmentForm(instance=student_assignment)
 
     return render(request, 'submit_assignment.html', {'form': form, 'assignment': assignment})
-
-

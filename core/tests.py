@@ -5,7 +5,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from core.models import Assignment, ClassAssignment, Subject
-from users.models import Teacher
+from core.models import Teacher
 from core.models import AuditLog
 
 class AssignmentCreationTests(TestCase):

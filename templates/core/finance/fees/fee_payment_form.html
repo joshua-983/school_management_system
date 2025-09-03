@@ -3,15 +3,103 @@
 {% block title %}Record Payment{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
 <style>
     .payment-summary-card {
         border-left: 4px solid #28a745;
+        transition: all 0.3s ease;
+    }
+    .payment-summary-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
     .payment-alert {
         border-left: 4px solid #17a2b8;
+        background-color: #f8f9fa;
     }
     .amount-input-group {
-        max-width: 250px;
+        max-width: 100%;
+    }
+    .student-info {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .student-photo {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 15px;
+        border: 3px solid #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .stats-card {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    .stats-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    .payment-history-card {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .payment-item {
+        border-left: 3px solid #28a745;
+        transition: all 0.3s ease;
+    }
+    .payment-item:hover {
+        background-color: #f8f9fa;
+        transform: translateX(3px);
+    }
+    .full-amount-btn {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+    .progress {
+        height: 10px;
+    }
+    .section-title {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        position: relative;
+        padding-left: 15px;
+    }
+    .section-title:before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 20px;
+        width: 4px;
+        background-color: #3a7bd5;
+        border-radius: 2px;
+    }
+    /* Animation for amount changes */
+    @keyframes highlight {
+        0% { background-color: #ffffcc; }
+        100% { background-color: transparent; }
+    }
+    .highlight {
+        animation: highlight 1s ease;
+    }
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .student-info {
+            flex-direction: column;
+            text-align: center;
+        }
+        .student-photo {
+            margin-right: 0;
+            margin-bottom: 10px;
+        }
     }
 </style>
 {% endblock %}
@@ -54,12 +142,71 @@
         <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
+                    <!-- Student Information -->
+                    <div class="student-info mb-4">
+                        {% if fee.student.photo %}
+                        <img src="{{ fee.student.photo.url }}" class="student-photo" alt="{{ fee.student.get_full_name }}">
+                        {% else %}
+                        <div class="student-photo bg-light d-flex align-items-center justify-content-center">
+                            <i class="bi bi-person fs-3 text-muted"></i>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h4 class="mb-1">{{ fee.student.get_full_name }}</h4>
+                            <p class="text-muted mb-1">
+                                {{ fee.student.class_level }} • {{ fee.student.student_id }}
+                            </p>
+                            <span class="badge {% if fee.payment_status == 'paid' %}bg-success
+                                {% elif fee.payment_status == 'unpaid' %}bg-danger
+                                {% elif fee.payment_status == 'partial' %}bg-warning
+                                {% elif fee.payment_status == 'overdue' %}bg-dark{% endif %}">
+                                {{ fee.get_payment_status_display }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Progress -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Payment Progress</span>
+                            <span>{{ fee.payment_percentage|default:0 }}%</span>
+                        </div>
+                        <div class="progress mb-3" style="height: 10px;">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ fee.payment_percentage|default:0 }}%" 
+                                 aria-valuenow="{{ fee.payment_percentage|default:0 }}" 
+                                 aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <div class="stats-card">
+                                    <div class="text-muted small">Payable</div>
+                                    <div class="stats-value">${{ fee.amount_payable|default:0|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stats-card">
+                                    <div class="text-muted small">Paid</div>
+                                    <div class="stats-value text-success">${{ fee.amount_paid|default:0|floatformat:2 }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="stats-card">
+                                    <div class="text-muted small">Balance</div>
+                                    <div class="stats-value {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ fee.balance|default:0|floatformat:2 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="alert payment-alert mb-4">
                         <div class="d-flex align-items-center">
-                            <i class="bi bi-info-circle fs-4 me-3"></i>
+                            <i class="bi bi-info-circle fs-4 me-3 text-info"></i>
                             <div>
                                 <h5 class="mb-1">{{ fee.category.name|default:"Fee" }}</h5>
-                                <p class="mb-1">Current Balance: <strong>${{ fee.balance|default:0|floatformat:2 }}</strong></p>
+                                <p class="mb-1">Current Balance: <strong class="fs-4">${{ fee.balance|default:0|floatformat:2 }}</strong></p>
                                 <small>Due: {{ fee.due_date|date:"M d, Y"|default:"Not specified" }}</small>
                             </div>
                         </div>
@@ -76,6 +223,8 @@
                         </div>
                         {% endif %}
                         
+                        <h5 class="section-title">Payment Details</h5>
+                        
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="{{ form.amount.id_for_label }}" class="form-label">
@@ -84,7 +233,7 @@
                                 <div class="input-group amount-input-group">
                                     <span class="input-group-text">$</span>
                                     {{ form.amount }}
-                                    <button type="button" class="btn btn-outline-secondary" id="pay-full-amount">
+                                    <button type="button" class="btn btn-outline-primary full-amount-btn" id="pay-full-amount">
                                         Full Amount
                                     </button>
                                 </div>
@@ -94,6 +243,11 @@
                                 </div>
                                 {% endif %}
                                 <small class="text-muted">Maximum: ${{ fee.balance|floatformat:2 }}</small>
+                                <div class="mt-2">
+                                    <small class="text-muted" id="balance-after-payment">
+                                        Balance after payment: ${{ fee.balance|floatformat:2 }}
+                                    </small>
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -114,7 +268,15 @@
                                 <label for="{{ form.payment_date.id_for_label }}" class="form-label">
                                     Payment Date <span class="text-danger">*</span>
                                 </label>
-                                {{ form.payment_date }}
+                                <div class="input-group">
+                                    {{ form.payment_date }}
+                                    <button class="btn btn-outline-secondary calendar-btn" type="button" id="calendar-btn">
+                                        <i class="bi bi-calendar"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary today-btn" type="button" id="today-btn">
+                                        Today
+                                    </button>
+                                </div>
                                 {% if form.payment_date.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.payment_date.errors.0 }}
@@ -163,32 +325,39 @@
         </div>
         
         <div class="col-lg-4">
-            <div class="card shadow-sm mb-4">
+            <div class="card shadow-sm mb-4 payment-summary-card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Fee Summary</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Fee Category:</span>
+                            <span><i class="bi bi-tag me-2 text-primary"></i>Fee Category:</span>
                             <span>{{ fee.category.name|default:"-" }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Student:</span>
+                            <span><i class="bi bi-person me-2 text-primary"></i>Student:</span>
                             <span>{{ fee.student.get_full_name|default:"-" }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Amount Payable:</span>
+                            <span><i class="bi bi-currency-dollar me-2 text-primary"></i>Amount Payable:</span>
                             <span>${{ fee.amount_payable|default:0|floatformat:2 }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Amount Paid:</span>
+                            <span><i class="bi bi-cash-coin me-2 text-primary"></i>Amount Paid:</span>
                             <span>${{ fee.amount_paid|default:0|floatformat:2 }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Balance:</span>
+                            <span><i class="bi bi-wallet2 me-2 text-primary"></i>Balance:</span>
                             <span class="fw-bold {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %}">
                                 ${{ fee.balance|default:0|floatformat:2 }}
+                            </span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-calendar me-2 text-primary"></i>Due Date:</span>
+                            <span class="{% if fee.is_overdue %}text-danger{% endif %}">
+                                {{ fee.due_date|date:"M d, Y"|default:"-" }}
+                                {% if fee.is_overdue %}<span class="badge bg-danger ms-1">Overdue</span>{% endif %}
                             </span>
                         </li>
                     </ul>
@@ -196,19 +365,20 @@
             </div>
             
             {% if fee.payments.exists %}
-            <div class="card shadow-sm">
+            <div class="card shadow-sm payment-history-card">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i> Recent Payments</h5>
                 </div>
                 <div class="card-body">
                     <div class="list-group">
-                        {% for payment in fee.payments.all|slice:":3" %}
-                        <div class="list-group-item">
+                        {% for payment in fee.payments.all|slice:":5" %}
+                        <div class="list-group-item payment-item">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">${{ payment.amount|floatformat:2 }}</h6>
                                 <small>{{ payment.payment_date|date:"M d, Y" }}</small>
                             </div>
                             <p class="mb-1 text-muted">
+                                <i class="bi bi-credit-card me-1"></i>
                                 {{ payment.get_payment_method_display }}
                                 {% if payment.receipt_number %}({{ payment.receipt_number }}){% endif %}
                             </p>
@@ -218,7 +388,7 @@
                         </div>
                         {% endfor %}
                     </div>
-                    {% if fee.payments.count > 3 %}
+                    {% if fee.payments.count > 5 %}
                     <div class="text-center mt-2">
                         <a href="{% url 'fee_detail' pk=fee.pk %}#payments" class="text-decoration-none">
                             View all {{ fee.payments.count }} payments
@@ -235,22 +405,72 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize datepicker with current date as default
+    // Initialize datepicker
     $('#id_payment_date').datepicker({
         format: 'yyyy-mm-dd',
         autoclose: true,
         todayHighlight: true,
         orientation: 'bottom auto',
         endDate: '0d' // Can't select future dates
-    }).datepicker('setDate', new Date());
+    });
+
+    // Calendar button
+    $('#calendar-btn').click(function() {
+        $('#id_payment_date').datepicker('show');
+    });
+
+    // Set today date
+    $('#today-btn').click(function() {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        $('#id_payment_date').val(dateStr);
+        $('#id_payment_date').datepicker('update');
+    });
+
+    // Set default to today if empty
+    if (!$('#id_payment_date').val()) {
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        $('#id_payment_date').val(dateStr);
+    }
+
+    // Make date field readonly to prevent manual entry
+    $('#id_payment_date').attr('readonly', true);
 
     // Set full amount button
     $('#pay-full-amount').click(function() {
         const balance = parseFloat('{{ fee.balance|default:0 }}');
         $('#id_amount').val(balance.toFixed(2));
+        updateBalanceAfterPayment();
+        $('#id_amount').addClass('highlight');
+        setTimeout(() => $('#id_amount').removeClass('highlight'), 1000);
     });
+
+    // Update balance after payment in real-time
+    function updateBalanceAfterPayment() {
+        const amount = parseFloat($('#id_amount').val()) || 0;
+        const currentBalance = parseFloat('{{ fee.balance|default:0 }}');
+        const newBalance = currentBalance - amount;
+        
+        $('#balance-after-payment').text(`Balance after payment: $${newBalance.toFixed(2)}`);
+        
+        if (newBalance <= 0) {
+            $('#balance-after-payment').removeClass('text-danger').addClass('text-success');
+        } else {
+            $('#balance-after-payment').removeClass('text-success').addClass('text-danger');
+        }
+    }
+
+    // Update balance as user types
+    $('#id_amount').on('input', function() {
+        updateBalanceAfterPayment();
+    });
+
+    // Initialize balance display
+    updateBalanceAfterPayment();
 
     // Form validation
     $('#payment-form').submit(function(e) {
@@ -258,19 +478,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const balance = parseFloat('{{ fee.balance|default:0 }}');
         
         if (amount <= 0) {
-            alert('Please enter a valid payment amount');
             e.preventDefault();
+            alert('Please enter a valid payment amount (greater than 0)');
+            $('#id_amount').focus();
             return false;
         }
         
         if (amount > balance) {
-            alert('Payment amount cannot exceed the remaining balance of $' + balance.toFixed(2));
             e.preventDefault();
+            alert('Payment amount cannot exceed the remaining balance of $' + balance.toFixed(2));
+            $('#id_amount').focus();
+            return false;
+        }
+        
+        const paymentDate = $('#id_payment_date').val();
+        if (!paymentDate) {
+            e.preventDefault();
+            alert('Please select a payment date');
+            return false;
+        }
+        
+        const paymentMethod = $('#id_payment_method').val();
+        if (!paymentMethod) {
+            e.preventDefault();
+            alert('Please select a payment method');
             return false;
         }
         
         return true;
     });
+
+    // Add error classes to form fields with errors
+    {% if form.errors %}
+    {% for field in form %}
+        {% if field.errors %}
+        $('#{{ field.id_for_label }}').addClass('is-invalid');
+        {% endif %}
+    {% endfor %}
+    {% endif %}
 });
 </script>
 {% endblock %}

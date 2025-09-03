@@ -1,133 +1,182 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load static %}
 
 {% block title %}Parent Dashboard{% endblock %}
 
+{% block extra_css %}
+<style>
+.dashboard-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+
+.stat-icon {
+    font-size: 3rem;
+    opacity: 0.8;
+}
+
+.quick-action-btn {
+    border-radius: 10px;
+    padding: 10px 15px;
+    margin: 5px;
+    transition: all 0.3s ease;
+}
+
+.quick-action-btn:hover {
+    transform: scale(1.05);
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container">
+<div class="container-fluid py-4">
+    <!-- Header -->
     <div class="row mb-4">
-        <div class="col">
-            <h2 class="mb-3"><i class="bi bi-house-door me-2"></i>Parent Dashboard</h2>
-            <div class="card shadow-sm">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">Parent Dashboard</h2>
+                    <p class="text-muted mb-0">Welcome back, {{ parent.full_name }}</p>
+                </div>
+                <span class="badge bg-primary fs-6">{{ children.count }} Child{{ children.count|pluralize }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card bg-primary text-white">
                 <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-1">Welcome, {{ parent.get_full_name }}</h4>
-                            <p class="mb-0 text-muted">You have {{ children.count }} child{{ children.count|pluralize:"ren" }} registered</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">MY CHILDREN</h6>
+                            <h2 class="stat-number mb-0">{{ children.count }}</h2>
                         </div>
+                        <i class="bi bi-people-fill stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">RECENT GRADES</h6>
+                            <h2 class="stat-number mb-0">{{ recent_grades.count }}</h2>
+                        </div>
+                        <i class="bi bi-journal-check stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card bg-warning text-dark">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">UNPAID FEES</h6>
+                            <h2 class="stat-number mb-0">{{ unpaid_fees.count }}</h2>
+                        </div>
+                        <i class="bi bi-cash-coin stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">ATTENDANCE</h6>
+                            <h2 class="stat-number mb-0">{{ recent_attendances.count }}</h2>
+                        </div>
+                        <i class="bi bi-calendar-check stat-icon"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Quick Stats -->
+    <!-- Quick Actions -->
     <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card shadow-sm border-success">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-2">Unpaid Fees</h6>
-                            <h4 class="mb-0">Ksh {{ unpaid_fees_total|default:0|intcomma }}</h4>
-                        </div>
-                        <div class="bg-success bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-cash-coin text-success fs-4"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm border-primary">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-2">Recent Grades</h6>
-                            <h4 class="mb-0">{{ recent_grades.count }}</h4>
-                        </div>
-                        <div class="bg-primary bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-journal-text text-primary fs-4"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card shadow-sm border-info">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-2">Attendance Records</h6>
-                            <h4 class="mb-0">{{ recent_attendances.count }}</h4>
-                        </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded">
-                            <i class="bi bi-calendar-check text-info fs-4"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Children List -->
-    <div class="row mb-4">
-        <div class="col">
-            <div class="card shadow-sm">
+        <div class="col-12">
+            <div class="card dashboard-card">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-people me-2"></i>My Children</h5>
+                    <h5 class="mb-0">Quick Actions</h5>
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Class</th>
-                                    <th>Recent Grades</th>
-                                    <th>Attendance</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for child in children %}
-                                <tr>
-                                    <td>{{ child.get_full_name }}</td>
-                                    <td>{{ child.get_class_level_display }}</td>
-                                    <td>
-                                        {% with child.recent_grades|slice:":3" as grades %}
-                                            {% for grade in grades %}
-                                                <span class="badge bg-light text-dark">{{ grade.subject }}: {{ grade.total_score }}</span>
-                                            {% empty %}
-                                                <span class="text-muted">No grades yet</span>
-                                            {% endfor %}
-                                        {% endwith %}
-                                    </td>
-                                    <td>
-                                        {% with child.recent_attendances|slice:":3" as attendances %}
-                                            {% for attendance in attendances %}
-                                                <span class="badge 
-                                                    {% if attendance.status == 'PRESENT' %}bg-success
-                                                    {% elif attendance.status == 'ABSENT' %}bg-danger
-                                                    {% elif attendance.status == 'LATE' %}bg-warning
-                                                    {% else %}bg-secondary{% endif %}">
-                                                    {{ attendance.get_status_display }}
-                                                </span>
-                                            {% empty %}
-                                                <span class="text-muted">No records</span>
-                                            {% endfor %}
-                                        {% endwith %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'parent_child_detail' pk=child.pk %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-eye"></i> View
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="d-flex flex-wrap">
+                        <a href="{% url 'parent_children_list' %}" class="btn btn-primary quick-action-btn">
+                            <i class="bi bi-people me-2"></i>View My Children
+                        </a>
+                        <a href="{% url 'parent_fee_list' %}" class="btn btn-warning quick-action-btn">
+                            <i class="bi bi-cash-coin me-2"></i>Pay Fees
+                        </a>
+                        <a href="{% url 'parent_attendance_list' %}" class="btn btn-info quick-action-btn">
+                            <i class="bi bi-calendar-check me-2"></i>Check Attendance
+                        </a>
+                        <a href="{% url 'parent_report_card_list' %}" class="btn btn-success quick-action-btn">
+                            <i class="bi bi-card-checklist me-2"></i>View Report Cards
+                        </a>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Children Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card dashboard-card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">My Children</h5>
+                    <a href="{% url 'parent_children_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    {% if children %}
+                    <div class="row">
+                        {% for child in children %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="bi bi-person-circle fs-1 text-primary"></i>
+                                    </div>
+                                    <h5 class="card-title">{{ child.get_full_name }}</h5>
+                                    <p class="card-text">
+                                        <span class="badge bg-secondary">{{ child.get_class_level_display }}</span>
+                                        <br>
+                                        <small class="text-muted">ID: {{ child.student_id }}</small>
+                                    </p>
+                                    <a href="{% url 'parent_child_detail' child.pk %}" class="btn btn-sm btn-outline-primary">View Profile</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-people fs-1 text-muted"></i>
+                        <p class="text-muted mt-2">No children registered</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -135,69 +184,69 @@
 
     <!-- Recent Activities -->
     <div class="row">
-        <div class="col-md-6">
-            <div class="card shadow-sm mb-4">
+        <!-- Recent Grades -->
+        <div class="col-lg-6 mb-4">
+            <div class="card dashboard-card h-100">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Recent Grades</h5>
+                    <h5 class="mb-0">Recent Grades</h5>
                 </div>
                 <div class="card-body">
                     {% if recent_grades %}
-                    <div class="list-group">
+                    <div class="list-group list-group-flush">
                         {% for grade in recent_grades %}
-                        <div class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1">{{ grade.student.get_full_name }} - {{ grade.subject }}</h6>
-                                <small class="text-muted">{{ grade.updated_at|timesince }} ago</small>
+                        <div class="list-group-item border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ grade.student.get_full_name }}</h6>
+                                    <small class="text-muted">{{ grade.subject.name }}</small>
+                                </div>
+                                <span class="badge bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}warning{% else %}danger{% endif %} fs-6">
+                                    {{ grade.total_score }}
+                                </span>
                             </div>
-                            <p class="mb-1">
-                                <span class="badge bg-primary">Score: {{ grade.total_score }}</span>
-                                <span class="badge bg-secondary">Term: {{ grade.term }}</span>
-                            </p>
+                            <small class="text-muted">{{ grade.updated_at|date:"M d, Y" }}</small>
                         </div>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-journal-x fs-1 text-muted"></i>
-                        <p class="text-muted">No recent grades found</p>
+                    <div class="text-center py-3">
+                        <i class="bi bi-journal-text fs-3 text-muted"></i>
+                        <p class="text-muted mt-2">No recent grades</p>
                     </div>
                     {% endif %}
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card shadow-sm mb-4">
+
+        <!-- Unpaid Fees -->
+        <div class="col-lg-6 mb-4">
+            <div class="card dashboard-card h-100">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Recent Attendance</h5>
+                    <h5 class="mb-0">Unpaid Fees</h5>
                 </div>
                 <div class="card-body">
-                    {% if recent_attendances %}
-                    <div class="list-group">
-                        {% for attendance in recent_attendances %}
-                        <div class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1">{{ attendance.student.get_full_name }}</h6>
-                                <small class="text-muted">{{ attendance.date }}</small>
+                    {% if unpaid_fees %}
+                    <div class="list-group list-group-flush">
+                        {% for fee in unpaid_fees %}
+                        <div class="list-group-item border-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ fee.student.get_full_name }}</h6>
+                                    <small class="text-muted">{{ fee.category.name }}</small>
+                                </div>
+                                <span class="text-danger fw-bold">${{ fee.balance }}</span>
                             </div>
-                            <p class="mb-1">
-                                <span class="badge 
-                                    {% if attendance.status == 'PRESENT' %}bg-success
-                                    {% elif attendance.status == 'ABSENT' %}bg-danger
-                                    {% elif attendance.status == 'LATE' %}bg-warning
-                                    {% else %}bg-secondary{% endif %}">
-                                    {{ attendance.get_status_display }}
-                                </span>
-                                {% if attendance.notes %}
-                                <small class="text-muted">- {{ attendance.notes|truncatechars:30 }}</small>
-                                {% endif %}
-                            </p>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <small class="text-muted">Due: {{ fee.due_date|date:"M d, Y" }}</small>
+                                <a href="{% url 'parent_fee_payment' fee.pk %}" class="btn btn-sm btn-danger">Pay Now</a>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="text-center py-4">
-                        <i class="bi bi-calendar-x fs-1 text-muted"></i>
-                        <p class="text-muted">No recent attendance records</p>
+                    <div class="text-center py-3">
+                        <i class="bi bi-check-circle fs-3 text-success"></i>
+                        <p class="text-muted mt-2">All fees are paid</p>
                     </div>
                     {% endif %}
                 </div>

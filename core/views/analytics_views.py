@@ -2,15 +2,18 @@ from django.views.generic import ListView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Count, Sum, Avg, Max, Min, Q
 from django.http import JsonResponse
+from django.utils import timezone
 import json
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 
 from .base_views import *
 from ..models import AuditLog, AnalyticsCache, GradeAnalytics, AttendanceAnalytics
 from ..filters import AuditLogFilter
+from core.models import StudentAttendance, Fee, Grade, ClassAssignment
+from core.utils import send_email
 
-#analytics views
+# analytics views
 
 class DecimalJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -32,7 +35,7 @@ class AnalyticsDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateVi
         context['is_teacher'] = is_teacher(self.request.user)
         # Get date range for analytics (last 30 days)
         end_date = timezone.now().date()
-        start_date = end_date - timezone.timedelta(days=30)
+        start_date = end_date - timedelta(days=30)
         
         context.update({
             'attendance_stats': self._get_attendance_stats(start_date, end_date),

@@ -1,7 +1,11 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
+from django.shortcuts import get_object_or_404, render, redirect
+from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.decorators import login_required, user_passes_test
 
-from .base_views import *
+from django.contrib import messages
+from .base_views import is_admin, is_teacher, is_student
 from ..models import TimeSlot, Timetable, TimetableEntry, Teacher, Subject, Student, ClassAssignment
 from ..forms import TimeSlotForm, TimetableForm, TimetableEntryForm, TimetableFilterForm
 #timetable

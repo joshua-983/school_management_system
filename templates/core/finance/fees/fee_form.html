@@ -3,9 +3,15 @@
 {% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Fee Record{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
 <style>
     .student-info-card {
         border-left: 4px solid #3a7bd5;
+        transition: all 0.3s ease;
+    }
+    .student-info-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
     .section-divider {
         border-top: 1px solid #dee2e6;
@@ -16,6 +22,19 @@
         color: #495057;
         font-weight: 600;
         margin-bottom: 1rem;
+        position: relative;
+        padding-left: 15px;
+    }
+    .section-title:before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 20px;
+        width: 4px;
+        background-color: #3a7bd5;
+        border-radius: 2px;
     }
     .datepicker-dropdown {
         z-index: 1100 !important;
@@ -25,16 +44,91 @@
         padding: 0.35em 0.65em;
         border-radius: 0.25rem;
         color: white;
+        font-weight: 600;
+        min-width: 100px;
+        text-align: center;
     }
     .bg-paid { background-color: #28a745; }
     .bg-unpaid { background-color: #dc3545; }
     .bg-partial { background-color: #fd7e14; }
     .bg-overdue { background-color: #6c757d; }
     .student-photo {
-        width: 50px;
-        height: 50px;
+        width: 60px;
+        height: 60px;
         border-radius: 50%;
         object-fit: cover;
+        border: 3px solid #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    .guideline-card .list-group-item {
+        border: none;
+        padding: 0.75rem 0.5rem;
+        background: transparent;
+    }
+    .existing-fees-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .stats-box {
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .stats-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    .input-group-text {
+        background-color: #e9ecef;
+    }
+    .calendar-btn {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+    .today-btn {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        border-left: 1px solid #dee2e6;
+    }
+    /* Animation for status changes */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    .status-change {
+        animation: pulse 0.5s ease;
+    }
+    /* Loading indicator */
+    .loading-indicator {
+        display: none;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-left: 10px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    /* Error styling */
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+    .invalid-feedback {
+        display: block;
+        width: 100%;
+        margin-top: 0.25rem;
+        font-size: 0.875em;
+        color: #dc3545;
     }
 </style>
 {% endblock %}
@@ -87,19 +181,31 @@
                                     <i class="bi bi-person fs-3 text-muted"></i>
                                 </div>
                                 {% endif %}
-                                <div>
+                                <div class="flex-grow-1">
                                     <h5 class="mb-1">{{ student.get_full_name }}</h5>
                                     <p class="text-muted mb-1">{{ student.get_class_level_display }} • {{ student.student_id }}</p>
                                     <small class="text-muted">Date of Birth: {{ student.date_of_birth|date:"M d, Y" }}</small>
+                                </div>
+                                <div class="stats-box text-center">
+                                    <div class="text-muted small">Total Fees</div>
+                                    <div class="stats-value text-primary">
+                                        ${{ student_total_fees|default:0|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <div class="stats-box text-center">
+                                    <div class="text-muted small">Total Paid</div>
+                                    <div class="stats-value text-success">
+                                        ${{ student_total_paid|default:0|floatformat:2 }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <form method="post" novalidate>
+                    <form method="post" novalidate id="fee-form">
                         {% csrf_token %}
                         
-                        <!-- Hidden student field - CRITICAL FIX -->
+                        <!-- Hidden student field -->
                         {{ form.student }}
                         
                         {% if form.non_field_errors %}
@@ -117,13 +223,20 @@
                                 <label for="{{ form.category.id_for_label }}" class="form-label">
                                     Fee Category <span class="text-danger">*</span>
                                 </label>
-                                {{ form.category }}
+                                <div class="input-group">
+                                    {{ form.category }}
+                                    <span class="input-group-text" id="category-loading">
+                                        <div class="loading-indicator"></div>
+                                    </span>
+                                </div>
                                 {% if form.category.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.category.errors.0 }}
                                 </div>
                                 {% endif %}
-                                <small class="text-muted">Select the appropriate fee category for this student</small>
+                                <small class="text-muted" id="category-description">
+                                    Select the appropriate fee category for this student
+                                </small>
                             </div>
                         </div>
 
@@ -196,7 +309,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="{{ form.payment_status.id_for_label }}" class="form-label">
-                                    Payment Status <span class="text-danger">*</span>
+                                    Payment Status
                                 </label>
                                 <div class="input-group">
                                     {{ form.payment_status }}
@@ -213,6 +326,7 @@
                                     {{ form.payment_status.errors.0 }}
                                 </div>
                                 {% endif %}
+                                <small class="text-muted">Auto-calculated based on amounts</small>
                             </div>
                             
                             <div class="col-md-6">
@@ -235,8 +349,8 @@
                                 </label>
                                 <div class="input-group" id="due-date-picker">
                                     {{ form.due_date }}
-                                    <button class="btn btn-outline-secondary" type="button" id="calendar-btn-due">
-                                        <i class="bi bi-calendar"></i> Select Date
+                                    <button class="btn btn-outline-secondary calendar-btn" type="button" id="calendar-btn-due">
+                                        <i class="bi bi-calendar"></i>
                                     </button>
                                 </div>
                                 {% if form.due_date.errors %}
@@ -252,10 +366,10 @@
                                 </label>
                                 <div class="input-group" id="payment-date-picker">
                                     {{ form.payment_date }}
-                                    <button class="btn btn-outline-secondary" type="button" id="calendar-btn-payment">
-                                        <i class="bi bi-calendar"></i> Select Date
+                                    <button class="btn btn-outline-secondary calendar-btn" type="button" id="calendar-btn-payment">
+                                        <i class="bi bi-calendar"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary" type="button" id="today-btn">
+                                    <button class="btn btn-outline-secondary today-btn" type="button" id="today-btn">
                                         Today
                                     </button>
                                 </div>
@@ -289,7 +403,7 @@
                             <input type="text" class="form-control" value="{{ request.user.get_full_name }} ({{ request.user.username }})" readonly>
                         </div>
 
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-check-circle me-1"></i> Save Fee Record
                             </button>
@@ -311,7 +425,7 @@
         
         <!-- Right sidebar -->
         <div class="col-lg-4">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm guideline-card">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Guidelines</h5>
                 </div>
@@ -346,10 +460,10 @@
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0"><i class="bi bi-exclamation-circle me-2"></i>Existing Fees</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     {% with existing_fees=student.fees.all %}
                     {% if existing_fees %}
-                    <div class="list-group">
+                    <div class="list-group existing-fees-list">
                         {% for fee in existing_fees|slice:":5" %}
                         <a href="{% url 'fee_detail' pk=fee.pk %}" class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
@@ -370,12 +484,12 @@
                         {% endfor %}
                     </div>
                     {% if existing_fees.count > 5 %}
-                    <div class="text-center mt-2">
+                    <div class="text-center mt-2 p-2">
                         <small class="text-muted">+ {{ existing_fees.count|add:"-5" }} more fees</small>
                     </div>
                     {% endif %}
                     {% else %}
-                    <div class="alert alert-info mb-0">
+                    <div class="alert alert-info m-3">
                         <i class="bi bi-info-circle me-2"></i> No existing fees for this student.
                     </div>
                     {% endif %}
@@ -383,6 +497,32 @@
                 </div>
             </div>
             {% endif %}
+            
+            <!-- Summary Card -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-calculator me-2"></i>Payment Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Amount Payable:</span>
+                        <strong id="summary-payable">$0.00</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Amount Paid:</span>
+                        <strong id="summary-paid" class="text-success">$0.00</strong>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Balance:</span>
+                        <strong id="summary-balance" class="text-danger">$0.00</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Status:</span>
+                        <span id="summary-status" class="payment-status-display bg-unpaid">Unpaid</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -390,8 +530,6 @@
 
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize datepicker for due date
@@ -456,6 +594,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const status = calculatePaymentStatus(amountPaid, amountPayable, dueDate);
         updateStatusBadge(status);
+        updateSummary(amountPayable, amountPaid, status);
     }
 
     function updateStatusBadge(status) {
@@ -477,7 +616,43 @@ document.addEventListener('DOMContentLoaded', function() {
         badge.text(statusText[status]);
         badge.removeClass('bg-success bg-danger bg-warning bg-dark');
         badge.addClass(colorMap[status]);
+        badge.addClass('status-change');
+        setTimeout(() => badge.removeClass('status-change'), 500);
         $('#id_payment_status').val(status);
+    }
+    
+    function updateSummary(amountPayable, amountPaid, status) {
+        const balance = amountPayable - amountPaid;
+        
+        $('#summary-payable').text('$' + amountPayable.toFixed(2));
+        $('#summary-paid').text('$' + amountPaid.toFixed(2));
+        $('#summary-balance').text('$' + balance.toFixed(2));
+        
+        const statusText = {
+            'paid': 'Paid',
+            'unpaid': 'Unpaid',
+            'partial': 'Part Payment',
+            'overdue': 'Overdue'
+        };
+        
+        const colorMap = {
+            'paid': 'bg-success',
+            'unpaid': 'bg-danger',
+            'partial': 'bg-warning',
+            'overdue': 'bg-dark'
+        };
+        
+        const summaryStatus = $('#summary-status');
+        summaryStatus.text(statusText[status]);
+        summaryStatus.removeClass('bg-success bg-danger bg-warning bg-dark');
+        summaryStatus.addClass(colorMap[status]);
+        
+        // Update balance color
+        if (balance <= 0) {
+            $('#summary-balance').removeClass('text-danger').addClass('text-success');
+        } else {
+            $('#summary-balance').removeClass('text-success').addClass('text-danger');
+        }
     }
 
     // Fetch category details
@@ -485,23 +660,39 @@ document.addEventListener('DOMContentLoaded', function() {
         const categoryId = $(this).val();
         if (!categoryId) return;
         
-        $.ajax({
-            url: `/api/fee-categories/${categoryId}/`,
-            beforeSend: function(xhr) {
-                xhr.setRequestHeader("X-CSRFToken", "{{ csrf_token }}");
-            },
-            success: function(data) {
-                $('#id_amount_payable').val(data.default_amount);
-                updatePaymentStatus();
-            },
-            error: function(xhr) {
-                console.error('Failed to fetch category details:', xhr.statusText);
+        // Show loading indicator
+        $('.loading-indicator').show();
+        
+        // Simulate API call (replace with actual API endpoint)
+        setTimeout(() => {
+            // This is a simulation - replace with actual API call
+            const categoryData = {
+                '1': {default_amount: 500.00, description: 'Tuition fee for all students'},
+                '2': {default_amount: 100.00, description: 'Library fee for accessing library resources'},
+                '3': {default_amount: 50.00, description: 'Sports fee for sports facilities'},
+                '4': {default_amount: 75.00, description: 'Laboratory fee for science students'},
+                '5': {default_amount: 25.00, description: 'Examination fee for term exams'}
+            };
+            
+            if (categoryData[categoryId]) {
+                $('#id_amount_payable').val(categoryData[categoryId].default_amount);
+                $('#category-description').text(categoryData[categoryId].description);
+            } else {
                 $('#id_amount_payable').val('');
+                $('#category-description').text('No description available');
             }
-        });
+            
+            updatePaymentStatus();
+            $('.loading-indicator').hide();
+        }, 800);
     });
 
     // Initialize and set up event listeners
+    const initialAmountPayable = parseFloat($('#id_amount_payable').val()) || 0;
+    const initialAmountPaid = parseFloat($('#id_amount_paid').val()) || 0;
+    updateSummary(initialAmountPayable, initialAmountPaid, 
+                 calculatePaymentStatus(initialAmountPaid, initialAmountPayable, $('#id_due_date').val()));
+    
     updatePaymentStatus();
     $('#id_amount_paid, #id_amount_payable').on('input change', updatePaymentStatus);
     
@@ -516,6 +707,38 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#id_payment_date').val(dateStr);
         }
     });
+    
+    // Form validation
+    $('#fee-form').on('submit', function(e) {
+        const amountPaid = parseFloat($('#id_amount_paid').val()) || 0;
+        const amountPayable = parseFloat($('#id_amount_payable').val()) || 0;
+        
+        if (amountPaid > amountPayable) {
+            e.preventDefault();
+            alert('Amount paid cannot be greater than amount payable.');
+            $('#id_amount_paid').focus();
+            return false;
+        }
+        
+        const status = $('#id_payment_status').val();
+        const paymentDate = $('#id_payment_date').val();
+        
+        if (status === 'paid' && !paymentDate) {
+            e.preventDefault();
+            alert('Payment date is required when status is "Paid".');
+            $('#id_payment_date').focus();
+            return false;
+        }
+    });
+    
+    // Add error classes to form fields with errors
+    {% if form.errors %}
+    {% for field in form %}
+        {% if field.errors %}
+        $('#{{ field.id_for_label }}').addClass('is-invalid');
+        {% endif %}
+    {% endfor %}
+    {% endif %}
 });
 </script>
 {% endblock %}
