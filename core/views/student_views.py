@@ -2,11 +2,26 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.db.models import Q
+from django.db.models import Q, Count
+from django.contrib import messages
+from django.urls import reverse_lazy
 
 from .base_views import *
 from ..models import Student, ClassAssignment, StudentAttendance
 from ..forms import StudentRegistrationForm
+
+# Add the global CLASS_LEVEL_CHOICES constant (from your previous code)
+CLASS_LEVEL_CHOICES = [
+    ('P1', 'Primary 1'),
+    ('P2', 'Primary 2'),
+    ('P3', 'Primary 3'),
+    ('P4', 'Primary 4'),
+    ('P5', 'Primary 5'),
+    ('P6', 'Primary 6'),
+    ('J1', 'JHS 1'),
+    ('J2', 'JHS 2'),
+    ('J3', 'JHS 3'),
+]
 
 @method_decorator(cache_page(60*15), name='dispatch')
 class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
@@ -26,7 +41,29 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        context['class_levels'] = CLASS_LEVEL_CHOICES  # Use the global constant
+        
+        # Calculate statistics
+        queryset = self.get_queryset()
+        
+        # Total students count
+        context['total_students'] = queryset.count()
+        
+        # Gender counts
+        context['male_count'] = queryset.filter(gender='M').count()
+        context['female_count'] = queryset.filter(gender='F').count()
+        
+        # Count distinct active classes
+        context['class_count'] = queryset.values('class_level').distinct().count()
+        
+        # Class distribution for chart (optional)
+        class_distribution = queryset.values('class_level').annotate(
+            count=Count('id')
+        ).order_by('class_level')
+        context['class_distribution'] = {
+            item['class_level']: item['count'] for item in class_distribution
+        }
+        
         return context
 
 class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):

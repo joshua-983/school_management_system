@@ -93,7 +93,7 @@
     }
 
     .table tr:hover {
-        background-color: #f8f9fa;
+        background-color: #F8F9FA29;
         transform: translateX(4px);
     }
 
@@ -650,3 +650,120 @@ function printTable() {
 }
 </script>
 {% endblock %}
+
+// Add this to your existing JavaScript in student_list.html
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing JavaScript code ...
+    
+    // Statistics auto-update when filters change
+    function updateStatistics() {
+        // This function would typically make an AJAX call to get updated stats
+        // For now, we'll just simulate it since the stats are calculated server-side
+        console.log('Statistics would update based on current filters');
+    }
+
+    // Update stats when filter changes
+    const classFilter = document.getElementById('classFilter');
+    if (classFilter) {
+        classFilter.addEventListener('change', function() {
+            setTimeout(updateStatistics, 100);
+        });
+    }
+
+    // Real-time search with statistics update
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            // Update visible count in the badge
+            const visibleRows = document.querySelectorAll('#studentsTable tbody tr:not([style*="display: none"])').length;
+            const totalRows = document.querySelectorAll('#studentsTable tbody tr').length;
+            
+            // Update the badge text
+            const badge = document.querySelector('.card-header .badge');
+            if (badge) {
+                badge.textContent = `${visibleRows} students${visibleRows !== totalRows ? ' (filtered)' : ''}`;
+            }
+        });
+    }
+
+    // Add chart functionality (optional - requires Chart.js)
+    function initStatisticsCharts() {
+        // Check if Chart.js is available
+        if (typeof Chart !== 'undefined') {
+            // Gender distribution chart
+            const genderCtx = document.getElementById('genderChart');
+            if (genderCtx) {
+                new Chart(genderCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Male', 'Female'],
+                        datasets: [{
+                            data: [{{ male_count }}, {{ female_count }}],
+                            backgroundColor: ['#3498db', '#e91e63']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+
+            // Class distribution chart
+            const classCtx = document.getElementById('classChart');
+            if (classCtx && {{ class_distribution|length }} > 0) {
+                const classData = {{ class_distribution|safe }};
+                new Chart(classCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(classData).map(cls => {
+                            const choice = CLASS_LEVEL_CHOICES.find(c => c[0] === cls);
+                            return choice ? choice[1] : cls;
+                        }),
+                        datasets: [{
+                            label: 'Students per Class',
+                            data: Object.values(classData),
+                            backgroundColor: '#4361ee'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            }
+        }
+    }
+
+    // Initialize charts if elements exist
+    setTimeout(initStatisticsCharts, 1000);
+});
+
+// Utility function to format numbers with commas
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Animate statistics counters
+function animateStatistics() {
+    const statsNumbers = document.querySelectorAll('.stats-number');
+    statsNumbers.forEach(element => {
+        const finalValue = parseInt(element.textContent);
+        let currentValue = 0;
+        const duration = 2000; // 2 seconds
+        const increment = finalValue / (duration / 16); // 60fps
+        
+        const timer = setInterval(() => {
+            currentValue += increment;
+            if (currentValue >= finalValue) {
+                element.textContent = formatNumber(finalValue);
+                clearInterval(timer);
+            } else {
+                element.textContent = formatNumber(Math.floor(currentValue));
+            }
+        }, 16);
+    });
+}
+
+// Start animation when page loads
+document.addEventListener('DOMContentLoaded', animateStatistics);

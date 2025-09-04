@@ -1,54 +1,69 @@
+import os
 from datetime import date, timedelta
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
 from decimal import Decimal
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils import timezone
-import os
-from datetime import date
 from django.urls import reverse
-from django.core.validators import RegexValidator
-from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.utils.safestring import mark_safe
-from django.apps import apps  # Add this import at the top
+from django.apps import apps
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-
-
-
 User = get_user_model()
 
+# ===== SHARED CONSTANTS (Moved to top to avoid circular imports) =====
+GENDER_CHOICES = [
+    ('M', 'Male'),
+    ('F', 'Female'),
+]
+
+CLASS_LEVEL_CHOICES = [
+    ('P1', 'Primary 1'),
+    ('P2', 'Primary 2'),
+    ('P3', 'Primary 3'),
+    ('P4', 'Primary 4'),
+    ('P5', 'Primary 5'),
+    ('P6', 'Primary 6'),
+    ('J1', 'JHS 1'),
+    ('J2', 'JHS 2'),
+    ('J3', 'JHS 3'),
+]
+
+CLASS_LEVEL_DISPLAY_MAP = dict(CLASS_LEVEL_CHOICES)
+
+# Image path functions
 def student_image_path(instance, filename):
     ext = filename.split('.')[-1]
     filename = f"{instance.student_id}.{ext}"
     return os.path.join('students', filename)
 
+def teacher_image_path(instance, filename):
+    return f'teachers/{instance.employee_id}/{filename}'
+
+def parent_image_path(instance, filename):
+    return f'parents/{instance.parent_id}/{filename}'
+
+# ===== MODELS =====
+
+class Subject(models.Model):
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=10, unique=True)
+    description = models.TextField(blank=True)
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
 class Student(models.Model):
-    GENDER_CHOICES = [
-        ('M', 'Male'),
-        ('F', 'Female'),
-    ]
-    
-    CLASS_LEVEL_CHOICES = [
-        ('P1', 'Primary 1'),
-        ('P2', 'Primary 2'),
-        ('P3', 'Primary 3'),
-        ('P4', 'Primary 4'),
-        ('P5', 'Primary 5'),
-        ('P6', 'Primary 6'),
-        ('J1', 'JHS 1'),
-        ('J2', 'JHS 2'),
-        ('J3', 'JHS 3'),
-    ]
-    
-    CLASS_LEVEL_DISPLAY_MAP = dict(CLASS_LEVEL_CHOICES)
-    
     student_id = models.CharField(max_length=20, unique=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student')
     first_name = models.CharField(max_length=100)
@@ -118,8 +133,35 @@ class Student(models.Model):
             # Format the new student ID
             self.student_id = f'STUD{current_year}{class_level}{new_sequence:03d}'
             
-        super().save(*args, **kwargs)   
+        super().save(*args, **kwargs)
 
+class Teacher(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE, 
+        related_name='teacher'
+    )
+    employee_id = models.CharField(max_length=20, unique=False, null=True, blank=True)
+    date_of_birth = models.DateField()
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
+    phone_number = models.CharField(max_length=20)
+    address = models.TextField()
+    subjects = models.ManyToManyField(Subject, related_name='teachers')
+    class_levels = models.CharField(max_length=50)
+    qualification = models.CharField(max_length=200, blank=True)
+    date_of_joining = models.DateField(null=True, blank=True)
+    is_class_teacher = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = "Teacher"
+        verbose_name_plural = "Teachers"
+    
+    def __str__(self):
+        return f"{self.get_full_name()} ({self.employee_id})"
+    
+    def get_full_name(self):
+        return f"{self.user.first_name} {self.user.last_name}"
 
 class ParentGuardian(models.Model):
     RELATIONSHIP_CHOICES = [
@@ -132,7 +174,7 @@ class ParentGuardian(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='parentguardian', null=True, blank=True)
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parents')  # Only keep this one
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parents')
     full_name = models.CharField(max_length=200)
     occupation = models.CharField(max_length=100, blank=True)
     relationship = models.CharField(max_length=1, choices=RELATIONSHIP_CHOICES)
@@ -145,9 +187,7 @@ class ParentGuardian(models.Model):
     class Meta:
         ordering = ['student', 'emergency_contact_priority']
         verbose_name_plural = "Parents/Guardians"
-        # Prevent duplicate emergency contact priorities for same student
         unique_together = ['student', 'emergency_contact_priority']
-        
         
     def __str__(self):
         return f"{self.full_name} ({self.get_relationship_display()}) - {self.student.get_full_name()}"
@@ -186,59 +226,28 @@ def create_parent_user(sender, instance, created, **kwargs):
                     last_name=' '.join(instance.full_name.split()[1:]) if len(instance.full_name.split()) > 1 else ""
                 )
             instance.user = user
-            instance.save(update_fields=['user'])  # Only update user field to avoid recursion
+            instance.save(update_fields=['user'])
         except Exception as e:
-            # Use logging instead of print for production
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error creating user for parent {instance.email}: {e}")
 
-
-class Subject(models.Model):
-    name = models.CharField(max_length=100)
-    code = models.CharField(max_length=10, unique=True)
-    description = models.TextField(blank=True)
-    
-    class Meta:
-        ordering = ['name']
-    
-    def __str__(self):
-        return f"{self.name} ({self.code})"
-
-class Teacher(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='teacher')
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    date_of_birth = models.DateField()
-    gender = models.CharField(max_length=1, choices=Student.GENDER_CHOICES)
-    phone_number = models.CharField(max_length=20)
-    email = models.EmailField()
-    address = models.TextField()
-    subjects = models.ManyToManyField(Subject, related_name='teachers')
-    class_levels = models.CharField(max_length=50)  # Comma-separated list of class levels
-    is_active = models.BooleanField(default=True)
-    
-    def __str__(self):
-        return f"{self.first_name} {self.last_name}"
-    
-    def get_full_name(self):
-        return f"{self.first_name} {self.last_name}"
-
 class ClassAssignment(models.Model):
-    class_level = models.CharField(max_length=2, choices=Student.CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
-    academic_year = models.CharField(max_length=9)  # e.g., "2023-2024"
+    academic_year = models.CharField(max_length=9)
     
     class Meta:
-        unique_together = ('class_level', 'subject', 'academic_year')
+        unique_together = ('class_level', 'subject', 'academic_year')  # Add this line
+        # Remove or modify the existing unique_together if it conflicts
     
     def __str__(self):
         return f"{self.get_class_level_display()} - {self.subject} ({self.academic_year})"
-    
-# fee management
+
+
+# Fee Management Models
 class FeeCategory(models.Model):
-    """Categories for different types of fees"""
     CATEGORY_TYPES = [
         ('ADMISSION', 'Admission Fees'),
         ('TUITION', 'Tuition Fees'),
@@ -252,7 +261,7 @@ class FeeCategory(models.Model):
     name = models.CharField(max_length=100, choices=CATEGORY_TYPES)
     description = models.TextField(blank=True)
     is_mandatory = models.BooleanField(default=True)
-    is_active = models.BooleanField(default=True)  # Added this field
+    is_active = models.BooleanField(default=True)
     applies_to_all = models.BooleanField(default=True)
     class_levels = models.CharField(
         max_length=100, 
@@ -262,6 +271,7 @@ class FeeCategory(models.Model):
     
     def __str__(self):
         return self.get_name_display()
+
 class Fee(models.Model):
     PAYMENT_STATUS_CHOICES = [
         ('paid', 'Paid'),
@@ -284,59 +294,24 @@ class Fee(models.Model):
         (3, 'Term 3'),
     ]
 
-    student = models.ForeignKey(
-        Student,
-        on_delete=models.PROTECT,
-        related_name='fees'
-    )
-    category = models.ForeignKey(
-        FeeCategory,
-        on_delete=models.PROTECT,
-        related_name='fees'
-    )
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fees')
+    category = models.ForeignKey(FeeCategory, on_delete=models.PROTECT, related_name='fees')
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
-    amount_payable = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
-    )
-    amount_paid = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    balance = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
+    amount_payable = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
     
-    payment_status = models.CharField(
-        max_length=10,
-        choices=PAYMENT_STATUS_CHOICES,
-        default='unpaid'
-    )
-    payment_mode = models.CharField(
-        max_length=15,
-        choices=PAYMENT_MODE_CHOICES,
-        blank=True,
-        null=True
-    )
+    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='unpaid')
+    payment_mode = models.CharField(max_length=15, choices=PAYMENT_MODE_CHOICES, blank=True, null=True)
     payment_date = models.DateField(blank=True, null=True)
     due_date = models.DateField()
     
     receipt_number = models.CharField(max_length=20, blank=True)
     notes = models.TextField(blank=True)
     
-    recorded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name='recorded_fees'
-    )
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='recorded_fees')
     date_recorded = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -353,13 +328,10 @@ class Fee(models.Model):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
 
     def update_payment_status(self):
-        """Enhanced payment status calculation with tolerance and grace period"""
-        tolerance = Decimal('1.00')  # Consider $1 difference as paid
-        grace_period = 5  # Days after due date before marking overdue
-        
+        tolerance = Decimal('1.00')
+        grace_period = 5
         today = timezone.now().date()
         effective_due_date = self.due_date + timedelta(days=grace_period)
-        
         difference = abs(self.amount_payable - self.amount_paid)
         
         if difference <= tolerance:
@@ -374,34 +346,22 @@ class Fee(models.Model):
             self.payment_status = 'unpaid'
 
     def save(self, *args, **kwargs):
-        # Calculate balance before saving
         self.balance = self.amount_payable - self.amount_paid
-        
-        # Auto-update payment status
         self.update_payment_status()
-            
-        # Set payment date if status is paid and no date exists
+        
         if self.payment_status == 'paid' and not self.payment_date:
             self.payment_date = timezone.now().date()
             
         super().save(*args, **kwargs)
 
     def clean(self):
-        """Add model-level validation"""
-        super().clean()
-        
         if self.amount_paid > self.amount_payable:
-            raise ValidationError({
-                'amount_paid': 'Amount paid cannot exceed amount payable'
-            })
+            raise ValidationError({'amount_paid': 'Amount paid cannot exceed amount payable'})
         
         if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
-            raise ValidationError({
-                'payment_status': 'Cannot mark as paid when amount paid is less than payable'
-            })
+            raise ValidationError({'payment_status': 'Cannot mark as paid when amount paid is less than payable'})
 
     def get_payment_status_html(self):
-        """Improved HTML display for payment status"""
         status_display = self.get_payment_status_display()
         color_map = {
             'paid': 'success',
@@ -410,9 +370,8 @@ class Fee(models.Model):
             'overdue': 'dark'
         }
         color = color_map.get(self.payment_status, 'primary')
-        return mark_safe(
-            f'<span class="badge bg-{color}">{status_display}</span>'
-        )
+        return mark_safe(f'<span class="badge bg-{color}">{status_display}</span>')
+
 class FeeInstallment(models.Model):
     fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='installments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -447,39 +406,7 @@ class FeeDiscount(models.Model):
             return fee_amount * (self.amount / 100)
         return min(fee_amount, self.amount)
 
-
-
-
-
-    def get_payment_status_html(self):
-        """Improved HTML display for payment status"""
-        status_display = self.get_payment_status_display()
-        color_map = {
-            'paid': 'success',
-            'unpaid': 'danger',
-            'partial': 'warning',
-            'overdue': 'dark'
-        }
-        color = color_map.get(self.payment_status, 'primary')
-        return mark_safe(
-            f'<span class="badge bg-{color}">{status_display}</span>'
-        )
-
-    def clean(self):
-        """Add model-level validation"""
-        super().clean()
-        
-        if self.amount_paid > self.amount_payable:
-            raise ValidationError({
-                'amount_paid': 'Amount paid cannot exceed amount payable'
-            })
-        
-        if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
-            raise ValidationError({
-                'payment_status': 'Cannot mark as paid when amount paid is less than payable'
-            })
 class FeePayment(models.Model):
-    """Detailed record of individual payments"""
     PAYMENT_MODE_CHOICES = [
         ('cash', 'Cash'),
         ('check', 'Check'),
@@ -488,32 +415,12 @@ class FeePayment(models.Model):
         ('other', 'Other'),
     ]
     
-    fee = models.ForeignKey(
-        'Fee', 
-        on_delete=models.CASCADE, 
-        related_name='payments'
-    )
-    amount = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
-    )
+    fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     payment_date = models.DateTimeField(default=timezone.now)
-    payment_mode = models.CharField(
-        max_length=15,  # Increased from 10 to 15 to accommodate 'bank_transfer'
-        choices=PAYMENT_MODE_CHOICES
-    )
-    receipt_number = models.CharField(
-        max_length=20, 
-        unique=True, 
-        blank=True
-    )
-    recorded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='recorded_payments'
-    )
+    payment_mode = models.CharField(max_length=15, choices=PAYMENT_MODE_CHOICES)
+    receipt_number = models.CharField(max_length=20, unique=True, blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='recorded_payments')
     notes = models.TextField(blank=True)
     bank_reference = models.CharField(max_length=50, blank=True)
     is_confirmed = models.BooleanField(default=False)
@@ -533,13 +440,13 @@ class FeePayment(models.Model):
     
     @classmethod
     def generate_receipt_number(cls):
-        """Generate a unique receipt number"""
         from django.utils.crypto import get_random_string
         while True:
             receipt_number = f"RCPT-{get_random_string(10, '0123456789')}"
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
+# Assignment Models
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [
         ('HOMEWORK', 'Homework'),
@@ -604,8 +511,8 @@ class StudentAssignment(models.Model):
                 self.status = 'SUBMITTED'
         super().save(*args, **kwargs)
 
+# Grade Model
 class Grade(models.Model):
-    # GES Standardized Grading Scale (1-9) with detailed descriptors
     GES_GRADE_CHOICES = [
         ('1', '1 (90-100%) - Outstanding'),
         ('2', '2 (80-89%) - Excellent'),
@@ -619,44 +526,19 @@ class Grade(models.Model):
         ('N/A', 'Not Available'),
     ]
 
-    # Core fields
     student = models.ForeignKey('Student', on_delete=models.CASCADE)
     subject = models.ForeignKey('Subject', on_delete=models.CASCADE)
     class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE)
     academic_year = models.CharField(max_length=9, validators=[RegexValidator(r'^\d{4}/\d{4}$')])
     term = models.PositiveSmallIntegerField(choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')])
 
-    # Assessment components
-    classwork_score = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(30)],
-        verbose_name="Classwork (30%)"
-    )
-    homework_score = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(10)],
-        verbose_name="Homework (10%)"
-    )
-    test_score = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(10)],
-        verbose_name="Test (10%)"
-    )
-    exam_score = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        validators=[MinValueValidator(0), MaxValueValidator(50)],
-        verbose_name="Exam (50%)"
-    )
+    classwork_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(30)], verbose_name="Classwork (30%)")
+    homework_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(10)], verbose_name="Homework (10%)")
+    test_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(10)], verbose_name="Test (10%)")
+    exam_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(50)], verbose_name="Exam (50%)")
 
-    # Calculated fields
-    total_score = models.DecimalField(
-        max_digits=5, decimal_places=2,
-        editable=False, null=True, blank=True
-    )
-    ges_grade = models.CharField(
-        max_length=3, choices=GES_GRADE_CHOICES,
-        editable=False, default='N/A'
-    )
+    total_score = models.DecimalField(max_digits=5, decimal_places=2, editable=False, null=True, blank=True)
+    ges_grade = models.CharField(max_length=3, choices=GES_GRADE_CHOICES, editable=False, default='N/A')
     remarks = models.TextField(blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -670,7 +552,6 @@ class Grade(models.Model):
         super().save(*args, **kwargs)
 
     def calculate_total_score(self):
-        """Calculate total based on component scores"""
         try:
             self.total_score = (
                 self.classwork_score + 
@@ -682,7 +563,6 @@ class Grade(models.Model):
             self.total_score = None
 
     def determine_ges_grade(self):
-        """Convert total score to GES standardized grade (1-9)"""
         if self.total_score is None:
             self.ges_grade = 'N/A'
             return
@@ -704,21 +584,13 @@ class Grade(models.Model):
 
     @classmethod
     def get_best_students(cls):
-        """
-        Returns a dictionary with:
-        - Best student for each class
-        - Overall best student
-        """
         from django.db.models import Avg, Max
         
-        # Get all classes (P1-P6, J1-J3)
         classes = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
         results = {}
         current_year = f"{timezone.now().year}/{timezone.now().year + 1}"
         
-        # Find best student per class
         for class_level in classes:
-            # Get the highest average score for this class
             best_avg = cls.objects.filter(
                 student__class_level=class_level,
                 academic_year=current_year
@@ -733,10 +605,7 @@ class Grade(models.Model):
                     'average': best_avg['avg_score']
                 }
         
-        # Find overall best student (highest single score across all classes)
-        overall_best = cls.objects.filter(
-            academic_year=current_year
-        ).order_by('-total_score').first()
+        overall_best = cls.objects.filter(academic_year=current_year).order_by('-total_score').first()
         
         if overall_best:
             results['overall'] = {
@@ -747,22 +616,15 @@ class Grade(models.Model):
         
         return results
 
-#school configuration
+# School Configuration
 class SchoolConfiguration(models.Model):
     GRADING_SYSTEM_CHOICES = [
         ('GES', 'Ghana Education System (Primary/JHS)'),
         ('WASSCE', 'West African Senior School Certificate Exam'),
     ]
     
-    grading_system = models.CharField(
-        max_length=10,
-        choices=GRADING_SYSTEM_CHOICES,
-        default='GES'
-    )
-    is_locked = models.BooleanField(
-        default=False,
-        help_text="Lock the grading system to prevent changes"
-    )
+    grading_system = models.CharField(max_length=10, choices=GRADING_SYSTEM_CHOICES, default='GES')
+    is_locked = models.BooleanField(default=False, help_text="Lock the grading system to prevent changes")
     last_updated = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -770,14 +632,12 @@ class SchoolConfiguration(models.Model):
         verbose_name_plural = "School Configuration"
     
     def save(self, *args, **kwargs):
-        # Ensure only one configuration exists
         if SchoolConfiguration.objects.exists() and not self.pk:
             raise ValidationError("Only one school configuration can exist")
         super().save(*args, **kwargs)
     
     def __str__(self):
         return f"Active Grading System: {self.get_grading_system_display()} {'(Locked)' if self.is_locked else ''}"
-
 
 # Notification System
 class Notification(models.Model):
@@ -804,7 +664,6 @@ class Notification(models.Model):
         return f"{self.get_notification_type_display()} - {self.title}"
     
     def get_absolute_url(self):
-        """Generate URL based on notification type and related object"""
         if self.related_object_id and self.related_content_type:
             try:
                 model_class = apps.get_model('core', self.related_content_type)
@@ -815,14 +674,12 @@ class Notification(models.Model):
         return reverse('notification_list')
     
     def mark_as_read(self):
-        """Mark notification as read and send update via WebSocket"""
         if not self.is_read:
             self.is_read = True
             self.save()
             self.send_ws_update()
     
     def send_ws_update(self):
-        """Send WebSocket update for this notification"""
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
         
@@ -837,6 +694,7 @@ class Notification(models.Model):
             }
         )
 
+# Audit Log
 class AuditLog(models.Model):
     ACTION_CHOICES = [
         ('CREATE', 'Create'),
@@ -848,62 +706,31 @@ class AuditLog(models.Model):
         ('OTHER', 'Other'),
     ]
     
-    user = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True,
-        blank=True,
-        related_name='audit_logs'
-    )
-    action = models.CharField(
-        max_length=10, 
-        choices=ACTION_CHOICES,
-        db_index=True
-    )
-    model_name = models.CharField(
-        max_length=50,
-        db_index=True
-    )
-    object_id = models.CharField(
-        max_length=50,
-        db_index=True,
-        blank=True,
-        null=True
-    )
-    details = models.JSONField(
-        blank=True,
-        null=True,
-        default=dict
-    )
-    ip_address = models.GenericIPAddressField(
-        null=True, 
-        blank=True,
-        db_index=True
-    )
-    timestamp = models.DateTimeField(
-        auto_now_add=True,
-        db_index=True
-    )
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES, db_index=True)
+    model_name = models.CharField(max_length=50, db_index=True)
+    object_id = models.CharField(max_length=50, db_index=True, blank=True, null=True)
+    details = models.JSONField(blank=True, null=True, default=dict)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     
-class Meta:
-    ordering = ['-timestamp']
-    verbose_name = 'Audit Log'
-    verbose_name_plural = 'Audit Logs'
-    indexes = [
-        models.Index(fields=['model_name', 'object_id']),
-        models.Index(fields=['action', 'timestamp']),
-        models.Index(fields=['-timestamp']),
-        models.Index(fields=['user']),
-        models.Index(fields=['action']),
-    ]
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Audit Log'
+        verbose_name_plural = 'Audit Logs'
+        indexes = [
+            models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['action', 'timestamp']),
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['user']),
+            models.Index(fields=['action']),
+        ]
+    
     def __str__(self):
         return f"{self.user or 'System'} {self.action}d {self.model_name} at {self.timestamp}"
 
     @classmethod
     def log_action(cls, user, action, model_name=None, object_id=None, details=None, ip_address=None):
-        """
-        Helper method to create audit log entries
-        """
         return cls.objects.create(
             user=user,
             action=action,
@@ -912,7 +739,8 @@ class Meta:
             details=details or {},
             ip_address=ip_address
         )
-    
+
+# Announcement
 class Announcement(models.Model):
     TARGET_CHOICES = [
         ('ALL', 'All Users'),
@@ -934,6 +762,7 @@ class Announcement(models.Model):
     def __str__(self):
         return self.title
 
+# Report Card
 class ReportCard(models.Model):
     TERM_CHOICES = [
         (1, 'Term 1'),
@@ -973,13 +802,11 @@ class ReportCard(models.Model):
         return f"{self.student}'s Report Card - {self.academic_year} Term {self.term}"
     
     def save(self, *args, **kwargs):
-        # Calculate average score and overall grade if not set
         if not self.average_score or not self.overall_grade:
             self.calculate_grades()
         super().save(*args, **kwargs)
     
     def calculate_grades(self):
-        # Get all grades for this student, academic year, and term
         grades = Grade.objects.filter(
             student=self.student,
             academic_year=self.academic_year,
@@ -987,11 +814,8 @@ class ReportCard(models.Model):
         )
         
         if grades.exists():
-            # Calculate average score
             total_score = sum(grade.total_score for grade in grades)
             self.average_score = total_score / grades.count()
-            
-            # Calculate overall grade
             self.overall_grade = self.calculate_grade(self.average_score)
         else:
             self.average_score = 0.00
@@ -1008,7 +832,8 @@ class ReportCard(models.Model):
         elif score >= 30: return 'D+'
         elif score >= 20: return 'D'
         else: return 'E'
-#attendance management
+
+# Attendance Management
 class AcademicTerm(models.Model):
     TERM_CHOICES = [
         (1, 'Term 1'),
@@ -1172,7 +997,7 @@ class AnalyticsCache(models.Model):
 
 class GradeAnalytics(models.Model):
     """Model to store grade-related analytics"""
-    class_level = models.CharField(max_length=20, choices=Student.CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)  # Use the global constant
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     average_score = models.FloatField()
     highest_score = models.FloatField()
@@ -1181,10 +1006,9 @@ class GradeAnalytics(models.Model):
     
     class Meta:
         unique_together = ('class_level', 'subject', 'date_calculated')
-
 class AttendanceAnalytics(models.Model):
     """Model to store attendance analytics"""
-    class_level = models.CharField(max_length=20, choices=Student.CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)  # Fix this line too
     date = models.DateField()
     present_count = models.IntegerField()
     absent_count = models.IntegerField()
@@ -1233,7 +1057,7 @@ class Timetable(models.Model):
         (5, 'Saturday'),
     ]
     
-    class_level = models.CharField(max_length=2, choices=Student.CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
     day_of_week = models.PositiveSmallIntegerField(choices=DAYS_OF_WEEK)
     academic_year = models.CharField(max_length=20)
     term = models.PositiveSmallIntegerField(choices=AcademicTerm.TERM_CHOICES)

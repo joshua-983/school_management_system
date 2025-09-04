@@ -1,6 +1,5 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import date
@@ -12,11 +11,12 @@ from .models import ReportCard
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from .models import Fee, FeeCategory, Student
+from django.conf import settings
+from django.apps import apps
+import re
+from .models import CLASS_LEVEL_CHOICES
 
-
-
-
-
+User = apps.get_model(settings.AUTH_USER_MODEL)
 
 class StudentRegistrationForm(forms.ModelForm):
     password1 = forms.CharField(label='Password', widget=forms.PasswordInput)
@@ -293,63 +293,124 @@ class SubjectForm(forms.ModelForm):
         }
 
 class TeacherRegistrationForm(forms.ModelForm):
-    password1 = forms.CharField(label='Password', widget=forms.PasswordInput)
-    password2 = forms.CharField(label='Confirm Password', widget=forms.PasswordInput)
-    
+    username = forms.CharField(max_length=150, required=True)
+    password = forms.CharField(widget=forms.PasswordInput, required=True)
+    first_name = forms.CharField(max_length=100, required=True)
+    last_name = forms.CharField(max_length=100, required=True)
+    email = forms.EmailField(required=True)
+
     class Meta:
         model = Teacher
-        fields = ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_number', 
-                 'email', 'address', 'subjects', 'class_levels']
+        fields = ['date_of_birth', 'gender', 'phone_number', 'address', 'subjects', 'class_levels', 
+                 'qualification', 'date_of_joining', 'is_class_teacher', 'is_active']
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
-            'address': forms.Textarea(attrs={'rows': 3}),
-            'subjects': forms.CheckboxSelectMultiple(),
+            'date_of_joining': forms.DateInput(attrs={'type': 'date'}),
         }
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # If editing an existing teacher, make user fields optional
+        if self.instance and self.instance.pk:
+            self.fields['username'].required = False
+            self.fields['password'].required = False
+            self.fields['first_name'].required = False
+            self.fields['last_name'].required = False
+            self.fields['email'].required = False
+
+    def clean_phone_number(self):
+        phone_number = self.cleaned_data.get('phone_number')
+        if phone_number:
+            if not phone_number.isdigit() or len(phone_number) != 10:
+                raise ValidationError("Phone number must be exactly 10 digits.")
+        return phone_number
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            # Convert to lowercase and validate format
+            email = email.lower()
+            if not re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email):
+                raise ValidationError("Email must be in valid format with @ symbol.")
+            
+            # Check if email already exists in the system (only for new teachers)
+            if not (self.instance and self.instance.pk):
+                User = apps.get_model(settings.AUTH_USER_MODEL)
+                if User.objects.filter(email=email).exists():
+                    raise ValidationError("A teacher with this email already exists.")
+        
+        return email
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if username and not (self.instance and self.instance.pk):
+            User = apps.get_model(settings.AUTH_USER_MODEL)
+            if User.objects.filter(username=username).exists():
+                raise ValidationError("This username is already taken. Please choose a different one.")
+        return username
+
     def clean(self):
         cleaned_data = super().clean()
-        password1 = cleaned_data.get('password1')
-        password2 = cleaned_data.get('password2')
         
-        if password1 and password2 and password1 != password2:
-            raise ValidationError("Passwords don't match")
+        # Only validate user fields for new teachers
+        if not (self.instance and self.instance.pk):
+            for field_name in ['username', 'password', 'first_name', 'last_name', 'email']:
+                if self.fields[field_name].required and not cleaned_data.get(field_name):
+                    self.add_error(field_name, "This field is required.")
         
         return cleaned_data
-    
-    def save(self, commit=False):  # ← FIXED: Changed false to False
-        teacher = super().save(commit=False)
+
+    def save(self, commit=True):
+        # For new teachers, create user
+        if not self.instance.pk:
+            User = apps.get_model(settings.AUTH_USER_MODEL)
+            
+            user_data = {
+                'username': self.cleaned_data['username'],
+                'first_name': self.cleaned_data['first_name'],
+                'last_name': self.cleaned_data['last_name'],
+                'email': self.cleaned_data['email'],
+            }
+            
+            # Check if username already exists and generate a unique one
+            base_username = user_data['username']
+            username = base_username
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user_data['username'] = username
+            
+            user = User.objects.create_user(**user_data)
+            user.set_password(self.cleaned_data['password'])
+            user.save()
+
+            teacher = super().save(commit=False)
+            teacher.user = user
+            
+            # Auto-generate employee_id if not set
+            if not teacher.employee_id:
+                last_teacher = Teacher.objects.order_by('-id').first()
+                if last_teacher and last_teacher.employee_id and last_teacher.employee_id.startswith('T'):
+                    try:
+                        last_number = int(last_teacher.employee_id[1:])
+                        new_number = last_number + 1
+                    except ValueError:
+                        new_number = 1
+                else:
+                    new_number = 1
+                teacher.employee_id = f"T{new_number:03d}"
+        else:
+            # For existing teachers, just save normally
+            teacher = super().save(commit=False)
         
-        # Get the cleaned data
-        email = self.cleaned_data['email']
-        password = self.cleaned_data['password1']
-        first_name = self.cleaned_data['first_name']
-        last_name = self.cleaned_data['last_name']
-        
-        # Generate a unique username
-        base_username = email.split('@')[0].lower()
-        username = base_username
-        counter = 1
-        
-        # Check if username already exists and find a unique one
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username}{counter}"
-            counter += 1
-        
-        # Create the user - use only existing fields
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-            is_staff=True  # Teachers get staff access
-        )
-        
-        teacher.user = user
         if commit:
             teacher.save()
             self.save_m2m()
+        
         return teacher
+
 
 
 class AssignmentForm(forms.ModelForm):
@@ -411,6 +472,27 @@ class ClassAssignmentForm(forms.ModelForm):
                 teachers=self.request.user.teacher
             )
 
+    def clean(self):  # Add this method
+        cleaned_data = super().clean()
+        subject = cleaned_data.get('subject')
+        class_level = cleaned_data.get('class_level')
+        academic_year = cleaned_data.get('academic_year')
+        
+        if subject and class_level and academic_year:
+            # Check if this subject-class combination already exists
+            existing_assignment = ClassAssignment.objects.filter(
+                subject=subject,
+                class_level=class_level,
+                academic_year=academic_year
+            ).exclude(pk=self.instance.pk if self.instance else None)
+            
+            if existing_assignment.exists():
+                raise ValidationError(
+                    f"This subject ({subject}) is already assigned to another teacher "
+                    f"in {class_level} for academic year {academic_year}."
+                )
+        
+        return cleaned_data
 class GradeForm(forms.ModelForm):
     class Meta:
         model = Grade
@@ -723,8 +805,14 @@ class AuditLogFilterForm(forms.Form):
         ('LOGOUT', 'Logout'),
     ]
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Get the custom user model in the __init__ method
+        User = apps.get_model(settings.AUTH_USER_MODEL)
+        self.fields['user'].queryset = User.objects.all()
+    
     user = forms.ModelChoiceField(
-        queryset=User.objects.all(),
+        queryset=None,  # Will be set in __init__
         required=False,
         label="Filter by User"
     )
@@ -743,7 +831,6 @@ class AuditLogFilterForm(forms.Form):
         widget=forms.DateInput(attrs={'type': 'date'}),
         label="To Date"
     )
-
 class ReportCardFilterForm(forms.Form):
     academic_year = forms.CharField(
         required=False,
@@ -890,9 +977,9 @@ class BulkAttendanceForm(forms.Form):
         required=True
     )
     class_level = forms.ChoiceField(
-        choices=Student.CLASS_LEVEL_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        required=True
+    choices=CLASS_LEVEL_CHOICES,
+    widget=forms.Select(attrs={'class': 'form-select'}),
+    required=True
     )
     csv_file = forms.FileField(
         widget=forms.FileInput(attrs={'class': 'form-control'}),
@@ -954,10 +1041,11 @@ class AttendanceSummaryFilterForm(forms.Form):
         required=False
     )
     class_level = forms.ChoiceField(
-        choices=Student.CLASS_LEVEL_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        required=False
+    choices=CLASS_LEVEL_CHOICES,
+    widget=forms.Select(attrs={'class': 'form-select'}),
+    required=False
     )
+    
     student = forms.ModelChoiceField(
         queryset=Student.objects.all(),
         widget=forms.Select(attrs={'class': 'form-select'}),
@@ -1122,7 +1210,7 @@ class TimetableEntryForm(forms.ModelForm):
             ).distinct()
 
 class TimetableFilterForm(forms.Form):
-    class_level = forms.ChoiceField(choices=Student.CLASS_LEVEL_CHOICES, required=False)
+    class_level = forms.ChoiceField(choices=CLASS_LEVEL_CHOICES, required=False)
     academic_year = forms.CharField(required=False)
     term = forms.ChoiceField(choices=AcademicTerm.TERM_CHOICES, required=False)
     day_of_week = forms.ChoiceField(choices=Timetable.DAYS_OF_WEEK, required=False)
@@ -1145,10 +1233,10 @@ class FeeStatusReportForm(forms.Form):
         label="To Date"
     )
     class_level = forms.ChoiceField(
-        choices=[('', 'All Classes')] + list(Student.CLASS_LEVEL_CHOICES),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        label="Class Level"
+    choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
+    required=False,
+    widget=forms.Select(attrs={'class': 'form-select'}),
+    label="Class Level"
     )
     fee_category = forms.ModelChoiceField(
         queryset=FeeCategory.objects.all(),

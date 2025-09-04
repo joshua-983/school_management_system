@@ -55,6 +55,10 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
         messages.success(self.request, 'Class assignment created successfully!')
         return super().form_valid(form)
     
+    def form_invalid(self, form):  # Add this method for better error handling
+        messages.error(self.request, 'Please correct the errors below.')
+        return super().form_invalid(form)
+    
     def get_success_url(self):
         return reverse_lazy('class_assignment_list')
 

@@ -2,10 +2,11 @@ from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from .models import (
     Student, AcademicTerm, Announcement, Assignment, AttendancePeriod,
-    AttendanceSummary, AuditLog,  ClassAssignment, 
-     Fee, FeeCategory, FeePayment, Grade, Notification,
-    ParentGuardian, ReportCard, StudentAssignment, StudentAttendance,
-    Subject, Teacher
+    AttendanceSummary, AuditLog, ClassAssignment, Fee, FeeCategory, 
+    FeePayment, Grade, Notification, ParentGuardian, ReportCard, 
+    StudentAssignment, StudentAttendance, Subject, Teacher,
+    SchoolConfiguration, AnalyticsCache, GradeAnalytics, AttendanceAnalytics,
+    TimeSlot, Timetable, TimetableEntry
 )
 
 @admin.register(Student)
@@ -68,8 +69,6 @@ class FeePaymentAdmin(admin.ModelAdmin):
     search_fields = ('fee__student__first_name', 'fee__student__last_name', 'receipt_number')
     raw_id_fields = ('fee', 'recorded_by')
 
-
-
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
     list_display = ('user', 'action', 'model_name', 'object_id', 'timestamp')
@@ -86,10 +85,43 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ('user', 'first_name', 'last_name', 'is_active')
-    search_fields = ('first_name', 'last_name', 'user__username')
-    list_filter = ('is_active',)
-    raw_id_fields = ('user',)
+    list_display = ['id', 'get_first_name', 'get_last_name', 'get_email', 'is_active']
+    list_filter = ['is_active', 'class_levels']
+    search_fields = ['user__first_name', 'user__last_name', 'user__email']
+    
+    # Custom methods to access user fields
+    def get_first_name(self, obj):
+        return obj.user.first_name
+    get_first_name.short_description = 'First Name'
+    get_first_name.admin_order_field = 'user__first_name'
+    
+    def get_last_name(self, obj):
+        return obj.user.last_name
+    get_last_name.short_description = 'Last Name'
+    get_last_name.admin_order_field = 'user__last_name'
+    
+    def get_email(self, obj):
+        return obj.user.email
+    get_email.short_description = 'Email'
+    get_email.admin_order_field = 'user__email'
+
+    # ADD THIS METHOD FOR AUTO EMPLOYEE ID GENERATION
+    def save_model(self, request, obj, form, change):
+        if not obj.employee_id:  # Only generate if not already set
+            # Get the last teacher by ID
+            last_teacher = Teacher.objects.order_by('-id').first()
+            if last_teacher and last_teacher.employee_id.startswith('T'):
+                try:
+                    # Extract number from existing ID (e.g., "T001" -> 1)
+                    last_number = int(last_teacher.employee_id[1:])
+                    new_number = last_number + 1
+                except ValueError:
+                    new_number = 1
+            else:
+                new_number = 1
+            # Format as T001, T002, etc.
+            obj.employee_id = f"T{new_number:03d}"
+        super().save_model(request, obj, form, change)
 
 @admin.register(ClassAssignment)
 class ClassAssignmentAdmin(admin.ModelAdmin):
@@ -119,12 +151,7 @@ class GradeAdmin(admin.ModelAdmin):
     raw_id_fields = ('student', 'subject', 'class_assignment')
 
     def get_grade(self, obj):
-        """
-        Converts total_score to a letter grade (A, B, C, etc.).
-        - Adjust thresholds as needed.
-        - Handles null/0 scores safely.
-        """
-        if obj.total_score is None:  # Handle missing scores
+        if obj.total_score is None:
             return "N/A"
         if obj.total_score >= 90:
             return "A"
@@ -136,7 +163,7 @@ class GradeAdmin(admin.ModelAdmin):
             return "D"
         else:
             return "F"
-    get_grade.short_description = 'Grade'  # Sets column header
+    get_grade.short_description = 'Grade'
     
 @admin.register(ReportCard)
 class ReportCardAdmin(admin.ModelAdmin):
@@ -153,3 +180,13 @@ class NotificationAdmin(admin.ModelAdmin):
     raw_id_fields = ('recipient',)
     readonly_fields = ('created_at',)
     date_hierarchy = 'created_at'
+
+# Register models without custom admin classes
+admin.site.register(SchoolConfiguration)
+admin.site.register(AnalyticsCache)
+admin.site.register(GradeAnalytics)
+admin.site.register(AttendanceAnalytics)
+admin.site.register(TimeSlot)
+admin.site.register(Timetable)
+admin.site.register(TimetableEntry)
+admin.site.register(Announcement)

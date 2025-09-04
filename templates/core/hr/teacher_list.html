@@ -1,102 +1,207 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Teachers{% endblock %}
+{% block title %}Teachers Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border: 1px solid rgba(0, 0, 0, 0.125);
+    }
+    .card-header {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+    }
+    .table th {
+        background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+        border-top: none;
+    }
+    .badge {
+        font-size: 0.75em;
+    }
+    .btn-group .btn {
+        border-radius: 0.25rem;
+        margin: 0 2px;
+    }
+    .teacher-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Teacher List</h5>
-        <a href="{% url 'teacher_add' %}" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus"></i> Add New Teacher
-        </a>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>Photo</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Subjects</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for teacher in teachers %}
-                    <tr>
-                        <td>
-                            <div class="bg-light rounded-circle d-flex align-items-center justify-content-center" 
-                                 style="width: 40px; height: 40px;">
-                                <i class="bi bi-person text-muted"></i>
-                            </div>
-                        </td>
-                        <td>{{ teacher.get_full_name }}</td>
-                        <td>{{ teacher.email }}</td>
-                        <td>{{ teacher.phone_number }}</td>
-                        <td>
-                            {% for subject in teacher.subjects.all %}
-                                <span class="badge bg-secondary">{{ subject.name }}</span>
-                            {% endfor %}
-                        </td>
-                        <td>
-                            {% if teacher.is_active %}
-                                <span class="badge bg-success">Active</span>
-                            {% else %}
-                                <span class="badge bg-danger">Inactive</span>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-people-fill me-2"></i>
+                        Teacher List (Total: {{ teachers.count }})
+                    </h5>
+                    <a href="{% url 'teacher_add' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-plus-circle me-1"></i> Add New Teacher
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                    <div class="messages">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Photo</th>
+                                    <th>Name</th>
+                                    <th>Employee ID</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Subjects</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for teacher in teachers %}
+                                <tr>
+                                    <td>
+                                        <div class="teacher-avatar">
+                                            {{ teacher.user.first_name|first }}{{ teacher.user.last_name|first }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if teacher.user.get_full_name %}
+                                            <strong>{{ teacher.user.get_full_name }}</strong>
+                                        {% else %}
+                                            <span class="text-muted">No name</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info text-dark">{{ teacher.employee_id|default:"N/A" }}</span>
+                                    </td>
+                                    <td>
+                                        {% if teacher.user.email %}
+                                            <a href="mailto:{{ teacher.user.email }}" class="text-decoration-none">
+                                                {{ teacher.user.email }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">No email</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if teacher.phone_number %}
+                                            <a href="tel:{{ teacher.phone_number }}" class="text-decoration-none">
+                                                {{ teacher.phone_number }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">No phone</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% for subject in teacher.subjects.all %}
+                                            <span class="badge bg-secondary mb-1">{{ subject.name }}</span>
+                                        {% empty %}
+                                            <span class="text-muted">No subjects</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if teacher.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'teacher_edit' teacher.pk %}" class="btn btn-warning" 
+                                               data-bs-toggle="tooltip" title="Edit Teacher">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <a href="{% url 'teacher_delete' teacher.pk %}" class="btn btn-danger" 
+                                               data-bs-toggle="tooltip" title="Delete Teacher"
+                                               onclick="return confirm('Are you sure you want to delete this teacher?')">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-4">
+                                        <div class="text-muted">
+                                            <i class="bi bi-people display-4 d-block mb-2"></i>
+                                            No teachers found. 
+                                            <a href="{% url 'teacher_add' %}" class="text-decoration-none">
+                                                Add the first teacher
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if is_paginated %}
+                    <nav aria-label="Page navigation" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1">&laquo; First</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                                </li>
                             {% endif %}
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="{% url 'teacher_edit' teacher.pk %}" class="btn btn-warning">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{% url 'teacher_delete' teacher.pk %}" class="btn btn-danger">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center">No teachers found</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
+                            
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        
-        {% if is_paginated %}
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1">&laquo; First</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-                    </li>
-                {% endif %}
-                
-                <li class="page-item active">
-                    <span class="page-link">
-                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                    </span>
-                </li>
-                
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+});
+</script>
 {% endblock %}
