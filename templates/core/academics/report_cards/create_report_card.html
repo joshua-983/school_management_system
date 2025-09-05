@@ -3,94 +3,261 @@
 
 {% block title %}Create New Report Card{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+}
+
+.form-control, .form-select {
+    height: calc(3.2rem + 2px);
+    padding: 1.5rem 0.75rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+}
+
+.form-floating > label {
+    position: absolute;
+    top: 0.8rem;
+    left: 0.75rem;
+    color: #6c757d;
+    transition: var(--transition);
+    pointer-events: none;
+    z-index: 1;
+    font-size: 0.9rem;
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    top: 0.4rem;
+    left: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--primary);
+    font-weight: 500;
+    background: white;
+    padding: 0 0.4rem;
+    height: auto;
+}
+
+.form-check-input {
+    width: 1.2em;
+    height: 1.2em;
+    margin-top: 0.15em;
+}
+
+.form-check-input:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.form-check-label {
+    margin-left: 0.5rem;
+}
+
+.btn {
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #2f48c9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
+}
+
+.alert {
+    border-radius: var(--border-radius);
+    border: none;
+}
+
+.alert-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: var(--danger);
+    border-left: 4px solid var(--danger);
+}
+
+.info-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid var(--info);
+}
+
+.info-card .card-header {
+    background: transparent;
+    color: var(--dark);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@media (max-width: 768px) {
+    .card-header h3 {
+        font-size: 1.25rem;
+    }
+    
+    .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .d-flex.justify-content-between {
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid py-4">
     <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow-lg">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="mb-0">
-                        <i class="fas fa-plus me-2"></i>Create New Report Card
-                    </h3>
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">
+                            <i class="fas fa-plus-circle me-2"></i>Create New Report Card
+                        </h3>
+                        <a href="{% url 'report_card_dashboard' %}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                        </a>
+                    </div>
                 </div>
                 
                 <div class="card-body">
-                    <form method="post" novalidate>
+                    <form method="post" novalidate id="reportCardForm">
                         {% csrf_token %}
                         
                         {% if form.non_field_errors %}
                         <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
                             {% for error in form.non_field_errors %}
                                 {{ error }}
                             {% endfor %}
                         </div>
                         {% endif %}
                         
-                        <div class="row mb-3">
+                        <div class="row mb-4">
                             <div class="col-md-6">
-                                <label for="{{ form.student.id_for_label }}" class="form-label">
-                                    <strong>Student</strong>
-                                </label>
-                                {{ form.student }}
-                                {% if form.student.errors %}
-                                <div class="text-danger small">
-                                    {% for error in form.student.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label for="{{ form.academic_year.id_for_label }}" class="form-label">
-                                    <strong>Academic Year</strong>
-                                </label>
-                                {{ form.academic_year }}
-                                {% if form.academic_year.errors %}
-                                <div class="text-danger small">
-                                    {% for error in form.academic_year.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="{{ form.term.id_for_label }}" class="form-label">
-                                    <strong>Term</strong>
-                                </label>
-                                {{ form.term }}
-                                {% if form.term.errors %}
-                                <div class="text-danger small">
-                                    {% for error in form.term.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label"><strong>Status</strong></label>
-                                <div class="form-check mt-2">
-                                    {{ form.is_published }}
-                                    <label class="form-check-label" for="{{ form.is_published.id_for_label }}">
-                                        Publish immediately
+                                <div class="form-floating mb-3">
+                                    {{ form.student }}
+                                    <label for="{{ form.student.id_for_label }}">
+                                        <i class="fas fa-user-graduate me-1"></i>Student *
                                     </label>
+                                    {% if form.student.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.student.errors %}
+                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
-                                <small class="form-text text-muted">
-                                    If checked, the report card will be visible to students/parents.
-                                </small>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating mb-3">
+                                    {{ form.academic_year }}
+                                    <label for="{{ form.academic_year.id_for_label }}">
+                                        <i class="fas fa-calendar-alt me-1"></i>Academic Year *
+                                    </label>
+                                    {% if form.academic_year.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.academic_year.errors %}
+                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left me-1"></i> Cancel
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-floating mb-3">
+                                    {{ form.term }}
+                                    <label for="{{ form.term.id_for_label }}">
+                                        <i class="fas fa-calendar me-1"></i>Term *
+                                    </label>
+                                    {% if form.term.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.term.errors %}
+                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3 p-4 border rounded">
+                                    {{ form.is_published }}
+                                    <label class="form-check-label ms-2" for="{{ form.is_published.id_for_label }}">
+                                        <strong>Publish immediately</strong>
+                                    </label>
+                                    <div class="form-text text-muted mt-1">
+                                        <small>If checked, the report card will be visible to students/parents immediately.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
                             </a>
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-save me-1"></i> Create Report Card
+                            <button type="submit" class="btn btn-success px-4" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>Create Report Card
                             </button>
                         </div>
                     </form>
@@ -98,8 +265,8 @@
             </div>
             
             <!-- Help Section -->
-            <div class="card mt-4">
-                <div class="card-header bg-info text-white">
+            <div class="card info-card mt-4">
+                <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-info-circle me-2"></i>Information
                     </h5>
@@ -113,7 +280,7 @@
                         <li>You can edit grades and details later</li>
                     </ul>
                     <p class="mb-0 text-muted">
-                        <small>Note: You need to add grades for each subject after creating the report card.</small>
+                        <small><i class="fas fa-lightbulb me-1"></i>Note: You need to add grades for each subject after creating the report card.</small>
                     </p>
                 </div>
             </div>
@@ -122,31 +289,62 @@
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-    .form-select, .form-control {
-        border-radius: 6px;
-        border: 2px solid #e9ecef;
-        transition: all 0.3s ease;
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('reportCardForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Auto-format academic year input
+    const academicYearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
+    if (academicYearInput) {
+        academicYearInput.addEventListener('blur', function() {
+            if (this.value && !this.value.includes('/')) {
+                if (this.value.length === 4) {
+                    const year = parseInt(this.value);
+                    this.value = year + '/' + (year + 1);
+                } else if (this.value.length === 8 && !isNaN(this.value)) {
+                    this.value = this.value.substring(0, 4) + '/' + this.value.substring(4);
+                }
+            }
+        });
     }
     
-    .form-select:focus, .form-control:focus {
-        border-color: #0d6efd;
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-    }
+    // Form validation
+    form.addEventListener('submit', function(e) {
+        let isValid = true;
+        const errors = [];
+        
+        // Validate student selection
+        const studentSelect = document.getElementById('{{ form.student.id_for_label }}');
+        if (!studentSelect.value) {
+            isValid = false;
+            errors.push('Please select a student');
+        }
+        
+        // Validate academic year format
+        if (academicYearInput && !/^\d{4}\/\d{4}$/.test(academicYearInput.value)) {
+            isValid = false;
+            errors.push('Academic year must be in YYYY/YYYY format');
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+            // Show error message
+            alert('Please correct the following errors:\n\n' + errors.join('\n'));
+        } else {
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+        }
+    });
     
-    .form-check-input:checked {
-        background-color: #0d6efd;
-        border-color: #0d6efd;
-    }
-    
-    .card {
-        border: none;
-        border-radius: 10px;
-    }
-    
-    .card-header {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    }
-</style>
+    // Add animation to form elements
+    const formElements = form.querySelectorAll('.form-control, .form-select, .form-check-input');
+    formElements.forEach((element, index) => {
+        element.style.animationDelay = `${index * 0.1}s`;
+        element.classList.add('animate__animated', 'animate__fadeInUp');
+    });
+});
+</script>
 {% endblock %}

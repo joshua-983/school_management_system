@@ -3,12 +3,14 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required, user_passes_test
-
+from django.http import JsonResponse
+from django.utils import timezone
 from django.contrib import messages
-from .base_views import is_admin, is_teacher, is_student
-from ..models import TimeSlot, Timetable, TimetableEntry, Teacher, Subject, Student, ClassAssignment
+
+from .base_views import is_admin, is_teacher, is_student, is_parent
+from ..models import TimeSlot, Timetable, TimetableEntry, Teacher, Subject, Student, ClassAssignment, AcademicTerm
 from ..forms import TimeSlotForm, TimetableForm, TimetableEntryForm, TimetableFilterForm
-#timetable
+from ..models import CLASS_LEVEL_CHOICES
 
 class TimeSlotListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = TimeSlot
@@ -59,7 +61,6 @@ class TimeSlotDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         messages.success(request, 'Time slot deleted successfully')
         return super().delete(request, *args, **kwargs)
 
-# Timetable Views
 class TimetableListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Timetable
     template_name = 'core/timetable/timetable_list.html'
@@ -97,7 +98,7 @@ class TimetableListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        context['class_levels'] = CLASS_LEVEL_CHOICES
         context['current_filters'] = {
             'class_level': self.request.GET.get('class_level', ''),
             'academic_year': self.request.GET.get('academic_year', ''),
@@ -213,7 +214,6 @@ class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         messages.success(request, 'Timetable deleted successfully')
         return super().delete(request, *args, **kwargs)
 
-# Student Timetable View
 class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/timetable/student_timetable.html'
     
@@ -226,11 +226,13 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         if is_student(self.request.user):
             student = self.request.user.student_profile
             class_level = student.class_level
+            context['student'] = student
         else:
             # For parents, get the first child's class level
             children = self.request.user.parentguardian.student.all()
             if children.exists():
                 class_level = children.first().class_level
+                context['student'] = children.first()
             else:
                 class_level = None
         
@@ -258,17 +260,26 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             
             # Organize by day
             weekly_timetable = {}
-            for day in range(6):  # Monday to Saturday
+            days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+            
+            for day_num, day_name in enumerate(days_order):
                 try:
-                    timetable = timetables.get(day_of_week=day)
-                    weekly_timetable[day] = timetable.entries.order_by('time_slot__period_number')
+                    timetable = timetables.get(day_of_week=day_num)
+                    weekly_timetable[day_name] = timetable.entries.order_by('time_slot__period_number')
                 except Timetable.DoesNotExist:
-                    weekly_timetable[day] = None
+                    weekly_timetable[day_name] = None
+            
+            # Get all time slots for the weekly overview
+            time_slots = TimeSlot.objects.order_by('period_number')
+            time_slot_list = []
+            
+            for slot in time_slots:
+                time_slot_list.append(f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}")
             
             context.update({
                 'weekly_timetable': weekly_timetable,
-                'timeslots': TimeSlot.objects.order_by('period_number'),
-                'days_of_week': dict(Timetable.DAYS_OF_WEEK),
+                'time_slots': time_slot_list,
+                'days_order': days_order,
                 'class_level': class_level,
                 'academic_year': academic_year,
                 'term': term,
@@ -276,7 +287,6 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         
         return context
 
-# Teacher Timetable View
 class TeacherTimetableView(LoginRequiredMixin, TemplateView):
     template_name = 'core/timetable/teacher_timetable.html'
     
@@ -287,6 +297,7 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
             return context
         
         teacher = self.request.user.teacher_profile
+        context['teacher'] = teacher
         
         # Get current academic year and term
         current_year = timezone.now().year
@@ -308,17 +319,27 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
         
         # Group entries by day of week
         days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-        entries_by_day = {}
+        periods_by_day = {}
         
         for entry in entries:
-            day_name = entry.timetable.get_day_of_week_display()
-            if day_name not in entries_by_day:
-                entries_by_day[day_name] = []
-            entries_by_day[day_name].append(entry)
+            day_name = days_order[entry.timetable.day_of_week]
+            if day_name not in periods_by_day:
+                periods_by_day[day_name] = []
+            
+            # Add current period flag
+            now = timezone.now()
+            start_datetime = timezone.make_aware(
+                timezone.datetime.combine(now.date(), entry.time_slot.start_time)
+            )
+            end_datetime = timezone.make_aware(
+                timezone.datetime.combine(now.date(), entry.time_slot.end_time)
+            )
+            
+            entry.is_current = start_datetime <= now <= end_datetime
+            periods_by_day[day_name].append(entry)
         
-        context['entries_by_day'] = entries_by_day
+        context['periods_by_day'] = periods_by_day
         context['days_order'] = days_order
-        context['teacher'] = teacher
         
         # Calculate statistics
         context['total_periods'] = entries.count()

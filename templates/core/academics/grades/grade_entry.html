@@ -1,36 +1,192 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
+{% load static %}
+{% load custom_filters %}
 
-{% block title %}Enter Student Grade{% endblock %}
+{% block title %}Enter Student Grade - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+}
+
+.form-control, .form-select {
+    height: calc(3.2rem + 2px);
+    padding: 1.5rem 0.75rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    font-size: 1rem;
+}
+
+.form-floating > label {
+    position: absolute;
+    top: 0.8rem;
+    left: 0.75rem;
+    color: #6c757d;
+    transition: var(--transition);
+    pointer-events: none;
+    z-index: 1;
+    font-size: 0.9rem;
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    top: 0.4rem;
+    left: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--primary);
+    font-weight: 500;
+    background: white;
+    padding: 0 0.4rem;
+    height: auto;
+}
+
+.score-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    transition: var(--transition);
+    height: 100%;
+}
+
+.score-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+}
+
+.score-input {
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-align: center;
+    border: none;
+    border-bottom: 2px solid #dee2e6;
+    border-radius: 0;
+    padding: 0.5rem;
+    background: transparent;
+    width: 100%;
+}
+
+.score-input:focus {
+    outline: none;
+    border-bottom-color: var(--primary);
+    box-shadow: none;
+}
+
+.weight-badge {
+    font-size: 0.75rem;
+    border-radius: 20px;
+    padding: 0.25rem 0.5rem;
+}
+
+.total-score-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px dashed #dee2e6;
+    border-radius: var(--border-radius);
+}
+
+.grade-display {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.grade-letter {
+    font-size: 1.5rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    color: white;
+}
+
+.grade-A { background-color: var(--success); }
+.grade-B { background-color: #20c997; }
+.grade-C { background-color: var(--warning); color: #000; }
+.grade-D { background-color: #fd7e14; }
+.grade-E { background-color: var(--danger); }
+.grade-F { background-color: var(--secondary); }
+
+.progress {
+    height: 8px;
+    border-radius: 4px;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: var(--secondary);
+    margin-top: 0.25rem;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pulse {
+    animation: pulse 0.5s ease;
+}
+
+.student-info {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid py-4">
     <div class="row mb-4">
-        <div class="col-md-12">
+        <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Dashboard</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'grade_list' %}">Grades</a></li>
                     <li class="breadcrumb-item active" aria-current="page">New Grade</li>
                 </ol>
             </nav>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-journal-plus text-primary me-2"></i>Grade Entry Form
+            </h1>
         </div>
     </div>
 
     <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h3 class="card-title mb-0">
-                            <i class="fas fa-graduation-cap me-2"></i>Grade Entry Form
+                            <i class="bi bi-journal-plus me-2"></i>Enter Student Grade
                         </h3>
                         <span class="badge bg-light text-dark">
-                            {% if request.user.is_superuser %}
-                                Admin Mode
-                            {% else %}
-                                Teacher Mode
-                            {% endif %}
+                        {% if request.user|is_admin %}Admin Mode{% else %}Teacher Mode{% endif %}
                         </span>
                     </div>
                 </div>
@@ -43,12 +199,40 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    {{ form.student|as_crispy_field }}
+                                    <select class="form-select" id="studentSelect" name="student" required>
+                                        <option value="" selected disabled>Select a student</option>
+                                        {% for student in students %}
+                                        <option value="{{ student.id }}" 
+                                                data-class-level="{{ student.class_level }}"
+                                                data-student-id="{{ student.student_id }}"
+                                                {% if selected_student and selected_student.id == student.id %}selected{% endif %}>
+                                            {{ student.last_name }}, {{ student.first_name }} - {{ student.get_class_level_display }}
+                                        </option>
+                                        {% empty %}
+                                        <option value="" disabled>No students available</option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="studentSelect">
+                                        <i class="bi bi-person me-1"></i>Student *
+                                    </label>
+                                    <div class="help-text">Select a student from your class</div>
                                 </div>
+                                <div id="studentInfo" class="student-info"></div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    {{ form.subject|as_crispy_field }}
+                                    <select class="form-select" id="subjectSelect" name="subject" required>
+                                        <option value="" selected disabled>Select a subject</option>
+                                        {% for subject in subjects %}
+                                        <option value="{{ subject.id }}">
+                                            {{ subject.name }} ({{ subject.code }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="subjectSelect">
+                                        <i class="bi bi-book me-1"></i>Subject *
+                                    </label>
+                                    <div class="help-text">Select the subject</div>
                                 </div>
                             </div>
                         </div>
@@ -57,68 +241,125 @@
                         <div class="row mb-4">
                             <div class="col-md-4">
                                 <div class="form-floating">
-                                    {{ form.academic_year|as_crispy_field }}
-                                    <small class="form-text text-muted">Format: YYYY/YYYY</small>
+                                    <input type="text" class="form-control" id="academicYear" name="academic_year" 
+                                           placeholder="2023/2024" value="2023/2024" required pattern="\d{4}/\d{4}">
+                                    <label for="academicYear">
+                                        <i class="bi bi-calendar me-1"></i>Academic Year *
+                                    </label>
+                                    <div class="help-text">Format: YYYY/YYYY</div>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-floating">
-                                    {{ form.term|as_crispy_field }}
+                                    <select class="form-select" id="termSelect" name="term" required>
+                                        <option value="1">Term 1</option>
+                                        <option value="2" selected>Term 2</option>
+                                        <option value="3">Term 3</option>
+                                    </select>
+                                    <label for="termSelect">
+                                        <i class="bi bi-calendar-event me-1"></i>Term *
+                                    </label>
+                                    <div class="help-text">Select the term</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <select class="form-select" id="assignmentSelect" name="assignment">
+                                        <option value="" selected>No assignment</option>
+                                        <!-- You can populate this dynamically if needed -->
+                                    </select>
+                                    <label for="assignmentSelect">
+                                        <i class="bi bi-clipboard me-1"></i>Assignment
+                                    </label>
+                                    <div class="help-text">Select assignment (optional)</div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Scores Section -->
                         <div class="card mb-4 border-primary">
-                            <div class="card-header bg-light-primary">
+                            <div class="card-header bg-light">
                                 <h5 class="mb-0">
-                                    <i class="fas fa-calculator me-2"></i>Score Components
+                                    <i class="bi bi-calculator me-2"></i>Score Components
                                 </h5>
                             </div>
                             <div class="card-body">
                                 <div class="row g-3">
                                     <div class="col-md-6 col-lg-3">
-                                        <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card score-card">
                                             <div class="card-body text-center">
-                                                {{ form.homework_score|as_crispy_field }}
-                                                <small class="text-muted">(20% weight)</small>
+                                                <label for="classworkScore" class="form-label fw-bold">Classwork</label>
+                                                <input type="number" class="score-input" 
+                                                       id="classworkScore" name="classwork_score"
+                                                       value="0" min="0" max="30" step="0.1" required
+                                                       oninput="calculateTotal()">
+                                                <div class="mt-2">
+                                                    <span class="weight-badge bg-primary">30% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 30 points</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-md-6 col-lg-3">
-                                        <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card score-card">
                                             <div class="card-body text-center">
-                                                {{ form.classwork_score|as_crispy_field }}
-                                                <small class="text-muted">(30% weight)</small>
+                                                <label for="homeworkScore" class="form-label fw-bold">Homework</label>
+                                                <input type="number" class="score-input" 
+                                                       id="homeworkScore" name="homework_score"
+                                                       value="0" min="0" max="10" step="0.1" required
+                                                       oninput="calculateTotal()">
+                                                <div class="mt-2">
+                                                    <span class="weight-badge bg-primary">10% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 10 points</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-md-6 col-lg-3">
-                                        <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card score-card">
                                             <div class="card-body text-center">
-                                                {{ form.test_score|as_crispy_field }}
-                                                <small class="text-muted">(10% weight)</small>
+                                                <label for="testScore" class="form-label fw-bold">Test</label>
+                                                <input type="number" class="score-input" 
+                                                       id="testScore" name="test_score"
+                                                       value="0" min="0" max="10" step="0.1" required
+                                                       oninput="calculateTotal()">
+                                                <div class="mt-2">
+                                                    <span class="weight-badge bg-primary">10% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 10 points</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="col-md-6 col-lg-3">
-                                        <div class="card h-100 border-0 shadow-sm">
+                                        <div class="card score-card">
                                             <div class="card-body text-center">
-                                                {{ form.exam_score|as_crispy_field }}
-                                                <small class="text-muted">(40% weight)</small>
+                                                <label for="examScore" class="form-label fw-bold">Exam</label>
+                                                <input type="number" class="score-input" 
+                                                       id="examScore" name="exam_score"
+                                                       value="0" min="0" max="50" step="0.1" required
+                                                       oninput="calculateTotal()">
+                                                <div class="mt-2">
+                                                    <span class="weight-badge bg-primary">50% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 50 points</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Calculated Total (JavaScript will update this) -->
+                                <!-- Calculated Total -->
                                 <div class="row mt-4">
-                                    <div class="col-md-6 offset-md-3">
-                                        <div class="card bg-light">
+                                    <div class="col-md-8 offset-md-2">
+                                        <div class="card total-score-card">
                                             <div class="card-body text-center">
                                                 <h5 class="mb-2">Projected Total Score</h5>
-                                                <div class="display-4 text-primary" id="totalScoreDisplay">--</div>
-                                                <div class="text-muted small" id="gradeLetterDisplay"></div>
+                                                <div class="grade-display pulse" id="totalScoreDisplay">0.0</div>
+                                                <div class="grade-letter mt-2" id="gradeLetterDisplay">-</div>
+                                                <div class="progress mt-3">
+                                                    <div class="progress-bar" id="totalProgressBar" role="progressbar" style="width: 0%;" 
+                                                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <div class="help-text mt-2" id="gradeDescription">Enter scores to calculate grade</div>
                                             </div>
                                         </div>
                                     </div>
@@ -128,16 +369,22 @@
                         
                         <!-- Remarks Section -->
                         <div class="mb-4">
-                            {{ form.remarks|as_crispy_field }}
+                            <div class="form-floating">
+                                <textarea class="form-control" placeholder="Leave a comment here" id="remarksText" name="remarks" style="height: 100px"></textarea>
+                                <label for="remarksText">
+                                    <i class="bi bi-chat-text me-1"></i>Teacher's Remarks
+                                </label>
+                                <div class="help-text">Optional comments about the student's performance</div>
+                            </div>
                         </div>
                         
                         <!-- Form Actions -->
-                        <div class="d-flex justify-content-between">
+                        <div class="d-flex justify-content-between pt-3 border-top">
                             <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
-                                <i class="fas fa-arrow-left me-2"></i>Cancel
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
                             </a>
-                            <button type="submit" class="btn btn-primary px-4">
-                                <i class="fas fa-save me-2"></i>Save Grade
+                            <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                                <i class="bi bi-save me-2"></i>Save Grade
                             </button>
                         </div>
                     </form>
@@ -148,68 +395,247 @@
 </div>
 {% endblock %}
 
-{% block javascript %}
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Calculate and display total score as user types
-    const scoreInputs = document.querySelectorAll('input[type="number"]');
-    const totalScoreDisplay = document.getElementById('totalScoreDisplay');
-    const gradeLetterDisplay = document.getElementById('gradeLetterDisplay');
-    
-    function calculateTotal() {
-        let homework = parseFloat(document.getElementById('id_homework_score').value) || 0;
-        let classwork = parseFloat(document.getElementById('id_classwork_score').value) || 0;
-        let test = parseFloat(document.getElementById('id_test_score').value) || 0;
-        let exam = parseFloat(document.getElementById('id_exam_score').value) || 0;
+    // Standardized weights (matching Django model)
+    const WEIGHTS = {
+        classwork: 30,  // Max: 30 points
+        homework: 10,   // Max: 10 points  
+        test: 10,       // Max: 10 points
+        exam: 50        // Max: 50 points
+    };
+
+    // Initialize form elements
+    const form = document.getElementById('gradeForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const studentSelect = document.getElementById('studentSelect');
+    const studentInfo = document.getElementById('studentInfo');
+
+    // Set max values for score inputs
+    document.getElementById('homeworkScore').max = WEIGHTS.homework;
+    document.getElementById('classworkScore').max = WEIGHTS.classwork;
+    document.getElementById('testScore').max = WEIGHTS.test;
+    document.getElementById('examScore').max = WEIGHTS.exam;
+
+    // Student selection handler
+    function initStudentSelection() {
+        studentSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const classLevel = selectedOption.getAttribute('data-class-level');
+            const studentId = selectedOption.getAttribute('data-student-id');
+            
+            if (classLevel && studentId) {
+                studentInfo.innerHTML = `
+                    <div class="d-flex justify-content-between small">
+                        <span><strong>Class:</strong> ${getClassLevelDisplay(classLevel)}</span>
+                        <span><strong>ID:</strong> ${studentId}</span>
+                    </div>
+                `;
+            } else {
+                studentInfo.innerHTML = '';
+            }
+        });
         
-        // Apply weights
-        let total = (homework * 0.2) + (classwork * 0.3) + (test * 0.1) + (exam * 0.4);
-        total = Math.round(total * 10) / 10; // Round to 1 decimal place
+        // Trigger change event if student is pre-selected
+        if (studentSelect.value) {
+            const event = new Event('change');
+            studentSelect.dispatchEvent(event);
+        }
+    }
+
+    function getClassLevelDisplay(classLevel) {
+        const classLevels = {
+            'P1': 'Primary 1', 'P2': 'Primary 2', 'P3': 'Primary 3',
+            'P4': 'Primary 4', 'P5': 'Primary 5', 'P6': 'Primary 6',
+            'J1': 'JHS 1', 'J2': 'JHS 2', 'J3': 'JHS 3'
+        };
+        return classLevels[classLevel] || classLevel;
+    }
+
+    // Calculate total score function with standardized weights
+    window.calculateTotal = function() {
+        let classwork = parseFloat(document.getElementById('classworkScore').value) || 0;
+        let homework = parseFloat(document.getElementById('homeworkScore').value) || 0;
+        let test = parseFloat(document.getElementById('testScore').value) || 0;
+        let exam = parseFloat(document.getElementById('examScore').value) || 0;
+        
+        // Apply standardized weights (matching Django)
+        let total = classwork + homework + test + exam;
+        
+        // Round to 1 decimal place
+        total = Math.round(total * 10) / 10;
         
         // Update display
-        totalScoreDisplay.textContent = total;
+        updateGradeDisplay(total);
+    };
+
+    function updateGradeDisplay(totalScore) {
+        const totalDisplay = document.getElementById('totalScoreDisplay');
+        const gradeDisplay = document.getElementById('gradeLetterDisplay');
+        const progressBar = document.getElementById('totalProgressBar');
+        const gradeDescription = document.getElementById('gradeDescription');
         
-        // Calculate grade letter
-        let gradeLetter = '';
-        if (total >= 90) gradeLetter = 'A+';
-        else if (total >= 80) gradeLetter = 'A';
-        else if (total >= 70) gradeLetter = 'B+';
-        else if (total >= 60) gradeLetter = 'B';
-        else if (total >= 50) gradeLetter = 'C+';
-        else if (total >= 40) gradeLetter = 'C';
-        else if (total >= 30) gradeLetter = 'D+';
-        else if (total >= 20) gradeLetter = 'D';
-        else gradeLetter = 'E';
+        totalDisplay.textContent = totalScore;
+        totalDisplay.classList.add('pulse');
+        setTimeout(() => totalDisplay.classList.remove('pulse'), 500);
         
-        gradeLetterDisplay.textContent = `Projected Grade: ${gradeLetter}`;
+        // Update progress bar
+        progressBar.style.width = totalScore + '%';
+        progressBar.setAttribute('aria-valuenow', totalScore);
+        
+        // Calculate grade letter and description
+        const { gradeLetter, gradeClass, description } = calculateGradeInfo(totalScore);
+        
+        gradeDisplay.textContent = gradeLetter;
+        gradeDisplay.className = 'grade-letter ' + gradeClass;
+        gradeDescription.textContent = description;
+        
+        // Update progress bar color based on grade
+        progressBar.className = 'progress-bar ' + gradeClass;
     }
-    
-    // Add event listeners to all score inputs
-    scoreInputs.forEach(input => {
-        input.addEventListener('input', calculateTotal);
-    });
-    
-    // Initial calculation
-    calculateTotal();
-    
-    // Form validation
-    const form = document.getElementById('gradeForm');
-    form.addEventListener('submit', function(event) {
-        let isValid = true;
+
+    function calculateGradeInfo(score) {
+        let gradeLetter = '';
+        let description = '';
+        let gradeClass = '';
         
-        // Validate scores are within range
-        const homework = parseFloat(document.getElementById('id_homework_score').value);
-        if (homework < 0 || homework > 20) {
-            isValid = false;
-            alert('Homework score must be between 0 and 20');
+        if (score >= 90) {
+            gradeLetter = 'A+';
+            description = 'Excellent - Outstanding performance';
+            gradeClass = 'grade-A';
+        } else if (score >= 80) {
+            gradeLetter = 'A';
+            description = 'Very Good - Strong performance';
+            gradeClass = 'grade-A';
+        } else if (score >= 70) {
+            gradeLetter = 'B+';
+            description = 'Good - Above average performance';
+            gradeClass = 'grade-B';
+        } else if (score >= 60) {
+            gradeLetter = 'B';
+            description = 'Satisfactory - Meets expectations';
+            gradeClass = 'grade-B';
+        } else if (score >= 50) {
+            gradeLetter = 'C+';
+            description = 'Fair - Needs improvement';
+            gradeClass = 'grade-C';
+        } else if (score >= 40) {
+            gradeLetter = 'C';
+            description = 'Marginal - Below expectations';
+            gradeClass = 'grade-C';
+        } else if (score >= 30) {
+            gradeLetter = 'D';
+            description = 'Poor - Significant improvement needed';
+            gradeClass = 'grade-D';
+        } else if (score >= 20) {
+            gradeLetter = 'E';
+            description = 'Very Poor - Concerning performance';
+            gradeClass = 'grade-E';
+        } else {
+            gradeLetter = 'F';
+            description = 'Fail - Immediate intervention required';
+            gradeClass = 'grade-F';
         }
         
-        // Add similar validation for other scores...
+        return { gradeLetter, gradeClass, description };
+    }
+
+    // Add event listeners to all score inputs
+    const scoreInputs = document.querySelectorAll('.score-input');
+    scoreInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Validate range based on max attribute
+            const max = parseFloat(this.max);
+            const value = parseFloat(this.value) || 0;
+            
+            if (value > max) {
+                this.value = max;
+            } else if (value < 0) {
+                this.value = 0;
+            }
+            
+            calculateTotal();
+        });
+    });
+
+    // Form validation
+    form.addEventListener('submit', function(event) {
+        let isValid = true;
+        const errorMessages = [];
+        
+        // Validate required fields
+        if (!studentSelect.value) {
+            isValid = false;
+            errorMessages.push('Please select a student');
+        }
+        
+        if (!document.getElementById('subjectSelect').value) {
+            isValid = false;
+            errorMessages.push('Please select a subject');
+        }
+        
+        // Validate scores are within range
+        const homework = parseFloat(document.getElementById('homeworkScore').value) || 0;
+        if (homework < 0 || homework > WEIGHTS.homework) {
+            isValid = false;
+            errorMessages.push(`Homework score must be between 0 and ${WEIGHTS.homework}`);
+        }
+        
+        const classwork = parseFloat(document.getElementById('classworkScore').value) || 0;
+        if (classwork < 0 || classwork > WEIGHTS.classwork) {
+            isValid = false;
+            errorMessages.push(`Classwork score must be between 0 and ${WEIGHTS.classwork}`);
+        }
+        
+        const test = parseFloat(document.getElementById('testScore').value) || 0;
+        if (test < 0 || test > WEIGHTS.test) {
+            isValid = false;
+            errorMessages.push(`Test score must be between 0 and ${WEIGHTS.test}`);
+        }
+        
+        const exam = parseFloat(document.getElementById('examScore').value) || 0;
+        if (exam < 0 || exam > WEIGHTS.exam) {
+            isValid = false;
+            errorMessages.push(`Exam score must be between 0 and ${WEIGHTS.exam}`);
+        }
+        
+        // Validate academic year format
+        const academicYear = document.getElementById('academicYear').value;
+        if (academicYear && !/^\d{4}\/\d{4}$/.test(academicYear)) {
+            isValid = false;
+            errorMessages.push('Academic year must be in YYYY/YYYY format');
+        }
         
         if (!isValid) {
             event.preventDefault();
+            alert('Please correct the following errors:\n\n' + errorMessages.join('\n'));
+        } else {
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+            // Allow form to submit normally
         }
     });
+    
+    // Auto-format academic year input
+    const academicYearInput = document.getElementById('academicYear');
+    if (academicYearInput) {
+        academicYearInput.addEventListener('blur', function() {
+            if (this.value && !this.value.includes('/')) {
+                if (this.value.length === 4) {
+                    const year = parseInt(this.value);
+                    this.value = year + '/' + (year + 1);
+                } else if (this.value.length === 8 && !isNaN(this.value)) {
+                    this.value = this.value.substring(0, 4) + '/' + this.value.substring(4);
+                }
+            }
+        });
+    }
+
+    // Initialize everything
+    initStudentSelection();
+    calculateTotal(); // Initial calculation
 });
 </script>
 {% endblock %}

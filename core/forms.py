@@ -15,6 +15,10 @@ from django.conf import settings
 from django.apps import apps
 import re
 from .models import CLASS_LEVEL_CHOICES
+from .models import Assignment  # Make sure this import exists
+
+
+
 
 User = apps.get_model(settings.AUTH_USER_MODEL)
 

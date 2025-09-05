@@ -1,132 +1,510 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
+{% block title %}Grade Reports{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+}
+
+.stats-card {
+    transition: var(--transition);
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card .card-body {
+    padding: 1.5rem;
+}
+
+.grade-distribution {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.distribution-bar {
+    height: 20px;
+    border-radius: 10px;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.grade-badge {
+    font-size: 0.75rem;
+    padding: 0.4em 0.8em;
+    border-radius: 20px;
+}
+
+.grade-1 { background-color: var(--success); }
+.grade-2 { background-color: #20c997; }
+.grade-3 { background-color: var(--warning); color: #000; }
+.grade-4 { background-color: #fd7e14; }
+.grade-5 { background-color: var(--danger); }
+
+.filter-form .card-body {
+    padding: 1.5rem;
+}
+
+.filter-form .form-label {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .stats-card .card-body {
+        padding: 1rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+.chart-container {
+    position: relative;
+    height: 250px;
+    margin: 1rem 0;
+}
+
+.export-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.export-btn {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: var(--transition);
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <h2>Grade Report</h2>
-    
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get">
-                <div class="row">
-                    <div class="col-md-3">
-                        {{ form.subject|as_crispy_field }}
-                    </div>
-                    <div class="col-md-2">
-                        {{ form.class_level|as_crispy_field }}
-                    </div>
-                    <div class="col-md-2">
-                        {{ form.academic_year|as_crispy_field }}
-                    </div>
-                    <div class="col-md-2">
-                        {{ form.term|as_crispy_field }}
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary">Generate Report</button>
-                    </div>
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'grade_list' %}">Grades</a></li>
+                            <li class="breadcrumb-item active" aria-current="page">Grade Reports</li>
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-graph-up text-primary me-2"></i>
+                        Grade Reports & Analytics
+                    </h1>
+                    <p class="text-muted mb-0">Generate detailed reports and analyze class performance</p>
                 </div>
-            </form>
-        </div>
-    </div>
-    
-    {% if show_results %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <h4>Class Performance Summary</h4>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card text-white bg-primary mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title">Class Average</h5>
-                            <p class="card-text display-4">{{ class_average|floatformat:2 }}%</p>
-                        </div>
-                    </div>
+            </div>
+
+            <!-- Filter Form -->
+            <div class="card filter-form mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-funnel me-2"></i>
+                        Report Filters
+                    </h5>
                 </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-success mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title">Passing Rate</h5>
-                            <p class="card-text display-4">{{ passing_rate|floatformat:2 }}%</p>
+                <div class="card-body">
+                    <form method="get" id="reportForm">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="subject" class="form-label">Subject</label>
+                                <select name="subject" id="subject" class="form-select">
+                                    <option value="">All Subjects</option>
+                                    {% for subject in subjects %}
+                                    <option value="{{ subject.id }}" {% if request.GET.subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ subject.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="class_level" class="form-label">Class Level</label>
+                                <select name="class_level" id="class_level" class="form-select">
+                                    <option value="">All Classes</option>
+                                    {% for level_code, level_name in class_levels %}
+                                    <option value="{{ level_code }}" {% if request.GET.class_level == level_code %}selected{% endif %}>
+                                        {{ level_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="academic_year" class="form-label">Academic Year</label>
+                                <input type="text" name="academic_year" id="academic_year" class="form-control" 
+                                       value="{{ request.GET.academic_year }}" placeholder="YYYY/YYYY"
+                                       pattern="\d{4}/\d{4}" title="Please use format: YYYY/YYYY">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="term" class="form-label">Term</label>
+                                <select name="term" id="term" class="form-select">
+                                    <option value="">All Terms</option>
+                                    <option value="1" {% if request.GET.term == "1" %}selected{% endif %}>Term 1</option>
+                                    <option value="2" {% if request.GET.term == "2" %}selected{% endif %}>Term 2</option>
+                                    <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2 w-100">
+                                    <i class="bi bi-filter me-1"></i>Generate Report
+                                </button>
+                                <a href="{% url 'grade_report' %}" class="btn btn-outline-secondary" title="Reset filters">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </a>
+                            </div>
                         </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-info mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title">Total Students</h5>
-                            <p class="card-text display-4">{{ grades.count }}</p>
-                        </div>
-                    </div>
+                    </form>
                 </div>
             </div>
             
-            <h5 class="mt-4">Grade Distribution</h5>
-            <div class="table-responsive">
-                <table class="table table-bordered">
-                    <thead class="thead-light">
-                        <tr>
-                            <th>GES Grade</th>
-                            <th>Count</th>
-                            <th>Percentage</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for grade in grade_distribution %}
-                        <tr>
-                            <td>{{ grade.ges_grade }}</td>
-                            <td>{{ grade.count }}</td>
-                            <td>{{ grade.percentage|floatformat:2 }}%</td>
-                            <td>{{ grade.get_ges_grade_display }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% if show_results %}
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-4 col-sm-6 mb-3">
+                    <div class="card stats-card text-white bg-primary">
+                        <div class="card-body text-center">
+                            <i class="bi bi-graph-up display-6 mb-2"></i>
+                            <h3 class="h2 mb-1">{{ class_average|floatformat:2 }}%</h3>
+                            <p class="mb-0">Class Average</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6 mb-3">
+                    <div class="card stats-card text-white bg-success">
+                        <div class="card-body text-center">
+                            <i class="bi bi-check-circle display-6 mb-2"></i>
+                            <h3 class="h2 mb-1">{{ passing_rate|floatformat:2 }}%</h3>
+                            <p class="mb-0">Passing Rate</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 col-sm-6 mb-3">
+                    <div class="card stats-card text-white bg-info">
+                        <div class="card-body text-center">
+                            <i class="bi bi-people-fill display-6 mb-2"></i>
+                            <h3 class="h2 mb-1">{{ grades.count }}</h3>
+                            <p class="mb-0">Total Students</p>
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            <!-- Grade Distribution -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-bar-chart me-2"></i>
+                                Grade Distribution
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="grade-distribution">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>GES Grade</th>
+                                            <th>Count</th>
+                                            <th>Percentage</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for grade in grade_distribution %}
+                                        <tr>
+                                            <td>
+                                                <span class="badge grade-badge grade-{{ grade.ges_grade }}">
+                                                    {{ grade.ges_grade }}
+                                                </span>
+                                            </td>
+                                            <td>{{ grade.count }}</td>
+                                            <td>{{ grade.percentage|floatformat:2 }}%</td>
+                                            <td>{{ grade.get_ges_grade_display }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-pie-chart me-2"></i>
+                                Performance Overview
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container" id="gradeChart">
+                                <canvas id="distributionChart"></canvas>
+                            </div>
+                            <div class="text-center">
+                                <small class="text-muted">Visual representation of grade distribution</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Grades -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check me-2"></i>
+                        Detailed Grades - {{ selected_subject.name }} ({{ selected_class_level }})
+                    </h5>
+                    <span class="badge bg-primary">
+                        {{ selected_academic_year }} - Term {{ selected_term }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Student ID</th>
+                                    <th>Class Exercises (30%)</th>
+                                    <th>Homework (10%)</th>
+                                    <th>Project Work (10%)</th>
+                                    <th>Mid-Term (20%)</th>
+                                    <th>End-Term (30%)</th>
+                                    <th>Total Score</th>
+                                    <th>GES Grade</th>
+                                    <th>WASSCE Grade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for grade in grades %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-circle me-2 text-muted"></i>
+                                            {{ grade.student.get_full_name }}
+                                        </div>
+                                    </td>
+                                    <td>{{ grade.student.student_id }}</td>
+                                    <td>{{ grade.class_exercises|default:"-" }}</td>
+                                    <td>{{ grade.homework|default:"-" }}</td>
+                                    <td>{{ grade.project_work|default:"-" }}</td>
+                                    <td>{{ grade.mid_term_exam|default:"-" }}</td>
+                                    <td>{{ grade.end_of_term_exam|default:"-" }}</td>
+                                    <td>
+                                        <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ grade.total_score|floatformat:2|default:"-" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge grade-badge grade-{{ grade.ges_grade }}">
+                                            {{ grade.get_ges_grade_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ grade.get_wassce_grade_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Options -->
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6 class="mb-3">Export Report</h6>
+                    <div class="export-buttons">
+                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success export-btn">
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
+                        </a>
+                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger export-btn">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                        </a>
+                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary export-btn">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-clipboard-data display-1 text-muted"></i>
+                    <h4 class="mt-3 text-muted">Generate a Grade Report</h4>
+                    <p class="text-muted">Select filters above to generate a detailed grade report.</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
-    
-    <div class="card">
-        <div class="card-header">
-            <h4>Detailed Grades</h4>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped">
-                    <thead>
-                        <tr>
-                            <th>Student</th>
-                            <th>Class Exercises (30%)</th>
-                            <th>Homework (10%)</th>
-                            <th>Project Work (10%)</th>
-                            <th>Mid-Term (20%)</th>
-                            <th>End-Term (30%)</th>
-                            <th>Total Score</th>
-                            <th>GES Grade</th>
-                            <th>WASSCE Grade</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for grade in grades %}
-                        <tr>
-                            <td>{{ grade.student.get_full_name }}</td>
-                            <td>{{ grade.class_exercises }}</td>
-                            <td>{{ grade.homework }}</td>
-                            <td>{{ grade.project_work }}</td>
-                            <td>{{ grade.mid_term_exam }}</td>
-                            <td>{{ grade.end_of_term_exam }}</td>
-                            <td>{{ grade.total_score|floatformat:2 }}</td>
-                            <td>{{ grade.get_ges_grade_display }}</td>
-                            <td>{{ grade.get_wassce_grade_display }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Select2 for filter dropdowns
+    $('#subject, #class_level, #term').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Select an option',
+        allowClear: true
+    });
+
+    // Academic year format validation
+    const academicYearInput = document.getElementById('academic_year');
+    if (academicYearInput) {
+        academicYearInput.addEventListener('blur', function() {
+            const pattern = /^\d{4}\/\d{4}$/;
+            if (this.value && !pattern.test(this.value)) {
+                this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+
+    {% if show_results %}
+    // Create grade distribution chart
+    const ctx = document.getElementById('distributionChart').getContext('2d');
+    const gradeData = [
+        {% for grade in grade_distribution %}
+        {
+            label: 'Grade {{ grade.ges_grade }} ({{ grade.get_ges_grade_display }})',
+            count: {{ grade.count }},
+            percentage: {{ grade.percentage|floatformat:2 }}
+        },
+        {% endfor %}
+    ];
+
+    const distributionChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: gradeData.map(item => item.label),
+            datasets: [{
+                data: gradeData.map(item => item.count),
+                backgroundColor: [
+                    '#198754', '#20c997', '#ffc107', '#fd7e14', '#dc3545', '#6c757d'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+
+    // Auto-submit form when filters change
+    const filterForm = document.getElementById('reportForm');
+    const filterInputs = filterForm.querySelectorAll('select, input');
+    
+    filterInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            filterForm.submit();
+        });
+    });
+
+    // Show loading state during exports
+    document.querySelectorAll('.export-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Show loading indicator
+            const originalHtml = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparing...';
+            this.disabled = true;
+            
+            // Revert after 3 seconds (in case the download doesn't start)
+            setTimeout(() => {
+                this.innerHTML = originalHtml;
+                this.disabled = false;
+            }, 3000);
+        });
+    });
+});
+</script>
 {% endblock %}

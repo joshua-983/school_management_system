@@ -1,104 +1,346 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}{% if object %}Edit{% else %}Add{% endif %} Class Assignment{% endblock %}
+{% block title %}{% if object %}Edit{% else %}Create New{% endif %} Class Assignment{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<style>
+    :root {
+        --primary: #4361ee;
+        --primary-dark: #3a56d4;
+        --secondary: #6c757d;
+        --light: #f8f9fa;
+        --dark: #212529;
+        --success: #198754;
+        --danger: #dc3545;
+        --border-radius: 10px;
+        --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        --transition: all 0.3s ease;
+    }
+    
+    .form-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        transition: var(--transition);
+    }
+    
+    .form-card:hover {
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    }
+    
+    .form-header {
+        background: var(--primary);
+        color: white;
+        padding: 1.5rem 2rem;
+        position: relative;
+    }
+    
+    .form-header h2 {
+        margin: 0;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .form-body {
+        padding: 2rem;
+    }
+    
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--dark);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .form-control, .form-select {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #fff;
+        transition: var(--transition);
+        font-size: 1rem;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+    }
+    
+    .form-hint {
+        display: block;
+        margin-top: 0.4rem;
+        font-size: 0.85rem;
+        color: var(--secondary);
+    }
+    
+    .form-info {
+        background: #e8f4ff;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1.5rem 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    .form-info i {
+        color: var(--primary);
+        font-size: 1.25rem;
+        margin-top: 0.1rem;
+    }
+    
+    .form-info-content {
+        flex: 1;
+    }
+    
+    .form-info-content strong {
+        color: var(--primary-dark);
+    }
+    
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: var(--transition);
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: var(--primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.25);
+    }
+    
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--secondary);
+        color: var(--secondary);
+    }
+    
+    .btn-outline:hover {
+        background: var(--secondary);
+        color: white;
+    }
+    
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .error-message {
+        color: var(--danger);
+        font-size: 0.875rem;
+        margin-top: 0.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .form-actions {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header bg-primary text-white">
-        <h4 class="mb-0">{% if object %}Edit{% else %}Add{% endif %} Class Assignment</h4>
-    </div>
-    <div class="card-body">
-        <form method="post" class="needs-validation" novalidate>
-            {% csrf_token %}
-            
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                    {% for error in form.non_field_errors %}
-                        {{ error }}
-                    {% endfor %}
-                </div>
-            {% endif %}
-            
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <div class="form-floating">
+<div class="form-container">
+    <div class="form-card">
+        <div class="form-header">
+            <h2>
+                <i class="bi bi-journal-plus"></i>
+                {% if object %}Edit Class Assignment{% else %}Create New Assignment{% endif %}
+            </h2>
+        </div>
+        
+        <div class="form-body">
+            <form method="post" novalidate id="assignment-form">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                    <div class="error-message">
+                        <i class="bi bi-exclamation-circle"></i>
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="{{ form.class_level.id_for_label }}" class="form-label">
+                            <i class="bi bi-mortarboard"></i>
+                            Class/Grade Level
+                        </label>
                         {{ form.class_level }}
-                        <label for="{{ form.class_level.id_for_label }}">Class Level</label>
                         {% if form.class_level.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.class_level.errors.as_text }}
+                            <div class="error-message">
+                                <i class="bi bi-x-circle"></i>{{ form.class_level.errors.as_text }}
                             </div>
                         {% endif %}
+                        <span class="form-hint">Select the class or grade level</span>
                     </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="form-floating">
+                    
+                    <div class="form-group">
+                        <label for="{{ form.subject.id_for_label }}" class="form-label">
+                            <i class="bi bi-book"></i>
+                            Subject/Course
+                        </label>
                         {{ form.subject }}
-                        <label for="{{ form.subject.id_for_label }}">Subject</label>
                         {% if form.subject.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.subject.errors.as_text }}
+                            <div class="error-message">
+                                <i class="bi bi-x-circle"></i>{{ form.subject.errors.as_text }}
                             </div>
                         {% endif %}
+                        <span class="form-hint">Select the subject or course</span>
                     </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="form-floating">
+                    
+                    <div class="form-group">
+                        <label for="{{ form.teacher.id_for_label }}" class="form-label">
+                            <i class="bi bi-person-badge"></i>
+                            Assigned Teacher
+                        </label>
                         {{ form.teacher }}
-                        <label for="{{ form.teacher.id_for_label }}">Teacher</label>
                         {% if form.teacher.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.teacher.errors.as_text }}
+                            <div class="error-message">
+                                <i class="bi bi-x-circle"></i>{{ form.teacher.errors.as_text }}
                             </div>
                         {% endif %}
+                        <span class="form-hint">Teacher responsible for this class</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.academic_year.id_for_label }}" class="form-label">
+                            <i class="bi bi-calendar-event"></i>
+                            Academic Year
+                        </label>
+                        {{ form.academic_year }}
+                        {% if form.academic_year.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-x-circle"></i>{{ form.academic_year.errors.as_text }}
+                            </div>
+                        {% endif %}
+                        <span class="form-hint">Format: YYYY-YYYY (e.g., 2023-2024)</span>
                     </div>
                 </div>
                 
-                <div class="col-12">
-                    <div class="form-floating">
-                        {{ form.academic_year }}
-                        <label for="{{ form.academic_year.id_for_label }}">Academic Year</label>
-                        <small class="text-muted">Format: YYYY-YYYY (e.g., 2023-2024)</small>
-                        {% if form.academic_year.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.academic_year.errors.as_text }}
-                            </div>
-                        {% endif %}
+                <div class="form-info">
+                    <i class="bi bi-info-circle"></i>
+                    <div class="form-info-content">
+                        <strong>What is a Class Assignment?</strong> 
+                        This assigns a specific teacher to teach a particular subject to a class for an academic year.
                     </div>
                 </div>
-            </div>
-            
-            <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Back to List
-                </a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment
-                </button>
-            </div>
-        </form>
+                
+                <div class="form-actions">
+                    <a href="{% url 'class_assignment_list' %}" class="btn btn-outline">
+                        <i class="bi bi-arrow-left"></i> Back to List
+                    </a>
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
+                        <i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-// Add Bootstrap validation classes
-(function () {
-    'use strict'
-    
-    const forms = document.querySelectorAll('.needs-validation')
-    
-    Array.from(forms).forEach(form => {
-        form.addEventListener('submit', event => {
-            if (!form.checkValidity()) {
-                event.preventDefault()
-                event.stopPropagation()
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add validation styles
+        const form = document.getElementById('assignment-form');
+        const inputs = form.querySelectorAll('select, input');
+        
+        // Add change events to provide feedback
+        inputs.forEach(input => {
+            input.addEventListener('change', function() {
+                if (this.checkValidity()) {
+                    this.style.borderColor = '#198754';
+                } else {
+                    this.style.borderColor = '#dc3545';
+                }
+            });
+        });
+        
+        // Form submission handling
+        form.addEventListener('submit', function(e) {
+            // Show loading state on button
+            const submitBtn = document.getElementById('submit-btn');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Processing...';
+                submitBtn.disabled = true;
             }
+        });
+        
+        // Academic year format validation
+        const academicYearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
+        if (academicYearInput) {
+            academicYearInput.addEventListener('blur', function() {
+                const pattern = /^\d{4}-\d{4}$/;
+                if (this.value && !pattern.test(this.value)) {
+                    this.setCustomValidity('Please use format: YYYY-YYYY (e.g., 2023-2024)');
+                    this.style.borderColor = '#dc3545';
+                } else {
+                    this.setCustomValidity('');
+                    this.style.borderColor = '#198754';
+                }
+            });
             
-            form.classList.add('was-validated')
-        }, false)
-    })
-})()
+            // Add placeholder text
+            academicYearInput.placeholder = "2023-2024";
+        }
+    });
 </script>
 {% endblock %}

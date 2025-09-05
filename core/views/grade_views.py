@@ -14,17 +14,18 @@ from asgiref.sync import async_to_sync
 from .base_views import *
 from ..models import Grade, Assignment, StudentAssignment, ReportCard, Student, Subject, ClassAssignment
 from ..forms import GradeForm, GradeEntryForm, ReportCardForm, ReportCardFilterForm
-
-class GradeListView(LoginRequiredMixin, ListView):
+from ..forms import BulkGradeUploadForm  # Add this import
+class GradeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Grade
     template_name = 'core/academics/grades/grade_list.html'
     context_object_name = 'grades'
     paginate_by = 20
     
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
     def get_queryset(self):
-        queryset = super().get_queryset().select_related(
-            'student', 'subject', 'class_assignment'
-        )
+        queryset = super().get_queryset().select_related('student', 'subject')
         
         # Apply filters
         student_id = self.request.GET.get('student')
@@ -38,7 +39,7 @@ class GradeListView(LoginRequiredMixin, ListView):
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
         if class_level:
-            queryset = queryset.filter(class_assignment__class_level=class_level)
+            queryset = queryset.filter(student__class_level=class_level)
         if academic_year:
             queryset = queryset.filter(academic_year=academic_year)
         if term:
@@ -46,12 +47,11 @@ class GradeListView(LoginRequiredMixin, ListView):
         
         # Role-based filtering
         if is_teacher(self.request.user):
-            class_assignments = ClassAssignment.objects.filter(
+            # Get the classes this teacher teaches
+            teacher_classes = ClassAssignment.objects.filter(
                 teacher=self.request.user.teacher
             ).values_list('class_level', flat=True)
-            queryset = queryset.filter(
-                class_assignment__class_level__in=class_assignments
-            )
+            queryset = queryset.filter(student__class_level__in=teacher_classes)
         elif is_student(self.request.user):
             queryset = queryset.filter(student=self.request.user.student)
         
@@ -60,10 +60,34 @@ class GradeListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Add filter options
-        context['students'] = Student.objects.all().order_by('last_name', 'first_name')
+        # Define class level choices for your school
+        CLASS_LEVEL_CHOICES = (
+            ('P1', 'Primary 1'),
+            ('P2', 'Primary 2'),
+            ('P3', 'Primary 3'),
+            ('P4', 'Primary 4'),
+            ('P5', 'Primary 5'),
+            ('P6', 'Primary 6'),
+            ('J1', 'JHS 1'),
+            ('J2', 'JHS 2'),
+            ('J3', 'JHS 3'),
+        )
+        
+        context['class_levels'] = CLASS_LEVEL_CHOICES
+        
+        # Get students based on user role
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            context['students'] = Student.objects.filter(
+                class_level__in=teacher_classes, 
+                is_active=True
+            ).order_by('last_name', 'first_name')
+        else:
+            context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+        
         context['subjects'] = Subject.objects.all().order_by('name')
-        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
         
         # Add statistics
         queryset = self.get_queryset()
@@ -88,7 +112,6 @@ class GradeListView(LoginRequiredMixin, ListView):
         }
         
         return context
-    
 def grade_delete(request, pk):
     grade = get_object_or_404(Grade, pk=pk)
     if request.method == 'POST':
@@ -388,6 +411,7 @@ class GradeUploadTemplateView(View):
     
 
 #GRADE ENTRIES
+
 class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
@@ -396,6 +420,40 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get students based on user role
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            context['students'] = Student.objects.filter(
+                class_level__in=teacher_classes, 
+                is_active=True
+            ).order_by('last_name', 'first_name')
+        else:
+            context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+        
+        context['subjects'] = Subject.objects.all().order_by('name')
+        
+        # Add class level choices
+        context['class_levels'] = (
+            ('P1', 'Primary 1'), ('P2', 'Primary 2'), ('P3', 'Primary 3'),
+            ('P4', 'Primary 4'), ('P5', 'Primary 5'), ('P6', 'Primary 6'),
+            ('J1', 'JHS 1'), ('J2', 'JHS 2'), ('J3', 'JHS 3')
+        )
+        
+        # Pre-select student if coming from student list
+        student_id = self.request.GET.get('student')
+        if student_id:
+            try:
+                context['selected_student'] = Student.objects.get(pk=student_id)
+            except Student.DoesNotExist:
+                pass
+                
+        return context
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -418,7 +476,6 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         # Set the class_assignment automatically based on student's class and subject
         student = form.cleaned_data['student']
         subject = form.cleaned_data['subject']
-        assignment = form.cleaned_data['assignment']
         
         try:
             class_assignment = ClassAssignment.objects.get(
@@ -433,47 +490,71 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         # Set recorded by
         form.instance.recorded_by = self.request.user
         
-        # Auto-calculate grade if not provided
-        if not form.instance.grade and form.instance.score is not None:
-            form.instance.grade = self.calculate_grade(form.instance.score)
+        # Auto-calculate total score
+        form.instance.calculate_total_score()
+        form.instance.determine_ges_grade()
         
         messages.success(self.request, 'Grade successfully recorded!')
         return super().form_valid(form)
 
-    def calculate_grade(self, score):
-        """Calculate letter grade based on score"""
-        if score >= 90:
-            return 'A'
-        elif score >= 80:
-            return 'B'
-        elif score >= 70:
-            return 'C'
-        elif score >= 60:
-            return 'D'
-        else:
-            return 'F'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Add student's previous grades if student is selected
-        student_id = self.request.GET.get('student')
-        if student_id:
-            try:
-                student = Student.objects.get(pk=student_id)
-                context['previous_grades'] = Grade.objects.filter(
-                    student=student
-                ).select_related('subject', 'assignment').order_by('-academic_year', '-term')[:10]
-            except (Student.DoesNotExist, ValueError):
-                context['previous_grades'] = Grade.objects.none()
-        else:
-            context['previous_grades'] = Grade.objects.none()
-                
-        return context
-
     def get_success_url(self):
         messages.success(self.request, 'Grade recorded successfully!')
         return super().get_success_url()
+
+# Add API view for real-time calculations
+class CalculateGradeAPI(View):
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            # Calculate total score using same logic as Django model
+            classwork = float(data.get('classwork_score', 0))
+            homework = float(data.get('homework_score', 0))
+            test = float(data.get('test_score', 0))
+            exam = float(data.get('exam_score', 0))
+            
+            # Apply weights (matching Django model)
+            total_score = (classwork + homework + test + exam)
+            
+            # Get letter grade
+            letter_grade = self.get_letter_grade(total_score)
+            description = self.get_grade_description(letter_grade)
+            
+            return JsonResponse({
+                'total_score': round(total_score, 1),
+                'letter_grade': letter_grade,
+                'grade_description': description
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    def get_letter_grade(self, score):
+        if score >= 90: return 'A+'
+        elif score >= 80: return 'A'
+        elif score >= 70: return 'B+'
+        elif score >= 60: return 'B'
+        elif score >= 50: return 'C+'
+        elif score >= 40: return 'C'
+        elif score >= 30: return 'D'
+        elif score >= 20: return 'E'
+        else: return 'F'
+    
+    def get_grade_description(self, grade):
+        descriptions = {
+            'A+': 'Excellent - Outstanding performance',
+            'A': 'Very Good - Strong performance',
+            'B+': 'Good - Above average performance',
+            'B': 'Satisfactory - Meets expectations',
+            'C+': 'Fair - Needs improvement',
+            'C': 'Marginal - Below expectations',
+            'D': 'Poor - Significant improvement needed',
+            'E': 'Very Poor - Concerning performance',
+            'F': 'Fail - Immediate intervention required'
+        }
+        return descriptions.get(grade, '')
+
+
 #grade reports
 class GradeReportView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/academics/grades/grade_report.html'

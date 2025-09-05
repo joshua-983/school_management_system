@@ -1,32 +1,315 @@
 {% extends 'base.html' %}
 {% load static %}
-{% load report_card_filters %}
+{% load custom_filters %}
 
 {% block title %}{{ student.get_full_name }} - Report Card{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.css">
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+}
+
+.school-info {
+    text-align: center;
+}
+
+.school-info h2 {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    font-size: 1.8rem;
+}
+
+.school-info h4 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1.2rem;
+}
+
+.school-logo img {
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
+
+.info-item {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.info-label {
+    font-weight: 600;
+    color: var(--primary);
+    margin-right: 0.5rem;
+}
+
+.info-value {
+    color: var(--dark);
+}
+
+.table {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.table thead th {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border: none;
+    font-weight: 500;
+    padding: 1rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.table tbody td {
+    padding: 0.75rem;
+    vertical-align: middle;
+    border-color: #f1f3f4;
+    text-align: center;
+}
+
+.table tbody tr {
+    transition: var(--transition);
+}
+
+.table tbody tr:hover {
+    background-color: rgba(67, 97, 238, 0.05);
+}
+
+.grade-badge {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    min-width: 45px;
+    text-align: center;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.grade-Aplus, .grade-A { background: linear-gradient(135deg, #28a745 0%, #218838 100%); color: white; }
+.grade-Bplus, .grade-B { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; }
+.grade-Cplus, .grade-C { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #000; }
+.grade-Dplus, .grade-D { background: linear-gradient(135deg, #fd7e14 0%, #d66a0a 100%); color: white; }
+.grade-E { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; }
+
+.signature-line {
+    border-top: 2px dashed #dee2e6;
+    padding-top: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.signature-line p {
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.btn {
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #2f48c9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffecb5 100%);
+    border: none;
+    border-left: 4px solid var(--warning);
+    border-radius: var(--border-radius);
+}
+
+.chart-container {
+    position: relative;
+    height: 220px;
+    width: 100%;
+}
+
+.grading-scale-table {
+    font-size: 0.9rem;
+}
+
+.grading-scale-table th {
+    background: linear-gradient(135deg, var(--info) 0%, #0bacbf 100%);
+    color: white;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-element {
+    animation: fadeIn 0.6s ease-out;
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    body {
+        background-color: white !important;
+        color: black !important;
+        font-size: 12pt;
+    }
+    
+    .container-fluid {
+        padding: 0 !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+    }
+    
+    .grade-badge {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        border: 1px solid rgba(0,0,0,0.1) !important;
+    }
+    
+    .table {
+        font-size: 10pt;
+    }
+    
+    .card-header {
+        padding: 10px !important;
+    }
+    
+    h2, h3, h4, h5 {
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
+    
+    .btn, .alert {
+        display: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .school-info h2 {
+        font-size: 1.4rem;
+    }
+    
+    .school-info h4 {
+        font-size: 1rem;
+    }
+    
+    .table-responsive {
+        border-radius: var(--border-radius);
+    }
+    
+    .table thead {
+        display: none;
+    }
+    
+    .table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+    }
+    
+    .table tbody td {
+        display: block;
+        text-align: right;
+        padding: 0.75rem;
+        position: relative;
+        border: none;
+        border-bottom: 1px solid #f1f3f4;
+    }
+    
+    .table tbody td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0.75rem;
+        font-weight: 600;
+        color: var(--primary);
+    }
+    
+    .btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .btn {
+        flex: 1;
+        min-width: 120px;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid py-4">
     <div class="card shadow-lg">
         <!-- Report Card Header -->
-        <div class="card-header bg-primary text-white text-center py-3">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="school-logo">
-                    <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="60">
+        <div class="card-header text-white">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div class="school-logo mb-3 mb-md-0">
+                    <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="60" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iOCIgZmlsbD0iIzQzNjFlZSIvPgo8dGV4dCB4PSIzMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkxPR088L3RleHQ+Cjwvc3ZnPgo='">
                 </div>
-                <div class="school-info">
+                <div class="school-info mx-2">
                     <h2 class="mb-0">SCHOOL MANAGEMENT SYSTEM</h2>
                     <h4 class="mb-0">OFFICIAL REPORT CARD</h4>
                     <p class="mb-0">123 Education Street, City, Country</p>
                 </div>
-                <div class="report-card-id">
+                <div class="report-card-id text-end">
                     <p class="mb-0">ID: {{ report_card.id|default:"DRAFT" }}</p>
+                    <p class="mb-0">{{ academic_year }} - Term {{ term }}</p>
                 </div>
             </div>
         </div>
 
         <!-- Student Information Section -->
         <div class="card-body">
-            <div class="row mb-4 border-bottom pb-3">
+            <div class="row mb-4 border-bottom pb-3 animate-element">
                 <div class="col-md-6">
                     <div class="info-item">
                         <span class="info-label"><strong>Student Name:</strong></span>
@@ -58,7 +341,7 @@
             </div>
 
             <!-- Academic Performance Table -->
-            <div class="table-responsive mb-4">
+            <div class="table-responsive mb-4 animate-element" style="animation-delay: 0.2s">
                 <table class="table table-bordered table-hover">
                     <thead class="thead-dark">
                         <tr>
@@ -74,28 +357,28 @@
                     </thead>
                     <tbody>
                         {% for grade in grades %}
-                        <tr>
-                            <td>{{ grade.subject.name }}</td>
-                            <td class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
-                            <td class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
-                            <td class="text-center">{{ grade.test_score|floatformat:1 }}</td>
-                            <td class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
-                            <td class="text-center">{{ grade.total_score|floatformat:1 }}</td>
-                            <td class="text-center">
+                        <tr class="animate-element" style="animation-delay: {{ forloop.counter0|add:3|multiply:0.1 }}s">
+                            <td data-label="Subject">{{ grade.subject.name }}</td>
+                            <td data-label="Homework" class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
+                            <td data-label="Classwork" class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
+                            <td data-label="Test" class="text-center">{{ grade.test_score|floatformat:1 }}</td>
+                            <td data-label="Exam" class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
+                            <td data-label="Total" class="text-center">{{ grade.total_score|floatformat:1 }}</td>
+                            <td data-label="Grade" class="text-center">
                                 <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
                                     {{ grade.grade }}
                                 </span>
                             </td>
-                            <td class="text-center">{{ grade.remarks|default:"-" }}</td>
+                            <td data-label="Remarks" class="text-center">{{ grade.remarks|default:"-" }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted">No grades available for this period</td>
+                            <td colspan="8" class="text-center text-muted py-4">No grades available for this period</td>
                         </tr>
                         {% endfor %}
                         {% if grades %}
-                        <tr class="table-active font-weight-bold">
-                            <td colspan="5" class="text-right">OVERALL AVERAGE:</td>
+                        <tr class="table-active fw-bold animate-element" style="animation-delay: 0.4s">
+                            <td colspan="5" class="text-end">OVERALL AVERAGE:</td>
                             <td class="text-center">{{ average_score|floatformat:1 }}</td>
                             <td class="text-center">
                                 <span class="badge grade-badge grade-{{ overall_grade|cut:'+'|cut:' ' }}">
@@ -112,15 +395,15 @@
             <!-- Additional Information Sections -->
             <div class="row mb-4">
                 <!-- Grading Scale -->
-                <div class="col-md-6 mb-3">
+                <div class="col-md-6 mb-3 animate-element" style="animation-delay: 0.5s">
                     <div class="card h-100">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">Grading Scale</h5>
+                            <h5 class="mb-0"><i class="fas fa-scale-balanced me-2"></i>Grading Scale</h5>
                         </div>
                         <div class="card-body p-0">
-                            <table class="table table-sm table-striped mb-0">
+                            <table class="table table-sm table-striped mb-0 grading-scale-table">
                                 <thead>
-                                    <tr class="bg-light">
+                                    <tr>
                                         <th>Grade</th>
                                         <th>Score Range</th>
                                         <th>Description</th>
@@ -143,17 +426,20 @@
                 </div>
 
                 <!-- Performance Chart -->
-                <div class="col-md-6 mb-3">
+                <div class="col-md-6 mb-3 animate-element" style="animation-delay: 0.6s">
                     <div class="card h-100">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">Performance Summary</h5>
+                            <h5 class="mb-0"><i class="fas fa-chart-column me-2"></i>Performance Summary</h5>
                         </div>
                         <div class="card-body">
                             {% if grades %}
-                            <canvas id="performanceChart" height="220"></canvas>
+                            <div class="chart-container">
+                                <canvas id="performanceChart"></canvas>
+                            </div>
                             {% else %}
                             <div class="text-center text-muted py-4">
-                                No data available for chart
+                                <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                                <p>No data available for chart</p>
                             </div>
                             {% endif %}
                         </div>
@@ -162,7 +448,7 @@
             </div>
 
             <!-- Signature Section -->
-            <div class="row mb-3">
+            <div class="row mb-3 animate-element" style="animation-delay: 0.7s">
                 <div class="col-md-6">
                     <div class="signature-line">
                         <p>Class Teacher's Signature: _________________________</p>
@@ -178,126 +464,43 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="d-flex justify-content-between mt-4 no-print">
+            <div class="d-flex justify-content-between mt-4 no-print animate-element" style="animation-delay: 0.8s">
                 <div>
                     {% if not report_card and is_teacher %}
                     <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
                         {% csrf_token %}
                         <input type="hidden" name="academic_year" value="{{ academic_year }}">
                         <input type="hidden" name="term" value="{{ term }}">
-                        <button type="submit" class="btn btn-success mr-2">
-                            <i class="fas fa-save"></i> Save Report Card
+                        <button type="submit" class="btn btn-success me-2">
+                            <i class="fas fa-save me-2"></i> Save Report Card
                         </button>
                     </form>
                     {% endif %}
                 </div>
                 
-                <div>
-                    <button onclick="window.print()" class="btn btn-info mr-2">
-                        <i class="fas fa-print"></i> Print Report
+                <div class="btn-group">
+                    <button onclick="window.print()" class="btn btn-info me-2">
+                        <i class="fas fa-print me-2"></i> Print Report
                     </button>
                     <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
-                       class="btn btn-info mr-2">
-                        <i class="fas fa-file-pdf"></i> Download PDF
+                       class="btn btn-info me-2">
+                        <i class="fas fa-file-pdf me-2"></i> Download PDF
                     </a>
                     <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
                     </a>
                 </div>
             </div>
 
             {% if not report_card %}
-            <div class="alert alert-warning mt-3 no-print">
-                <i class="fas fa-exclamation-triangle"></i> This is a preview of the report card. 
+            <div class="alert alert-warning mt-3 no-print animate-element" style="animation-delay: 0.9s">
+                <i class="fas fa-exclamation-triangle me-2"></i> This is a preview of the report card. 
                 {% if is_teacher %}Please save it to make it permanent.{% else %}This is not an official document.{% endif %}
             </div>
             {% endif %}
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_css %}
-<style>
-    .card {
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    
-    .card-header {
-        border-bottom: none;
-    }
-    
-    .info-item {
-        margin-bottom: 10px;
-    }
-    
-    .info-label {
-        display: inline-block;
-        width: 120px;
-        font-weight: 500;
-    }
-    
-    .grade-badge {
-        font-size: 0.9rem;
-        padding: 5px 10px;
-        min-width: 40px;
-        border-radius: 4px;
-    }
-    
-    .grade-Aplus, .grade-A { background-color: #28a745; color: white; }
-    .grade-Bplus, .grade-B { background-color: #17a2b8; color: white; }
-    .grade-Cplus, .grade-C { background-color: #ffc107; color: #212529; }
-    .grade-Dplus, .grade-D { background-color: #fd7e14; color: white; }
-    .grade-E { background-color: #dc3545; color: white; }
-    
-    .signature-line {
-        border-top: 1px solid #dee2e6;
-        padding-top: 15px;
-        margin-top: 15px;
-    }
-    
-    @media print {
-        .no-print {
-            display: none !important;
-        }
-        
-        body {
-            background-color: white !important;
-            color: black !important;
-            font-size: 12pt;
-        }
-        
-        .container-fluid {
-            padding: 0 !important;
-        }
-        
-        .card {
-            border: none !important;
-            box-shadow: none !important;
-            margin: 0 !important;
-        }
-        
-        .grade-badge {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            border: 1px solid rgba(0,0,0,0.1) !important;
-        }
-        
-        .table {
-            font-size: 10pt;
-        }
-        
-        .card-header {
-            padding: 10px !important;
-        }
-        
-        h2, h3, h4, h5 {
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
-    }
-</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -307,24 +510,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Only initialize chart if grades exist
     {% if grades %}
     const ctx = document.getElementById('performanceChart').getContext('2d');
+    
+    // Prepare data for chart
+    const subjects = [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}];
+    const scores = [{% for grade in grades %}{{ grade.total_score }},{% endfor %}];
+    const gradeColors = [
+        {% for grade in grades %}
+        '{% if grade.grade == "A+" or grade.grade == "A" %}#28a745{% elif grade.grade == "B+" or grade.grade == "B" %}#17a2b8{% elif grade.grade == "C+" or grade.grade == "C" %}#ffc107{% elif grade.grade == "D+" or grade.grade == "D" %}#fd7e14{% else %}#dc3545{% endif %}',
+        {% endfor %}
+    ];
+    
     const chart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}],
+            labels: subjects,
             datasets: [{
                 label: 'Score (%)',
-                data: [{% for grade in grades %}{{ grade.total_score }},{% endfor %}],
-                backgroundColor: [
-                    {% for grade in grades %}
-                    '{% if grade.grade == "A+" or grade.grade == "A" %}#28a745{% elif grade.grade == "B+" or grade.grade == "B" %}#17a2b8{% elif grade.grade == "C+" or grade.grade == "C" %}#ffc107{% elif grade.grade == "D+" or grade.grade == "D" %}#fd7e14{% else %}#dc3545{% endif %}',
-                    {% endfor %}
-                ],
-                borderColor: [
-                    {% for grade in grades %}
-                    '{% if grade.grade == "A+" or grade.grade == "A" %}#218838{% elif grade.grade == "B+" or grade.grade == "B" %}#138496{% elif grade.grade == "C+" or grade.grade == "C" %}#e0a800{% elif grade.grade == "D+" or grade.grade == "D" %}#d66a0a{% else %}#c82333{% endif %}',
-                    {% endfor %}
-                ],
-                borderWidth: 1
+                data: scores,
+                backgroundColor: gradeColors,
+                borderColor: gradeColors.map(color => color.replace(')', ', 0.8)').replace('rgb', 'rgba')),
+                borderWidth: 1,
+                borderRadius: 6,
+                barPercentage: 0.7,
             }]
         },
         options: {
@@ -336,17 +543,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     max: 100,
                     title: {
                         display: true,
-                        text: 'Score (%)'
+                        text: 'Score (%)',
+                        color: '#6c757d',
+                        font: {
+                            weight: 'bold'
+                        }
                     },
                     ticks: {
-                        stepSize: 10
+                        stepSize: 10,
+                        color: '#6c757d'
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
                     }
                 },
                 x: {
                     ticks: {
-                        autoSkip: false,
+                        color: '#6c757d',
                         maxRotation: 45,
                         minRotation: 45
+                    },
+                    grid: {
+                        display: false
                     }
                 }
             },
@@ -355,6 +573,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     display: false
                 },
                 tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: {
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 13
+                    },
                     callbacks: {
                         label: function(context) {
                             return context.parsed.y.toFixed(1) + '%';
@@ -365,6 +591,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     {% endif %}
+    
+    // Add print functionality enhancement
+    const printBtn = document.querySelector('[onclick="window.print()"]');
+    if (printBtn) {
+        printBtn.addEventListener('click', function() {
+            // Show loading state
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparing...';
+            
+            // Reset after a short delay
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-print me-2"></i> Print Report';
+            }, 1500);
+        });
+    }
+    
+    // Add animation to elements
+    const animateElements = document.querySelectorAll('.animate-element');
+    animateElements.forEach((element, index) => {
+        element.style.animationDelay = `${index * 0.1 + 0.3}s`;
+    });
 });
 </script>
 {% endblock %}

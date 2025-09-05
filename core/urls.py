@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+from .views.grade_views import CalculateGradeAPI
 # Import from the new modular views
 from .views.base_views import home, admin_dashboard, teacher_dashboard, student_dashboard
 from .views.student_views import StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, StudentDeleteView
@@ -119,7 +120,7 @@ urlpatterns = [
     path('grades/report/', GradeReportView.as_view(), name='grade_report'),
     path('best-students/', BestStudentsView.as_view(), name='best_students'),
     path('grades/delete/<int:pk>/', grade_delete, name='grade_delete'),
-    
+    path('api/calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
     # Report Cards
     path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
     path('report-card/create/', CreateReportCardView.as_view(), name='create_report_card'), 

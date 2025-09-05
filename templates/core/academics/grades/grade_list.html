@@ -1,4 +1,4 @@
-{% extends 'base.html' %}  {# Changed from core/academics/grades/base.html #}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Grade Management - {{ block.super }}{% endblock %}
@@ -6,28 +6,178 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 <style>
-    .grade-table th {
-        background-color: #f8f9fa;
-        font-weight: 600;
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.grade-table {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.grade-table th {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+    border: none;
+}
+
+.grade-table td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-color: #dee2e6;
+}
+
+.grade-badge {
+    font-size: 0.75rem;
+    padding: 0.5em 0.8em;
+    border-radius: 20px;
+}
+
+.filter-card {
+    background-color: var(--light);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.stats-card {
+    transition: var(--transition);
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card .card-body {
+    padding: 1.5rem;
+}
+
+.quick-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.quick-action-btn {
+    border-radius: 20px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    transition: var(--transition);
+}
+
+.export-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.export-btn {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: var(--transition);
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+}
+
+.score-progress {
+    height: 8px;
+    border-radius: 4px;
+    margin-top: 0.25rem;
+}
+
+.grade-A { background-color: #198754; }
+.grade-B { background-color: #20c997; }
+.grade-C { background-color: #fd7e14; }
+.grade-D { background-color: #ffc107; }
+.grade-E { background-color: #dc3545; }
+.grade-F { background-color: #6c757d; }
+
+@media (max-width: 768px) {
+    .grade-table {
+        font-size: 0.875rem;
     }
-    .grade-badge {
-        font-size: 0.75rem;
+    
+    .stats-card .card-body {
+        padding: 1rem;
     }
-    .filter-card {
-        background-color: #f8f9fa;
+    
+    .quick-actions {
+        flex-direction: column;
     }
-    .stats-card {
-        transition: transform 0.2s;
+    
+    .export-buttons {
+        flex-direction: column;
     }
-    .stats-card:hover {
-        transform: translateY(-2px);
+    
+    .export-btn {
+        width: 100%;
     }
+}
+
+/* Animation for new records */
+@keyframes highlightRow {
+    0% { background-color: rgba(25, 135, 84, 0.2); }
+    100% { background-color: transparent; }
+}
+
+.highlight-new {
+    animation: highlightRow 2s ease;
+}
+
+/* Loading animation */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    display: none;
+}
+
+.spinner-large {
+    width: 3rem;
+    height: 3rem;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border spinner-large text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-12">
             <!-- Header -->
@@ -46,9 +196,14 @@
                     </h1>
                     <p class="text-muted mb-0">View and manage student grades</p>
                 </div>
-                <a href="{% url 'grade_add' %}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle me-2"></i>Add New Grade
-                </a>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'grade_add' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-2"></i>Add New Grade
+                    </a>
+                    <a href="{% url 'grade_bulk_upload' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-upload me-2"></i>Bulk Upload
+                    </a>
+                </div>
             </div>
 
             <!-- Messages -->
@@ -56,7 +211,7 @@
             <div class="mb-4">
                 {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    <i class="bi {% if message.tags == 'success' %}bi-check-circle{% else %}bi-exclamation-triangle{% endif %} me-2"></i>
+                    <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'warning' %}bi-exclamation-triangle{% elif message.tags == 'error' %}bi-x-circle{% else %}bi-info-circle{% endif %} me-2"></i>
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
@@ -64,10 +219,28 @@
             </div>
             {% endif %}
 
+            <!-- Quick Actions -->
+            <div class="quick-actions mb-4">
+                {% for level_code, level_name in class_levels %}
+                <button class="btn btn-outline-primary quick-action-btn" data-filter="class_level" data-value="{{ level_code }}">
+                    <i class="bi bi-people-fill me-1"></i>{{ level_name }}
+                </button>
+                {% endfor %}
+                <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="1">
+                    <i class="bi bi-calendar me-1"></i>Term 1
+                </button>
+                <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="2">
+                    <i class="bi bi-calendar me-1"></i>Term 2
+                </button>
+                <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="3">
+                    <i class="bi bi-calendar me-1"></i>Term 3
+                </button>
+            </div>
+
             <!-- Statistics Cards -->
             <div class="row mb-4">
                 <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card border-0 shadow-sm">
+                    <div class="card stats-card">
                         <div class="card-body text-center">
                             <i class="bi bi-people-fill text-primary display-6 mb-2"></i>
                             <h3 class="h2 mb-1">{{ total_students }}</h3>
@@ -76,7 +249,7 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card border-0 shadow-sm">
+                    <div class="card stats-card">
                         <div class="card-body text-center">
                             <i class="bi bi-clipboard-check text-success display-6 mb-2"></i>
                             <h3 class="h2 mb-1">{{ total_grades }}</h3>
@@ -85,7 +258,7 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card border-0 shadow-sm">
+                    <div class="card stats-card">
                         <div class="card-body text-center">
                             <i class="bi bi-book text-warning display-6 mb-2"></i>
                             <h3 class="h2 mb-1">{{ total_subjects }}</h3>
@@ -94,18 +267,25 @@
                     </div>
                 </div>
                 <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card border-0 shadow-sm">
+                    <div class="card stats-card">
                         <div class="card-body text-center">
                             <i class="bi bi-graph-up text-info display-6 mb-2"></i>
                             <h3 class="h2 mb-1">{{ average_grade|floatformat:1 }}%</h3>
                             <p class="text-muted mb-0">Average Score</p>
+                            <div class="progress score-progress">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ average_grade }}%;" 
+                                     aria-valuenow="{{ average_grade }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Filters -->
-            <div class="card border-0 shadow-sm mb-4">
+            <div class="card filter-card mb-4">
                 <div class="card-header bg-light py-3">
                     <h6 class="mb-0">
                         <i class="bi bi-funnel me-2"></i>
@@ -113,7 +293,7 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <form method="get" class="row g-3">
+                    <form method="get" class="row g-3" id="filterForm">
                         <div class="col-md-3">
                             <label for="student" class="form-label">Student</label>
                             <select name="student" id="student" class="form-select">
@@ -150,7 +330,8 @@
                         <div class="col-md-2">
                             <label for="academic_year" class="form-label">Year</label>
                             <input type="text" name="academic_year" id="academic_year" class="form-control" 
-                                   value="{{ request.GET.academic_year }}" placeholder="YYYY/YYYY">
+                                   value="{{ request.GET.academic_year }}" placeholder="YYYY/YYYY"
+                                   pattern="\d{4}/\d{4}" title="Please use format: YYYY/YYYY">
                         </div>
                         <div class="col-md-2">
                             <label for="term" class="form-label">Term</label>
@@ -161,17 +342,20 @@
                                 <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
                             </select>
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
+                        <div class="col-md-2 d-flex align-items-end gap-2">
                             <button type="submit" class="btn btn-primary w-100">
                                 <i class="bi bi-filter me-1"></i>Apply
                             </button>
+                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary" title="Reset filters">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </a>
                         </div>
                     </form>
                 </div>
             </div>
 
             <!-- Grades Table -->
-            <div class="card border-0 shadow-sm">
+            <div class="card grade-table">
                 <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
                     <h6 class="mb-0">
                         <i class="bi bi-list-check me-2"></i>
@@ -179,10 +363,10 @@
                     </h6>
                     <span class="badge bg-primary">{{ grades.count }} record(s)</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     {% if grades %}
                     <div class="table-responsive">
-                        <table class="table table-hover grade-table">
+                        <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
                                     <th>Student</th>
@@ -197,7 +381,7 @@
                             </thead>
                             <tbody>
                                 {% for grade in grades %}
-                                <tr>
+                                <tr class="{% if forloop.first and request.GET.new %}highlight-new{% endif %}">
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="flex-shrink-0">
@@ -211,25 +395,40 @@
                                         </div>
                                     </td>
                                     <td>{{ grade.subject.name }}</td>
-                                    <td>{{ grade.student.get_class_level_display }}</td>
-                                    <td>{{ grade.academic_year }}</td>
-                                    <td>Term {{ grade.term }}</td>
                                     <td>
-                                        <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
-                                            {{ grade.total_score|default:"N/A" }}/100
-                                        </span>
+                                        <span class="badge bg-primary">{{ grade.student.get_class_level_display }}</span>
+                                    </td>
+                                    <td>{{ grade.academic_year }}</td>
+                                    <td>
+                                        <span class="badge bg-info">Term {{ grade.term }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge {% if grade.ges_grade == '1' %}bg-success{% elif grade.ges_grade == '2' %}bg-info{% elif grade.ges_grade == '3' %}bg-primary{% elif grade.ges_grade == '4' %}bg-warning{% elif grade.ges_grade == '5' %}bg-orange{% else %}bg-danger{% endif %} grade-badge">
+                                        <div class="d-flex align-items-center">
+                                            <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                                {{ grade.total_score|default:"N/A" }}
+                                            </span>
+                                            <small class="text-muted ms-1">/100</small>
+                                        </div>
+                                        <div class="progress score-progress mt-1">
+                                            <div class="progress-bar grade-{{ grade.ges_grade|default:'F' }}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ grade.total_score|default:0 }}%;" 
+                                                 aria-valuenow="{{ grade.total_score|default:0 }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100"></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge grade-badge grade-{{ grade.ges_grade|default:'F' }}">
                                             {{ grade.get_ges_grade_display|default:"N/A" }}
                                         </span>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a href="{% url 'grade_edit' grade.pk %}" class="btn btn-outline-primary" title="Edit">
+                                            <a href="{% url 'grade_edit' grade.pk %}" class="btn btn-outline-primary" title="Edit" data-bs-toggle="tooltip">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
-                                            <a href="{% url 'grade_delete' grade.pk %}" class="btn btn-outline-danger" title="Delete">
+                                            <a href="{% url 'grade_delete' grade.pk %}" class="btn btn-outline-danger" title="Delete" data-bs-toggle="tooltip" onclick="return confirm('Are you sure you want to delete this grade record?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
                                         </div>
@@ -242,31 +441,33 @@
 
                     <!-- Pagination -->
                     {% if is_paginated %}
-                    <nav aria-label="Grade pagination" class="mt-4">
-                        <ul class="pagination justify-content-center">
-                            {% if page_obj.has_previous %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
-                            </li>
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
-                            </li>
-                            {% endif %}
+                    <div class="card-footer">
+                        <nav aria-label="Grade pagination">
+                            <ul class="pagination justify-content-center mb-0">
+                                {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                                </li>
+                                {% endif %}
 
-                            <li class="page-item active">
-                                <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                            </li>
+                                <li class="page-item active">
+                                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                                </li>
 
-                            {% if page_obj.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
-                            </li>
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
-                            </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
+                                {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
                     {% endif %}
 
                     {% else %}
@@ -287,14 +488,14 @@
             <div class="card border-0 shadow-sm mt-4">
                 <div class="card-body text-center">
                     <h6 class="mb-3">Export Grades</h6>
-                    <div class="d-flex gap-2 justify-content-center flex-wrap">
-                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success btn-sm">
+                    <div class="export-buttons">
+                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success export-btn">
                             <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
                         </a>
-                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger btn-sm">
+                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger export-btn">
                             <i class="bi bi-file-earmark-pdf me-1"></i>PDF
                         </a>
-                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary btn-sm">
+                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary export-btn">
                             <i class="bi bi-file-earmark-excel me-1"></i>Excel
                         </a>
                     </div>
@@ -313,32 +514,63 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Select2 for filter dropdowns
     $('#student, #subject, #class_level, #term').select2({
         theme: 'bootstrap-5',
-        width: '100%'
+        width: '100%',
+        placeholder: 'Select an option',
+        allowClear: true
     });
 
-    // Auto-submit form when filters change
-    const filterForm = document.querySelector('form');
-    const filterInputs = filterForm.querySelectorAll('select, input');
-    
-    filterInputs.forEach(input => {
-        input.addEventListener('change', function() {
-            filterForm.submit();
-        });
-    });
+    // Initialize tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 
     // Quick filter actions
-    document.querySelectorAll('.quick-filter').forEach(button => {
+    document.querySelectorAll('.quick-action-btn').forEach(button => {
         button.addEventListener('click', function() {
             const filterType = this.dataset.filter;
             const filterValue = this.dataset.value;
             
             // Update the corresponding filter field
-            document.querySelector(`#${filterType}`).value = filterValue;
+            const filterField = document.querySelector(`[name="${filterType}"]`);
+            if (filterField) {
+                if (filterField.tagName === 'SELECT') {
+                    $(filterField).val(filterValue).trigger('change');
+                } else {
+                    filterField.value = filterValue;
+                }
+            }
             
             // Submit the form
-            filterForm.submit();
+            document.getElementById('filterForm').submit();
         });
     });
+
+    // Show loading state during exports
+    document.querySelectorAll('.export-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        });
+    });
+
+    // Auto-hide alerts after 5 seconds
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        setTimeout(() => {
+            bootstrap.Alert.getOrCreateInstance(alert).close();
+        }, 5000);
+    });
+
+    // Academic year format validation
+    const academicYearInput = document.getElementById('academic_year');
+    if (academicYearInput) {
+        academicYearInput.addEventListener('blur', function() {
+            const pattern = /^\d{4}\/\d{4}$/;
+            if (this.value && !pattern.test(this.value)) {
+                this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

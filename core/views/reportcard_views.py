@@ -1,9 +1,14 @@
+from django.db.models import Avg
 from django.views.generic import TemplateView, CreateView, View
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from ..models import ReportCard, Student, Subject, Grade
 from .base_views import is_student, is_teacher, is_admin
-from ..forms import ReportCardForm
+from ..forms import ReportCardForm, ReportCardFilterForm  # Add ReportCardFilterForm here
+from django.shortcuts import render, redirect, get_object_or_404
+
+
+
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/academics/report_cards/report_card_dashboard.html'
     
@@ -83,7 +88,7 @@ class ReportCardView(LoginRequiredMixin, View):
             'form': ReportCardFilterForm(request.GET),
         }
 
-        return render(request, 'core/academics/record_cards/report_card.html', context)
+        return render(request, 'core/academics/report_cards/report_card.html', context)
 
     def _has_permission(self, request, student):
         """Check if user has permission to view this report card"""
