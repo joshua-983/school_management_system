@@ -175,13 +175,13 @@
                     </div>
                     <div>View Reports</div>
                 </a>
-                <a href="#" class="quick-action-btn" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <a href="#" class="quick-action-btn btn-export" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
                     <div class="quick-action-icon">
                         <i class="bi bi-download"></i>
                     </div>
                     <div>Export Data</div>
                 </a>
-                <a href="#" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <a href="{% url 'bill_generate' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
                     <div class="quick-action-icon">
                         <i class="bi bi-arrow-repeat"></i>
                     </div>
@@ -200,7 +200,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted mb-2">Total Payable</h6>
-                            <h4 class="mb-0">${{ total_payable|floatformat:2 }}</h4>
+                            <h4 class="mb-0">GH₵{{ total_payable|floatformat:2 }}</h4>
                             <small class="text-muted">{{ object_list.count }} fee records</small>
                         </div>
                         <div class="bg-light rounded p-3">
@@ -216,7 +216,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted mb-2">Total Paid</h6>
-                            <h4 class="mb-0">${{ total_paid|floatformat:2 }}</h4>
+                            <h4 class="mb-0">GH₵{{ total_paid|floatformat:2 }}</h4>
                             <small class="text-muted">{{ paid_count }} paid fees</small>
                         </div>
                         <div class="bg-light rounded p-3">
@@ -232,7 +232,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted mb-2">Total Balance</h6>
-                            <h4 class="mb-0">${{ total_balance|floatformat:2 }}</h4>
+                            <h4 class="mb-0">GH₵{{ total_balance|floatformat:2 }}</h4>
                             <small class="text-muted">{{ pending_count }} pending fees</small>
                         </div>
                         <div class="bg-light rounded p-3">
@@ -286,6 +286,9 @@
                                 <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-counterclockwise me-1"></i> Clear
                                 </a>
+                                <button type="button" class="btn btn-outline-success btn-export ms-2">
+                                    <i class="bi bi-download me-1"></i> Export
+                                </button>
                             </div>
                         </div>
                     </form>
@@ -299,6 +302,7 @@
                                     {% if is_admin or is_teacher %}
                                     <th>Student</th>
                                     {% endif %}
+                                    <th>Bill #</th>
                                     <th>Category</th>
                                     <th>Academic Year</th>
                                     <th>Term</th>
@@ -331,16 +335,25 @@
                                     </td>
                                     {% endif %}
                                     <td>
+                                        {% if fee.bill %}
+                                            <a href="{% url 'bill_detail' pk=fee.bill.pk %}" class="text-decoration-none">
+                                                #{{ fee.bill.bill_number }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">Not billed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
                                         <span class="badge bg-info text-dark">{{ fee.category.name }}</span>
                                     </td>
                                     <td>{{ fee.academic_year }}</td>
                                     <td>
                                         <span class="badge bg-secondary">{{ fee.get_term_display }}</span>
                                     </td>
-                                    <td class="text-end fw-bold">${{ fee.amount_payable|floatformat:2 }}</td>
-                                    <td class="text-end text-success">${{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold">GH₵{{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td class="text-end text-success">GH₵{{ fee.amount_paid|floatformat:2 }}</td>
                                     <td class="text-end {% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
-                                        ${{ fee.balance|floatformat:2 }}
+                                        GH₵{{ fee.balance|floatformat:2 }}
                                     </td>
                                     <td>
                                         {% if fee.payment_status == 'PAID' %}
@@ -513,9 +526,9 @@
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i> Cancel
                 </button>
-                <button type="button" class="btn btn-primary" id="confirmStudentSelection" disabled>
+                <a href="#" class="btn btn-primary" id="confirmStudentSelection">
                     <i class="bi bi-check-circle me-1"></i> Continue
-                </button>
+                </a>
             </div>
         </div>
     </div>
@@ -534,12 +547,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle student selection modal
     const studentModal = new bootstrap.Modal(document.getElementById('selectStudentModal'));
     let selectedStudentId = null;
-
+    const confirmBtn = document.getElementById('confirmStudentSelection');
+    
     // Search functionality
     const studentSearch = document.getElementById('studentSearch');
     const studentList = document.getElementById('studentList');
     const studentOptions = studentList.querySelectorAll('.student-option');
-    const confirmBtn = document.getElementById('confirmStudentSelection');
 
     studentSearch.addEventListener('input', function() {
         const searchTerm = this.value.toLowerCase();
@@ -575,39 +588,16 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedStudentId = this.getAttribute('data-student-id');
             
             // Enable confirm button
-            confirmBtn.disabled = false;
+            confirmBtn.href = "{% url 'fee_create' student_id=0 %}".replace('0', selectedStudentId);
         });
     });
-
+    
     // Double-click to select
     studentOptions.forEach(option => {
         option.addEventListener('dblclick', function() {
             selectedStudentId = this.getAttribute('data-student-id');
-            proceedWithSelection();
+            window.location.href = "{% url 'fee_create' student_id=0 %}".replace('0', selectedStudentId);
         });
-    });
-
-    // Confirm selection
-    confirmBtn.addEventListener('click', proceedWithSelection);
-
-    function proceedWithSelection() {
-        if (selectedStudentId) {
-            const baseUrl = "{% url 'fee_create' student_id=0 %}";
-            const newUrl = baseUrl.replace('0', selectedStudentId);
-            
-            console.log('Redirecting to:', newUrl);
-            window.location.href = newUrl;
-        }
-    }
-
-    // Keyboard navigation
-    studentSearch.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (selectedStudentId) {
-                proceedWithSelection();
-            }
-        }
     });
 
     // Clear search when modal closes
@@ -618,7 +608,6 @@ document.addEventListener('DOMContentLoaded', function() {
             option.classList.remove('bg-primary', 'text-white');
         });
         selectedStudentId = null;
-        confirmBtn.disabled = true;
     });
 
     // Auto-focus on search when modal opens
@@ -633,12 +622,17 @@ document.addEventListener('DOMContentLoaded', function() {
         table.style.overflowY = 'auto';
     }
 
-    // Add export functionality
-    const exportButtons = document.querySelectorAll('[href="#"]');
-    exportButtons.forEach(btn => {
+    // Export functionality
+    document.querySelectorAll('.btn-export').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            alert('Export functionality will be implemented soon!');
+            
+            // Get current filter parameters
+            const params = new URLSearchParams(window.location.search);
+            params.set('export', 'excel');
+            
+            // Redirect to export URL
+            window.location.href = window.location.pathname + '?' + params.toString();
         });
     });
 });

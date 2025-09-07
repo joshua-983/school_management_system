@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bills Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bill-card {
+        border-left: 4px solid #3a7bd5;
+        transition: all 0.3s ease;
+    }
+    .bill-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .bill-status {
+        padding: 0.35em 0.65em;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .status-issued { background-color: #fff3cd; color: #856404; }
+    .status-paid { background-color: #d4edda; color: #155724; }
+    .status-partial { background-color: #fff3cd; color: #856404; }
+    .status-overdue { background-color: #f8d7da; color: #721c24; }
+    .status-cancelled { background-color: #6c757d; color: white; }
+    
+    .bill-amount {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #3a7bd5;
+    }
+    
+    .action-buttons .btn {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .search-box {
+        max-width: 300px;
+    }
+    
+    .filter-card {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-receipt me-2"></i>
+                    Bills Management
+                </h2>
+                {% if is_admin %}
+                <div>
+                    <a href="{% url 'bill_generate' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> Generate Bills
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Admin</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Bills</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-primary fs-2 fw-bold">{{ total_bills }}</div>
+                    <div class="text-muted">Total Bills</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-success fs-2 fw-bold">{{ paid_bills }}</div>
+                    <div class="text-muted">Paid Bills</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-warning fs-2 fw-bold">{{ outstanding_bills }}</div>
+                    <div class="text-muted">Outstanding</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-danger fs-2 fw-bold">{{ overdue_bills }}</div>
+                    <div class="text-muted">Overdue</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">All Bills</h5>
+                    <div class="d-flex">
+                        <input type="text" id="billSearch" class="form-control form-control-sm search-box me-2" 
+                               placeholder="Search bills...">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" 
+                                data-bs-target="#filterCollapse">
+                            <i class="bi bi-funnel"></i> Filters
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Filters Section -->
+                <div class="collapse" id="filterCollapse">
+                    <div class="card-body border-bottom filter-card">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Academic Year</label>
+                                <input type="text" name="academic_year" class="form-control" 
+                                       placeholder="e.g., 2024/2025" value="{{ request.GET.academic_year }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Term</label>
+                                <select name="term" class="form-select">
+                                    <option value="">All Terms</option>
+                                    <option value="1" {% if request.GET.term == "1" %}selected{% endif %}>Term 1</option>
+                                    <option value="2" {% if request.GET.term == "2" %}selected{% endif %}>Term 2</option>
+                                    <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="">All Statuses</option>
+                                    <option value="issued" {% if request.GET.status == "issued" %}selected{% endif %}>Issued</option>
+                                    <option value="paid" {% if request.GET.status == "paid" %}selected{% endif %}>Paid</option>
+                                    <option value="partial" {% if request.GET.status == "partial" %}selected{% endif %}>Partial</option>
+                                    <option value="overdue" {% if request.GET.status == "overdue" %}selected{% endif %}>Overdue</option>
+                                    <option value="cancelled" {% if request.GET.status == "cancelled" %}selected{% endif %}>Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    {% if bills %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="billsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Bill Number</th>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th>Academic Year</th>
+                                    <th>Term</th>
+                                    <th class="text-end">Amount</th>
+                                    <th>Status</th>
+                                    <th>Due Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bill in bills %}
+                                <tr class="bill-row">
+                                    <td>
+                                        <strong>{{ bill.bill_number }}</strong>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-circle me-2 text-muted"></i>
+                                            <div>
+                                                <div class="fw-medium">{{ bill.student.get_full_name }}</div>
+                                                <small class="text-muted">{{ bill.student.student_id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ bill.student.get_class_level_display }}</td>
+                                    <td>{{ bill.academic_year }}</td>
+                                    <td>Term {{ bill.term }}</td>
+                                    <td class="text-end fw-bold bill-amount">GH₵{{ bill.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="bill-status status-{{ bill.status }}">
+                                            {{ bill.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ bill.due_date|date:"M d, Y" }}</td>
+                                    <td class="action-buttons">
+                                        <a href="{% url 'bill_detail' pk=bill.pk %}" 
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="View Details"
+                                           data-bs-toggle="tooltip">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        {% if is_admin %}
+                                        <a href="#" class="btn btn-sm btn-outline-success"
+                                           title="Record Payment"
+                                           data-bs-toggle="tooltip">
+                                            <i class="bi bi-cash-coin"></i>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if is_paginated %}
+                    <nav aria-label="Bill pagination">
+                        <ul class="pagination justify-content-center mt-4">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-receipt display-1 text-muted"></i>
+                        <h5 class="text-muted mt-3">No bills found</h5>
+                        <p class="text-muted">Get started by generating bills for the current term.</p>
+                        {% if is_admin %}
+                        <a href="{% url 'bill_generate' %}" class="btn btn-primary mt-2">
+                            <i class="bi bi-plus-lg me-1"></i> Generate Bills
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('billSearch');
+    const billRows = document.querySelectorAll('.bill-row');
+    
+    if (searchInput && billRows.length > 0) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            billRows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // Format currency amounts
+    document.querySelectorAll('.bill-amount').forEach(element => {
+        const amount = element.textContent.trim();
+        if (!amount.startsWith('₵')) {
+            element.textContent = 'GH₵' + amount;
+        }
+    });
+
+    // Auto-expand filters if any filter is applied
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.toString() && !urlParams.has('page')) {
+        const filterCollapse = document.getElementById('filterCollapse');
+        if (filterCollapse) {
+            new bootstrap.Collapse(filterCollapse, { show: true });
+        }
+    }
+});
+</script>
+{% endblock %};/

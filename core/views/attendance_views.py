@@ -8,6 +8,13 @@ from urllib.parse import urlencode
 from .base_views import *
 from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment
 # Attendance Period Views
+from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment, CLASS_LEVEL_CHOICES
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django.db import transaction
+from django.core.exceptions import PermissionDenied
+from django.urls import reverse
+
 
 class AttendanceBaseView(LoginRequiredMixin, UserPassesTestMixin):
     """Base view for attendance-related views with common permissions"""
@@ -40,7 +47,7 @@ class AttendanceDashboardView(AttendanceBaseView, TemplateView):
             'today_attendance': today_attendance,
             'terms': terms,
             'periods': periods,
-            'class_levels': Student.CLASS_LEVEL_CHOICES,
+            'class_levels': CLASS_LEVEL_CHOICES,  # FIXED: Use imported constant
             'status_choices': StudentAttendance.STATUS_CHOICES,
             'stats': stats,
             'class_stats': class_stats,
@@ -64,6 +71,7 @@ class AttendanceDashboardView(AttendanceBaseView, TemplateView):
             queryset = queryset.filter(student__class_level__in=teacher_classes)
             
         return queryset
+
     def _calculate_attendance_stats(self, attendance):
         """Calculate and return attendance statistics"""
         total_students = Student.objects.count()
@@ -81,7 +89,7 @@ class AttendanceDashboardView(AttendanceBaseView, TemplateView):
     def _calculate_class_stats(self, attendance):
         """Calculate statistics by class level"""
         class_stats = {}
-        for class_level in Student.CLASS_LEVEL_CHOICES:
+        for class_level in CLASS_LEVEL_CHOICES:  # FIXED: Use imported constant
             class_attendance = attendance.filter(student__class_level=class_level[0])
             stats = self._calculate_single_class_stats(class_attendance)
             class_stats[class_level[0]] = stats
@@ -112,7 +120,6 @@ class AttendanceDashboardView(AttendanceBaseView, TemplateView):
             'absent_percentage': absent_percentage,
             'late_percentage': late_percentage,
         }
-
 class AttendanceRecordView(AttendanceBaseView, View):
     """View for recording and viewing attendance records"""
     template_name = 'core/academics/attendance_record.html'
@@ -157,35 +164,7 @@ class AttendanceRecordView(AttendanceBaseView, View):
             messages.error(request, f"Error recording attendance: {str(e)}")
             return self._handle_error_redirect(request)
 
-    def _build_success_redirect_url(self, form_data):
-        """Build redirect URL with all parameters after successful submission"""
-        params = {
-            'date': form_data['date'].strftime('%Y-%m-%d'),
-            'term': form_data['term'].id,
-            'class_level': form_data['class_level']
-        }
-        if form_data['period']:
-            params['period'] = form_data['period'].id
-        return reverse('attendance_record') + '?' + urlencode(params)
-
-    def _handle_error_redirect(self, request):
-        """Handle redirect when errors occur, preserving parameters"""
-        try:
-            params = {
-                'date': request.POST.get('date'),
-                'term': request.POST.get('term'),
-                'class_level': request.POST.get('class_level')
-            }
-            if request.POST.get('period'):
-                params['period'] = request.POST.get('period')
-            return redirect(reverse('attendance_record') + '?' + urlencode(params))
-        except:
-            return redirect(reverse('attendance_dashboard'))
-
-
-
-
-    def _extract_filters(self, request):
+    def _extract_filters(self, request):  # MOVED INSIDE THE CLASS
         """Extract and validate filter parameters from GET request"""
         term_id = request.GET.get('term')
         period_id = request.GET.get('period')
@@ -198,7 +177,7 @@ class AttendanceRecordView(AttendanceBaseView, View):
             'selected_period': None,
             'selected_date': None,
             'selected_class': class_level,
-            'selected_class_name': dict(Student.CLASS_LEVEL_CHOICES).get(class_level, ''),
+            'selected_class_name': dict(CLASS_LEVEL_CHOICES).get(class_level, ''),
             'date_error': None,
             'class_error': None,
         }
@@ -416,7 +395,30 @@ class AttendanceRecordView(AttendanceBaseView, View):
                     }
                 )
 
+    def _build_success_redirect_url(self, form_data):
+        """Build redirect URL with all parameters after successful submission"""
+        params = {
+            'date': form_data['date'].strftime('%Y-%m-%d'),
+            'term': form_data['term'].id,
+            'class_level': form_data['class_level']
+        }
+        if form_data['period']:
+            params['period'] = form_data['period'].id
+        return reverse('attendance_record') + '?' + urlencode(params)
 
+    def _handle_error_redirect(self, request):
+        """Handle redirect when errors occur, preserving parameters"""
+        try:
+            params = {
+                'date': request.POST.get('date'),
+                'term': request.POST.get('term'),
+                'class_level': request.POST.get('class_level')
+            }
+            if request.POST.get('period'):
+                params['period'] = request.POST.get('period')
+            return redirect(reverse('attendance_record') + '?' + urlencode(params))
+        except:
+            return redirect(reverse('attendance_dashboard'))
 class AttendancePeriodListView(AttendanceBaseView, ListView):
     """View for listing attendance periods"""
     model = AttendancePeriod
@@ -472,4 +474,3 @@ def load_periods(request):
         'periods': periods
     })
 
-# Note: Ensure to add corresponding URL patterns and templates for these views.

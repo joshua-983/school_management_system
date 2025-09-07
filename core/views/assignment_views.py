@@ -1,6 +1,7 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import JsonResponse
+from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, Student, CLASS_LEVEL_CHOICES  # Add CLASS_
 
 from .base_views import *
 from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, Student
@@ -44,7 +45,7 @@ class AssignmentListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['time_now'] = timezone.now()  # Keep as datetime for template
-        context['class_levels'] = Student.CLASS_LEVEL_CHOICES
+        context['class_levels'] = CLASS_LEVEL_CHOICES
         context['assignment_types'] = Assignment.ASSIGNMENT_TYPES
         
         if is_teacher(self.request.user):

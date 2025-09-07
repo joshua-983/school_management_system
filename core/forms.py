@@ -4,20 +4,17 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from datetime import date
 from django.core.validators import RegexValidator
-from .models import *
-from .models import Announcement
-from .utils import is_admin, is_teacher
-from .models import ReportCard
+from decimal import Decimal
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from .models import Fee, FeeCategory, Student
 from django.conf import settings
 from django.apps import apps
 import re
-from .models import CLASS_LEVEL_CHOICES
-from .models import Assignment  # Make sure this import exists
 
-
+from .models import *
+from .models import Announcement, ReportCard, Fee, FeeCategory, Student, Assignment, ClassAssignment
+from .utils import is_admin, is_teacher
+from .models import CLASS_LEVEL_CHOICES, TERM_CHOICES
 
 
 User = apps.get_model(settings.AUTH_USER_MODEL)
@@ -82,7 +79,7 @@ class ParentGuardianForm(forms.ModelForm):
         model = ParentGuardian
         fields = ['student', 'full_name', 'occupation', 'relationship', 
                 'phone_number', 'email', 'address', 'is_emergency_contact',
-                'emergency_contact_priority']
+                'emergency_contact_priority']  # CORRECTED SPELLING HERE
         widgets = {
             'address': forms.Textarea(attrs={'rows': 3}),
             'student': forms.HiddenInput(),
@@ -108,14 +105,62 @@ class ParentGuardianForm(forms.ModelForm):
 class FeeCategoryForm(forms.ModelForm):
     class Meta:
         model = FeeCategory
-        fields = '__all__'
+        fields = ['name', 'description', 'default_amount', 'frequency', 'is_mandatory', 'is_active', 'class_levels']
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 3}),
+            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'default_amount': forms.NumberInput(attrs={
+                'step': '0.01', 
+                'min': '0',
+                'class': 'form-control',
+                'placeholder': '0.00'
+            }),
+            'frequency': forms.Select(attrs={'class': 'form-control'}),
+            'is_mandatory': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'class_levels': forms.TextInput(attrs={
-                'placeholder': 'P1,P2,J1 etc. Leave blank for all'
+                'class': 'form-control',
+                'placeholder': 'P1,P2,P3 (leave blank for all classes)'
             }),
         }
-
+        labels = {
+            'default_amount': 'Default Amount (GH₵)',
+            'class_levels': 'Applicable Class Levels',
+        }
+        help_texts = {
+            'class_levels': 'Comma-separated list (e.g., P1,P2,P3) or leave blank for all classes',
+            'frequency': 'How often this fee is charged to students',
+        }
+    
+    def clean_default_amount(self):
+        amount = self.cleaned_data.get('default_amount')
+        if amount is not None and amount <= 0:
+            raise forms.ValidationError("Amount must be greater than 0")
+        return amount
+    
+    def clean_class_levels(self):
+        class_levels = self.cleaned_data.get('class_levels', '')
+        if class_levels:
+            # Validate class levels format
+            valid_levels = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
+            levels = [level.strip() for level in class_levels.split(',')]
+            invalid_levels = []
+            
+            for level in levels:
+                if level and level not in valid_levels:
+                    invalid_levels.append(level)
+            
+            if invalid_levels:
+                raise forms.ValidationError(
+                    f"Invalid class level(s): {', '.join(invalid_levels)}. "
+                    f"Valid levels are: {', '.join(valid_levels)}"
+                )
+            
+            # Remove duplicates and empty strings, then rejoin
+            unique_levels = list(set(levels))
+            unique_levels = [level for level in unique_levels if level]  # Remove empty strings
+            return ','.join(unique_levels)
+        
+        return class_levels
 class FeeForm(forms.ModelForm):
     academic_year = forms.CharField(
         help_text="Format: YYYY/YYYY or YYYY-YYYY",
@@ -124,26 +169,27 @@ class FeeForm(forms.ModelForm):
     
     payment_status = forms.ChoiceField(
         choices=[
-            ('paid', 'Paid'),
-            ('unpaid', 'Unpaid'),
-            ('partial', 'Part Payment'),
-            ('overdue', 'Overdue')
+            ('PAID', 'Paid'),
+            ('UNPAID', 'Unpaid'),
+            ('PARTIAL', 'Part Payment'),
+            ('OVERDUE', 'Overdue')
         ],
-        initial='unpaid'
+        initial='UNPAID'
     )
     
     class Meta:
         model = Fee
         fields = ['student', 'category', 'academic_year', 'term', 'amount_payable', 
                  'amount_paid', 'payment_status', 'payment_mode', 'payment_date', 
-                 'due_date', 'notes']
+                 'due_date', 'notes', 'bill']
         widgets = {
             'student': forms.HiddenInput(),
-            'due_date': forms.TextInput(attrs={'readonly': True}),
-            'payment_date': forms.TextInput(attrs={'readonly': True}),
+            'due_date': forms.DateInput(attrs={'type': 'date'}),
+            'payment_date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
             'amount_payable': forms.NumberInput(attrs={'step': '0.01'}),
             'amount_paid': forms.NumberInput(attrs={'step': '0.01'}),
+            'bill': forms.Select(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -161,12 +207,18 @@ class FeeForm(forms.ModelForm):
                 self.fields['category'].queryset = self.get_applicable_categories(student)
                 self.fields['category'].empty_label = "--- Select Fee Type ---"
                 
+                # Set up bill field with student's bills
+                self.fields['bill'].queryset = Bill.objects.filter(student=student)
+                self.fields['bill'].empty_label = "--- Not linked to a bill ---"
+                
             except Student.DoesNotExist:
                 # If student doesn't exist, show all students (for admin)
                 self.fields['student'].queryset = Student.objects.filter(is_active=True)
+                self.fields['bill'].queryset = Bill.objects.all()
         else:
             # If no student_id provided, show all active students
             self.fields['student'].queryset = Student.objects.filter(is_active=True)
+            self.fields['bill'].queryset = Bill.objects.all()
         
         # Set default academic year if not already set
         if not self.initial.get('academic_year'):
@@ -181,30 +233,41 @@ class FeeForm(forms.ModelForm):
         student_class = str(student.class_level)
         
         # Categories that apply to all classes
-        qs = FeeCategory.objects.filter(applies_to_all=True, is_active=True)
+        qs = FeeCategory.objects.filter(is_active=True)
         
-        # Add categories specific to this class level
-        specific_categories = FeeCategory.objects.exclude(applies_to_all=True).filter(
-            class_levels__contains=student_class,
-            is_active=True
-        )
+        # Filter categories that either apply to all or specifically to this class
+        applicable_categories = []
+        for category in qs:
+            if category.class_levels:
+                class_levels = [x.strip() for x in category.class_levels.split(',')]
+                if student_class in class_levels:
+                    applicable_categories.append(category)
+            else:
+                applicable_categories.append(category)
         
-        return (qs | specific_categories).distinct().order_by('name')
+        return FeeCategory.objects.filter(id__in=[cat.id for cat in applicable_categories])
     
     def clean(self):
         cleaned_data = super().clean()
         student = cleaned_data.get('student')
         category = cleaned_data.get('category')
+        bill = cleaned_data.get('bill')
         
         # Validate that category is applicable to student's class
         if student and category:
-            if not category.applies_to_all:
+            if category.class_levels:
                 student_class = str(student.class_level)
                 class_levels = [x.strip() for x in category.class_levels.split(',')] if category.class_levels else []
                 if student_class not in class_levels:
                     raise forms.ValidationError(
                         f"The selected category '{category.name}' is not applicable to {student}'s class level ({student.get_class_level_display()})."
                     )
+        
+        # Validate bill belongs to the correct student
+        if bill and student and bill.student != student:
+            raise forms.ValidationError(
+                "The selected bill does not belong to the chosen student."
+            )
         
         amount_payable = cleaned_data.get('amount_payable', Decimal('0.00'))
         amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
@@ -214,19 +277,19 @@ class FeeForm(forms.ModelForm):
         cleaned_data['balance'] = amount_payable - amount_paid
         
         # Validate payment status consistency
-        if payment_status == 'paid' and amount_paid != amount_payable:
+        if payment_status == 'PAID' and amount_paid != amount_payable:
             raise forms.ValidationError(
                 "For 'Paid' status, amount paid must equal amount payable."
             )
-        elif payment_status == 'unpaid' and amount_paid > 0:
+        elif payment_status == 'UNPAID' and amount_paid > 0:
             raise forms.ValidationError(
                 "For 'Unpaid' status, amount paid must be zero."
             )
-        elif payment_status == 'partial' and (amount_paid <= 0 or amount_paid >= amount_payable):
+        elif payment_status == 'PARTIAL' and (amount_paid <= 0 or amount_paid >= amount_payable):
             raise forms.ValidationError(
                 "For 'Part Payment' status, amount paid must be between 0 and the payable amount."
             )
-        elif payment_status == 'overdue' and amount_paid >= amount_payable:
+        elif payment_status == 'OVERDUE' and amount_paid >= amount_payable:
             raise forms.ValidationError(
                 "For 'Overdue' status, amount paid must be less than amount payable."
             )
@@ -247,6 +310,7 @@ class FeeForm(forms.ModelForm):
             raise forms.ValidationError("Invalid academic year format. Use YYYY/YYYY or YYYY-YYYY.")
         
         return academic_year
+
 class FeePaymentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         fee_id = kwargs.pop('fee_id', None)
@@ -259,34 +323,159 @@ class FeePaymentForm(forms.ModelForm):
             
             # Set max payment amount as the remaining balance
             self.fields['amount'].widget.attrs['max'] = fee.balance
+            
+            # If fee is linked to a bill, show bill information
+            if fee.bill:
+                self.fields['bill'] = forms.ModelChoiceField(
+                    queryset=Bill.objects.filter(pk=fee.bill.pk),
+                    initial=fee.bill,
+                    widget=forms.HiddenInput(),
+                    required=False
+                )
     
     class Meta:
         model = FeePayment
-        fields = '__all__'
+        fields = ['fee', 'amount', 'payment_mode', 'payment_date', 'notes', 'recorded_by']
         widgets = {
-            'payment_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'payment_date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 2}),
+            'recorded_by': forms.HiddenInput(),
         }
-
+    
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        fee = self.cleaned_data.get('fee')
+        
+        if fee and amount:
+            if amount <= 0:
+                raise forms.ValidationError("Payment amount must be greater than zero.")
+            
+            if amount > fee.balance:
+                raise forms.ValidationError(
+                    f"Payment amount cannot exceed the remaining balance of GH₵{fee.balance:.2f}."
+                )
+        
+        return amount
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        fee = cleaned_data.get('fee')
+        amount = cleaned_data.get('amount')
+        
+        if fee and amount:
+            # Check if payment would make the fee overpaid
+            new_total_paid = fee.amount_paid + amount
+            if new_total_paid > fee.amount_payable:
+                raise forms.ValidationError(
+                    f"This payment would result in overpayment. Maximum allowed is GH₵{fee.balance:.2f}."
+                )
+        
+        return cleaned_data
 class FeeFilterForm(forms.Form):
     academic_year = forms.CharField(required=False)
     term = forms.ChoiceField(
-        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        choices=[('', 'All Terms'), (1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
         required=False
     )
     payment_status = forms.ChoiceField(
-        choices=Fee.PAYMENT_STATUS_CHOICES,
+        choices=[('', 'All Statuses')] + Fee.PAYMENT_STATUS_CHOICES,
         required=False
     )
     category = forms.ModelChoiceField(
         queryset=FeeCategory.objects.all(),
-        required=False
+        required=False,
+        empty_label="All Categories"
     )
     student = forms.ModelChoiceField(
         queryset=Student.objects.all(),
-        required=False
+        required=False,
+        empty_label="All Students"
     )
+    has_bill = forms.ChoiceField(
+        choices=[('', 'All'), ('yes', 'With Bill'), ('no', 'Without Bill')],
+        required=False,
+        label="Bill Status"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set current academic year as default if not provided
+        if not self.data.get('academic_year'):
+            current_year = timezone.now().year
+            self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
 
+class FeeStatusReportForm(forms.Form):
+    REPORT_TYPE_CHOICES = [
+        ('summary', 'Summary Report'),
+        ('detailed', 'Detailed Report'),
+        ('outstanding', 'Outstanding Fees'),
+        ('paid', 'Paid Fees'),
+        ('billed', 'Billed Fees'),
+        ('unbilled', 'Unbilled Fees'),
+    ]
+    
+    report_type = forms.ChoiceField(
+        choices=REPORT_TYPE_CHOICES,
+        required=True,
+        label="Report Type"
+    )
+    
+    academic_year = forms.CharField(
+        required=False,
+        label="Academic Year",
+        widget=forms.TextInput(attrs={'placeholder': 'e.g., 2024/2025'})
+    )
+    
+    term = forms.ChoiceField(
+        choices=[('', 'All Terms')] + list(TERM_CHOICES),
+        required=False,
+        label="Term"
+    )
+    
+    class_level = forms.ChoiceField(
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
+        required=False,
+        label="Class Level"
+    )
+    
+    payment_status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + [
+            ('PAID', 'Paid'),
+            ('UNPAID', 'Unpaid'),
+            ('PARTIAL', 'Partial Payment'),
+            ('OVERDUE', 'Overdue'),
+        ],
+        required=False,
+        label="Payment Status"
+    )
+    
+    bill_status = forms.ChoiceField(
+        choices=[('', 'All'), ('billed', 'Billed'), ('unbilled', 'Not Billed')],
+        required=False,
+        label="Bill Status"
+    )
+    
+    start_date = forms.DateField(
+        required=False,
+        label="Start Date",
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    
+    end_date = forms.DateField(
+        required=False,
+        label="End Date",
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        
+        if start_date and end_date and start_date > end_date:
+            raise forms.ValidationError("Start date cannot be after end date")
+        
+        return cleaned_data
 
 class SubjectForm(forms.ModelForm):
     class Meta:
@@ -334,7 +523,7 @@ class TeacherRegistrationForm(forms.ModelForm):
         if email:
             # Convert to lowercase and validate format
             email = email.lower()
-            if not re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email):
+            if not re.match(r'^[a-z0-9._%+-]+@[a-z00.-]+\.[a-z]{2,}$', email):
                 raise ValidationError("Email must be in valid format with @ symbol.")
             
             # Check if email already exists in the system (only for new teachers)
@@ -415,8 +604,6 @@ class TeacherRegistrationForm(forms.ModelForm):
         
         return teacher
 
-
-
 class AssignmentForm(forms.ModelForm):
     class Meta:
         model = Assignment
@@ -465,7 +652,7 @@ class AssignmentForm(forms.ModelForm):
 class ClassAssignmentForm(forms.ModelForm):
     class Meta:
         model = ClassAssignment
-        fields = ['subject', 'class_level', 'academic_year']
+        fields = ['subject', 'class_level', 'academic_year', 'teacher']
         
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
@@ -475,14 +662,27 @@ class ClassAssignmentForm(forms.ModelForm):
             self.fields['subject'].queryset = Subject.objects.filter(
                 teachers=self.request.user.teacher
             )
+            # For teachers, set the teacher field to their own account and make it read-only
+            self.fields['teacher'].initial = self.request.user.teacher
+            self.fields['teacher'].widget.attrs['readonly'] = True
+            self.fields['teacher'].disabled = True
+        else:
+            # For admins, show all active teachers
+            self.fields['teacher'].queryset = Teacher.objects.filter(is_active=True)
 
-    def clean(self):  # Add this method
+    def clean(self):
         cleaned_data = super().clean()
         subject = cleaned_data.get('subject')
         class_level = cleaned_data.get('class_level')
         academic_year = cleaned_data.get('academic_year')
+        teacher = cleaned_data.get('teacher')
         
-        if subject and class_level and academic_year:
+        # For teachers, automatically set the teacher to themselves
+        if self.request and hasattr(self.request.user, 'teacher') and not teacher:
+            cleaned_data['teacher'] = self.request.user.teacher
+            teacher = self.request.user.teacher
+        
+        if subject and class_level and academic_year and teacher:
             # Check if this subject-class combination already exists
             existing_assignment = ClassAssignment.objects.filter(
                 subject=subject,
@@ -497,6 +697,7 @@ class ClassAssignmentForm(forms.ModelForm):
                 )
         
         return cleaned_data
+
 class GradeForm(forms.ModelForm):
     class Meta:
         model = Grade
@@ -603,8 +804,7 @@ class GradeForm(forms.ModelForm):
                 )
         
         return cleaned_data
-    
-#GRADE ENTRIES FORM
+
 class GradeEntryForm(forms.ModelForm):
     class Meta:
         model = Grade
@@ -816,7 +1016,7 @@ class AuditLogFilterForm(forms.Form):
         self.fields['user'].queryset = User.objects.all()
     
     user = forms.ModelChoiceField(
-        queryset=None,  # Will be set in __init__
+        queryset=None,
         required=False,
         label="Filter by User"
     )
@@ -835,6 +1035,7 @@ class AuditLogFilterForm(forms.Form):
         widget=forms.DateInput(attrs={'type': 'date'}),
         label="To Date"
     )
+
 class ReportCardFilterForm(forms.Form):
     academic_year = forms.CharField(
         required=False,
@@ -848,7 +1049,6 @@ class ReportCardFilterForm(forms.Form):
         choices=[('', 'All Terms')] + [(i, f'Term {i}') for i in range(1, 4)],
         required=False
     )
-
 
 class AcademicTermForm(forms.ModelForm):
     class Meta:
@@ -870,7 +1070,7 @@ class AcademicTermForm(forms.ModelForm):
         if start_date and end_date:
             # Validate term duration (approximately 4 months)
             delta = end_date - start_date
-            if delta.days > 120:  # ~4 months
+            if delta.days > 120:
                 raise ValidationError("Term duration should be approximately 4 months (3 months school + 1 month vacation)")
             
             # Check for overlapping terms
@@ -981,9 +1181,9 @@ class BulkAttendanceForm(forms.Form):
         required=True
     )
     class_level = forms.ChoiceField(
-    choices=CLASS_LEVEL_CHOICES,
-    widget=forms.Select(attrs={'class': 'form-select'}),
-    required=True
+        choices=CLASS_LEVEL_CHOICES,  # ← FIXED
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        required=True
     )
     csv_file = forms.FileField(
         widget=forms.FileInput(attrs={'class': 'form-control'}),
@@ -1021,9 +1221,10 @@ class BulkAttendanceForm(forms.Form):
                 teacher=self.user.teacher
             ).values_list('class_level', flat=True)
             self.fields['class_level'].choices = [
-                (level, name) for level, name in Student.CLASS_LEVEL_CHOICES
+                (level, name) for level, name in CLASS_LEVEL_CHOICES  # ← FIXED
                 if level in class_levels
             ]
+
 
 class AttendanceSummaryFilterForm(forms.Form):
     PERIOD_CHOICES = [
@@ -1045,9 +1246,9 @@ class AttendanceSummaryFilterForm(forms.Form):
         required=False
     )
     class_level = forms.ChoiceField(
-    choices=CLASS_LEVEL_CHOICES,
-    widget=forms.Select(attrs={'class': 'form-select'}),
-    required=False
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),  # ← FIXED (1st instance)
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        required=False
     )
     
     student = forms.ModelChoiceField(
@@ -1073,15 +1274,12 @@ class AttendanceSummaryFilterForm(forms.Form):
                 teacher=self.user.teacher
             ).values_list('class_level', flat=True)
             self.fields['class_level'].choices = [
-                (level, name) for level, name in Student.CLASS_LEVEL_CHOICES
+                (level, name) for level, name in CLASS_LEVEL_CHOICES  # ← FIXED (2nd instance)
                 if level in class_levels
             ]
             self.fields['student'].queryset = Student.objects.filter(
                 class_level__in=class_levels
             )
-
-
-# Add to your forms.py
 
 class ParentFeePaymentForm(forms.Form):
     PAYMENT_METHODS = [
@@ -1143,8 +1341,9 @@ class ParentAttendanceFilterForm(forms.Form):
         super().__init__(*args, **kwargs)
         
         if user and hasattr(user, 'parentguardian'):
-            self.fields['student'].queryset = user.parentguardian.student.all()
-
+            self.fields['student'].queryset = Student.objects.filter(
+                parents__user=user
+            )
 
 class ReportCardForm(forms.ModelForm):
     class Meta:
@@ -1167,9 +1366,6 @@ class ReportCardForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['student'].queryset = Student.objects.all().order_by('first_name', 'last_name')
-
-#timetable 
-# Add to core/forms.py
 
 class TimeSlotForm(forms.ModelForm):
     class Meta:
@@ -1214,54 +1410,160 @@ class TimetableEntryForm(forms.ModelForm):
             ).distinct()
 
 class TimetableFilterForm(forms.Form):
-    class_level = forms.ChoiceField(choices=CLASS_LEVEL_CHOICES, required=False)
-    academic_year = forms.CharField(required=False)
-    term = forms.ChoiceField(choices=AcademicTerm.TERM_CHOICES, required=False)
-    day_of_week = forms.ChoiceField(choices=Timetable.DAYS_OF_WEEK, required=False)
-
-
-
-
-
-
-
-class FeeStatusReportForm(forms.Form):
-    start_date = forms.DateField(
-        required=False, 
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-        label="From Date"
-    )
-    end_date = forms.DateField(
-        required=False, 
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-        label="To Date"
-    )
     class_level = forms.ChoiceField(
-    choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
-    required=False,
-    widget=forms.Select(attrs={'class': 'form-select'}),
-    label="Class Level"
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),  # ← FIXED
+        required=False
     )
-    fee_category = forms.ModelChoiceField(
-        queryset=FeeCategory.objects.all(),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        label="Fee Category"
+    academic_year = forms.CharField(required=False)
+    term = forms.ChoiceField(
+        choices=[('', 'All Terms')] + list(TERM_CHOICES),  # Also fixed TERM_CHOICES
+        required=False
     )
-    status = forms.ChoiceField(
-        choices=[('', 'All Statuses')] + list(Fee.PAYMENT_STATUS_CHOICES),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        label="Payment Status"
+    day_of_week = forms.ChoiceField(
+        choices=[('', 'All Days')] + list(Timetable.DAYS_OF_WEEK),
+        required=False
     )
 
+#bills
+class BillGenerationForm(forms.Form):
+    academic_year = forms.CharField(
+        max_length=9,
+        required=True,
+        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
+        widget=forms.TextInput(attrs={'placeholder': 'e.g., 2024/2025'})
+    )
+    
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        required=True
+    )
+    
+    class_levels = forms.MultipleChoiceField(
+        choices=CLASS_LEVEL_CHOICES,
+        required=False,
+        widget=forms.SelectMultiple(attrs={'size': 6}),
+        help_text="Select specific class levels (leave blank for all)"
+    )
+    
+    due_date = forms.DateField(
+        required=True,
+        widget=forms.DateInput(attrs={'type': 'date'}),
+        help_text="Due date for the generated bills"
+    )
+    
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Optional notes for the bills'}),
+        help_text="Optional notes that will be added to all generated bills"
+    )
+    
+    skip_existing = forms.BooleanField(
+        required=False,
+        initial=True,
+        help_text="Skip students who already have bills for this term"
+    )
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Set default date range to current term if available
+        # Set default academic year
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+        
+        # Set default due date (30 days from now)
+        default_due_date = timezone.now().date() + timedelta(days=30)
+        self.fields['due_date'].initial = default_due_date
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data['academic_year']
+        # Validate the years are consecutive
         try:
-            current_term = AcademicTerm.objects.filter(is_active=True).first()
-            if current_term:
-                self.fields['start_date'].initial = current_term.start_date
-                self.fields['end_date'].initial = current_term.end_date
-        except:
-            pass
+            year1, year2 = map(int, academic_year.split('/'))
+            if year2 != year1 + 1:
+                raise forms.ValidationError("The second year should be exactly one year after the first year")
+        except (ValueError, IndexError):
+            raise forms.ValidationError("Invalid academic year format. Use YYYY/YYYY")
+        
+        return academic_year
+    
+    def clean_due_date(self):
+        due_date = self.cleaned_data['due_date']
+        if due_date < timezone.now().date():
+            raise forms.ValidationError("Due date cannot be in the past")
+        return due_date
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        academic_year = cleaned_data.get('academic_year')
+        term = cleaned_data.get('term')
+        
+        # Check if bills already exist for this term
+        if academic_year and term and cleaned_data.get('skip_existing'):
+            existing_bills_count = Bill.objects.filter(
+                academic_year=academic_year,
+                term=term
+            ).count()
+            
+            if existing_bills_count > 0:
+                self.add_error(
+                    None,
+                    f"Warning: {existing_bills_count} bills already exist for {academic_year} Term {term}. "
+                    f"They will be skipped if 'Skip existing' is checked."
+                )
+        
+        return cleaned_data
+
+class BillPaymentForm(forms.ModelForm):
+    class Meta:
+        model = BillPayment
+        fields = ['bill', 'amount', 'payment_mode', 'payment_date', 'notes', 'recorded_by']
+        widgets = {
+            'bill': forms.HiddenInput(),
+            'payment_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Optional payment notes'}),
+            'recorded_by': forms.HiddenInput(),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        bill_id = kwargs.pop('bill_id', None)
+        super().__init__(*args, **kwargs)
+        
+        if bill_id:
+            bill = get_object_or_404(Bill, pk=bill_id)
+            self.fields['bill'].initial = bill
+            self.fields['bill'].widget = forms.HiddenInput()
+            
+            # Set max payment amount as the remaining balance
+            remaining_balance = bill.total_amount - bill.amount_paid
+            self.fields['amount'].widget.attrs['max'] = remaining_balance
+            self.fields['amount'].help_text = f"Remaining balance: GH₵{remaining_balance:.2f}"
+    
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        bill = self.cleaned_data.get('bill')
+        
+        if bill and amount:
+            if amount <= 0:
+                raise forms.ValidationError("Payment amount must be greater than zero.")
+            
+            remaining_balance = bill.total_amount - bill.amount_paid
+            if amount > remaining_balance:
+                raise forms.ValidationError(
+                    f"Payment amount cannot exceed the remaining balance of GH₵{remaining_balance:.2f}."
+                )
+        
+        return amount
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        bill = cleaned_data.get('bill')
+        amount = cleaned_data.get('amount')
+        
+        if bill and amount:
+            # Check if payment would make the bill overpaid
+            new_total_paid = bill.amount_paid + amount
+            if new_total_paid > bill.total_amount:
+                raise forms.ValidationError(
+                    f"This payment would result in overpayment. Maximum allowed is GH₵{bill.total_amount - bill.amount_paid:.2f}."
+                )
+        
+        return cleaned_data

@@ -38,6 +38,13 @@ CLASS_LEVEL_CHOICES = [
 
 CLASS_LEVEL_DISPLAY_MAP = dict(CLASS_LEVEL_CHOICES)
 
+# Add TERM_CHOICES to shared constants
+TERM_CHOICES = [
+    (1, 'Term 1'),
+    (2, 'Term 2'),
+    (3, 'Term 3'),
+]
+
 # Image path functions
 def student_image_path(instance, filename):
     ext = filename.split('.')[-1]
@@ -239,14 +246,114 @@ class ClassAssignment(models.Model):
     academic_year = models.CharField(max_length=9)
     
     class Meta:
-        unique_together = ('class_level', 'subject', 'academic_year')  # Add this line
-        # Remove or modify the existing unique_together if it conflicts
+        unique_together = ('class_level', 'subject', 'academic_year')
     
     def __str__(self):
         return f"{self.get_class_level_display()} - {self.subject} ({self.academic_year})"
 
+# Fee Management Models - BILL MODEL COMES FIRST
+class Bill(models.Model):
+    """Represents an invoice sent to a student for specific fees"""
+    bill_number = models.CharField(max_length=20, unique=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='bills')
+    issue_date = models.DateField(auto_now_add=True)
+    due_date = models.DateField()
+    academic_year = models.CharField(max_length=9)
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    status = models.CharField(max_length=10, choices=[
+        ('issued', 'Issued'),
+        ('paid', 'Paid'),
+        ('partial', 'Partially Paid'),
+        ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled')
+    ], default='issued')
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='recorded_bills')
+    
+    class Meta:
+        ordering = ['-issue_date']
+    
+    def __str__(self):
+        return f"Bill #{self.bill_number} - {self.student.get_full_name()}"
+    
+    def save(self, *args, **kwargs):
+        # Generate bill number if not provided
+        if not self.bill_number:
+            current_year = str(timezone.now().year)
+            last_bill = Bill.objects.filter(bill_number__startswith=f'BILL{current_year}').order_by('-bill_number').first()
+            
+            if last_bill:
+                try:
+                    last_sequence = int(last_bill.bill_number[-6:])
+                    new_sequence = last_sequence + 1
+                except ValueError:
+                    new_sequence = 1
+            else:
+                new_sequence = 1
+                
+            self.bill_number = f"BILL{current_year}{new_sequence:06d}"
+        
+        super().save(*args, **kwargs)
+    
+    def update_status(self):
+        """Update bill status based on payments"""
+        total_paid = sum(payment.amount for payment in self.payments.all())
+        
+        if total_paid >= self.total_amount:
+            self.status = 'paid'
+        elif total_paid > 0:
+            self.status = 'partial'
+        elif timezone.now().date() > self.due_date:
+            self.status = 'overdue'
+        else:
+            self.status = 'issued'
+        
+        self.save()
 
-# Fee Management Models
+class BillItem(models.Model):
+    """Individual fee items on a bill"""
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='items')
+    fee_category = models.ForeignKey('FeeCategory', on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True)
+    
+    def __str__(self):
+        return f"{self.fee_category.name} - GH₵{self.amount}"
+
+# Add this to your models.py file
+class BillPayment(models.Model):
+    PAYMENT_MODES = [
+        ('CASH', 'Cash'),
+        ('BANK_TRANSFER', 'Bank Transfer'),
+        ('MOBILE_MONEY', 'Mobile Money'),
+        ('CHECK', 'Check'),
+        ('OTHER', 'Other'),
+    ]
+    
+    bill = models.ForeignKey('Bill', on_delete=models.CASCADE, related_name='bill_payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODES, default='CASH')
+    payment_date = models.DateField(default=timezone.now)
+    notes = models.TextField(blank=True, null=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-payment_date']
+        verbose_name = 'Bill Payment'
+        verbose_name_plural = 'Bill Payments'
+
+    def __str__(self):
+        return f"Payment of GH₵{self.amount} for Bill #{self.bill.bill_number}"
+
+    def save(self, *args, **kwargs):
+        # Update the bill's paid amount when a payment is saved
+        super().save(*args, **kwargs)
+        self.bill.update_payment_status()
+
+
 class FeeCategory(models.Model):
     CATEGORY_TYPES = [
         ('ADMISSION', 'Admission Fees'),
@@ -258,8 +365,20 @@ class FeeCategory(models.Model):
         ('OTHER', 'Other Fees'),
     ]
     
+    FREQUENCY_CHOICES = [
+        ('one_time', 'One Time'),
+        ('termly', 'Per Term'),
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('semester', 'Per Semester'),
+        ('annual', 'Annual'),
+        ('custom', 'Custom'),
+    ]
+    
     name = models.CharField(max_length=100, choices=CATEGORY_TYPES)
     description = models.TextField(blank=True)
+    default_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='termly')
     is_mandatory = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     applies_to_all = models.BooleanField(default=True)
@@ -269,9 +388,38 @@ class FeeCategory(models.Model):
         help_text="Comma-separated list of class levels this applies to (leave blank for all)"
     )
     
+    class Meta:
+        verbose_name_plural = "Fee Categories"
+        ordering = ['name']
+    
     def __str__(self):
         return self.get_name_display()
-
+    
+    def get_frequency_display_with_icon(self):
+        """Return frequency with appropriate icon for display"""
+        icons = {
+            'one_time': '💰',
+            'termly': '📚',
+            'monthly': '📅',
+            'quarterly': '📊',
+            'semester': '🎓',
+            'annual': '📆',
+            'custom': '⚙️',
+        }
+        return f"{icons.get(self.frequency, '📝')} {self.get_frequency_display()}"
+    
+    def get_applicable_class_levels(self):
+        """Return list of applicable class levels"""
+        if not self.class_levels:
+            return []
+        return [level.strip() for level in self.class_levels.split(',')]
+    
+    def is_applicable_to_class(self, class_level):
+        """Check if this fee applies to a specific class level"""
+        if self.applies_to_all or not self.class_levels:
+            return True
+        return class_level in self.get_applicable_class_levels()
+# Now Fee model can reference Bill since it's defined above
 class Fee(models.Model):
     PAYMENT_STATUS_CHOICES = [
         ('paid', 'Paid'),
@@ -287,12 +435,6 @@ class Fee(models.Model):
         ('mobile_money', 'Mobile Money'),
         ('other', 'Other'),
     ]
-    
-    TERM_CHOICES = [
-        (1, 'Term 1'),
-        (2, 'Term 2'),
-        (3, 'Term 3'),
-    ]
 
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fees')
     category = models.ForeignKey(FeeCategory, on_delete=models.PROTECT, related_name='fees')
@@ -307,6 +449,9 @@ class Fee(models.Model):
     payment_mode = models.CharField(max_length=15, choices=PAYMENT_MODE_CHOICES, blank=True, null=True)
     payment_date = models.DateField(blank=True, null=True)
     due_date = models.DateField()
+    
+    # Now Bill is defined above, so this reference works
+    bill = models.ForeignKey(Bill, on_delete=models.SET_NULL, null=True, blank=True, related_name='fees')
     
     receipt_number = models.CharField(max_length=20, blank=True)
     notes = models.TextField(blank=True)
@@ -385,7 +530,6 @@ class FeeInstallment(models.Model):
     def __str__(self):
         return f"Installment of {self.amount} due {self.due_date}"
 
-
 class FeeDiscount(models.Model):
     DISCOUNT_TYPES = [
         ('PERCENT', 'Percentage'),
@@ -416,6 +560,7 @@ class FeePayment(models.Model):
     ]
     
     fee = models.ForeignKey('Fee', on_delete=models.CASCADE, related_name='payments')
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='fee_payments', null=True, blank=True) 
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     payment_date = models.DateTimeField(default=timezone.now)
     payment_mode = models.CharField(max_length=15, choices=PAYMENT_MODE_CHOICES)
@@ -436,6 +581,11 @@ class FeePayment(models.Model):
     def save(self, *args, **kwargs):
         if not self.receipt_number:
             self.receipt_number = self.generate_receipt_number()
+        
+        # Update related bill status if this payment is for a bill
+        if self.bill:
+            self.bill.update_status()
+            
         super().save(*args, **kwargs)
     
     @classmethod
@@ -446,6 +596,8 @@ class FeePayment(models.Model):
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
+
+# ... REST OF YOUR MODELS (Assignment, Grade, etc.) REMAIN THE SAME ...
 # Assignment Models
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [
@@ -615,6 +767,12 @@ class Grade(models.Model):
             }
         
         return results
+
+# ... CONTINUE WITH THE REST OF YOUR EXISTING MODELS ...
+# School Configuration, Notification, AuditLog, Announcement, ReportCard, 
+# AcademicTerm, AttendancePeriod, StudentAttendance, AttendanceSummary, 
+# AnalyticsCache, GradeAnalytics, AttendanceAnalytics, TimeSlot, Timetable, 
+# TimetableEntry, etc.
 
 # School Configuration
 class SchoolConfiguration(models.Model):
@@ -904,7 +1062,7 @@ class AttendancePeriod(models.Model):
             term=self.term,
             start_date__lte=self.end_date,
             end_date__gte=self.start_date
-        ).exclude(pk=self.pk)
+            ).exclude(pk=self.pk)
         
         if overlapping.exists():
             raise ValidationError("This period overlaps with an existing period")
@@ -923,11 +1081,11 @@ class StudentAttendance(models.Model):
     period = models.ForeignKey(AttendancePeriod, on_delete=models.CASCADE, null=True, blank=True)
     term = models.ForeignKey(AcademicTerm, on_delete=models.CASCADE)
     recorded_by = models.ForeignKey(
-    settings.AUTH_USER_MODEL,
-    on_delete=models.SET_NULL,
-    null=True,
-    verbose_name='Recorded By'
-)
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        verbose_name='Recorded By'
+    )
     notes = models.TextField(blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     
@@ -997,7 +1155,7 @@ class AnalyticsCache(models.Model):
 
 class GradeAnalytics(models.Model):
     """Model to store grade-related analytics"""
-    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)  # Use the global constant
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
     average_score = models.FloatField()
     highest_score = models.FloatField()
@@ -1006,9 +1164,10 @@ class GradeAnalytics(models.Model):
     
     class Meta:
         unique_together = ('class_level', 'subject', 'date_calculated')
+
 class AttendanceAnalytics(models.Model):
     """Model to store attendance analytics"""
-    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)  # Fix this line too
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)
     date = models.DateField()
     present_count = models.IntegerField()
     absent_count = models.IntegerField()
@@ -1019,8 +1178,6 @@ class AttendanceAnalytics(models.Model):
         unique_together = ('class_level', 'date')
 
 #timetable
-# Add to core/models.py
-
 class TimeSlot(models.Model):
     PERIOD_CHOICES = [
         (1, '1st Period (8:00-9:00)'),
@@ -1090,34 +1247,8 @@ class TimetableEntry(models.Model):
             return f"{self.time_slot.break_name} - Break"
         return f"{self.time_slot} - {self.subject.name} - {self.teacher.get_full_name()}"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def get_unread_count(user):
     """
     Get count of unread notifications for a user
     """
     return Notification.objects.filter(recipient=user, is_read=False).count()
-

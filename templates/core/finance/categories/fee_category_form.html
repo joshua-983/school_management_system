@@ -1,6 +1,24 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Fee Category{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/finance.css' %}">
+<style>
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    .currency-input-group .input-group-text {
+        background-color: #f8f9fa;
+        border-right: none;
+    }
+    .currency-input-group .form-control {
+        border-left: none;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -32,7 +50,7 @@
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <form method="post" novalidate>
+                    <form method="post" novalidate id="fee-category-form">
                         {% csrf_token %}
                         
                         {% if form.non_field_errors %}
@@ -60,8 +78,8 @@
                                 <label for="{{ form.default_amount.id_for_label }}" class="form-label">
                                     {{ form.default_amount.label }} <span class="text-danger">*</span>
                                 </label>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
+                                <div class="input-group currency-input-group">
+                                    <span class="input-group-text">₵</span>
                                     {{ form.default_amount }}
                                 </div>
                                 {% if form.default_amount.errors %}
@@ -75,7 +93,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="{{ form.frequency.id_for_label }}" class="form-label">
-                                    {{ form.frequency.label }} <span class="text-danger">*</span>
+                                    Frequency <span class="text-danger">*</span>
                                 </label>
                                 {{ form.frequency }}
                                 {% if form.frequency.errors %}
@@ -85,12 +103,32 @@
                                 {% endif %}
                             </div>
                             
-                            <div class="col-md-6">
+                            <div class="col-md-3">
+                                <label for="{{ form.is_mandatory.id_for_label }}" class="form-label">
+                                    Mandatory
+                                </label>
+                                <div class="form-check form-switch">
+                                    {{ form.is_mandatory }}
+                                    <label class="form-check-label" for="{{ form.is_mandatory.id_for_label }}">
+                                        Required for all students
+                                    </label>
+                                </div>
+                                {% if form.is_mandatory.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.is_mandatory.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-3">
                                 <label for="{{ form.is_active.id_for_label }}" class="form-label">
-                                    {{ form.is_active.label }}
+                                    Status
                                 </label>
                                 <div class="form-check form-switch">
                                     {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                        Active
+                                    </label>
                                 </div>
                                 {% if form.is_active.errors %}
                                 <div class="invalid-feedback d-block">
@@ -100,7 +138,25 @@
                             </div>
                         </div>
                         
-                        <div class="mb-3">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.class_levels.id_for_label }}" class="form-label">
+                                    Applicable Class Levels
+                                </label>
+                                {{ form.class_levels }}
+                                {% if form.class_levels.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.class_levels.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="text-muted">
+                                    Leave blank if this fee applies to all class levels. 
+                                    Use comma-separated values (e.g., P1,P2,P3)
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
                             <label for="{{ form.description.id_for_label }}" class="form-label">
                                 {{ form.description.label }}
                             </label>
@@ -110,11 +166,12 @@
                                 {{ form.description.errors.0 }}
                             </div>
                             {% endif %}
+                            <small class="text-muted">Describe what this fee category covers</small>
                         </div>
                         
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-3">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-1"></i> Save
+                                <i class="bi bi-check-circle me-1"></i> Save Category
                             </button>
                             <a href="{% url 'fee_category_list' %}" class="btn btn-secondary">
                                 <i class="bi bi-x-circle me-1"></i> Cancel
@@ -126,7 +183,7 @@
         </div>
         
         <div class="col-lg-4">
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Guidelines</h5>
                 </div>
@@ -138,11 +195,15 @@
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Set appropriate default amounts for each category
+                            Set appropriate default amounts in Ghana Cedis (₵)
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
-                            Choose the correct frequency (one-time, monthly, termly, etc.)
+                            Choose the correct frequency (Termly, Annual, One-time)
+                        </li>
+                        <li class="list-group-item">
+                            <i class="bi bi-check-circle text-primary me-2"></i>
+                            Mark mandatory fees that apply to all students
                         </li>
                         <li class="list-group-item">
                             <i class="bi bi-check-circle text-primary me-2"></i>
@@ -151,7 +212,81 @@
                     </ul>
                 </div>
             </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Tips</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-light">
+                        <h6>Common Fee Categories:</h6>
+                        <ul class="mb-0">
+                            <li>Tuition Fees</li>
+                            <li>Library Fees</li>
+                            <li>Sports Fees</li>
+                            <li>Examination Fees</li>
+                            <li>Development Levy</li>
+                            <li>PTA Dues</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add currency formatting to amount field
+    const amountField = document.getElementById('{{ form.default_amount.id_for_label }}');
+    
+    if (amountField) {
+        amountField.addEventListener('blur', function() {
+            const value = parseFloat(this.value);
+            if (!isNaN(value)) {
+                this.value = value.toFixed(2);
+            }
+        });
+        
+        amountField.addEventListener('input', function() {
+            // Allow only numbers and decimal point
+            this.value = this.value.replace(/[^0-9.]/g, '');
+        });
+    }
+    
+    // Add form validation
+    const form = document.getElementById('fee-category-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const nameField = document.getElementById('{{ form.name.id_for_label }}');
+            const amountField = document.getElementById('{{ form.default_amount.id_for_label }}');
+            
+            if (!nameField.value.trim()) {
+                e.preventDefault();
+                alert('Please enter a category name');
+                nameField.focus();
+                return false;
+            }
+            
+            if (!amountField.value || parseFloat(amountField.value) <= 0) {
+                e.preventDefault();
+                alert('Please enter a valid amount greater than 0');
+                amountField.focus();
+                return false;
+            }
+        });
+    }
+    
+    // Add error styling to fields with errors
+    {% if form.errors %}
+    {% for field in form %}
+        {% if field.errors %}
+        document.getElementById('{{ field.id_for_label }}').classList.add('is-invalid');
+        {% endif %}
+    {% endfor %}
+    {% endif %}
+});
+</script>
 {% endblock %}

@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generate Bills{% endblock %}
+
+{% block extra_css %}
+<style>
+    .generation-card {
+        border-left: 4px solid #3a7bd5;
+        border-radius: 10px;
+    }
+    .preview-card {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #3a7bd5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-gear me-2"></i>
+                    Generate Bills
+                </h2>
+                <a href="{% url 'bill_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Bills
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'bill_list' %}">Bills</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Generate</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm generation-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cash-stack me-2"></i>
+                        Bill Generation Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="billGenerationForm">
+                        {% csrf_token %}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Academic Year</label>
+                                <input type="text" class="form-control" name="academic_year" 
+                                       placeholder="e.g., 2024/2025" required
+                                       pattern="\d{4}/\d{4}" title="Format: YYYY/YYYY">
+                                <div class="form-text">Format: YYYY/YYYY</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Term</label>
+                                <select class="form-select" name="term" required>
+                                    <option value="">Select Term</option>
+                                    <option value="1">Term 1</option>
+                                    <option value="2">Term 2</option>
+                                    <option value="3">Term 3</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Class Levels</label>
+                                <select class="form-select" name="class_levels" multiple size="6">
+                                    {% for value, display in class_level_choices %}
+                                    <option value="{{ value }}">{{ display }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Hold Ctrl/Cmd to select multiple classes</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Due Date</label>
+                                <input type="date" class="form-control" name="due_date" required>
+                                <div class="form-text">Bills will be due on this date</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notes (Optional)</label>
+                            <textarea class="form-control" name="notes" rows="2" 
+                                      placeholder="Optional notes for the bills"></textarea>
+                        </div>
+
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" name="skip_existing" id="skipExisting" checked>
+                            <label class="form-check-label" for="skipExisting">
+                                Skip students who already have bills for this term
+                            </label>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-gear me-2"></i>
+                                Generate Bills
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Preview Card -->
+            <div class="card shadow-sm preview-card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-eye me-2"></i>
+                        Generation Preview
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="stat-number">{{ student_count }}</div>
+                    <p class="text-muted">Active Students</p>
+                    
+                    <div class="stat-number">{{ fee_category_count }}</div>
+                    <p class="text-muted">Mandatory Fee Categories</p>
+                    
+                    <hr>
+                    
+                    <p class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Bills will be generated for all active students with mandatory fee categories
+                    </p>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Recent Generations
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_generations %}
+                    {% for generation in recent_generations %}
+                    <div class="border-bottom pb-2 mb-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-medium">{{ generation.academic_year }} Term {{ generation.term }}</span>
+                            <small class="text-muted">{{ generation.created_at|timesince }} ago</small>
+                        </div>
+                        <small class="text-muted">{{ generation.bills_created }} bills created</small>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted text-center">No recent bill generations</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default academic year (current year/next year)
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    document.querySelector('input[name="academic_year"]').value = `${currentYear}/${nextYear}`;
+    
+    // Set default due date (2 weeks from now)
+    const twoWeeksFromNow = new Date();
+    twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14);
+    const dueDateStr = twoWeeksFromNow.toISOString().split('T')[0];
+    document.querySelector('input[name="due_date"]').value = dueDateStr;
+    
+    // Form validation
+    const form = document.getElementById('billGenerationForm');
+    form.addEventListener('submit', function(e) {
+        const academicYear = document.querySelector('input[name="academic_year"]').value;
+        const term = document.querySelector('select[name="term"]').value;
+        const dueDate = document.querySelector('input[name="due_date"]').value;
+        
+        if (!academicYear || !term || !dueDate) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+            return false;
+        }
+        
+        // Confirm before generating
+        if (!confirm('Are you sure you want to generate bills? This action cannot be undone.')) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

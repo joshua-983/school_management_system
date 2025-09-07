@@ -1,0 +1,390 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bill #{{ bill.bill_number }} - Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bill-header {
+        background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        color: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .status-badge {
+        padding: 0.5em 1em;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .status-issued { background-color: #fff3cd; color: #856404; }
+    .status-paid { background-color: #d4edda; color: #155724; }
+    .status-partial { background-color: #fff3cd; color: #856404; }
+    .status-overdue { background-color: #f8d7da; color: #721c24; }
+    .status-cancelled { background-color: #6c757d; color: white; }
+    
+    .amount-display {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #3a7bd5;
+    }
+    
+    .item-list {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .payment-history {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .action-btn {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-receipt me-2"></i>
+                    Bill Details
+                </h2>
+                <a href="{% url 'bill_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Bills
+                </a>
+            </div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'bill_list' %}">Bills</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Bill #{{ bill.bill_number }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Bill Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="bill-header">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h3 class="mb-1">Bill #{{ bill.bill_number }}</h3>
+                        <p class="mb-0">Issued for {{ bill.student.get_full_name }}</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <span class="status-badge status-{{ bill.status }}">
+                            {{ bill.get_status_display }}
+                        </span>
+                        <div class="amount-display mt-2">GH₵{{ bill.total_amount|floatformat:2 }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Bill Information -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Bill Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Student</label>
+                                <p class="fw-medium">{{ bill.student.get_full_name }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Student ID</label>
+                                <p>{{ bill.student.student_id }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Class Level</label>
+                                <p>{{ bill.student.get_class_level_display }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Academic Year</label>
+                                <p>{{ bill.academic_year }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Term</label>
+                                <p>Term {{ bill.term }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Due Date</label>
+                                <p class="{% if bill.is_overdue %}text-danger fw-bold{% endif %}">
+                                    {{ bill.due_date|date:"M d, Y" }}
+                                    {% if bill.is_overdue %}(Overdue){% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if bill.notes %}
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Notes</label>
+                        <p class="border rounded p-3 bg-light">{{ bill.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Bill Items -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check me-2"></i>
+                        Fee Items
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fee Category</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in bill.items.all %}
+                                <tr>
+                                    <td>{{ item.fee_category.get_name_display }}</td>
+                                    <td>{{ item.description|default:"Standard fee" }}</td>
+                                    <td class="text-end">GH₵{{ item.amount|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                                <tr class="table-primary">
+                                    <td colspan="2" class="text-end fw-bold">Total Amount:</td>
+                                    <td class="text-end fw-bold">GH₵{{ bill.total_amount|floatformat:2 }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Associated Fees -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cash-stack me-2"></i>
+                        Associated Fee Records
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fee Category</th>
+                                    <th>Amount Payable</th>
+                                    <th>Amount Paid</th>
+                                    <th>Balance</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fee in fees %}
+                                <tr>
+                                    <td>{{ fee.category.name }}</td>
+                                    <td>GH₵{{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td>GH₵{{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="{% if fee.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        GH₵{{ fee.balance|floatformat:2 }}
+                                    </td>
+                                    <td>
+                                        {% if fee.payment_status == 'PAID' %}
+                                        <span class="badge bg-success">Paid</span>
+                                        {% elif fee.payment_status == 'PARTIAL' %}
+                                        <span class="badge bg-warning">Partial</span>
+                                        {% elif fee.payment_status == 'OVERDUE' %}
+                                        <span class="badge bg-danger">Overdue</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Unpaid</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-3">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        No fee records associated with this bill
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar - Actions and Payments -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning me-2"></i>
+                        Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if is_admin %}
+                        {% if bill.status != 'paid' and bill.status != 'cancelled' %}
+                        <button class="btn btn-success action-btn" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                            <i class="bi bi-cash-coin me-2"></i>Record Payment
+                        </button>
+                        {% endif %}
+                        
+                        {% if bill.status != 'cancelled' %}
+                        <button class="btn btn-warning action-btn" data-bs-toggle="modal" data-bs-target="#editBillModal">
+                            <i class="bi bi-pencil me-2"></i>Edit Bill
+                        </button>
+                        {% endif %}
+                        
+                        {% if bill.status != 'cancelled' %}
+                        <button class="btn btn-danger action-btn" data-bs-toggle="modal" data-bs-target="#cancelBillModal">
+                            <i class="bi bi-x-circle me-2"></i>Cancel Bill
+                        </button>
+                        {% endif %}
+                        
+                        <a href="#" class="btn btn-info action-btn">
+                            <i class="bi bi-printer me-2"></i>Print Bill
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{% url 'student_detail' pk=bill.student.pk %}" class="btn btn-outline-primary action-btn">
+                            <i class="bi bi-person me-2"></i>View Student Profile
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment History -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Payment History
+                    </h5>
+                </div>
+                <div class="card-body payment-history">
+                    {% if bill.payments.all %}
+                    {% for payment in bill.payments.all %}
+                    <div class="border-bottom pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">GH₵{{ payment.amount|floatformat:2 }}</h6>
+                                <small class="text-muted">{{ payment.payment_date|date:"M d, Y" }}</small>
+                                <br>
+                                <small class="text-muted">{{ payment.get_payment_mode_display }}</small>
+                            </div>
+                            <span class="badge bg-success">Paid</span>
+                        </div>
+                        {% if payment.notes %}
+                        <small class="text-muted">{{ payment.notes }}</small>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted text-center">No payments recorded yet</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Record Payment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paymentForm">
+                    <div class="mb-3">
+                        <label class="form-label">Amount</label>
+                        <input type="number" class="form-control" name="amount" step="0.01" min="0.01" 
+                               max="{{ bill.total_amount }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payment Mode</label>
+                        <select class="form-select" name="payment_mode" required>
+                            <option value="">Select Payment Mode</option>
+                            <option value="cash">Cash</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="mobile_money">Mobile Money</option>
+                            <option value="check">Check</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payment Date</label>
+                        <input type="date" class="form-control" name="payment_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitPayment()">Record Payment</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set today's date as default for payment date
+    const today = new Date().toISOString().split('T')[0];
+    document.querySelector('input[name="payment_date"]').value = today;
+    
+    // Format currency amounts
+    document.querySelectorAll('.amount-display').forEach(element => {
+        const amount = element.textContent.trim();
+        if (!amount.startsWith('GH₵')) {
+            element.textContent = 'GH₵' + amount;
+        }
+    });
+});
+
+function submitPayment() {
+    // This would typically be handled by a form submission or AJAX call
+    alert('Payment recording functionality would be implemented here');
+    // You would typically submit the form via AJAX or redirect to a payment view
+}
+</script>
+{% endblock %}

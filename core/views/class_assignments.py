@@ -3,6 +3,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from .base_views import *
 from ..models import ClassAssignment
 from ..forms import ClassAssignmentForm
+from django.contrib import messages
+from django.urls import reverse_lazy  # Make sure this import is at the top
+
 
 # Class Assignment Views
 class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
@@ -39,6 +42,7 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
     model = ClassAssignment
     form_class = ClassAssignmentForm
     template_name = 'core/academics/classes/class_assignment_form.html'
+    success_url = reverse_lazy('class_assignment_list')  # ADD THIS LINE
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -49,18 +53,23 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
         return kwargs
     
     def form_valid(self, form):
-        if is_teacher(self.request.user):
-            form.instance.teacher = self.request.user.teacher
+        # Always set the teacher - either from the form or from the current user
+        if not form.instance.teacher:
+            if is_teacher(self.request.user):
+                form.instance.teacher = self.request.user.teacher
+            else:
+                # For admins, you might want to handle this differently
+                # Maybe add the teacher field to the form for admins
+                form.add_error(None, "Teacher is required")
+                return self.form_invalid(form)
         
         messages.success(self.request, 'Class assignment created successfully!')
         return super().form_valid(form)
     
-    def form_invalid(self, form):  # Add this method for better error handling
+    def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
         return super().form_invalid(form)
     
-    def get_success_url(self):
-        return reverse_lazy('class_assignment_list')
 
 class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = ClassAssignment

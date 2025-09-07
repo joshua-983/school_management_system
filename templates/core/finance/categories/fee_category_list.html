@@ -4,11 +4,13 @@
 {% block title %}Fee Categories{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/finance.css' %}">
 <style>
     .category-card {
         transition: all 0.3s ease;
         border-radius: 10px;
         overflow: hidden;
+        border-left: 4px solid #3a7bd5;
     }
     .category-card:hover {
         transform: translateY(-5px);
@@ -17,9 +19,31 @@
     .category-icon {
         font-size: 2rem;
         margin-bottom: 1rem;
+        color: #3a7bd5;
     }
     .table-actions {
         white-space: nowrap;
+    }
+    .status-badge {
+        padding: 0.35em 0.65em;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .status-active {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .status-inactive {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .mandatory-badge {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    .search-box {
+        max-width: 300px;
     }
 </style>
 {% endblock %}
@@ -46,41 +70,112 @@
         </div>
     </div>
 
-    <div class="row">
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-primary fs-2 fw-bold">{{ object_list.count }}</div>
+                    <div class="text-muted">Total Categories</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-success fs-2 fw-bold">{{ active_count }}</div>
+                    <div class="text-muted">Active Categories</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-warning fs-2 fw-bold">{{ mandatory_count }}</div>
+                    <div class="text-muted">Mandatory Fees</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="text-info fs-2 fw-bold">{{ fees_count }}</div>
+                    <div class="text-muted">Total Fees Created</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Fee Categories</h5>
+                    <div class="d-flex">
+                        <input type="text" id="categorySearch" class="form-control form-control-sm search-box" 
+                               placeholder="Search categories...">
+                    </div>
+                </div>
                 <div class="card-body">
                     {% if object_list %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="categoriesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Name</th>
                                     <th>Description</th>
-                                    <th>Default Amount</th>
+                                    <th class="text-end">Default Amount</th>
                                     <th>Frequency</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for category in object_list %}
-                                <tr>
-                                    <td>{{ category.name }}</td>
-                                    <td>{{ category.description|default:"-" }}</td>
-                                    <td>{{ category.default_amount|floatformat:2 }}</td>
-                                    <td>{{ category.get_frequency_display }}</td>
+                                <tr class="category-row">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-tag-fill text-primary me-2"></i>
+                                            <div>
+                                                <div class="fw-medium">{{ category.name }}</div>
+                                                {% if category.is_mandatory %}
+                                                <span class="badge mandatory-badge">Mandatory</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ category.description|default:"-"|truncatewords:10 }}</td>
+                                    <td class="text-end fw-bold currency-amount">₵{{ category.default_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ category.get_frequency_display }}</span>
+                                    </td>
+                                    <td>
+                                        {% if category.is_active %}
+                                        <span class="status-badge status-active">
+                                            <i class="bi bi-check-circle me-1"></i>Active
+                                        </span>
+                                        {% else %}
+                                        <span class="status-badge status-inactive">
+                                            <i class="bi bi-x-circle me-1"></i>Inactive
+                                        </span>
+                                        {% endif %}
+                                    </td>
                                     <td class="table-actions">
                                         {% if is_admin %}
                                         <a href="{% url 'fee_category_update' pk=category.pk %}" 
                                            class="btn btn-sm btn-outline-primary me-1"
-                                           title="Edit">
+                                           title="Edit"
+                                           data-bs-toggle="tooltip">
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         <a href="{% url 'fee_category_delete' pk=category.pk %}" 
                                            class="btn btn-sm btn-outline-danger"
-                                           title="Delete">
+                                           title="Delete"
+                                           data-bs-toggle="tooltip">
                                             <i class="bi bi-trash"></i>
                                         </a>
+                                        {% else %}
+                                        <span class="text-muted">View only</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -89,8 +184,15 @@
                         </table>
                     </div>
                     {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i> No fee categories found.
+                    <div class="text-center py-5">
+                        <i class="bi bi-tags display-1 text-muted"></i>
+                        <h5 class="text-muted mt-3">No fee categories found</h5>
+                        <p class="text-muted">Get started by creating your first fee category.</p>
+                        {% if is_admin %}
+                        <a href="{% url 'fee_category_create' %}" class="btn btn-primary mt-2">
+                            <i class="bi bi-plus-lg me-1"></i> Create First Category
+                        </a>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -98,4 +200,53 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('categorySearch');
+    const categoryRows = document.querySelectorAll('.category-row');
+    
+    if (searchInput && categoryRows.length > 0) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            categoryRows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // Add confirmation for delete actions
+    const deleteButtons = document.querySelectorAll('.btn-outline-danger');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (!confirm('Are you sure you want to delete this fee category? This action cannot be undone.')) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    // Format currency amounts
+    document.querySelectorAll('.currency-amount').forEach(element => {
+        const amount = element.textContent.trim();
+        if (!amount.startsWith('₵')) {
+            element.textContent = '₵' + amount;
+        }
+    });
+});
+</script>
 {% endblock %}

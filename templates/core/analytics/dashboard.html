@@ -7,46 +7,132 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.35.0/dist/apexcharts.css">
 <style>
-    /* Improved dashboard styles */
+    :root {
+        --primary: #3a7bd5;
+        --secondary: #6c757d;
+        --success: #28a745;
+        --info: #17a2b8;
+        --warning: #ffc107;
+        --danger: #dc3545;
+        --light: #f8f9fa;
+        --dark: #343a40;
+        --sidebar-width: 250px;
+        --header-height: 70px;
+        --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        --transition: all 0.3s ease;
+    }
+
     .dashboard-container {
-        background-color: #f8f9fa;
+        background-color: #f5f7fb;
         min-height: 100vh;
+        padding: 20px;
+    }
+    
+    .page-header {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: var(--card-shadow);
+        border-left: 4px solid var(--primary);
+    }
+    
+    .summary-card {
+        border-radius: 12px;
+        overflow: hidden;
+        transition: var(--transition);
+        height: 100%;
+        border: none;
+        box-shadow: var(--card-shadow);
+    }
+    
+    .summary-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .summary-card .card-body {
+        padding: 1.5rem;
+        position: relative;
+    }
+    
+    .summary-card .icon-container {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.2;
+    }
+    
+    .summary-card .icon {
+        font-size: 1.8rem;
+    }
+    
+    .summary-card .card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .summary-card .value {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: white;
+    }
+    
+    .summary-card .trend {
+        display: flex;
+        align-items: center;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .summary-card .trend.up {
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .summary-card .trend.down {
+        color: rgba(255, 255, 255, 0.9);
     }
     
     .analytics-card {
-        border-radius: 0.5rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        transition: all 0.3s ease;
+        border-radius: 12px;
+        box-shadow: var(--card-shadow);
+        transition: var(--transition);
         height: 100%;
         border: none;
         background-color: white;
+        margin-bottom: 24px;
     }
     
     .analytics-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     }
     
-    .card-header {
-        background-color: #f8f9fa;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        padding: 1rem 1.25rem;
-    }
-    
-    .stat-card {
-        border-left: 4px solid;
-        border-radius: 0.25rem;
-        padding: 1rem;
+    .analytics-card .card-header {
         background-color: white;
-        margin-bottom: 1rem;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.05);
+        border-bottom: 1px solid #edf2f9;
+        padding: 1.25rem 1.5rem;
+        border-top-left-radius: 12px !important;
+        border-top-right-radius: 12px !important;
     }
     
-    .stat-card.present { border-left-color: #28a745; }
-    .stat-card.absent { border-left-color: #dc3545; }
-    .stat-card.late { border-left-color: #ffc107; }
-    .stat-card.excused { border-left-color: #17a2b8; }
+    .analytics-card .card-header h5 {
+        margin-bottom: 0;
+        font-weight: 600;
+        color: #344050;
+    }
     
     .chart-container {
         position: relative;
@@ -54,62 +140,119 @@
         width: 100%;
     }
     
-    .nav-pills .nav-link.active {
-        background-color: #3a7bd5;
+    .nav-pills .nav-link {
+        border-radius: 8px;
+        padding: 0.6rem 1.2rem;
         font-weight: 500;
+        color: #506690;
+        margin-right: 0.5rem;
+        transition: var(--transition);
     }
     
-    .nav-pills .nav-link {
-        color: #495057;
+    .nav-pills .nav-link.active {
+        background-color: var(--primary);
+        color: white;
+        box-shadow: 0 3px 10px rgba(58, 123, 213, 0.3);
+    }
+    
+    .stat-card {
+        border-radius: 10px;
+        padding: 1.25rem;
+        background-color: white;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid;
+        transition: var(--transition);
+    }
+    
+    .stat-card:hover {
+        transform: translateX(5px);
+    }
+    
+    .stat-card.present { border-left-color: var(--success); }
+    .stat-card.absent { border-left-color: var(--danger); }
+    .stat-card.late { border-left-color: var(--warning); }
+    .stat-card.excused { border-left-color: var(--info); }
+    
+    .stat-card h6 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-card h3 {
+        font-weight: 700;
+        color: #344050;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-card small {
+        color: #8a92a6;
+    }
+    
+    .filter-section {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: var(--card-shadow);
+    }
+    
+    .date-range-picker {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .date-range-picker .form-control {
+        max-width: 150px;
+    }
+    
+    .dropdown-menu {
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        border: 1px solid #edf2f9;
+    }
+    
+    .dropdown-item {
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        margin: 0 5px;
+        width: auto;
+    }
+    
+    .dropdown-item:hover {
+        background-color: #f5f7fb;
+    }
+    
+    .btn {
+        border-radius: 8px;
         font-weight: 500;
         padding: 0.5rem 1rem;
     }
     
-    .summary-card {
-        border-radius: 0.5rem;
-        color: white;
-        height: 100%;
+    .btn-primary {
+        background-color: var(--primary);
+        border-color: var(--primary);
+        box-shadow: 0 3px 10px rgba(58, 123, 213, 0.3);
     }
     
-    .summary-card .card-body {
-        padding: 1.5rem;
+    .btn-outline-primary {
+        color: var(--primary);
+        border-color: var(--primary);
     }
     
-    .summary-card .icon {
-        font-size: 2.5rem;
-        opacity: 0.3;
-        position: absolute;
-        right: 1.5rem;
-        top: 1.5rem;
+    .btn-outline-primary:hover {
+        background-color: var(--primary);
+        border-color: var(--primary);
+        box-shadow: 0 3px 10px rgba(58, 123, 213, 0.3);
     }
     
-    .summary-card .card-title {
-        font-size: 1rem;
-        margin-bottom: 0.5rem;
-        opacity: 0.9;
-    }
-    
-    .summary-card .display-4 {
-        font-size: 2.5rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .summary-card .card-link {
-        color: rgba(255, 255, 255, 0.8);
-        text-decoration: none;
-        font-size: 0.9rem;
-        transition: all 0.2s;
-    }
-    
-    .summary-card .card-link:hover {
-        color: white;
-        text-decoration: underline;
-    }
-    
-    /* Custom scrollbar for tab content */
-    .tab-content {
-        max-height: calc(100vh - 300px);
-        overflow-y: auto;
+    .btn-group .btn {
+        border-radius: 8px;
     }
     
     /* Loading spinner */
@@ -119,33 +262,144 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(255, 255, 255, 0.7);
+        background-color: rgba(255, 255, 255, 0.8);
         z-index: 9999;
         display: flex;
         justify-content: center;
         align-items: center;
+        backdrop-filter: blur(5px);
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
     }
     
     /* Data table styles */
     .data-table-container {
         overflow-x: auto;
+        border-radius: 12px;
     }
     
     /* Responsive adjustments */
+    @media (max-width: 992px) {
+        .date-range-picker {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .date-range-picker .form-control {
+            max-width: 100%;
+        }
+    }
+    
     @media (max-width: 768px) {
-        .summary-card .display-4 {
-            font-size: 2rem;
+        .dashboard-container {
+            padding: 15px;
+        }
+        
+        .summary-card .value {
+            font-size: 1.8rem;
         }
         
         .chart-container {
             height: 250px;
         }
+        
+        .nav-pills .nav-link {
+            margin-bottom: 0.5rem;
+        }
+    }
+    
+    /* Custom animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.5s ease forwards;
+    }
+    
+    /* Custom scrollbar */
+    .tab-content::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .tab-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .tab-content::-webkit-scrollbar-thumb {
+        background: #c2c2c2;
+        border-radius: 10px;
+    }
+    
+    .tab-content::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* KPI badges */
+    .kpi-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 50px;
+        font-weight: 600;
+    }
+    
+    /* Custom checkbox for filters */
+    .filter-checkbox {
+        position: relative;
+        display: inline-block;
+        margin-right: 10px;
+        cursor: pointer;
+    }
+    
+    .filter-checkbox input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+    }
+    
+    .filter-checkbox .checkmark {
+        height: 20px;
+        width: 20px;
+        background-color: #fff;
+        border: 2px solid #dee2e6;
+        border-radius: 4px;
+        display: inline-block;
+        position: relative;
+        margin-right: 5px;
+        vertical-align: middle;
+    }
+    
+    .filter-checkbox input:checked ~ .checkmark {
+        background-color: var(--primary);
+        border-color: var(--primary);
+    }
+    
+    .filter-checkbox .checkmark:after {
+        content: "";
+        position: absolute;
+        display: none;
+    }
+    
+    .filter-checkbox input:checked ~ .checkmark:after {
+        display: block;
+        left: 6px;
+        top: 2px;
+        width: 5px;
+        height: 10px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid dashboard-container px-4 py-3">
+<div class="container-fluid dashboard-container px-0">
     <!-- Loading overlay (initially hidden) -->
     <div id="loadingOverlay" class="spinner-overlay" style="display: none;">
         <div class="spinner-border text-primary" role="status">
@@ -153,37 +407,50 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h3 mb-0 text-gray-800">Analytics Dashboard</h1>
-            <p class="mb-0 text-muted">Comprehensive overview of school performance metrics</p>
-        </div>
-        <div class="dropdown">
-            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dateRangeDropdown" data-bs-toggle="dropdown">
-                <i class="bi bi-calendar-range me-2"></i>
-                <span id="dateRangeDisplay">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</span>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end">
-                <li><h6 class="dropdown-header">Quick Range</h6></li>
-                <li><a class="dropdown-item date-range-option" href="#" data-range="today"><i class="bi bi-calendar-day me-2"></i>Today</a></li>
-                <li><a class="dropdown-item date-range-option" href="#" data-range="week"><i class="bi bi-calendar-week me-2"></i>This Week</a></li>
-                <li><a class="dropdown-item date-range-option" href="#" data-range="month"><i class="bi bi-calendar-month me-2"></i>This Month</a></li>
-                <li><a class="dropdown-item date-range-option" href="#" data-range="year"><i class="bi bi-calendar me-2"></i>This Year</a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" id="customRangeOption">
-                    <i class="bi bi-calendar-plus me-2"></i>Custom Range
-                </a></li>
-            </ul>
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h1 class="h3 mb-1 text-gray-800">Analytics Dashboard</h1>
+                <p class="mb-0 text-muted">Comprehensive overview of school performance metrics</p>
+            </div>
+            <div class="d-flex align-items-center mt-2 mt-md-0">
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dateRangeDropdown" data-bs-toggle="dropdown">
+                        <i class="bi bi-calendar-range me-2"></i>
+                        <span id="dateRangeDisplay">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">Quick Range</h6></li>
+                        <li><a class="dropdown-item date-range-option" href="#" data-range="today"><i class="bi bi-calendar-day me-2"></i>Today</a></li>
+                        <li><a class="dropdown-item date-range-option" href="#" data-range="week"><i class="bi bi-calendar-week me-2"></i>This Week</a></li>
+                        <li><a class="dropdown-item date-range-option" href="#" data-range="month"><i class="bi bi-calendar-month me-2"></i>This Month</a></li>
+                        <li><a class="dropdown-item date-range-option" href="#" data-range="year"><i class="bi bi-calendar me-2"></i>This Year</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" id="customRangeOption">
+                            <i class="bi bi-calendar-plus me-2"></i>Custom Range
+                        </a></li>
+                    </ul>
+                </div>
+                <button class="btn btn-primary" id="refreshBtn">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Custom Range Picker (hidden by default) -->
-    <div id="customRangePicker" class="card mb-4" style="display: none;">
-        <div class="card-body">
-            <div class="date-range-picker">
+    <div id="customRangePicker" class="filter-section" style="display: none;">
+        <h5 class="mb-3">Select Custom Date Range</h5>
+        <div class="date-range-picker">
+            <div class="d-flex align-items-center">
+                <label class="me-2 mb-0">From:</label>
                 <input type="text" class="form-control datepicker" id="startDatePicker" placeholder="Start Date" value="{{ start_date|date:'Y-m-d' }}">
-                <span class="separator">to</span>
+            </div>
+            <div class="d-flex align-items-center">
+                <label class="me-2 mb-0">To:</label>
                 <input type="text" class="form-control datepicker" id="endDatePicker" placeholder="End Date" value="{{ end_date|date:'Y-m-d' }}">
+            </div>
+            <div>
                 <button class="btn btn-primary" id="applyDateRange">Apply</button>
                 <button class="btn btn-outline-secondary" id="cancelDateRange">Cancel</button>
             </div>
@@ -193,46 +460,58 @@
     <!-- Summary Cards -->
     <div class="row mb-4 g-4">
         <!-- Attendance Summary -->
-        <div class="col-md-4">
+        <div class="col-xl-4 col-md-6">
             <div class="summary-card bg-primary">
                 <div class="card-body position-relative">
-                    <i class="bi bi-calendar-check icon"></i>
+                    <div class="icon-container bg-white">
+                        <i class="bi bi-calendar-check text-primary icon"></i>
+                    </div>
                     <h5 class="card-title">Attendance Overview</h5>
-                    <p class="display-4">{{ attendance_stats.stats.present|default:"0" }}</p>
+                    <p class="value">{{ attendance_stats.stats.present|default:"0" }}</p>
                     <p class="mb-1">Present students this period</p>
-                    <a href="{% url 'attendance_dashboard' %}" class="card-link">
-                        View Attendance Details <i class="bi bi-arrow-right"></i>
-                    </a>
+                    <div class="trend up">
+                        <i class="bi bi-arrow-up-circle-fill me-1"></i>
+                        <span>{{ attendance_stats.attendance_rate|default:"0" }}% attendance rate</span>
+                    </div>
+                    <a href="{% url 'attendance_dashboard' %}" class="stretched-link"></a>
                 </div>
             </div>
         </div>
 
         <!-- Grades Summary -->
-        <div class="col-md-4">
+        <div class="col-xl-4 col-md-6">
             <div class="summary-card bg-success">
                 <div class="card-body position-relative">
-                    <i class="bi bi-journal-check icon"></i>
+                    <div class="icon-container bg-white">
+                        <i class="bi bi-journal-check text-success icon"></i>
+                    </div>
                     <h5 class="card-title">Academic Performance</h5>
-                    <p class="display-4">{{ grade_stats.overall.avg_score|default:"0"|floatformat:1 }}</p>
+                    <p class="value">{{ grade_stats.overall.avg_score|default:"0"|floatformat:1 }}</p>
                     <p class="mb-1">Average score across classes</p>
-                    <a href="{% url 'grade_list' %}" class="card-link">
-                        View Grade Details <i class="bi bi-arrow-right"></i>
-                    </a>
+                    <div class="trend up">
+                        <i class="bi bi-arrow-up-circle-fill me-1"></i>
+                        <span>{{ grade_stats.overall.count|default:"0" }} assessments</span>
+                    </div>
+                    <a href="{% url 'grade_list' %}" class="stretched-link"></a>
                 </div>
             </div>
         </div>
 
         <!-- Financial Summary -->
-        <div class="col-md-4">
+        <div class="col-xl-4 col-md-6">
             <div class="summary-card bg-info">
                 <div class="card-body position-relative">
-                    <i class="bi bi-cash-stack icon"></i>
+                    <div class="icon-container bg-white">
+                        <i class="bi bi-cash-stack text-info icon"></i>
+                    </div>
                     <h5 class="card-title">Financial Summary</h5>
-                    <p class="display-4">{{ fee_stats.collection_rate|default:"0" }}%</p>
+                    <p class="value">{{ fee_stats.collection_rate|default:"0" }}%</p>
                     <p class="mb-1">Fee collection rate</p>
-                    <a href="{% url 'fee_report' %}" class="card-link">
-                        View Financial Details <i class="bi bi-arrow-right"></i>
-                    </a>
+                    <div class="trend up">
+                        <i class="bi bi-arrow-up-circle-fill me-1"></i>
+                        <span>₦{{ fee_stats.stats.total_paid|default:"0"|floatformat:2 }} collected</span>
+                    </div>
+                    <a href="{% url 'fee_report' %}" class="stretched-link"></a>
                 </div>
             </div>
         </div>
@@ -240,7 +519,7 @@
 
     <!-- Detailed Analytics Tabs -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white border-bottom-0">
+        <div class="card-header bg-white border-bottom-0 py-3">
             <ul class="nav nav-pills card-header-pills" id="analyticsTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="attendance-tab" data-bs-toggle="pill" data-bs-target="#attendance" type="button">
@@ -257,7 +536,7 @@
                         <i class="bi bi-cash-stack me-1"></i> Finance
                     </button>
                 </li>
-                <li class="nav-item ms-auto">
+                <li class="nav-item ms-auto d-flex align-items-center">
                     <div class="dropdown d-inline-block me-2">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown">
                             <i class="bi bi-download me-1"></i> Export
@@ -268,23 +547,20 @@
                             <li><a class="dropdown-item export-option" href="#" data-format="csv"><i class="bi bi-file-earmark-text me-2"></i>CSV Data</a></li>
                         </ul>
                     </div>
-                    <button class="btn btn-sm btn-primary" id="refreshBtn">
-                        <i class="bi bi-arrow-clockwise me-1"></i> Refresh
-                    </button>
                 </li>
             </ul>
         </div>
         
         <div class="card-body p-0">
-            <div class="tab-content p-3" id="analyticsTabsContent">
+            <div class="tab-content p-4" id="analyticsTabsContent">
                 <!-- Attendance Tab Content -->
                 <div class="tab-pane fade show active" id="attendance" role="tabpanel">
                     <div class="row">
-                        <div class="col-md-8">
-                            <div class="card analytics-card mb-4">
-                                <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="col-lg-8">
+                            <div class="analytics-card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                                     <h5 class="mb-0">Attendance Trend</h5>
-                                    <div class="btn-group btn-group-sm">
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
                                         <button class="btn btn-outline-secondary chart-reset" data-chart="attendanceTrendChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
@@ -300,8 +576,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
-                            <div class="card analytics-card mb-4">
+                        <div class="col-lg-4">
+                            <div class="analytics-card mb-4">
                                 <div class="card-header">
                                     <h5 class="mb-0">Attendance Stats</h5>
                                 </div>
@@ -314,15 +590,18 @@
                                     <div class="stat-card absent">
                                         <h6>Absent</h6>
                                         <h3>{{ attendance_stats.stats.absent|default:"0" }}</h3>
+                                        <small>{{ attendance_stats.stats.absent_pct|default:"0" }}% of total</small>
                                     </div>
                                     <div class="stat-card late">
                                         <h6>Late</h6>
                                         <h3>{{ attendance_stats.stats.late|default:"0" }}</h3>
+                                        <small>{{ attendance_stats.stats.late_pct|default:"0" }}% of total</small>
                                     </div>
                                     {% if attendance_stats.stats.excused %}
                                     <div class="stat-card excused">
                                         <h6>Excused</h6>
                                         <h3>{{ attendance_stats.stats.excused|default:"0" }}</h3>
+                                        <small>{{ attendance_stats.stats.excused_pct|default:"0" }}% of total</small>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -331,10 +610,10 @@
                     </div>
                     <div class="row">
                         <div class="col-md-12">
-                            <div class="card analytics-card">
-                                <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="analytics-card">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                                     <h5 class="mb-0">Attendance by Class</h5>
-                                    <div class="btn-group btn-group-sm">
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
                                         <button class="btn btn-outline-secondary chart-reset" data-chart="attendanceClassChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
@@ -356,11 +635,11 @@
                 <!-- Grades Tab Content -->
                 <div class="tab-pane fade" id="grades" role="tabpanel">
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="card analytics-card mb-4">
-                                <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="col-lg-6">
+                            <div class="analytics-card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                                     <h5 class="mb-0">Performance by Class</h5>
-                                    <div class="btn-group btn-group-sm">
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
                                         <button class="btn btn-outline-secondary chart-reset" data-chart="gradeClassChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
@@ -376,11 +655,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card analytics-card mb-4">
-                                <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="col-lg-6">
+                            <div class="analytics-card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
                                     <h5 class="mb-0">Performance by Subject</h5>
-                                    <div class="btn-group btn-group-sm">
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
                                         <button class="btn btn-outline-secondary chart-reset" data-chart="gradeSubjectChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
@@ -399,7 +678,7 @@
                     </div>
                     <div class="row">
                         <div class="col-md-12">
-                            <div class="card analytics-card">
+                            <div class="analytics-card">
                                 <div class="card-header">
                                     <h5 class="mb-0">Grade Summary</h5>
                                 </div>
@@ -409,94 +688,102 @@
                                             <div class="stat-card">
                                                 <h6>Average Score</h6>
                                                 <h3>{{ grade_stats.overall.avg_score|default:"0"|floatformat:1 }}</h3>
+                                                <small>Across all classes</small>
                                             </div>
                                         </div>
                                         <div class="col-md-4">
                                             <div class="stat-card">
                                                 <h6>Highest Score</h6>
                                                 <h3>{{ grade_stats.overall.max_score|default:"0"|floatformat:1 }}</h3>
+                                                <small>Best performance</small>
                                             </div>
                                         </div>
                                         <div class="col-md-4">
                                             <div class="stat-card">
                                                 <h6>Lowest Score</h6>
-                                        <h3>{{ grade_stats.overall.min_score|default:"0"|floatformat:1 }}</h3>
+                                                <h3>{{ grade_stats.overall.min_score|default:"0"|floatformat:1 }}</h3>
+                                                <small>Needs improvement</small>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Finance Tab Content -->
-            <div class="tab-pane fade" id="finance" role="tabpanel">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card analytics-card mb-4">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Payment Status</h5>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary chart-reset" data-chart="financeStatusChart">
-                                        <i class="bi bi-zoom-out"></i> Reset Zoom
-                                    </button>
-                                    <button class="btn btn-outline-secondary chart-export" data-chart="financeStatusChart">
-                                        <i class="bi bi-download"></i> Export
-                                    </button>
+                <!-- Finance Tab Content -->
+                <div class="tab-pane fade" id="finance" role="tabpanel">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="analytics-card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                                    <h5 class="mb-0">Payment Status</h5>
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="financeStatusChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="financeStatusChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="financeStatusChart"></canvas>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="card-body">
-                                <div class="chart-container">
-                                    <canvas id="financeStatusChart"></canvas>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="analytics-card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                                    <h5 class="mb-0">Fee Categories</h5>
+                                    <div class="btn-group btn-group-sm mt-2 mt-md-0">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="financeCategoryChart">
+                                            <i class="bi bi-zoom-out"></i> Reset Zoom
+                                        </button>
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="financeCategoryChart">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <canvas id="financeCategoryChart"></canvas>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card analytics-card mb-4">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Fee Categories</h5>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary chart-reset" data-chart="financeCategoryChart">
-                                        <i class="bi bi-zoom-out"></i> Reset Zoom
-                                    </button>
-                                    <button class="btn btn-outline-secondary chart-export" data-chart="financeCategoryChart">
-                                        <i class="bi bi-download"></i> Export
-                                    </button>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="analytics-card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Financial Summary</h5>
                                 </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="chart-container">
-                                    <canvas id="financeCategoryChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="card analytics-card">
-                            <div class="card-header">
-                                <h5 class="mb-0">Financial Summary</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="stat-card">
-                                            <h6>Total Payable</h6>
-                                            <h3>₦{{ fee_stats.stats.total_payable|default:"0"|floatformat:2 }}</h3>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <h6>Total Payable</h6>
+                                                <h3>₦{{ fee_stats.stats.total_payable|default:"0"|floatformat:2 }}</h3>
+                                                <small>Amount expected</small>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="stat-card">
-                                            <h6>Total Paid</h6>
-                                            <h3>₦{{ fee_stats.stats.total_paid|default:"0"|floatformat:2 }}</h3>
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <h6>Total Paid</h6>
+                                                <h3>₦{{ fee_stats.stats.total_paid|default:"0"|floatformat:2 }}</h3>
+                                                <small>Amount collected</small>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="stat-card">
-                                            <h6>Collection Rate</h6>
-                                            <h3>{{ fee_stats.collection_rate|default:"0" }}%</h3>
+                                        <div class="col-md-4">
+                                            <div class="stat-card">
+                                                <h6>Collection Rate</h6>
+                                                <h3>{{ fee_stats.collection_rate|default:"0" }}%</h3>
+                                                <small>Efficiency rate</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -534,11 +821,13 @@
     // Show loading indicator
     function showLoading() {
         document.getElementById('loadingOverlay').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
     }
 
     // Hide loading indicator
     function hideLoading() {
         document.getElementById('loadingOverlay').style.display = 'none';
+        document.body.style.overflow = 'auto';
     }
 
     // Common chart options
@@ -552,6 +841,14 @@
             tooltip: {
                 mode: 'index',
                 intersect: false,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                titleFont: {
+                    size: 14
+                },
+                bodyFont: {
+                    size: 13
+                },
+                padding: 10,
                 callbacks: {
                     label: function(context) {
                         let label = context.dataset.label || '';
@@ -587,6 +884,18 @@
         interaction: {
             intersect: false,
             mode: 'nearest',
+        },
+        scales: {
+            x: {
+                grid: {
+                    display: false
+                }
+            },
+            y: {
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                }
+            }
         }
     };
 
@@ -605,6 +914,14 @@
         
         // Set up event listeners
         setupEventListeners();
+        
+        // Add animation to cards
+        setTimeout(() => {
+            document.querySelectorAll('.summary-card, .analytics-card').forEach((card, index) => {
+                card.classList.add('fade-in');
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+        }, 100);
     });
 
     function setupEventListeners() {
@@ -731,6 +1048,7 @@
         .catch(error => {
             console.error('Error:', error);
             hideLoading();
+            alert('Error updating date range. Please try again.');
         });
     }
 
@@ -776,6 +1094,7 @@
         .catch(error => {
             console.error('Error:', error);
             hideLoading();
+            alert('Error refreshing dashboard. Please try again.');
         });
     }
 
@@ -932,7 +1251,10 @@
         charts.attendanceTrendChart = new Chart(attendanceTrendCtx, {
             type: 'line',
             data: {
-                labels: {{ attendance_stats.trend_data|safe }}.map(item => item.date),
+                labels: {{ attendance_stats.trend_data|safe }}.map(item => {
+                    const date = new Date(item.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }),
                 datasets: [
                     {
                         label: 'Present',
@@ -941,7 +1263,10 @@
                         backgroundColor: 'rgba(40, 167, 69, 0.1)',
                         tension: 0.3,
                         fill: true,
-                        borderWidth: 2
+                        borderWidth: 2,
+                        pointBackgroundColor: '#28a745',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     },
                     {
                         label: 'Absent',
@@ -950,7 +1275,10 @@
                         backgroundColor: 'rgba(220, 53, 69, 0.1)',
                         tension: 0.3,
                         fill: true,
-                        borderWidth: 2
+                        borderWidth: 2,
+                        pointBackgroundColor: '#dc3545',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     },
                     {
                         label: 'Late',
@@ -959,7 +1287,10 @@
                         backgroundColor: 'rgba(255, 193, 7, 0.1)',
                         tension: 0.3,
                         fill: true,
-                        borderWidth: 2
+                        borderWidth: 2,
+                        pointBackgroundColor: '#ffc107',
+                        pointRadius: 3,
+                        pointHoverRadius: 5
                     }
                 ]
             },
@@ -1121,7 +1452,15 @@
         charts.financeStatusChart = new Chart(financeStatusCtx, {
             type: 'doughnut',
             data: {
-                labels: {{ fee_stats.status_distribution|safe }}.map(item => item.payment_status),
+                labels: {{ fee_stats.status_distribution|safe }}.map(item => {
+                    // Convert status to more readable format
+                    const statusMap = {
+                        'paid': 'Paid',
+                        'unpaid': 'Unpaid',
+                        'partial': 'Partial'
+                    };
+                    return statusMap[item.payment_status] || item.payment_status;
+                }),
                 datasets: [
                     {
                         data: {{ fee_stats.status_distribution|safe }}.map(item => item.count),

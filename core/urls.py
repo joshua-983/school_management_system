@@ -1,8 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-
 from .views.grade_views import CalculateGradeAPI
 # Import from the new modular views
+from .views.bill_views import BillListView, BillDetailView, BillGenerateView
 from .views.base_views import home, admin_dashboard, teacher_dashboard, student_dashboard
 from .views.student_views import StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, StudentDeleteView
 from .views.parents_views import (
@@ -13,7 +13,7 @@ from .views.parents_views import (
 from .views.fee_views import (
     FeeCategoryListView, FeeCategoryCreateView, FeeCategoryUpdateView, FeeCategoryDeleteView,
     FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
-    FeePaymentCreateView, FeePaymentDeleteView, FeeReportView
+    FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView
 )
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.teacher_views import TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView
@@ -69,6 +69,7 @@ urlpatterns = [
     path('fee-categories/add/', FeeCategoryCreateView.as_view(), name='fee_category_create'),
     path('fee-categories/<int:pk>/edit/', FeeCategoryUpdateView.as_view(), name='fee_category_update'),
     path('fee-categories/<int:pk>/delete/', FeeCategoryDeleteView.as_view(), name='fee_category_delete'),
+    path('fee-dashboard/', FeeDashboardView.as_view(), name='fee_dashboard'),
     
     # Fee URLs
     path('fees/', FeeListView.as_view(), name='fee_list'),
@@ -83,6 +84,10 @@ urlpatterns = [
     
     # Fee Reports
     path('reports/fees/', FeeReportView.as_view(), name='fee_report'),
+# bill
+    path('bills/', BillListView.as_view(), name='bill_list'),
+    path('bills/generate/', BillGenerateView.as_view(), name='bill_generate'),
+    path('bills/<int:pk>/', BillDetailView.as_view(), name='bill_detail'),
     
     # Subject URLs
     path('subjects/', SubjectListView.as_view(), name='subject_list'),

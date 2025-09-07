@@ -7,6 +7,9 @@ from .base_views import is_student, is_teacher, is_admin
 from ..forms import ReportCardForm, ReportCardFilterForm  # Add ReportCardFilterForm here
 from django.shortcuts import render, redirect, get_object_or_404
 
+from ..models import ReportCard, Student, Subject, Grade, ClassAssignment
+from .base_views import is_student, is_teacher, is_admin
+from ..forms import ReportCardForm, ReportCardFilterForm
 
 
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):

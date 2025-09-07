@@ -102,27 +102,35 @@
 
     {% if fees %}
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card bg-light mb-3">
                 <div class="card-body text-center">
-                    <div class="summary-value text-primary">${{ summary.total_payable|default:0|floatformat:2 }}</div>
+                    <div class="summary-value text-primary">GH₵{{ summary.total_payable|floatformat:2 }}</div>
                     <div class="summary-label text-muted">Total Payable</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card bg-light mb-3">
                 <div class="card-body text-center">
-                    <div class="summary-value text-success">${{ summary.total_paid|default:0|floatformat:2 }}</div>
+                    <div class="summary-value text-success">GH₵{{ summary.total_paid|floatformat:2 }}</div>
                     <div class="summary-label text-muted">Total Paid</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card bg-light mb-3">
                 <div class="card-body text-center">
-                    <div class="summary-value text-danger">${{ summary.total_balance|default:0|floatformat:2 }}</div>
+                    <div class="summary-value text-danger">GH₵{{ summary.total_balance|floatformat:2 }}</div>
                     <div class="summary-label text-muted">Total Balance</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card summary-card bg-light mb-3">
+                <div class="card-body text-center">
+                    <div class="summary-value text-info">{{ summary.count }}</div>
+                    <div class="summary-label text-muted">Total Records</div>
                 </div>
             </div>
         </div>
@@ -167,9 +175,9 @@
                                     </td>
                                     <td>{{ fee.student.class_level }}</td>
                                     <td>{{ fee.category.name }}</td>
-                                    <td class="text-end">${{ fee.amount_payable|floatformat:2 }}</td>
-                                    <td class="text-end">${{ fee.amount_paid|floatformat:2 }}</td>
-                                    <td class="text-end">${{ fee.balance|floatformat:2 }}</td>
+                                    <td class="text-end">GH₵{{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td class="text-end">GH₵{{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="text-end">GH₵{{ fee.balance|floatformat:2 }}</td>
                                     <td>
                                         {% if fee.payment_status == 'PAID' %}
                                         <span class="badge bg-success">Paid</span>
@@ -239,22 +247,25 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(statusCtx, {
         type: 'pie',
         data: {
-            labels: ['Paid', 'Partial', 'Unpaid'],
+            labels: ['Paid', 'Partial', 'Unpaid', 'Overdue'],
             datasets: [{
                 data: [
                     {{ summary.paid_count|default:0 }}, 
                     {{ summary.partial_count|default:0 }}, 
+                    {{ summary.unpaid_count|default:0 }},
                     {{ summary.overdue_count|default:0 }}
                 ],
                 backgroundColor: [
                     'rgba(40, 167, 69, 0.7)',
                     'rgba(255, 193, 7, 0.7)',
-                    'rgba(220, 53, 69, 0.7)'
+                    'rgba(220, 53, 69, 0.7)',
+                    'rgba(108, 117, 125, 0.7)'
                 ],
                 borderColor: [
                     'rgba(40, 167, 69, 1)',
                     'rgba(255, 193, 7, 1)',
-                    'rgba(220, 53, 69, 1)'
+                    'rgba(220, 53, 69, 1)',
+                    'rgba(108, 117, 125, 1)'
                 ],
                 borderWidth: 1
             }]
@@ -307,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return '$' + value.toLocaleString();
+                            return 'GH₵' + value.toLocaleString();
                         }
                     }
                 }
@@ -319,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return '$' + context.raw.toFixed(2);
+                            return 'GH₵' + context.raw.toFixed(2);
                         }
                     }
                 }
