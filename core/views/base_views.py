@@ -6,6 +6,9 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from ..models import Student, Teacher, Subject, AuditLog, ClassAssignment, Assignment, StudentAssignment, Grade
 import logging
+from django.db.models import Avg
+from ..models import Fee
+
 
 
 logger = logging.getLogger(__name__)
@@ -78,11 +81,33 @@ def student_dashboard(request):
     
     student = request.user.student
     current_assignments = StudentAssignment.objects.filter(student=student).order_by('assignment__due_date')
-    recent_grades = Grade.objects.filter(student=student).order_by('-updated_at')[:5]
+    
+    # Calculate statistics for the dashboard
+    pending_assignments = current_assignments.filter(
+        status__in=['PENDING', 'LATE']
+    ).count()
+    
+    # Calculate average grade
+    grades = Grade.objects.filter(student=student)
+    average_grade = grades.aggregate(Avg('total_score'))['total_score__avg']
+    
+    # Get fee status
+    fees = Fee.objects.filter(student=student)
+    fee_status = 'PAID'
+    if fees.filter(payment_status='UNPAID').exists():
+        fee_status = 'UNPAID'
+    elif fees.filter(payment_status='PARTIAL').exists():
+        fee_status = 'PARTIAL'
+    
+    # Get recent grades (last 5)
+    recent_grades = Grade.objects.filter(student=student).order_by('-last_updated')[:5]
     
     context = {
         'student': student,
         'current_assignments': current_assignments,
+        'pending_assignments': pending_assignments,
+        'average_grade': round(average_grade, 1) if average_grade else 'N/A',
+        'fee_status': fee_status,
         'recent_grades': recent_grades,
     }
     return render(request, 'core/students/student_dashboard.html', context)

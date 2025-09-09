@@ -1,6 +1,6 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from core.models import AuditLog, FeePayment
+from core.models import AuditLog, FeePayment  # Keep your existing imports
 from django.db.models import Sum
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -160,3 +160,20 @@ def get_location(ip_address):
     except Exception as e:
         logger.warning(f"Geolocation failed for {ip_address}: {str(e)}")
         return None
+
+# Add signal for new message notifications
+@receiver(post_save, sender='core.ParentMessage')  # Use string reference
+def notify_parent_message(sender, instance, created, **kwargs):
+    if created:
+        # Import Notification locally to avoid circular imports
+        from core.models import Notification
+        
+        # Send notification to receiver
+        Notification.objects.create(
+            recipient=instance.receiver,
+            notification_type='MESSAGE',
+            title='New Message',
+            message=f'You have a new message from {instance.sender.get_full_name()}',
+            related_object_id=instance.id,
+            related_content_type='parentmessage'
+        )

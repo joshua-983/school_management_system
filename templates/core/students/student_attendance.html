@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}My Attendance - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-calendar-check me-2"></i>My Attendance Record
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Attendance Statistics -->
+                    {% if attendance_stats %}
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-success text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ attendance_stats.present }}</h5>
+                                    <p class="card-text">Present</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ attendance_stats.absent }}</h5>
+                                    <p class="card-text">Absent</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ attendance_stats.late }}</h5>
+                                    <p class="card-text">Late</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ attendance_stats.total }}</h5>
+                                    <p class="card-text">Total Days</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Monthly Summary -->
+                    {% if monthly_summary %}
+                    <h5 class="mb-3">Monthly Attendance Summary</h5>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Present</th>
+                                    <th>Total Days</th>
+                                    <th>Attendance Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for month in monthly_summary %}
+                                <tr>
+                                    <td>{{ month.month|date:"F Y" }}</td>
+                                    <td>{{ month.present }}</td>
+                                    <td>{{ month.total }}</td>
+                                    <td>
+                                        {% widthratio month.present month.total 100 %}%
+                                        <div class="progress mt-1" style="height: 5px;">
+                                            <div class="progress-bar {% if month.present|divisibleby:month.total >= 0.8 %}bg-success{% elif month.present|divisibleby:month.total >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 style="width: {% widthratio month.present month.total 100 %}%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    <!-- Detailed Attendance -->
+                    <h5 class="mb-3">Detailed Attendance Record</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Day</th>
+                                    <th>Status</th>
+                                    <th>Subject/Class</th>
+                                    <th>Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for attendance in attendances %}
+                                <tr>
+                                    <td>{{ attendance.date|date:"M d, Y" }}</td>
+                                    <td>{{ attendance.date|date:"l" }}</td>
+                                    <td>
+                                        <span class="badge {% if attendance.status == 'present' %}bg-success{% elif attendance.status == 'absent' %}bg-danger{% else %}bg-warning{% endif %}">
+                                            {{ attendance.status|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ attendance.subject.name|default:"All Classes" }}</td>
+                                    <td>{{ attendance.remarks|default:"-" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle me-2"></i>No attendance records found.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

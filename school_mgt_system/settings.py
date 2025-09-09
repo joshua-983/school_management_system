@@ -4,6 +4,7 @@ Django settings for school_mgt_system project.
 
 from pathlib import Path
 import os
+from asgiref.sync import sync_to_async
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +36,7 @@ INSTALLED_APPS = [
     'django_otp.plugins.otp_totp',
     'guardian',
     'django_filters',
+    'debug_toolbar',
     
     
 ]
@@ -50,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_otp.middleware.OTPMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
 ]
 
 ROOT_URLCONF = 'school_mgt_system.urls'
@@ -118,6 +121,8 @@ TEMPLATES = [
         },
     },
 ]
+
+
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -231,4 +236,21 @@ CACHE_MIDDLEWARE_SECONDS = 60 * 15  # 15 minutes
 GEOIP_PATH = '/mnt/e/projects/school/data/geoip/GeoLite2-City/GeoLite2-City.mmdb'  # Full path to file
 GEOIP_CITY = 'GeoLite2-City.mmdb'
 GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
-    
+
+
+DEBUG_TOOLBAR_CONFIG = {
+    "RENDER_PANELS": False,
+    "SKIP_TEMPLATE_PREFIXES": (
+        'django/forms/widgets/',
+        'admin/',
+    ),
+    "IS_ASYNC": True,
+}
+
+# Use sync_to_async for the callback
+
+@sync_to_async
+def show_toolbar(request):
+    if request.path.startswith('/admin/'):
+        return False
+    return True

@@ -1,3 +1,4 @@
+from ..models import ParentAnnouncement, ParentMessage, ParentEvent
 from django.shortcuts import get_object_or_404, redirect
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required
@@ -11,6 +12,14 @@ from django.db.models import Sum, Count, Avg
 from urllib.parse import urlencode
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+
+
+# Add these imports at the top of the file
+from ..models import Teacher
+from django.utils import timezone
+from django.db.models import Q
+from calendar import monthcalendar
+from datetime import datetime
 
 from .base_views import *
 from ..models import ParentGuardian, Student, Fee, StudentAttendance, Grade, ReportCard, FeePayment
@@ -495,4 +504,214 @@ def parent_dashboard(request):
         'unpaid_fees': unpaid_fees,
     }
     return render(request, 'core/parents/parent_dashboard.html', context)
+
+
+# Parent Dashboard and related views
+class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/parents/parent_dashboard.html'
     
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        parent = self.request.user.parentguardian
+        children = parent.student.all()
+        
+        # Get upcoming events (next 7 days)
+        from datetime import datetime, timedelta
+        next_week = timezone.now() + timedelta(days=7)
+        
+        # Get events for all classes of the parent's children
+        child_classes = children.values_list('class_level', flat=True).distinct()
+        context['upcoming_events'] = ParentEvent.objects.filter(
+            Q(is_whole_school=True) | Q(class_level__in=child_classes),
+            start_date__gte=timezone.now(),
+            start_date__lte=next_week
+        ).order_by('start_date')[:5]
+        
+        # Get recent announcements
+        context['recent_announcements'] = ParentAnnouncement.objects.filter(
+            Q(target_type='ALL') | 
+            Q(target_type='CLASS', target_class__in=child_classes) |
+            Q(target_type='INDIVIDUAL', target_parents=parent)
+        ).order_by('-created_at')[:5]
+        
+        # Get unread messages
+        context['unread_messages'] = ParentMessage.objects.filter(
+            receiver=self.request.user,
+            is_read=False
+        ).count()
+        
+        # Get recent grades for all children
+        context['recent_grades'] = Grade.objects.filter(
+            student__in=children
+        ).select_related('student', 'subject').order_by('-last_updated')[:5]
+        
+        # Get attendance summary for all children
+        context['attendance_summary'] = StudentAttendance.objects.filter(
+            student__in=children,
+            date__month=timezone.now().month
+        ).values('status').annotate(count=Count('id'))
+        
+        # Get fee summary
+        context['fee_summary'] = {
+            'total_due': Fee.objects.filter(
+                student__in=children,
+                payment_status__in=['unpaid', 'partial']
+            ).aggregate(Sum('balance'))['balance__sum'] or 0,
+            'overdue': Fee.objects.filter(
+                student__in=children,
+                payment_status='overdue'
+            ).count()
+        }
+        
+        context['children'] = children
+        context['parent'] = parent
+        
+        return context
+
+class ParentAnnouncementListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ParentAnnouncement
+    template_name = 'core/parents/announcement_list.html'
+    context_object_name = 'announcements'
+    paginate_by = 10
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        parent = self.request.user.parentguardian
+        children = parent.student.all()
+        child_classes = children.values_list('class_level', flat=True).distinct()
+        
+        return ParentAnnouncement.objects.filter(
+            Q(target_type='ALL') | 
+            Q(target_type='CLASS', target_class__in=child_classes) |
+            Q(target_type='INDIVIDUAL', target_parents=parent)
+        ).order_by('-created_at')
+
+class ParentMessageListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = ParentMessage
+    template_name = 'core/parents/message_list.html'
+    context_object_name = 'messages'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_queryset(self):
+        return ParentMessage.objects.filter(
+            receiver=self.request.user
+        ).order_by('-timestamp')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get teachers for messaging
+        children = self.request.user.parentguardian.student.all()
+        context['teachers'] = Teacher.objects.filter(
+            classassignment__class_level__in=children.values_list('class_level', flat=True)
+        ).distinct()
+        return context
+
+class ParentMessageCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = ParentMessage
+    fields = ['receiver', 'subject', 'message']
+    template_name = 'core/parents/message_form.html'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def form_valid(self, form):
+        form.instance.sender = self.request.user
+        form.instance.parent = self.request.user.parentguardian
+        
+        # Link teacher if message is to a teacher
+        if hasattr(form.instance.receiver, 'teacher'):
+            form.instance.teacher = form.instance.receiver.teacher
+        
+        messages.success(self.request, 'Message sent successfully')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('parent_message_list')
+
+class ParentCalendarView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/parents/calendar.html'
+    
+    def test_func(self):
+        return is_parent(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        parent = self.request.user.parentguardian
+        children = parent.student.all()
+        child_classes = children.values_list('class_level', flat=True).distinct()
+        
+        # Get events
+        context['events'] = ParentEvent.objects.filter(
+            Q(is_whole_school=True) | Q(class_level__in=child_classes),
+            start_date__gte=timezone.now()
+        ).order_by('start_date')
+        
+        # Calendar data for month view
+        today = timezone.now()
+        context['current_month'] = today
+        context['today'] = today
+        
+        # Generate calendar data
+        cal = monthcalendar(today.year, today.month)
+        calendar_data = []
+        
+        for week in cal:
+            week_data = []
+            for day in week:
+                if day == 0:
+                    week_data.append({'date': None, 'events': []})
+                else:
+                    day_date = datetime(today.year, today.month, day).date()
+                    day_events = ParentEvent.objects.filter(
+                        Q(is_whole_school=True) | Q(class_level__in=child_classes),
+                        start_date__date=day_date
+                    )
+                    week_data.append({'date': day_date, 'events': day_events})
+            calendar_data.append(week_data)
+        
+        context['calendar_data'] = calendar_data
+        
+        return context
+
+class ParentMessageDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    model = ParentMessage
+    template_name = 'core/parents/message_detail.html'
+    context_object_name = 'message'
+    
+    def test_func(self):
+        message = self.get_object()
+        return message.receiver == self.request.user or message.sender == self.request.user
+    
+    def get(self, request, *args, **kwargs):
+        # Mark as read when viewed
+        message = self.get_object()
+        if message.receiver == request.user and not message.is_read:
+            message.is_read = True
+            message.save()
+        return super().get(request, *args, **kwargs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

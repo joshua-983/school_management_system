@@ -4,11 +4,21 @@ from .views.grade_views import CalculateGradeAPI
 # Import from the new modular views
 from .views.bill_views import BillListView, BillDetailView, BillGenerateView
 from .views.base_views import home, admin_dashboard, teacher_dashboard, student_dashboard
-from .views.student_views import StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, StudentDeleteView
+from .views.student_views import StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, StudentDeleteView, StudentGradeListView, StudentAttendanceView, StudentFeeListView, StudentProfileView
 from .views.parents_views import (
     ParentCreateView, ParentUpdateView, ParentDeleteView, parent_dashboard,
     ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
     ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView
+)
+
+# Add these imports to your existing parents_views imports
+from .views.parents_views import (
+    ParentCreateView, ParentUpdateView, ParentDeleteView, parent_dashboard,
+    ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
+    ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
+    # Add these new imports
+    ParentDashboardView, ParentAnnouncementListView, ParentMessageListView,
+    ParentMessageCreateView, ParentCalendarView, ParentMessageDetailView
 )
 from .views.fee_views import (
     FeeCategoryListView, FeeCategoryCreateView, FeeCategoryUpdateView, FeeCategoryDeleteView,
@@ -44,7 +54,7 @@ router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
 urlpatterns = [
     # API endpoints
     path('api/', include(router.urls)),
-    
+    path('__debug__/', include('debug_toolbar.urls')),
     # Home and dashboards
     path('', home, name='home'),
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
@@ -58,6 +68,12 @@ urlpatterns = [
     path('students/<int:pk>/edit/', StudentUpdateView.as_view(), name='student_update'),
     path('students/<int:pk>/delete/', StudentDeleteView.as_view(), name='student_delete'),
     path('student/<int:student_id>/attendance/', AttendanceDashboardView.as_view(), name='student_attendance_summary'),
+    
+    # Student URLs
+    path('student/profile/', StudentProfileView.as_view(), name='student_profile'),
+    path('student/grades/', StudentGradeListView.as_view(), name='student_grades'),
+    path('student/attendance/', StudentAttendanceView.as_view(), name='student_attendance'),
+    path('student/fees/', StudentFeeListView.as_view(), name='student_fees'),
     
     # Parent/Guardian URLs
     path('students/<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create'),
@@ -151,7 +167,7 @@ urlpatterns = [
     path('student-attendance/', StudentAttendanceListView.as_view(), name='student_attendance_list'),
     
     # Parent URLs
-    path('parent/', parent_dashboard, name='parent_dashboard'),
+    path('parent/dashboard/', parent_dashboard, name='parent_dashboard'),
     path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
     path('parent/children/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
     path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
@@ -161,6 +177,17 @@ urlpatterns = [
     path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
     path('parent/report-cards/<int:student_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
     path('parent/report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
+    
+    # Add to your urls.py in the parent section
+    
+    path('parent/announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
+    path('parent/messages/', ParentMessageListView.as_view(), name='parent_messages'),
+    path('parent/messages/new/', ParentMessageCreateView.as_view(), name='parent_message_create'),
+    path('parent/calendar/', ParentCalendarView.as_view(), name='parent_calendar'),
+    path('parent/messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
+    
+    
+    
     
     # Analytics Dashboard
     path('analytics/', AnalyticsDashboardView.as_view(), name='analytics_dashboard'),

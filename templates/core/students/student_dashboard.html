@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Student Dashboard - School Management System{% endblock %}
 
@@ -301,7 +302,7 @@
                         <i class="fas fa-chart-line stats-icon"></i>
                         <h5 class="card-title">Average Grade</h5>
                         <p class="stats-number">{{ average_grade|default:"N/A" }}</p>
-                        <a href="{% url 'report_card' student.pk %}" class="text-white text-decoration-none d-flex align-items-center">
+                        <a href="{% url 'report_card' student_id=student.pk %}" class="text-white text-decoration-none d-flex align-items-center">
                             <span>View Report Card</span>
                             <i class="fas fa-arrow-right ms-2"></i>
                         </a>
@@ -478,7 +479,7 @@
                     </table>
                 </div>
                 <div class="text-end mt-4">
-                    <a href="{% url 'report_card' student.pk %}" class="btn btn-primary btn-action">
+                    <a href="{% url 'report_card' student_id=student.pk %}" class="btn btn-primary btn-action">
                         <i class="fas fa-download me-2"></i> View Full Report Card
                     </a>
                 </div>
@@ -545,32 +546,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     updateCurrentDate();
 
-    // Countdown timers for assignments
-    function updateCountdowns() {
-        const countdownElements = document.querySelectorAll('.countdown-timer');
+// Countdown timers for assignments
+function updateCountdowns() {
+    const countdownElements = document.querySelectorAll('.countdown-timer');
+    
+    countdownElements.forEach(element => {
+        const dueDate = new Date(element.getAttribute('data-due-date') * 1000);
+        const now = new Date();
+        const distance = dueDate - now;
         
-        countdownElements.forEach(element => {
-            const dueDate = parseInt(element.getAttribute('data-due-date')) * 1000;
-            const now = new Date().getTime();
-            const distance = dueDate - now;
+        if (distance < 0) {
+            element.querySelector('.countdown-text').textContent = 'Expired';
+            element.style.background = 'rgba(220, 53, 69, 0.2)';
+            element.style.color = '#dc3545';
+        } else {
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             
-            if (distance < 0) {
-                element.querySelector('.countdown-text').textContent = 'Expired';
-                element.style.background = 'rgba(220, 53, 69, 0.2)';
-                element.style.color = '#dc3545';
+            if (days > 0) {
+                element.querySelector('.countdown-text').textContent = `${days}d ${hours}h`;
+            } else if (hours > 0) {
+                element.querySelector('.countdown-text').textContent = `${hours}h left`;
             } else {
-                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                
-                if (days > 0) {
-                    element.querySelector('.countdown-text').textContent = `${days}d ${hours}h`;
-                } else {
-                    element.querySelector('.countdown-text').textContent = `${hours}h left`;
-                }
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                element.querySelector('.countdown-text').textContent = `${minutes}m left`;
             }
-        });
-    }
-
+        }
+    });
+}
     // Initial update and set interval
     updateCountdowns();
     setInterval(updateCountdowns, 60000); // Update every minute
@@ -626,7 +629,7 @@ document.addEventListener('keydown', function(e) {
     }
     if (e.altKey && e.key === 'g') {
         e.preventDefault();
-        window.location.href = "{% url 'report_card' student.pk %}";
+        window.location.href = "{% url 'report_card' student_id=student.pk %}";
     }
 });
 </script>

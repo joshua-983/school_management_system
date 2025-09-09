@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Calendar - Parent Portal{% endblock %}
+
+{% block extra_css %}
+<style>
+.calendar-event {
+    border-left: 4px solid;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.event-school { border-left-color: #007bff; background-color: #e3f2fd; }
+.event-class { border-left-color: #28a745; background-color: #e8f5e8; }
+.event-exam { border-left-color: #dc3545; background-color: #fde8e8; }
+.event-holiday { border-left-color: #ffc107; background-color: #fff3cd; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>School Calendar</h2>
+                <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Upcoming Events</h5>
+                </div>
+                <div class="card-body">
+                    {% if events %}
+                    <div class="row">
+                        {% for event in events %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="calendar-event event-{{ event.event_type|lower }}">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-0">{{ event.title }}</h6>
+                                    <span class="badge bg-{% if event.event_type == 'SCHOOL' %}primary{% elif event.event_type == 'CLASS' %}success{% elif event.event_type == 'EXAM' %}danger{% else %}warning{% endif %}">
+                                        {{ event.get_event_type_display }}
+                                    </span>
+                                </div>
+                                
+                                <p class="mb-2 small">{{ event.description }}</p>
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="bi bi-calendar me-1"></i>
+                                        {{ event.start_date|date:"M d, Y" }}
+                                    </small>
+                                    <small class="text-muted">
+                                        <i class="bi bi-clock me-1"></i>
+                                        {{ event.start_date|time }} - {{ event.end_date|time }}
+                                    </small>
+                                </div>
+                                
+                                {% if event.class_level %}
+                                <small class="text-muted d-block mt-1">
+                                    <i class="bi bi-people me-1"></i>
+                                    Class: {{ event.get_class_level_display }}
+                                </small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-calendar-event fs-1 text-muted"></i>
+                        <p class="text-muted mt-3">No upcoming events</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Month View Calendar (Simplified) -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Month View</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <h4>{{ current_month|date:"F Y" }}</h4>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for week in calendar_data %}
+                                <tr>
+                                    {% for day in week %}
+                                    <td class="{% if day.date == today.date %}bg-light{% endif %}" 
+                                        style="height: 100px; vertical-align: top;">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="{% if day.date == today.date %}fw-bold text-primary{% endif %}">
+                                                {{ day.date.day }}
+                                            </span>
+                                            {% if day.events %}
+                                            <span class="badge bg-primary">{{ day.events|length }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% if day.events %}
+                                        <div class="mt-1">
+                                            {% for event in day.events %}
+                                            <span class="badge bg-{% if event.event_type == 'SCHOOL' %}primary{% elif event.event_type == 'CLASS' %}success{% elif event.event_type == 'EXAM' %}danger{% else %}warning{% endif %} mb-1"
+                                                  title="{{ event.title }}">
+                                                {{ event.title|truncatechars:15 }}
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

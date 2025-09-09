@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}My Grades - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-graduation-cap me-2"></i>My Grades
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if grades %}
+                    <!-- Grade Summary -->
+                    {% if grade_summary %}
+                    <h5 class="mb-3">Grade Summary</h5>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Academic Year</th>
+                                    <th>Term</th>
+                                    <th>Average Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for summary in grade_summary %}
+                                <tr>
+                                    <td>{{ summary.academic_year }}</td>
+                                    <td>Term {{ summary.term }}</td>
+                                    <td>
+                                        <strong>{{ summary.average|default:"N/A" }}</strong>
+                                        {% if summary.average %}
+                                        <div class="progress mt-1" style="height: 5px;">
+                                            <div class="progress-bar {% if summary.average >= 80 %}bg-success{% elif summary.average >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 style="width: {{ summary.average }}%"></div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+
+                    <!-- Detailed Grades -->
+                    <h5 class="mb-3">Detailed Grades</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-info">
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Academic Year</th>
+                                    <th>Term</th>
+                                    <th>Homework (10%)</th>
+                                    <th>Classwork (30%)</th>
+                                    <th>Test (10%)</th>
+                                    <th>Exam (50%)</th>
+                                    <th>Total Score</th>
+                                    <th>Grade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for grade in grades %}
+                                <tr>
+                                    <td><strong>{{ grade.subject.name }}</strong></td>
+                                    <td>{{ grade.academic_year }}</td>
+                                    <td>Term {{ grade.term }}</td>
+                                    <td>{{ grade.homework_score|default:"-" }}</td>
+                                    <td>{{ grade.classwork_score|default:"-" }}</td>
+                                    <td>{{ grade.test_score|default:"-" }}</td>
+                                    <td>{{ grade.exam_score|default:"-" }}</td>
+                                    <td>
+                                        <strong>{{ grade.total_score|default:"-" }}</strong>
+                                        {% if grade.total_score %}
+                                        <div class="progress mt-1" style="height: 5px;">
+                                            <div class="progress-bar {% if grade.total_score >= 80 %}bg-success{% elif grade.total_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 style="width: {{ grade.total_score }}%"></div>
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if grade.ges_grade == '1' or grade.ges_grade == '2' %}bg-success{% elif grade.ges_grade == '3' or grade.ges_grade == '4' %}bg-warning{% else %}bg-danger{% endif %}">
+                                            {{ grade.ges_grade|default:"N/A" }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-graduation-cap display-4 text-muted mb-3"></i>
+                        <h5 class="text-muted">No grades available</h5>
+                        <p class="text-muted">Your grades will appear here once they are published by your teachers.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Messages - Parent Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>Messages</h2>
+                <div>
+                    <a href="{% url 'parent_message_create' %}" class="btn btn-primary me-2">
+                        <i class="bi bi-plus-circle me-2"></i>New Message
+                    </a>
+                    <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">Message Inbox</h5>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                    <div class="list-group list-group-flush">
+                        {% for message in messages %}
+                        <a href="{% url 'parent_message_detail' message.pk %}" 
+                           class="list-group-item list-group-item-action border-0 px-0 {% if not message.is_read %}bg-light{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1 {% if not message.is_read %}fw-bold{% endif %}">
+                                        {{ message.subject }}
+                                        {% if not message.is_read %}
+                                        <span class="badge bg-primary ms-2">New</span>
+                                        {% endif %}
+                                    </h6>
+                                    <p class="mb-1 text-muted">{{ message.message|truncatewords:20 }}</p>
+                                    <small class="text-muted">
+                                        From: {{ message.sender.get_full_name }}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-muted">{{ message.timestamp|date:"M d, Y" }}</small>
+                                    <br>
+                                    <small class="text-muted">{{ message.timestamp|time }}</small>
+                                </div>
+                            </div>
+                        </a>
+                        {% if not forloop.last %}
+                        <hr class="my-2">
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-chat-left-text fs-1 text-muted"></i>
+                        <p class="text-muted mt-3">No messages yet</p>
+                        <a href="{% url 'parent_message_create' %}" class="btn btn-primary mt-2">
+                            Send your first message
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

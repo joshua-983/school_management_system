@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}My Fees - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-money-bill-wave me-2"></i>My Fee Statement
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Fee Summary -->
+                    {% if fee_summary %}
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-primary text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">KES {{ fee_summary.total_payable|default:0|intcomma }}</h5>
+                                    <p class="card-text">Total Payable</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-success text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">KES {{ fee_summary.total_paid|default:0|intcomma }}</h5>
+                                    <p class="card-text">Total Paid</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card {% if fee_summary.total_balance > 0 %}bg-danger{% else %}bg-secondary{% endif %} text-white text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">KES {{ fee_summary.total_balance|default:0|intcomma }}</h5>
+                                    <p class="card-text">Balance</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Detailed Fees -->
+                    <h5 class="mb-3">Detailed Fee Statement</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Fee Type</th>
+                                    <th>Academic Year</th>
+                                    <th>Term</th>
+                                    <th>Amount (KES)</th>
+                                    <th>Paid (KES)</th>
+                                    <th>Balance (KES)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fee in fees %}
+                                <tr>
+                                    <td>{{ fee.fee_type.name }}</td>
+                                    <td>{{ fee.academic_year }}</td>
+                                    <td>Term {{ fee.term }}</td>
+                                    <td>{{ fee.amount|intcomma }}</td>
+                                    <td>{{ fee.amount_paid|intcomma }}</td>
+                                    <td class="{% if fee.balance > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">
+                                        {{ fee.balance|intcomma }}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if fee.balance == 0 %}bg-success{% else %}bg-warning{% endif %}">
+                                            {% if fee.balance == 0 %}Paid{% else %}Pending{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle me-2"></i>No fee records found.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Payment Instructions -->
+                    {% if fee_summary.total_balance > 0 %}
+                    <div class="alert alert-info mt-4">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle me-2"></i>Payment Instructions
+                        </h6>
+                        <p class="mb-1">Total Balance: <strong>KES {{ fee_summary.total_balance|intcomma }}</strong></p>
+                        <p class="mb-0">Please contact the school accounts office for payment details and assistance.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

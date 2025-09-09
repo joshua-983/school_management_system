@@ -1,14 +1,17 @@
+from django.db.models import Q, Count, Avg, Sum # Add this import
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.db.models import Q, Count
 from django.contrib import messages
 from django.urls import reverse_lazy
+from ..forms import StudentProfileForm
 
 from .base_views import *
 from ..models import Student, ClassAssignment, StudentAttendance
 from ..forms import StudentRegistrationForm
+from ..models import Fee
+
 
 # Add the global CLASS_LEVEL_CHOICES constant (from your previous code)
 CLASS_LEVEL_CHOICES = [
@@ -131,3 +134,130 @@ class StudentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Student deleted successfully')
         return super().delete(request, *args, **kwargs)
+
+
+# student profile view
+class StudentProfileView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = Student
+    form_class = StudentProfileForm  # You'll need to create this form
+    template_name = 'core/students/student_profile.html'
+    
+    def test_func(self):
+        return self.get_object().user == self.request.user
+    
+    def get_object(self):
+        return self.request.user.student
+    
+    def get_success_url(self):
+        messages.success(self.request, 'Profile updated successfully')
+        return reverse_lazy('student_profile')
+
+class StudentGradeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Grade
+    template_name = 'core/students/student_grades.html'
+    context_object_name = 'grades'
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_queryset(self):
+        return Grade.objects.filter(student=self.request.user.student).order_by('-academic_year', '-term', 'subject')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add summary statistics
+        grades = self.get_queryset()
+        context['grade_summary'] = grades.values('academic_year', 'term').annotate(
+            average=Avg('total_score')
+        ).order_by('-academic_year', '-term')
+        return context
+
+class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = StudentAttendance
+    template_name = 'core/students/student_attendance.html'
+    context_object_name = 'attendances'
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_queryset(self):
+        return StudentAttendance.objects.filter(
+            student=self.request.user.student
+        ).order_by('-date')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        attendances = self.get_queryset()
+        
+        # Calculate attendance statistics
+        context['attendance_stats'] = attendances.aggregate(
+            total=Count('id'),
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late'))
+        )
+        
+        # Monthly attendance summary
+        from django.db.models.functions import TruncMonth
+        context['monthly_summary'] = attendances.annotate(
+            month=TruncMonth('date')
+        ).values('month').annotate(
+            present=Count('id', filter=Q(status='present')),
+            total=Count('id')
+        ).order_by('-month')[:6]  # Last 6 months
+        
+        return context
+
+class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    model = Fee
+    template_name = 'core/students/student_fees.html'
+    context_object_name = 'fees'
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_queryset(self):
+        return Fee.objects.filter(student=self.request.user.student).order_by('-academic_year', '-term')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        fees = self.get_queryset()
+        
+        # Calculate fee summary
+        context['fee_summary'] = fees.aggregate(
+            total_payable=Sum('amount_payable'),
+            total_paid=Sum('amount_paid'),
+            total_balance=Sum('balance')
+        )
+        
+        # Summary by academic year and term
+        context['term_summary'] = fees.values('academic_year', 'term').annotate(
+            payable=Sum('amount_payable'),
+            paid=Sum('amount_paid'),
+            balance=Sum('balance')
+        ).order_by('-academic_year', '-term')
+        
+        return context
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

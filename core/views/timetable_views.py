@@ -90,7 +90,7 @@ class TimetableListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         # For teachers, only show timetables for classes they teach
         if is_teacher(self.request.user):
             teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher_profile
+                teacher=self.request.user.teacher
             ).values_list('class_level', flat=True)
             queryset = queryset.filter(class_level__in=teacher_classes)
         
@@ -136,7 +136,7 @@ class TimetableDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
             # Check if teacher teaches this class
             return ClassAssignment.objects.filter(
                 class_level=timetable.class_level,
-                teacher=self.request.user.teacher_profile
+                teacher=self.request.user.teacher
             ).exists()
         return False
     
@@ -224,7 +224,7 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         context = super().get_context_data(**kwargs)
         
         if is_student(self.request.user):
-            student = self.request.user.student_profile
+            student = self.request.user.student
             class_level = student.class_level
             context['student'] = student
         else:
@@ -296,7 +296,7 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
         if not is_teacher(self.request.user):
             return context
         
-        teacher = self.request.user.teacher_profile
+        teacher = self.request.user.teacher
         context['teacher'] = teacher
         
         # Get current academic year and term

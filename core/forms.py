@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.apps import apps
 import re
-
+from .models import ParentMessage
 from .models import *
 from .models import Announcement, ReportCard, Fee, FeeCategory, Student, Assignment, ClassAssignment
 from .utils import is_admin, is_teacher
@@ -1567,3 +1567,38 @@ class BillPaymentForm(forms.ModelForm):
                 )
         
         return cleaned_data
+
+
+class StudentProfileForm(forms.ModelForm):
+    class Meta:
+        model = Student
+        fields = ['first_name', 'middle_name', 'last_name', 'date_of_birth', 
+                 'gender', 'profile_picture', 'residential_address']
+        widgets = {
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'residential_address': forms.Textarea(attrs={'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make some fields read-only if needed
+        self.fields['first_name'].disabled = True
+        self.fields['last_name'].disabled = True
+
+
+
+class ParentMessageForm(forms.ModelForm):
+    class Meta:
+        model = ParentMessage
+        fields = ['receiver', 'subject', 'message']
+        widgets = {
+            'message': forms.Textarea(attrs={'rows': 4}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Limit receiver choices to teachers and staff
+        from django.contrib.auth.models import User
+        self.fields['receiver'].queryset = User.objects.filter(
+            Q(is_staff=True) | Q(teacher__isnull=False)
+        )

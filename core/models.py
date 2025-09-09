@@ -16,6 +16,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+
 User = get_user_model()
 
 # ===== SHARED CONSTANTS (Moved to top to avoid circular imports) =====
@@ -238,6 +239,68 @@ def create_parent_user(sender, instance, created, **kwargs):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Error creating user for parent {instance.email}: {e}")
+
+
+# Parent Communication Models
+class ParentAnnouncement(models.Model):
+    TARGET_TYPES = [
+        ('ALL', 'All Parents'),
+        ('CLASS', 'Specific Class'),
+        ('INDIVIDUAL', 'Individual Parents'),
+    ]
+    
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    target_type = models.CharField(max_length=20, choices=TARGET_TYPES, default='ALL')
+    target_class = models.CharField(max_length=50, blank=True, null=True)
+    target_parents = models.ManyToManyField('ParentGuardian', blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_important = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return self.title
+
+class ParentMessage(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_parent_messages')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_parent_messages')
+    parent = models.ForeignKey('ParentGuardian', on_delete=models.CASCADE, null=True, blank=True)
+    teacher = models.ForeignKey('Teacher', on_delete=models.CASCADE, null=True, blank=True)
+    subject = models.CharField(max_length=200)
+    message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.subject} - {self.sender} to {self.receiver}"
+
+class ParentEvent(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    location = models.CharField(max_length=200, blank=True)
+    is_whole_school = models.BooleanField(default=False)
+    class_level = models.CharField(max_length=50, blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['start_date']
+    
+    def __str__(self):
+        return self.title
+
+
+
+
+
 
 class ClassAssignment(models.Model):
     class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)

@@ -215,15 +215,13 @@
         <ul class="sidebar-nav">
             {% if user.is_authenticated %}
             <!-- Dashboard -->
-            <li class="nav-item">
-                <a class="nav-link {% if request.path == dashboard_url %}active{% endif %}" 
-                   href="{% if user.is_superuser %}{% url 'admin_dashboard' %}
-                   {% elif user.teacher %}{% url 'teacher_dashboard' %}
-                   {% elif user.student %}{% url 'student_dashboard' %}
-                   {% elif is_parent %}{% url 'parent_dashboard' %}
-                   {% endif %}">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>Dashboard</span>
+            <a class="nav-link {% if request.path == dashboard_url %}active{% endif %}" 
+            href="{% if user.is_superuser %}
+            {% url 'admin_dashboard' %}{% elif user.teacher %}
+            {% url 'teacher_dashboard' %}{% elif user.student %}
+            {% url 'student_dashboard' %}{% elif user.parentguardian %}
+            {% url 'parent_dashboard' %}{% endif %}">
+            <span>Dashboard</span>
                 </a>
             </li>
             
@@ -269,7 +267,7 @@
                     
                     <!-- Report Cards - Show to students, parents, teachers and admin -->
                     {% if user.student %}
-                    <a class="nav-link" href="{% url 'report_card' pk=user.student.pk %}">
+                    <a class="nav-link" href="{% url 'report_card' student_id=user.student.pk %}">
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Card</span>
                     </a>
@@ -344,6 +342,28 @@
                 </div>
             </li>
             {% endif %}
+
+            {% if user.student %}
+<!-- Student-specific menu items -->
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'student_grades' %}">
+        <i class="bi bi-clipboard-data"></i>
+        <span>My Grades</span>
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'student_attendance' %}">
+        <i class="bi bi-calendar-event"></i>
+        <span>My Attendance</span>
+    </a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'student_fees' %}">
+        <i class="bi bi-credit-card"></i>
+        <span>My Fees</span>
+    </a>
+</li>
+{% endif %}
             
             <!-- Finance -->
             {% if user.is_superuser or is_parent %}
