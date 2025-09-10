@@ -12,14 +12,12 @@ from django.db.models import Sum, Count, Avg
 from urllib.parse import urlencode
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
-
-
-# Add these imports at the top of the file
 from ..models import Teacher
 from django.utils import timezone
 from django.db.models import Q
 from calendar import monthcalendar
 from datetime import datetime
+from django.shortcuts import render
 
 from .base_views import *
 from ..models import ParentGuardian, Student, Fee, StudentAttendance, Grade, ReportCard, FeePayment
@@ -210,14 +208,8 @@ class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return is_parent(self.request.user)
     
     def get_queryset(self):
-        # This will work with either ForeignKey or ManyToMany
-        if hasattr(self.request.user.parentguardian, 'student'):
-            # For ManyToMany
-            return self.request.user.parentguardian.student.all()
-        else:
-            # For ForeignKey (single child)
-            return Student.objects.filter(parents=self.request.user.parentguardian)
-
+        # This will work with the ManyToMany relationship
+        return self.request.user.parentguardian.students.all()  # Changed to students
 class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
     template_name = 'core/parents/child_detail.html'
@@ -225,7 +217,7 @@ class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
     
     def test_func(self):
         parent = self.request.user.parentguardian
-        return parent.student.filter(pk=self.kwargs['pk']).exists()
+        return parent.students.filter(pk=self.kwargs['pk']).exists()
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -257,7 +249,7 @@ class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return is_parent(self.request.user)
     
     def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
+        children = self.request.user.parentguardian.students.all()
         queryset = Fee.objects.filter(student__in=children).select_related('student', 'category')
         
         # Apply filters
@@ -269,7 +261,7 @@ class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        children = self.request.user.parentguardian.student.all()
+        children = self.request.user.parentguardian.students.all()
         
         # Summary statistics
         fees = Fee.objects.filter(student__in=children)
@@ -400,19 +392,41 @@ class ParentReportCardListView(LoginRequiredMixin, UserPassesTestMixin, ListView
     context_object_name = 'report_cards'
     
     def test_func(self):
-        return is_parent(self.request.user)
+        # Allow both parents and students to access their report cards
+        return hasattr(self.request.user, 'parentguardian') or hasattr(self.request.user, 'student')
     
     def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
+        user = self.request.user
+        
+        # Check if user is a parent
+        if hasattr(user, 'parentguardian'):
+            # User is a parent - get all students associated with this parent
+            children = user.parentguardian.students.all()  # Changed to students
+        # Check if user is a student
+        elif hasattr(user, 'student'):
+            # User is a student - get only their own report cards
+            children = Student.objects.filter(pk=user.student.pk)
+        else:
+            children = Student.objects.none()
+            
         return ReportCard.objects.filter(
             student__in=children
         ).order_by('-academic_year', '-term')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['children'] = self.request.user.parentguardian.student.all()
+        user = self.request.user
+        
+        # Get children based on user type
+        if hasattr(user, 'parentguardian'):
+            # Get all students associated with this parent
+            context['children'] = user.parentguardian.students.all()  # Changed to students
+        elif hasattr(user, 'student'):
+            context['children'] = Student.objects.filter(pk=user.student.pk)
+        else:
+            context['children'] = Student.objects.none()
+            
         return context
-
 class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
     def get(self, request, student_id, report_card_id=None):
         parent = request.user.parentguardian
@@ -489,10 +503,10 @@ def parent_dashboard(request):
         raise PermissionDenied
     
     parent = request.user.parentguardian
-    children = parent.student.all()  # This should work if your relationship is set up correctly
+    children = parent.students.all()
     
-    # Get recent activities
-    recent_grades = Grade.objects.filter(student__in=children).order_by('-updated_at')[:5]
+    # Get recent activities - use last_updated instead of updated_at
+    recent_grades = Grade.objects.filter(student__in=children).order_by('-last_updated')[:5]  # Changed to last_updated
     recent_attendances = StudentAttendance.objects.filter(student__in=children).order_by('-date')[:5]
     unpaid_fees = Fee.objects.filter(student__in=children, payment_status='UNPAID').order_by('due_date')
     
@@ -505,7 +519,6 @@ def parent_dashboard(request):
     }
     return render(request, 'core/parents/parent_dashboard.html', context)
 
-
 # Parent Dashboard and related views
 class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/parents/parent_dashboard.html'
@@ -516,7 +529,7 @@ class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         parent = self.request.user.parentguardian
-        children = parent.student.all()
+        children = parent.students.all()
         
         # Get upcoming events (next 7 days)
         from datetime import datetime, timedelta

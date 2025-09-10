@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
 from django.core.exceptions import ValidationError
@@ -10,12 +11,13 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.apps import apps
 import re
-from .models import ParentMessage
-from .models import *
-from .models import Announcement, ReportCard, Fee, FeeCategory, Student, Assignment, ClassAssignment
-from .utils import is_admin, is_teacher
+from .models import (
+    ParentMessage, Announcement, ReportCard, Fee, FeeCategory, Student, StudentAttendance, 
+    ClassAssignment, ParentGuardian, FeePayment, Bill, Subject, BillPayment,  # Added comma here
+    Teacher, Grade, StudentAssignment, AcademicTerm, AttendancePeriod, Assignment, TimeSlot,  # Added comma after Grade
+    Timetable, TimetableEntry
+)
 from .models import CLASS_LEVEL_CHOICES, TERM_CHOICES
-
 
 User = apps.get_model(settings.AUTH_USER_MODEL)
 
@@ -76,31 +78,24 @@ class StudentRegistrationForm(forms.ModelForm):
 
 class ParentGuardianForm(forms.ModelForm):
     class Meta:
-        model = ParentGuardian
-        fields = ['student', 'full_name', 'occupation', 'relationship', 
-                'phone_number', 'email', 'address', 'is_emergency_contact',
-                'emergency_contact_priority']  # CORRECTED SPELLING HERE
+        model = ParentGuardian  # Import this from models, not define here
+        fields = ['user', 'students', 'occupation', 'relationship', 'phone_number', 'email', 'address', 
+                 'is_emergency_contact', 'emergency_contact_priority']
         widgets = {
-            'address': forms.Textarea(attrs={'rows': 3}),
-            'student': forms.HiddenInput(),
+            'students': forms.SelectMultiple(attrs={'class': 'form-control'}),
+            'occupation': forms.TextInput(attrs={'class': 'form-control'}),
+            'relationship': forms.Select(attrs={'class': 'form-control'}),
+            'phone_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'emergency_contact_priority': forms.NumberInput(attrs={'class': 'form-control'}),
         }
     
     def __init__(self, *args, **kwargs):
-        student_id = kwargs.pop('student_id', None)
         super().__init__(*args, **kwargs)
-        
-        if student_id:
-            self.fields['student'].initial = student_id
-            self.fields['student'].widget = forms.HiddenInput()
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        phone_number = cleaned_data.get('phone_number')
-        
-        if phone_number and not phone_number.isdigit():
-            raise ValidationError("Phone number should contain only digits")
-        
-        return cleaned_data
+        # Make user field optional for existing instances
+        if self.instance and self.instance.pk:
+            self.fields['user'].required = False
 
 class FeeCategoryForm(forms.ModelForm):
     class Meta:

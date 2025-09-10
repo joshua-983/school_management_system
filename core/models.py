@@ -171,6 +171,7 @@ class Teacher(models.Model):
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"
 
+
 class ParentGuardian(models.Model):
     RELATIONSHIP_CHOICES = [
         ('F', 'Father'),
@@ -182,8 +183,7 @@ class ParentGuardian(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='parentguardian', null=True, blank=True)
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='parents')
-    full_name = models.CharField(max_length=200)
+    students = models.ManyToManyField(Student, related_name='parents')
     occupation = models.CharField(max_length=100, blank=True)
     relationship = models.CharField(max_length=1, choices=RELATIONSHIP_CHOICES)
     phone_number = models.CharField(max_length=20)
@@ -193,22 +193,28 @@ class ParentGuardian(models.Model):
     emergency_contact_priority = models.PositiveSmallIntegerField(default=1)
     
     class Meta:
-        ordering = ['student', 'emergency_contact_priority']
+        ordering = ['emergency_contact_priority', 'user__last_name']
         verbose_name_plural = "Parents/Guardians"
-        unique_together = ['student', 'emergency_contact_priority']
         
     def __str__(self):
-        return f"{self.full_name} ({self.get_relationship_display()}) - {self.student.get_full_name()}"
+        student_names = ", ".join([student.get_full_name() for student in self.students.all()])
+        if self.user:
+            return f"{self.user.get_full_name()} ({self.get_relationship_display()}) - {student_names}"
+        return f"{self.get_relationship_display()} - {student_names}"
+    
+    def get_user_full_name(self):
+        if self.user:
+            return self.user.get_full_name()
+        return "No User Account"
     
     def clean(self):
-        """Validate that email is unique per student"""
+        """Validate that email is unique"""
         if self.email:
             existing = ParentGuardian.objects.filter(
-                student=self.student, 
                 email=self.email
             ).exclude(pk=self.pk)
             if existing.exists():
-                raise ValidationError({'email': 'This email is already registered for this student'})
+                raise ValidationError({'email': 'This email is already registered'})
 
 @receiver(post_save, sender=ParentGuardian)
 def create_parent_user(sender, instance, created, **kwargs):
@@ -226,12 +232,13 @@ def create_parent_user(sender, instance, created, **kwargs):
                     username = f"{base_username}{counter}"
                     counter += 1
                 
+                # Use a default name since we don't have separate name fields
                 user = User.objects.create_user(
                     username=username,
                     email=instance.email,
                     password=User.objects.make_random_password(),
-                    first_name=instance.full_name.split()[0],
-                    last_name=' '.join(instance.full_name.split()[1:]) if len(instance.full_name.split()) > 1 else ""
+                    first_name="Parent",
+                    last_name=instance.email.split('@')[0]
                 )
             instance.user = user
             instance.save(update_fields=['user'])
@@ -296,10 +303,6 @@ class ParentEvent(models.Model):
     
     def __str__(self):
         return self.title
-
-
-
-
 
 
 class ClassAssignment(models.Model):

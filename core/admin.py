@@ -18,10 +18,20 @@ class StudentAdmin(admin.ModelAdmin):
 
 @admin.register(ParentGuardian)
 class ParentGuardianAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'relationship', 'student', 'is_emergency_contact')
-    search_fields = ('full_name', 'student__first_name', 'student__last_name')
-    raw_id_fields = ('student',)
-
+    list_display = ('get_user_full_name', 'get_relationship_display', 'get_students_list', 'is_emergency_contact')
+    list_filter = ('relationship', 'is_emergency_contact', 'students__class_level')
+    search_fields = ('user__first_name', 'user__last_name', 'students__first_name', 'students__last_name', 'phone_number', 'email')
+    filter_horizontal = ('students',)  # For better ManyToMany field interface
+    
+    # Custom method to display students
+    def get_students_list(self, obj):
+        return ", ".join([student.get_full_name() for student in obj.students.all()])
+    get_students_list.short_description = 'Students'
+    
+    # Custom method to display user full name
+    def get_user_full_name(self, obj):
+        return obj.get_user_full_name()
+    get_user_full_name.short_description = 'Parent/Guardian Name'
 @admin.register(AcademicTerm)
 class AcademicTermAdmin(admin.ModelAdmin):
     list_display = ('term', 'academic_year', 'start_date', 'end_date', 'is_active')
