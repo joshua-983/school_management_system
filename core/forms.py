@@ -76,26 +76,116 @@ class StudentRegistrationForm(forms.ModelForm):
             
         return student
 
-class ParentGuardianForm(forms.ModelForm):
+
+class ParentGuardianAddForm(forms.ModelForm):
+    """Form for adding a parent/guardian to a specific student"""
+    
+    # Add full_name field instead of separate first/last names to match template
+    full_name = forms.CharField(max_length=200, required=True, label="Full Name")
+    
     class Meta:
-        model = ParentGuardian  # Import this from models, not define here
-        fields = ['user', 'students', 'occupation', 'relationship', 'phone_number', 'email', 'address', 
-                 'is_emergency_contact', 'emergency_contact_priority']
+        model = ParentGuardian
+        fields = ['full_name', 'relationship', 'phone_number', 'email', 
+                 'occupation', 'address', 'is_emergency_contact', 'emergency_contact_priority']
         widgets = {
-            'students': forms.SelectMultiple(attrs={'class': 'form-control'}),
-            'occupation': forms.TextInput(attrs={'class': 'form-control'}),
+            'full_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., John Doe'}),
+            'occupation': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Teacher, Engineer'}),
             'relationship': forms.Select(attrs={'class': 'form-control'}),
-            'phone_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'emergency_contact_priority': forms.NumberInput(attrs={'class': 'form-control'}),
+            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., 0241234567'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'e.g., parent@example.com'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Full residential address'}),
+            'emergency_contact_priority': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '5'}),
         }
     
     def __init__(self, *args, **kwargs):
+        # Extract student_id from kwargs before calling super
+        self.student_id = kwargs.pop('student_id', None)
         super().__init__(*args, **kwargs)
-        # Make user field optional for existing instances
-        if self.instance and self.instance.pk:
-            self.fields['user'].required = False
+        
+        # Set required fields
+        self.fields['relationship'].required = True
+        self.fields['phone_number'].required = True
+    
+    def clean_phone_number(self):
+        phone_number = self.cleaned_data.get('phone_number')
+        if phone_number:
+            # Remove any non-digit characters
+            phone_number = ''.join(filter(str.isdigit, phone_number))
+            
+            # Basic phone number validation for Ghana
+            if len(phone_number) != 10:
+                raise ValidationError("Phone number must be exactly 10 digits.")
+            
+            # Check if it starts with valid Ghana prefix
+            if not phone_number.startswith(('02', '05')):
+                raise ValidationError("Phone number must start with 02 or 05 for Ghana numbers.")
+        return phone_number
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            email = email.lower()
+            if not re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email):
+                raise ValidationError("Please enter a valid email address.")
+        return email
+    
+    def save(self, commit=True):
+        # Create the parent instance
+        parent = super().save(commit=False)
+        
+        # Split full_name into first and last names
+        full_name = self.cleaned_data['full_name'].strip()
+        name_parts = full_name.split()
+        
+        if len(name_parts) >= 2:
+            first_name = name_parts[0]
+            last_name = ' '.join(name_parts[1:])
+        else:
+            first_name = full_name
+            last_name = full_name
+        
+        # Create a user for the parent
+        username = self.generate_username()
+        email = self.cleaned_data.get('email', '')
+        
+        user = User.objects.create_user(
+            username=username,
+            password='temp123',  # Set a temporary password
+            first_name=first_name,
+            last_name=last_name,
+            email=email
+        )
+        
+        parent.user = user
+        
+        if commit:
+            parent.save()
+            
+            # Add the student relationship
+            if self.student_id:
+                try:
+                    student = Student.objects.get(pk=self.student_id)
+                    parent.students.add(student)
+                except Student.DoesNotExist:
+                    pass
+        
+        return parent
+    
+    def generate_username(self):
+        """Generate a unique username based on phone number"""
+        phone = self.cleaned_data.get('phone_number', '')
+        # Clean phone number (remove non-digits)
+        clean_phone = ''.join(filter(str.isdigit, phone)) if phone else ''
+        
+        base_username = f"parent_{clean_phone}" if clean_phone else f"parent_{int(timezone.now().timestamp())}"
+        
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}_{counter}"
+            counter += 1
+        
+        return username
 
 class FeeCategoryForm(forms.ModelForm):
     class Meta:

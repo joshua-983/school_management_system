@@ -33,39 +33,40 @@
 <div class="card">
     <div class="card-header">
         <h4>{% if object %}Edit{% else %}Add{% endif %} Parent/Guardian</h4>
+        {% if student %}
+            <p class="text-muted mb-0">For student: {{ student.get_full_name }} ({{ student.student_id }})</p>
+        {% endif %}
     </div>
     <div class="card-body">
         <form method="post" id="parentForm">
             {% csrf_token %}
             
-            <!-- Hidden student field - critical for the relationship -->
-            {% if form.student %}
-                {{ form.student }}
-            {% else %}
-                <input type="hidden" name="student" value="{{ student_id }}">
-            {% endif %}
+            <!-- Debug info (remove in production) -->
+            <input type="hidden" name="debug_student_id" value="{{ student_id }}">
             
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="{{ form.full_name.id_for_label }}" class="form-label">Full Name *</label>
+                        <label for="{{ form.full_name.id_for_label }}" class="form-label required">Full Name</label>
                         {{ form.full_name }}
                         {% if form.full_name.errors %}
                             <div class="invalid-feedback d-block">
                                 {{ form.full_name.errors.as_text }}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">Enter the parent's full name</small>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="{{ form.relationship.id_for_label }}" class="form-label">Relationship *</label>
+                        <label for="{{ form.relationship.id_for_label }}" class="form-label required">Relationship</label>
                         {{ form.relationship }}
                         {% if form.relationship.errors %}
                             <div class="invalid-feedback d-block">
                                 {{ form.relationship.errors.as_text }}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">e.g., Mother, Father, Guardian</small>
                     </div>
                 </div>
             </div>
@@ -73,9 +74,9 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="mb-3">
-                        <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number *</label>
+                        <label for="{{ form.phone_number.id_for_label }}" class="form-label required">Phone Number</label>
                         <div class="input-group">
-                            <span class="input-group-text">+</span>
+                            <span class="input-group-text">+233</span>
                             {{ form.phone_number }}
                         </div>
                         {% if form.phone_number.errors %}
@@ -83,6 +84,7 @@
                                 {{ form.phone_number.errors.as_text }}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">10-digit Ghana number (e.g., 241234567)</small>
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -94,6 +96,7 @@
                                 {{ form.email.errors.as_text }}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">Optional email address</small>
                     </div>
                 </div>
             </div>
@@ -119,6 +122,7 @@
                                 {{ form.emergency_contact_priority.errors.as_text }}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">1 (lowest) to 5 (highest)</small>
                     </div>
                 </div>
             </div>
@@ -136,10 +140,11 @@
             <div class="mb-3 form-check form-switch">
                 {{ form.is_emergency_contact }}
                 <label class="form-check-label" for="{{ form.is_emergency_contact.id_for_label }}">Emergency Contact</label>
+                <small class="form-text text-muted d-block">This parent will be contacted first in emergencies</small>
             </div>
 
             <div class="d-flex justify-content-between">
-                <a href="{% if object %}{% url 'student_detail' object.student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-secondary">
+                <a href="{% if student %}{% url 'student_detail' student.id %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-secondary">
                     Cancel
                 </a>
                 <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -173,8 +178,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!phoneNumber) {
             errors.push('Phone number is required');
-        } else if (!/^[0-9]{10,15}$/.test(phoneNumber)) {
-            errors.push('Phone number must be 10-15 digits');
+        } else {
+            // Clean phone number (remove non-digits)
+            const cleanPhone = phoneNumber.replace(/\D/g, '');
+            if (cleanPhone.length !== 10) {
+                errors.push('Phone number must be exactly 10 digits');
+            } else if (!cleanPhone.startsWith('02') && !cleanPhone.startsWith('05')) {
+                errors.push('Phone number must start with 02 or 05');
+            }
         }
         
         if (errors.length > 0) {
@@ -188,16 +199,6 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
         return true;
     });
-    
-    // Debug: Log form data before submission
-    form.addEventListener('submit', function(e) {
-        console.log('Form submission data:', {
-            student: document.querySelector('[name="student"]').value,
-            full_name: document.getElementById('id_full_name').value,
-            relationship: document.getElementById('id_relationship').value,
-            phone_number: document.getElementById('id_phone_number').value
-        });
-    });
 });
 </script>
 
@@ -209,6 +210,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .form-label.required:after {
     content: " *";
     color: #dc3545;
+}
+.form-text {
+    font-size: 0.875em;
 }
 </style>
 {% endblock %}

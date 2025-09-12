@@ -13,10 +13,6 @@ from .views.parents_views import (
 
 # Add these imports to your existing parents_views imports
 from .views.parents_views import (
-    ParentCreateView, ParentUpdateView, ParentDeleteView, parent_dashboard,
-    ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
-    ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
-    # Add these new imports
     ParentDashboardView, ParentAnnouncementListView, ParentMessageListView,
     ParentMessageCreateView, ParentCalendarView, ParentMessageDetailView
 )
@@ -180,12 +176,14 @@ urlpatterns = [
     
     # Add to your urls.py in the parent section
     
-    path('parent/announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
-    path('parent/messages/', ParentMessageListView.as_view(), name='parent_messages'),
-    path('parent/messages/new/', ParentMessageCreateView.as_view(), name='parent_message_create'),
-    path('parent/calendar/', ParentCalendarView.as_view(), name='parent_calendar'),
-    path('parent/messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
-    
+    # Parent URLs
+    path('parent/dashboard/', ParentDashboardView.as_view(), name='parent_dashboard'),
+    path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
+    path('parent/child/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
+    path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
+    path('parent/fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
+    path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
+    path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
     
     
     

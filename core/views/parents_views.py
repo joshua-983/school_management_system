@@ -18,128 +18,76 @@ from django.db.models import Q
 from calendar import monthcalendar
 from datetime import datetime
 from django.shortcuts import render
+from datetime import timedelta
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+
 
 from .base_views import *
 from ..models import ParentGuardian, Student, Fee, StudentAttendance, Grade, ReportCard, FeePayment
-from ..forms import ParentGuardianForm, ParentFeePaymentForm, ParentAttendanceFilterForm, ReportCardFilterForm
+from ..forms import ParentGuardianAddForm, ParentFeePaymentForm, ParentAttendanceFilterForm, ReportCardFilterForm
 #PARENTS RELATED VIEWS
+
 class ParentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = ParentGuardian
-    form_class = ParentGuardianForm
+    form_class = ParentGuardianAddForm
     template_name = 'core/parents/parent_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_form_kwargs(self):
-        """Prepare form kwargs with student_id and proper initial data"""
+        """Prepare form kwargs with student_id"""
         kwargs = super().get_form_kwargs()
         student_id = self.kwargs.get('student_id')
         
         if student_id:
-            # Ensure student exists before proceeding
-            student = get_object_or_404(Student, pk=student_id)
             kwargs['student_id'] = student_id
-            
-            # Initialize form data if not present
-            if 'data' not in kwargs:
-                kwargs['data'] = {}
-            
-            # Create a mutable copy if needed
-            if not isinstance(kwargs['data'], dict):
-                kwargs['data'] = kwargs['data'].copy()
-            
-            # Set student in form data if not already set
-            if 'student' not in kwargs['data']:
-                kwargs['data']['student'] = student_id
-            
-            # Set initial student if in GET request
-            if self.request.method == 'GET':
-                kwargs['initial'] = kwargs.get('initial', {})
-                kwargs['initial']['student'] = student_id
         
         return kwargs
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student_id = self.kwargs.get('student_id')
+        if student_id:
+            context['student'] = get_object_or_404(Student, pk=student_id)
+            context['student_id'] = student_id
+        return context
+    
     def form_valid(self, form):
         """Handle successful form submission with transaction safety"""
-        from django.db import transaction
-        
         try:
             with transaction.atomic():
-                student_id = self.kwargs.get('student_id')
-                
-                # Debug: Print form data before save
-                print("\n=== BEFORE SAVE ===")
-                print("Form data:", form.cleaned_data)
-                print("Student ID from URL:", student_id)
-                print("Form instance student:", getattr(form.instance, 'student', None))
-                
-                # Ensure student is set
-                if student_id and not form.instance.student_id:
-                    form.instance.student = get_object_or_404(Student, pk=student_id)
-                
-                # Validate model before save
-                form.instance.full_clean()
-                
-                # Save the instance
+                # Save the parent (the form handles user creation and student relationship)
                 self.object = form.save()
-                
-                # Debug: Print after save
-                print("\n=== AFTER SAVE ===")
-                print("Saved parent ID:", self.object.id)
-                print("Associated student:", self.object.student)
-                print("Database record:", ParentGuardian.objects.filter(id=self.object.id).exists())
                 
                 messages.success(self.request, 'Parent/Guardian added successfully')
                 return super().form_valid(form)
                 
         except Exception as e:
-            # Detailed error logging
-            import traceback
-            print("\n=== SAVE ERROR ===")
-            print("Error:", str(e))
-            print("Traceback:", traceback.format_exc())
-            
-            # Form-specific errors
-            if hasattr(e, 'error_dict'):
-                for field, errors in e.error_dict.items():
-                    for error in errors:
-                        messages.error(self.request, f"{field}: {error}")
-            else:
-                messages.error(self.request, f'Error saving parent: {str(e)}')
-            
+            messages.error(self.request, f'Error saving parent: {str(e)}')
             return self.form_invalid(form)
     
     def get_success_url(self):
-        """Ensure we have a valid student relationship before redirecting"""
-        if not hasattr(self.object, 'student'):
-            messages.error(self.request, 'Parent saved but student relationship missing!')
-            return reverse_lazy('student_list')
-        return reverse_lazy('student_detail', kwargs={'pk': self.object.student.pk})
-    
-    def form_invalid(self, form):
-        """Enhanced invalid form handling"""
-        print("\n=== FORM INVALID ===")
-        print("Form errors:", form.errors.as_json())
-        print("Non-field errors:", form.non_field_errors())
-        
-        # Add field-specific errors to messages
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"{field}: {error}")
-        
-        return super().form_invalid(form)
+        """Redirect to student detail page"""
+        student_id = self.kwargs.get('student_id')
+        if student_id:
+            return reverse_lazy('student_detail', kwargs={'pk': student_id})
+        return reverse_lazy('student_list')
 
 class ParentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = ParentGuardian
-    form_class = ParentGuardianForm
+    form_class = ParentGuardianAddForm  # Use the original form for editing
     template_name = 'core/parents/parent_form.html'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_success_url(self):
-        return reverse_lazy('student_detail', kwargs={'pk': self.object.student.pk})
+        # Redirect to the first student's detail page
+        if self.object.students.exists():
+            return reverse_lazy('student_detail', kwargs={'pk': self.object.students.first().pk})
+        return reverse_lazy('student_list')
     
     def form_valid(self, form):
         messages.success(self.request, 'Parent/Guardian updated successfully')
@@ -209,7 +157,7 @@ class ParentChildrenListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_queryset(self):
         # This will work with the ManyToMany relationship
-        return self.request.user.parentguardian.students.all()  # Changed to students
+        return self.request.user.parentguardian.students.all()
 class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
     template_name = 'core/parents/child_detail.html'
@@ -338,7 +286,7 @@ class ParentAttendanceListView(LoginRequiredMixin, UserPassesTestMixin, ListView
         return is_parent(self.request.user)
     
     def get_queryset(self):
-        children = self.request.user.parentguardian.student.all()
+        children = self.request.user.parentguardian.students.all()
         queryset = StudentAttendance.objects.filter(
             student__in=children
         ).select_related('student', 'term', 'period').order_by('-date')
@@ -364,7 +312,7 @@ class ParentAttendanceListView(LoginRequiredMixin, UserPassesTestMixin, ListView
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        children = self.request.user.parentguardian.student.all()
+        children = self.request.user.parentguardian.students.all()
         
         # Add filter form
         context['filter_form'] = ParentAttendanceFilterForm(
@@ -503,22 +451,75 @@ def parent_dashboard(request):
         raise PermissionDenied
     
     parent = request.user.parentguardian
-    children = parent.students.all()
+    children = parent.students.all()  # Fixed: use students (plural)
     
-    # Get recent activities - use last_updated instead of updated_at
-    recent_grades = Grade.objects.filter(student__in=children).order_by('-last_updated')[:5]  # Changed to last_updated
-    recent_attendances = StudentAttendance.objects.filter(student__in=children).order_by('-date')[:5]
-    unpaid_fees = Fee.objects.filter(student__in=children, payment_status='UNPAID').order_by('due_date')
+    # Get children data for the template
+    children_data = []
+    for child in children:
+        # Get recent grades
+        recent_grades = Grade.objects.filter(
+            student=child
+        ).select_related('subject').order_by('-last_updated')[:3]
+        
+        # Get attendance summary for current month
+        current_month = timezone.now().month
+        current_year = timezone.now().year
+        attendance_summary = StudentAttendance.objects.filter(
+            student=child,
+            date__month=current_month,
+            date__year=current_year
+        ).aggregate(
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late')),
+            total=Count('id')
+        )
+        
+        # Get fee status
+        fee_status = Fee.objects.filter(
+            student=child,
+            payment_status__in=['unpaid', 'partial']
+        ).aggregate(
+            total_due=Sum('balance'),
+            count=Count('id')
+        )
+        
+        children_data.append({
+            'child': child,
+            'recent_grades': recent_grades,
+            'attendance': attendance_summary,
+            'fee_status': fee_status
+        })
+    
+    # Get upcoming events (next 7 days)
+    next_week = timezone.now() + timedelta(days=7)
+    child_classes = children.values_list('class_level', flat=True).distinct()
+    
+    # Get recent announcements
+    recent_announcements = ParentAnnouncement.objects.filter(
+        Q(target_type='ALL') | 
+        Q(target_type='CLASS', target_class__in=child_classes) |
+        Q(target_type='INDIVIDUAL', target_parents=parent)
+    ).order_by('-created_at')[:5]
+    
+    # Get unread messages
+    unread_messages = ParentMessage.objects.filter(
+        receiver=request.user,
+        is_read=False
+    ).count()
     
     context = {
         'parent': parent,
-        'children': children,
-        'recent_grades': recent_grades,
-        'recent_attendances': recent_attendances,
-        'unpaid_fees': unpaid_fees,
+        'children_data': children_data,  # Pass the processed data
+        'recent_announcements': recent_announcements,
+        'unread_messages': unread_messages,
+        'upcoming_events': ParentEvent.objects.filter(
+            Q(is_whole_school=True) | Q(class_level__in=child_classes),
+            start_date__gte=timezone.now(),
+            start_date__lte=next_week
+        ).order_by('start_date')[:5],
     }
     return render(request, 'core/parents/parent_dashboard.html', context)
-
 # Parent Dashboard and related views
 class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/parents/parent_dashboard.html'
@@ -529,58 +530,74 @@ class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         parent = self.request.user.parentguardian
-        children = parent.students.all()
+        children = parent.students.all()  # Fixed: use students (plural)
+        
+        # Get children data for the template
+        children_data = []
+        for child in children:
+            # Get recent grades
+            recent_grades = Grade.objects.filter(
+                student=child
+            ).select_related('subject').order_by('-last_updated')[:3]
+            
+            # Get attendance summary for current month
+            current_month = timezone.now().month
+            current_year = timezone.now().year
+            attendance_summary = StudentAttendance.objects.filter(
+                student=child,
+                date__month=current_month,
+                date__year=current_year
+            ).aggregate(
+                present=Count('id', filter=Q(status='present')),
+                absent=Count('id', filter=Q(status='absent')),
+                late=Count('id', filter=Q(status='late')),
+                total=Count('id')
+            )
+            
+            # Get fee status
+            fee_status = Fee.objects.filter(
+                student=child,
+                payment_status__in=['unpaid', 'partial']
+            ).aggregate(
+                total_due=Sum('balance'),
+                count=Count('id')
+            )
+            
+            children_data.append({
+                'child': child,
+                'recent_grades': recent_grades,
+                'attendance': attendance_summary,
+                'fee_status': fee_status
+            })
         
         # Get upcoming events (next 7 days)
-        from datetime import datetime, timedelta
         next_week = timezone.now() + timedelta(days=7)
-        
-        # Get events for all classes of the parent's children
         child_classes = children.values_list('class_level', flat=True).distinct()
-        context['upcoming_events'] = ParentEvent.objects.filter(
-            Q(is_whole_school=True) | Q(class_level__in=child_classes),
-            start_date__gte=timezone.now(),
-            start_date__lte=next_week
-        ).order_by('start_date')[:5]
         
         # Get recent announcements
-        context['recent_announcements'] = ParentAnnouncement.objects.filter(
+        recent_announcements = ParentAnnouncement.objects.filter(
             Q(target_type='ALL') | 
             Q(target_type='CLASS', target_class__in=child_classes) |
             Q(target_type='INDIVIDUAL', target_parents=parent)
         ).order_by('-created_at')[:5]
         
         # Get unread messages
-        context['unread_messages'] = ParentMessage.objects.filter(
+        unread_messages = ParentMessage.objects.filter(
             receiver=self.request.user,
             is_read=False
         ).count()
         
-        # Get recent grades for all children
-        context['recent_grades'] = Grade.objects.filter(
-            student__in=children
-        ).select_related('student', 'subject').order_by('-last_updated')[:5]
-        
-        # Get attendance summary for all children
-        context['attendance_summary'] = StudentAttendance.objects.filter(
-            student__in=children,
-            date__month=timezone.now().month
-        ).values('status').annotate(count=Count('id'))
-        
-        # Get fee summary
-        context['fee_summary'] = {
-            'total_due': Fee.objects.filter(
-                student__in=children,
-                payment_status__in=['unpaid', 'partial']
-            ).aggregate(Sum('balance'))['balance__sum'] or 0,
-            'overdue': Fee.objects.filter(
-                student__in=children,
-                payment_status='overdue'
-            ).count()
-        }
-        
-        context['children'] = children
-        context['parent'] = parent
+        context.update({
+            'parent': parent,
+            'children_data': children_data,  # Pass the processed data
+            'recent_announcements': recent_announcements,
+            'unread_messages': unread_messages,
+            'upcoming_events': ParentEvent.objects.filter(
+                Q(is_whole_school=True) | Q(class_level__in=child_classes),
+                start_date__gte=timezone.now(),
+                start_date__lte=next_week
+            ).order_by('start_date')[:5],
+        })
         
         return context
 
