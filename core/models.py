@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 from django.db import models
@@ -12,11 +13,11 @@ from django.utils.safestring import mark_safe
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-
+from django.db.models import Q, Count, Avg, Sum, Case, When, IntegerField, FloatField
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 # ===== SHARED CONSTANTS (Moved to top to avoid circular imports) =====
@@ -243,8 +244,6 @@ def create_parent_user(sender, instance, created, **kwargs):
             instance.user = user
             instance.save(update_fields=['user'])
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Error creating user for parent {instance.email}: {e}")
 
 
@@ -387,7 +386,6 @@ class BillItem(models.Model):
     def __str__(self):
         return f"{self.fee_category.name} - GH₵{self.amount}"
 
-# Add this to your models.py file
 class BillPayment(models.Model):
     PAYMENT_MODES = [
         ('CASH', 'Cash'),
@@ -417,7 +415,7 @@ class BillPayment(models.Model):
     def save(self, *args, **kwargs):
         # Update the bill's paid amount when a payment is saved
         super().save(*args, **kwargs)
-        self.bill.update_payment_status()
+        self.bill.update_status()
 
 
 class FeeCategory(models.Model):
@@ -485,7 +483,7 @@ class FeeCategory(models.Model):
         if self.applies_to_all or not self.class_levels:
             return True
         return class_level in self.get_applicable_class_levels()
-# Now Fee model can reference Bill since it's defined above
+
 class Fee(models.Model):
     PAYMENT_STATUS_CHOICES = [
         ('paid', 'Paid'),
@@ -516,7 +514,6 @@ class Fee(models.Model):
     payment_date = models.DateField(blank=True, null=True)
     due_date = models.DateField()
     
-    # Now Bill is defined above, so this reference works
     bill = models.ForeignKey(Bill, on_delete=models.SET_NULL, null=True, blank=True, related_name='fees')
     
     receipt_number = models.CharField(max_length=20, blank=True)
@@ -662,9 +659,7 @@ class FeePayment(models.Model):
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
-
-# ... REST OF YOUR MODELS (Assignment, Grade, etc.) REMAIN THE SAME ...
-# Assignment Models
+# In your Assignment class, fix the indentation and structure:
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [
         ('HOMEWORK', 'Homework'),
@@ -691,6 +686,7 @@ class Assignment(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(100)],
         help_text="Percentage weight of this assignment in the final grade"
     )
+    attachment = models.FileField(upload_to='assignment_attachments/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -699,10 +695,116 @@ class Assignment(models.Model):
     
     def __str__(self):
         return f"{self.get_assignment_type_display()} - {self.subject} ({self.class_assignment.get_class_level_display()})"
-
+    
+    def clean(self):
+        """Validate that class_assignment is set"""
+        if not self.class_assignment_id:
+            raise ValidationError("Class assignment is required.")
+        
+        # Validate that due date is in the future
+        if self.due_date and self.due_date <= timezone.now():
+            raise ValidationError({'due_date': 'Due date must be in the future'})
+    
+    def save(self, *args, **kwargs):
+        self.clean()  # Run validation before saving
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        # If this is a new assignment, create StudentAssignment records
+        if is_new:
+            self.create_student_assignments()
+            # Comment out notification for now to avoid errors
+            # self.send_assignment_notifications()
+    
+    def get_status_summary(self):
+        """Get summary of assignment statuses"""
+        return {
+            'total': self.total_students,
+            'pending': self.pending_students,
+            'graded': self.graded_students,
+            'late': self.late_submissions,
+            'submitted': self.total_students - self.pending_students
+        }
+    
+    def get_completion_percentage(self):
+        """Get the percentage of students who have submitted"""
+        summary = self.get_status_summary()
+        total = summary['total']
+        if total == 0:
+            return 0
+        
+        completed = summary['submitted'] + summary['late'] + summary['graded']
+        return round((completed / total) * 100, 1)
+    
+    def is_overdue(self):
+        """Check if the assignment is overdue for any student"""
+        return self.due_date < timezone.now()
+    
+    def create_student_assignments(self):
+        """Create StudentAssignment records for all students in this class"""
+        from django.db import transaction
+        
+        try:
+            with transaction.atomic():
+                students = Student.objects.filter(
+                    class_level=self.class_assignment.class_level,
+                    is_active=True
+                )
+                
+                student_assignments = [
+                    StudentAssignment(
+                        student=student,
+                        assignment=self,
+                        status='PENDING'
+                    )
+                    for student in students
+                ]
+                
+                # Use bulk_create for better performance
+                StudentAssignment.objects.bulk_create(
+                    student_assignments,
+                    ignore_conflicts=False  # Changed to False to catch errors
+                )
+                logger.info(f"Created {len(student_assignments)} student assignments for assignment {self.id}")
+                
+        except Exception as e:
+            # Re-raise the error to prevent assignment creation if student assignments fail
+            logger.error(f"Error creating student assignments for assignment {self.id}: {str(e)}")
+            raise ValidationError(f"Failed to create student assignments: {str(e)}")
+    
+    # Comment out notification method for now to avoid errors
+    # def send_assignment_notifications(self):
+    #     """Send notifications to students about the new assignment"""
+    #     pass  # Implement this later
+    
+    def get_analytics(self, recalculate=False):
+        """Get analytics for this assignment, optionally recalculating"""
+        analytics, created = AssignmentAnalytics.objects.get_or_create(
+            assignment=self
+        )
+        
+        if created or recalculate or not analytics.last_calculated:
+            analytics.calculate_analytics()
+            
+        return analytics
+    
+    def update_analytics(self):
+        """Force update of analytics"""
+        return self.get_analytics(recalculate=True)
+    
+    def get_quick_stats(self):
+        """Get quick statistics without full analytics calculation"""
+        student_assignments = self.student_assignments.all()
+            
+        return {
+            'total_students': student_assignments.count(),
+            'submitted': student_assignments.exclude(status='PENDING').count(),
+            'graded': student_assignments.filter(status='GRADED').count(),
+            'pending': student_assignments.filter(status='PENDING').count(),
+        }
 class StudentAssignment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE)
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='student_assignments')
     status = models.CharField(max_length=10, choices=Assignment.STATUS_CHOICES, default='PENDING')
     submitted_date = models.DateTimeField(null=True, blank=True)
     score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -712,6 +814,52 @@ class StudentAssignment(models.Model):
     class Meta:
         unique_together = ('student', 'assignment')
         ordering = ['assignment__due_date', 'student']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['submitted_date']),  # Fixed: added square brackets
+            models.Index(fields=['assignment', 'student']),
+        ]
+        verbose_name = 'Student Assignment'
+        verbose_name_plural = 'Student Assignments'
+    
+    def get_submission_status(self):
+        """Get a human-readable status with icons/colors"""
+        status_map = {
+            'PENDING': ('🔴', 'Pending', 'danger'),
+            'SUBMITTED': ('🟡', 'Submitted', 'warning'),
+            'LATE': ('🟠', 'Late', 'warning'),
+            'GRADED': ('🟢', 'Graded', 'success'),
+        }
+        icon, text, color = status_map.get(self.status, ('⚪', 'Unknown', 'secondary'))
+        return {
+            'icon': icon,
+            'text': text,
+            'color': color,
+            'full': f"{icon} {text}"
+        }
+    
+    def get_time_remaining(self):
+        """Get time remaining until due date"""
+        if not self.assignment.due_date:
+            return None
+        
+        now = timezone.now()
+        time_remaining = self.assignment.due_date - now
+        
+        if time_remaining.total_seconds() <= 0:
+            return "Overdue"
+        
+        # Format the time remaining
+        days = time_remaining.days
+        hours = time_remaining.seconds // 3600
+        minutes = (time_remaining.seconds % 3600) // 60
+        
+        if days > 0:
+            return f"{days}d {hours}h remaining"
+        elif hours > 0:
+            return f"{hours}h {minutes}m remaining"
+        else:
+            return f"{minutes}m remaining"
     
     def __str__(self):
         return f"{self.student} - {self.assignment} ({self.status})"
@@ -728,6 +876,102 @@ class StudentAssignment(models.Model):
             else:
                 self.status = 'SUBMITTED'
         super().save(*args, **kwargs)
+
+class AssignmentAnalytics(models.Model):
+    """Model to track assignment analytics and statistics"""
+    assignment = models.OneToOneField(
+        Assignment, 
+        on_delete=models.CASCADE, 
+        related_name='analytics'
+    )
+    average_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    highest_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    lowest_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    submission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
+    on_time_submission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
+    total_students = models.PositiveIntegerField(default=0)
+    graded_students = models.PositiveIntegerField(default=0)
+    pending_students = models.PositiveIntegerField(default=0)
+    late_submissions = models.PositiveIntegerField(default=0)
+    last_calculated = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Assignment Analytics'
+        verbose_name_plural = 'Assignment Analytics'
+        ordering = ['-last_calculated']
+    
+    def __str__(self):
+        return f"Analytics for {self.assignment.title}"
+    
+    def calculate_analytics(self):
+        """Calculate and update analytics data with error handling"""
+        try:
+            student_assignments = self.assignment.student_assignments.all()
+            self.total_students = student_assignments.count()
+            
+            # Count students by status
+            self.pending_students = student_assignments.filter(status='PENDING').count()
+            self.graded_students = student_assignments.filter(status='GRADED').count()
+            self.late_submissions = student_assignments.filter(status='LATE').count()
+            
+            # Calculate score statistics
+            graded_with_scores = student_assignments.filter(
+                status='GRADED', 
+                score__isnull=False
+            )
+            
+            if graded_with_scores.exists():
+                scores = [float(sa.score) for sa in graded_with_scores]
+                self.average_score = sum(scores) / len(scores)
+                self.highest_score = max(scores)
+                self.lowest_score = min(scores)
+            else:
+                self.average_score = None
+                self.highest_score = None
+                self.lowest_score = None
+            
+            # Calculate submission rates
+            submitted_assignments = student_assignments.exclude(status='PENDING')
+            on_time_assignments = student_assignments.filter(
+                status__in=['SUBMITTED', 'GRADED'],
+                submitted_date__lte=self.assignment.due_date
+            ) if self.assignment.due_date else submitted_assignments
+            
+            if self.total_students > 0:
+                self.submission_rate = (submitted_assignments.count() / self.total_students) * 100
+                self.on_time_submission_rate = (on_time_assignments.count() / self.total_students) * 100
+            
+            self.save()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error calculating analytics for assignment {self.assignment.id}: {str(e)}")
+            return False
+    
+    def get_status_summary(self):
+        """Get summary of assignment statuses"""
+        return {
+            'total': self.total_students,
+            'pending': self.pending_students,
+            'graded': self.graded_students,
+            'late': self.late_submissions,
+            'submitted': self.total_students - self.pending_students
+        }
+    
+    def to_dict(self):
+        """Convert analytics to dictionary for API responses"""
+        return {
+            'average_score': float(self.average_score) if self.average_score else None,
+            'highest_score': float(self.highest_score) if self.highest_score else None,
+            'lowest_score': float(self.lowest_score) if self.lowest_score else None,
+            'submission_rate': float(self.submission_rate),
+            'on_time_submission_rate': float(self.on_time_submission_rate),
+            'total_students': self.total_students,
+            'graded_students': self.graded_students,
+            'pending_students': self.pending_students,
+            'late_submissions': self.late_submissions,
+            'last_calculated': self.last_calculated.isoformat()
+        }
 
 # Grade Model
 class Grade(models.Model):
@@ -834,12 +1078,6 @@ class Grade(models.Model):
         
         return results
 
-# ... CONTINUE WITH THE REST OF YOUR EXISTING MODELS ...
-# School Configuration, Notification, AuditLog, Announcement, ReportCard, 
-# AcademicTerm, AttendancePeriod, StudentAttendance, AttendanceSummary, 
-# AnalyticsCache, GradeAnalytics, AttendanceAnalytics, TimeSlot, Timetable, 
-# TimetableEntry, etc.
-
 # School Configuration
 class SchoolConfiguration(models.Model):
     GRADING_SYSTEM_CHOICES = [
@@ -914,7 +1152,7 @@ class Notification(models.Model):
                 'type': 'notification_update',
                 'action': 'single_read',
                 'notification_id': self.id,
-                'unread_count': self.recipient.notification_set.filter(is_read=False).count()
+                'unread_count': self.recipient.notifications.filter(is_read=False).count()
             }
         )
 
@@ -1205,7 +1443,7 @@ class AttendanceSummary(models.Model):
             self.attendance_rate = (present_days / self.total_days) * 100
         super().save(*args, **kwargs)
 
-#analytics
+# Analytics
 class AnalyticsCache(models.Model):
     """Cache for pre-computed analytics data"""
     name = models.CharField(max_length=100, unique=True)
@@ -1243,7 +1481,7 @@ class AttendanceAnalytics(models.Model):
     class Meta:
         unique_together = ('class_level', 'date')
 
-#timetable
+# Timetable
 class TimeSlot(models.Model):
     PERIOD_CHOICES = [
         (1, '1st Period (8:00-9:00)'),

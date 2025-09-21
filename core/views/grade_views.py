@@ -1,4 +1,4 @@
-from django.views.generic import TemplateView,  ListView, DetailView, CreateView, UpdateView, DeleteView, View
+from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
 from django.http import JsonResponse, HttpResponse
@@ -13,8 +13,8 @@ from asgiref.sync import async_to_sync
 
 from .base_views import *
 from ..models import Grade, Assignment, StudentAssignment, ReportCard, Student, Subject, ClassAssignment
-from ..forms import GradeForm, GradeEntryForm, ReportCardForm, ReportCardFilterForm
-from ..forms import BulkGradeUploadForm  # Add this import
+from ..forms import GradeEntryForm, ReportCardForm, ReportCardFilterForm, BulkGradeUploadForm
+
 class GradeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Grade
     template_name = 'core/academics/grades/grade_list.html'
@@ -112,24 +112,17 @@ class GradeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         }
         
         return context
+
 def grade_delete(request, pk):
     grade = get_object_or_404(Grade, pk=pk)
     if request.method == 'POST':
         grade.delete()
         messages.success(request, 'Grade record deleted successfully.')
         return redirect('grade_list')
-    
-    # For GET requests, you might want to show a confirmation page
-    # If you want a confirmation page, create it and render it here
-    # return render(request, 'core/grades/confirm_delete.html', {'grade': grade})
-    
-    # Or directly delete on GET (not recommended for production)
-    grade.delete()
-    messages.success(request, 'Grade record deleted successfully.')
-    return redirect('grade_list')
+
 class GradeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Grade
-    form_class = GradeForm
+    form_class = GradeEntryForm  # Changed from GradeForm to GradeEntryForm
     template_name = 'core/academics/grades/grade_form.html'
     
     def get_object(self, queryset=None):

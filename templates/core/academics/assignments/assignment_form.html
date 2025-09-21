@@ -36,6 +36,7 @@
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
         background: white;
         transition: all 0.3s ease;
+        overflow: visible;
     }
 
     .form-card:hover {
@@ -56,18 +57,39 @@
         margin-bottom: 0.5rem;
     }
 
-    .form-control, .form-select {
+    .form-control, .form-select, .select2-selection {
         border: 2px solid #e2e8f0;
         border-radius: 12px;
         padding: 0.75rem 1rem;
         transition: all 0.3s ease;
         font-size: 0.95rem;
+        min-height: 48px;
     }
 
-    .form-control:focus, .form-select:focus {
+    .form-control:focus, .form-select:focus, .select2-selection--single:focus {
         border-color: #667eea;
         box-shadow: 0 0 0 0.3rem rgba(102, 126, 234, 0.2);
         transform: translateY(-2px);
+    }
+
+    .select2-container {
+        z-index: 1060;
+        width: 100% !important;
+    }
+
+    .select2-dropdown {
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .select2-results__option {
+        padding: 0.75rem 1rem;
+    }
+
+    .select2-results__option--highlighted {
+        background-color: #667eea !important;
     }
 
     .form-control.is-valid {
@@ -250,6 +272,12 @@
             height: 35px;
             font-size: 0.9rem;
         }
+        
+        .select2-container--open .select2-dropdown {
+            position: fixed !important;
+            width: 90% !important;
+            left: 5% !important;
+        }
     }
 
     /* Custom scrollbar */
@@ -345,90 +373,88 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
-
                             <!-- Step 1: Basic Information -->
-                            <div class="form-step active" id="step1">
-                                <h5 class="section-header">
-                                    <i class="fas fa-info-circle me-2 text-primary"></i>Basic Information
-                                </h5>
-                                
-                                <div class="row g-4">
-                                    <!-- Title -->
-                                    <div class="col-12">
-                                        <label for="{{ form.title.id_for_label }}" class="form-label">
-                                            Assignment Title <span class="text-danger">*</span>
-                                        </label>
-                                        {{ form.title }}
-                                        <div class="character-count" id="titleCount">0/200 characters</div>
-                                        {% if form.title.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.title.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                        <div class="form-text">Enter a clear and descriptive title for the assignment</div>
-                                    </div>
+<div class="form-step active" id="step1">
+    <h5 class="section-header">
+        <i class="fas fa-info-circle me-2 text-primary"></i>Basic Information
+    </h5>
+    
+    <div class="row g-4">
+        <!-- Title -->
+        <div class="col-12">
+            <label for="{{ form.title.id_for_label }}" class="form-label">
+                Assignment Title <span class="text-danger">*</span>
+            </label>
+            {{ form.title }}
+            <div class="character-count" id="titleCount">0/200 characters</div>
+            {% if form.title.errors %}
+            <div class="invalid-feedback">
+                <i class="fas fa-exclamation-circle me-1"></i>{{ form.title.errors.0 }}
+            </div>
+            {% endif %}
+            <div class="form-text">Enter a clear and descriptive title for the assignment</div>
+        </div>
 
-                                    <!-- Subject and Class -->
-                                    <div class="col-md-6">
-                                        <label for="{{ form.subject.id_for_label }}" class="form-label">
-                                            Subject <span class="text-danger">*</span>
-                                        </label>
-                                        {{ form.subject }}
-                                        {% if form.subject.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.subject.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                    </div>
+        <!-- Subject and Class Level -->
+        <div class="col-md-6">
+            <label for="{{ form.subject.id_for_label }}" class="form-label">
+                Subject <span class="text-danger">*</span>
+            </label>
+            {{ form.subject }}
+            {% if form.subject.errors %}
+            <div class="invalid-feedback">
+                <i class="fas fa-exclamation-circle me-1"></i>{{ form.subject.errors.0 }}
+            </div>
+            {% endif %}
+        </div>
 
-                                    <div class="col-md-6">
-                                        <label for="{{ form.class_assignment.id_for_label }}" class="form-label">
-                                            Class <span class="text-danger">*</span>
-                                        </label>
-                                        {{ form.class_assignment }}
-                                        {% if form.class_assignment.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.class_assignment.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                    </div>
+        <!-- The class_level field -->
+        <div class="col-md-6">
+            <label for="{{ form.class_level.id_for_label }}" class="form-label">
+                Class Level <span class="text-danger">*</span>
+            </label>
+            {{ form.class_level }}
+            {% if form.class_level.errors %}
+            <div class="invalid-feedback">
+                <i class="fas fa-exclamation-circle me-1"></i>{{ form.class_level.errors.0 }}
+            </div>
+            {% endif %}
+        </div>
 
-                                    <!-- Due Date -->
-                                    <div class="col-12">
-                                        <label for="{{ form.due_date.id_for_label }}" class="form-label">
-                                            Due Date & Time <span class="text-danger">*</span>
-                                        </label>
-                                        <div class="input-group">
-                                            {{ form.due_date }}
-                                            <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                                        </div>
-                                        {% if form.due_date.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.due_date.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                        <div class="form-text">Students will not be able to submit after this date</div>
-                                    </div>
-                                </div>
+        <!-- Due Date -->
+        <div class="col-12">
+            <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                Due Date & Time <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+                {{ form.due_date }}
+                <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+            </div>
+            {% if form.due_date.errors %}
+            <div class="invalid-feedback">
+                <i class="fas fa-exclamation-circle me-1"></i>{{ form.due_date.errors.0 }}
+            </div>
+            {% endif %}
+            <div class="form-text">Students will not be able to submit after this date</div>
+        </div>
+    </div>
 
-                                <div class="d-flex justify-content-between mt-5">
-                                    <div></div> <!-- Empty div for spacing -->
-                                    <button type="button" class="btn btn-primary next-step" data-next="2">
-                                        Next <i class="fas fa-arrow-right ms-2"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Step 2: Grading Information -->
-                            <div class="form-step" id="step2">
-                                <h5 class="section-header">
-                                    <i class="fas fa-chart-bar me-2 text-info"></i>Grading Information
-                                </h5>
-                                
-                                <div class="row g-4">
-                                    <div class="col-md-4">
-                                        <label for="{{ form.assignment_type.id_for_label }}" class="form-label">
-                                            Type <span class="text-danger">*</span>
+    <div class="d-flex justify-content-between mt-5">
+        <div></div> <!-- Empty div for spacing -->
+        <button type="button" class="btn btn-primary next-step" data-next="2">
+            Next <i class="fas fa-arrow-right ms-2"></i>
+        </button>
+    </div>
+</div>
+        <!-- Step 2: Grading Information -->
+        <div class="form-step" id="step2">
+            <h5 class="section-header">
+                <i class="fas fa-chart-bar me-2 text-info"></i>Grading Information
+            </h5>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                            <label for="{{ form.assignment_type.id_for_label }}" class="form-label">
+                                    Type <span class="text-danger">*</span>
                                         </label>
                                         {{ form.assignment_type }}
                                         {% if form.assignment_type.errors %}
@@ -507,7 +533,7 @@
                                         <h6>Drop your file here or click to browse</h6>
                                         <p class="text-muted small">Max file size: 10MB</p>
                                         {{ form.attachment }}
-                                        <button type="button" class="btn btn-outline-primary mt-2" onclick="document.getElementById('id_attachment').click()">
+                                        <button type="button" class="btn btn-outline-primary mt-2" id="fileUploadButton">
                                             <i class="fas fa-upload me-2"></i>Select File
                                         </button>
                                     </div>
@@ -568,6 +594,7 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize date picker
@@ -579,12 +606,18 @@ document.addEventListener('DOMContentLoaded', function() {
             minDate: "today",
             time_24hr: true,
             minuteIncrement: 5,
-            placeholder: "Select date and time",
-            onChange: function(selectedDates, dateStr, instance) {
-                validateDueDate(selectedDates[0]);
-            }
+            placeholder: "Select date and time"
         });
     }
+
+    // Initialize Select2 for dropdowns
+    $('select').select2({
+        theme: 'bootstrap4',
+        width: '100%',
+        placeholder: 'Select an option',
+        allowClear: true,
+        dropdownParent: $('.form-card')
+    });
 
     // Multi-step form functionality
     const steps = document.querySelectorAll('.form-step');
@@ -718,17 +751,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // File upload area functionality
+    // Fixed File Upload Functionality
     const fileUploadArea = document.getElementById('fileUploadArea');
     const fileInput = document.getElementById('id_attachment');
+    const fileUploadButton = document.getElementById('fileUploadButton');
 
-    if (fileUploadArea && fileInput) {
-        setupFileUpload(fileUploadArea, fileInput);
-    }
-
-    function setupFileUpload(dropArea, input) {
+    if (fileUploadArea && fileInput && fileUploadButton) {
+        // Prevent default drag behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
+            fileUploadArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
         });
 
         function preventDefaults(e) {
@@ -736,87 +768,108 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
         }
 
+        // Highlight drop area when item is dragged over it
         ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, highlight, false);
+            fileUploadArea.addEventListener(eventName, highlight, false);
         });
 
         ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, unhighlight, false);
+            fileUploadArea.addEventListener(eventName, unhighlight, false);
         });
 
         function highlight() {
-            dropArea.classList.add('dragover');
+            fileUploadArea.classList.add('dragover');
         }
 
         function unhighlight() {
-            dropArea.classList.remove('dragover');
+            fileUploadArea.classList.remove('dragover');
         }
 
-        dropArea.addEventListener('drop', handleDrop, false);
+        // Handle dropped files
+        fileUploadArea.addEventListener('drop', handleDrop, false);
 
         function handleDrop(e) {
             const dt = e.dataTransfer;
             const files = dt.files;
-            input.files = files;
-            updateFilePreview(files[0]);
+            
+            if (files.length > 0) {
+                handleFiles(files[0]);
+            }
         }
 
-        dropArea.addEventListener('click', () => {
-            input.click();
-        });
-
-        input.addEventListener('change', function(e) {
-            if (this.files.length > 0) {
-                updateFilePreview(this.files[0]);
+        // Handle click on drop area
+        fileUploadArea.addEventListener('click', function(e) {
+            if (e.target === fileUploadArea || e.target.classList.contains('fa-cloud-upload-alt')) {
+                fileInput.click();
             }
         });
-    }
 
-    function updateFilePreview(file) {
-        if (file) {
+        // Handle button click
+        fileUploadButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            fileInput.click();
+        });
+
+        // Handle file selection via input
+        fileInput.addEventListener('change', function(e) {
+            if (this.files && this.files.length > 0) {
+                handleFiles(this.files[0]);
+            }
+        });
+
+        function handleFiles(file) {
             if (file.size > 10 * 1024 * 1024) {
                 showToast('Error', 'File size must be less than 10MB', 'error');
                 fileInput.value = '';
+                resetFileUploadArea();
             } else {
-                const fileName = file.name.length > 30 ? file.name.substring(0, 30) + '...' : file.name;
-                fileUploadArea.innerHTML = `
-                    <i class="fas fa-file text-success display-4 mb-3"></i>
-                    <h6 class="text-success">File Selected</h6>
-                    <p class="text-muted small">${fileName} (${formatFileSize(file.size)})</p>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeFile()">
-                        Change File
-                    </button>
-                `;
+                updateFilePreview(file);
             }
         }
-    }
 
-    function changeFile() {
-        fileInput.value = '';
-        fileUploadArea.innerHTML = `
-            <i class="fas fa-cloud-upload-alt display-4 text-muted mb-3"></i>
-            <h6>Drop your file here or click to browse</h6>
-            <p class="text-muted small">Max file size: 10MB</p>
-            <button type="button" class="btn btn-outline-primary mt-2" onclick="document.getElementById('id_attachment').click()">
-                <i class="fas fa-upload me-2"></i>Select File
-            </button>
-        `;
-        setupFileUpload(fileUploadArea, fileInput);
-    }
+        function updateFilePreview(file) {
+            const fileName = file.name.length > 30 ? file.name.substring(0, 30) + '...' : file.name;
+            fileUploadArea.innerHTML = `
+                <i class="fas fa-file text-success display-4 mb-3"></i>
+                <h6 class="text-success">File Selected</h6>
+                <p class="text-muted small">${fileName} (${formatFileSize(file.size)})</p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="changeFileButton">
+                    Change File
+                </button>
+            `;
+            
+            // Add event listener to the new button
+            document.getElementById('changeFileButton').addEventListener('click', function(e) {
+                e.stopPropagation();
+                resetFileUploadArea();
+            });
+        }
 
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
+        function resetFileUploadArea() {
+            fileInput.value = '';
+            fileUploadArea.innerHTML = `
+                <i class="fas fa-cloud-upload-alt display-4 text-muted mb-3"></i>
+                <h6>Drop your file here or click to browse</h6>
+                <p class="text-muted small">Max file size: 10MB</p>
+                <button type="button" class="btn btn-outline-primary mt-2" id="fileUploadButton">
+                    <i class="fas fa-upload me-2"></i>Select File
+                </button>
+            `;
+            
+            // Re-setup event listeners
+            const newButton = document.getElementById('fileUploadButton');
+            newButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                fileInput.click();
+            });
+        }
 
-    function validateDueDate(date) {
-        const now = new Date();
-        if (date < now) {
-            showToast('Warning', 'Due date cannot be in the past', 'warning');
-            dueDateField._flatpickr.setDate(now);
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
     }
 
@@ -852,12 +905,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
     // Add shake animation
     const style = document.createElement('style');
     style.textContent = `
@@ -871,8 +918,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function showToast(title, message, type = 'info') {
-    // Toast implementation would go here
-    console.log(`${title}: ${message} (${type})`);
+    // Create a simple toast notification
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : 'success'} border-0 position-fixed bottom-0 end-0 m-3`;
+    toast.style.zIndex = '1100';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas ${type === 'error' ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-2"></i>
+                <strong>${title}:</strong> ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Remove toast after it's hidden
+    toast.addEventListener('hidden.bs.toast', function() {
+        document.body.removeChild(toast);
+    });
 }
 </script>
 {% endblock %}

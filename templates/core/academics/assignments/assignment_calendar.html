@@ -1,0 +1,577 @@
+<!-- core/academics/assignments/assignment_calendar.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assignment Calendar - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css' rel='stylesheet' />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+}
+
+.calendar-container {
+    background: var(--primary-gradient);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+
+.calendar-header {
+    background: white;
+    border-radius: 15px 15px 0 0;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-card {
+    background: white;
+    border-radius: 0 0 15px 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+#calendar {
+    padding: 1rem;
+    background: white;
+    border-radius: 0 0 15px 15px;
+    min-height: 600px;
+}
+
+.fc-toolbar {
+    padding: 1rem;
+    margin-bottom: 0 !important;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.fc .fc-button {
+    background: var(--primary-gradient);
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+}
+
+.fc .fc-button:hover {
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a42b5 100%);
+}
+
+.fc .fc-button:disabled {
+    background: #6c757d;
+}
+
+.fc-event {
+    border: none;
+    border-radius: 6px;
+    padding: 2px 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.fc-event:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.fc-daygrid-event-dot {
+    display: none;
+}
+
+.calendar-filters {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+
+.filter-btn {
+    background: var(--success-gradient);
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: white;
+    font-weight: 500;
+}
+
+.filter-btn:hover {
+    background: linear-gradient(135deg, #25a25a 0%, #1e874b 100%);
+}
+
+.calendar-stats {
+    background: var(--warning-gradient);
+    color: white;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    border-radius: 0 0 15px 15px;
+}
+
+.view-toggle {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.view-toggle .btn {
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+}
+
+.view-toggle .btn.active {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: #667eea;
+}
+
+.assignment-preview {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    z-index: 1060;
+    max-width: 500px;
+    width: 90%;
+    display: none;
+}
+
+.assignment-preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .calendar-container {
+        padding: 1rem 0;
+    }
+    
+    .calendar-header {
+        padding: 1rem;
+    }
+    
+    #calendar {
+        padding: 0.5rem;
+        min-height: 500px;
+    }
+    
+    .fc-toolbar {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .calendar-filters .row {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="calendar-container">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="calendar-header">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <h2 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Assignment Calendar</h2>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'assignment_list' %}" class="btn btn-primary">
+                                <i class="fas fa-list me-2"></i>List View
+                            </a>
+                            {% if is_teacher or is_admin %}
+                            <a href="{% url 'assignment_create' %}" class="btn btn-success">
+                                <i class="fas fa-plus me-2"></i>New Assignment
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="calendar-card">
+                    <!-- Quick Stats -->
+                    <div class="row calendar-stats">
+                        <div class="col-md-4 stat-item">
+                            <span class="stat-number" id="totalAssignments">0</span>
+                            <span class="stat-label">Total Assignments</span>
+                        </div>
+                        <div class="col-md-4 stat-item">
+                            <span class="stat-number" id="upcomingAssignments">0</span>
+                            <span class="stat-label">Upcoming</span>
+                        </div>
+                        <div class="col-md-4 stat-item">
+                            <span class="stat-number" id="overdueAssignments">0</span>
+                            <span class="stat-label">Overdue</span>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="calendar-filters">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <div class="view-toggle me-3">
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary active" data-view="dayGridMonth">
+                                            <i class="fas fa-calendar-month me-1"></i>Month
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" data-view="timeGridWeek">
+                                            <i class="fas fa-calendar-week me-1"></i>Week
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" data-view="timeGridDay">
+                                            <i class="fas fa-calendar-day me-1"></i>Day
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-outline-secondary" id="todayBtn">
+                                    <i class="fas fa-calendar-day me-2"></i>Today
+                                </button>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button type="button" class="btn filter-btn" id="refreshBtn">
+                                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calendar Container -->
+                    <div id="calendar-container" style="position: relative;">
+                        <div id="calendar"></div>
+                        <div class="loading-overlay" id="loadingOverlay">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                                    <span class="visually-hidden">Loading calendar...</span>
+                                </div>
+                                <p class="mt-3 fw-semibold">Loading assignments...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Preview Modal -->
+<div class="assignment-preview-overlay" id="previewOverlay"></div>
+<div class="assignment-preview" id="assignmentPreview">
+    <div class="card border-0">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0" id="previewTitle">Assignment Details</h5>
+            <button type="button" class="btn-close btn-close-white" id="closePreview"></button>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <strong>Subject:</strong> <span id="previewSubject"></span>
+            </div>
+            <div class="mb-3">
+                <strong>Class:</strong> <span id="previewClass"></span>
+            </div>
+            <div class="mb-3">
+                <strong>Type:</strong> <span id="previewType"></span>
+            </div>
+            <div class="mb-3">
+                <strong>Due:</strong> <span id="previewDue"></span>
+            </div>
+            <div class="text-end">
+                <a href="#" class="btn btn-primary" id="previewLink">View Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js'></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const todayBtn = document.getElementById('todayBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const previewOverlay = document.getElementById('previewOverlay');
+    const assignmentPreview = document.getElementById('assignmentPreview');
+    const closePreview = document.getElementById('closePreview');
+    let calendar;
+
+    // Initialize calendar
+    function initCalendar() {
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            themeSystem: 'bootstrap5',
+            height: 'auto',
+            nowIndicator: true,
+            dayMaxEvents: true,
+            events: function(fetchInfo, successCallback, failureCallback) {
+                showLoading();
+                
+                // Build URL with current filters
+                const url = `{% url 'assignment_calendar_events' %}?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}`;
+                
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        successCallback(data);
+                        updateStats(data);
+                        hideLoading();
+                    })
+                    .catch(error => {
+                        console.error('Error loading events:', error);
+                        showError('Failed to load calendar events. Please try again.');
+                        failureCallback(error);
+                        hideLoading();
+                    });
+            },
+            eventClick: function(info) {
+                info.jsEvent.preventDefault();
+                
+                // Show assignment preview instead of immediate redirect
+                showAssignmentPreview(info.event);
+            },
+            eventDidMount: function(info) {
+                // Add custom styling based on event properties
+                if (info.event.extendedProps.overdue) {
+                    info.el.style.fontWeight = 'bold';
+                }
+                
+                // Add hover effect
+                info.el.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.05)';
+                });
+                
+                info.el.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                });
+            },
+            loading: function(isLoading) {
+                if (isLoading) {
+                    showLoading();
+                } else {
+                    hideLoading();
+                }
+            },
+            datesSet: function(info) {
+                // Update browser title with current view
+                document.title = `Assignments - ${info.view.title} | School Management System`;
+            }
+        });
+
+        calendar.render();
+    }
+
+    // Show/hide loading overlay
+    function showLoading() {
+        loadingOverlay.style.display = 'flex';
+    }
+
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
+    }
+
+    // Show error message
+    function showError(message) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger alert-dismissible fade show m-3';
+        errorDiv.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        calendarEl.parentNode.insertBefore(errorDiv, calendarEl);
+    }
+
+    // Update statistics
+    function updateStats(events) {
+        const now = new Date();
+        const total = events.length;
+        const upcoming = events.filter(event => new Date(event.start) > now).length;
+        const overdue = events.filter(event => new Date(event.start) < now && event.color === 'red').length;
+
+        document.getElementById('totalAssignments').textContent = total;
+        document.getElementById('upcomingAssignments').textContent = upcoming;
+        document.getElementById('overdueAssignments').textContent = overdue;
+    }
+
+    // Show assignment preview
+    function showAssignmentPreview(event) {
+        const previewTitle = document.getElementById('previewTitle');
+        const previewSubject = document.getElementById('previewSubject');
+        const previewClass = document.getElementById('previewClass');
+        const previewType = document.getElementById('previewType');
+        const previewDue = document.getElementById('previewDue');
+        const previewLink = document.getElementById('previewLink');
+        
+        previewTitle.textContent = event.title;
+        previewSubject.textContent = event.extendedProps.subject || 'N/A';
+        previewClass.textContent = event.extendedProps.class_level || 'N/A';
+        previewType.textContent = event.extendedProps.type || 'N/A';
+        
+        const dueDate = new Date(event.start);
+        previewDue.textContent = dueDate.toLocaleString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        previewLink.href = event.url;
+        
+        // Show preview
+        previewOverlay.style.display = 'block';
+        assignmentPreview.style.display = 'block';
+        
+        // Add click outside to close
+        previewOverlay.onclick = closeAssignmentPreview;
+    }
+
+    function closeAssignmentPreview() {
+        previewOverlay.style.display = 'none';
+        assignmentPreview.style.display = 'none';
+    }
+
+    // Event listeners
+    todayBtn.addEventListener('click', function() {
+        calendar.today();
+    });
+
+    refreshBtn.addEventListener('click', function() {
+        calendar.refetchEvents();
+        showToast('Calendar refreshed', 'Assignments have been updated', 'success');
+    });
+
+    closePreview.addEventListener('click', closeAssignmentPreview);
+
+    // View switch buttons
+    document.querySelectorAll('[data-view]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const view = this.getAttribute('data-view');
+            
+            // Update active state
+            document.querySelectorAll('[data-view]').forEach(b => {
+                b.classList.remove('active');
+                b.classList.add('btn-outline-primary');
+            });
+            this.classList.add('active');
+            this.classList.remove('btn-outline-primary');
+            
+            calendar.changeView(view);
+        });
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeAssignmentPreview();
+        }
+        if (e.key === 'r' && e.ctrlKey) {
+            e.preventDefault();
+            calendar.refetchEvents();
+        }
+    });
+
+    // Initialize calendar
+    initCalendar();
+
+    // Handle window resize
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            calendar.updateSize();
+        }, 250);
+    });
+
+    // Toast notification function
+    function showToast(title, message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong>${title}</strong><br>${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+});
+</script>
+{% endblock %}

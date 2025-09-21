@@ -24,7 +24,8 @@ from .views.fee_views import (
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.teacher_views import TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
-from .views.assignment_views import AssignmentListView, AssignmentDetailView, AssignmentCreateView, AssignmentUpdateView, AssignmentDeleteView
+from .views.assignment_views import (AssignmentListView, AssignmentDetailView, AssignmentCreateView, AssignmentUpdateView, AssignmentDeleteView, SubmitAssignmentView,
+AssignmentCalendarView, AssignmentEventJsonView)
 from .views.grade_views import (
     GradeListView, GradeUpdateView, BulkGradeUploadView, GradeEntryView, GradeReportView,
     BestStudentsView, grade_delete, GradeUploadTemplateView
@@ -120,6 +121,10 @@ urlpatterns = [
     path('assignments/<int:pk>/', AssignmentDetailView.as_view(), name='assignment_detail'),
     path('assignments/<int:pk>/update/', AssignmentUpdateView.as_view(), name='assignment_update'),
     path('assignments/<int:pk>/delete/', AssignmentDeleteView.as_view(), name='assignment_delete'),
+    path('assignments/submit/<int:pk>/', SubmitAssignmentView.as_view(), name='submit_assignment'),
+    path('assignments/calendar/', AssignmentCalendarView.as_view(), name='assignment_calendar'),
+    path('assignments/calendar/events/', AssignmentEventJsonView.as_view(), name='assignment_calendar_events'),
+    
     
     # Class Assignment URLs
     path('class-assignments/', ClassAssignmentListView.as_view(), name='class_assignment_list'),

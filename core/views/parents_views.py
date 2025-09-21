@@ -530,23 +530,31 @@ class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         parent = self.request.user.parentguardian
-        children = parent.students.all()  # Fixed: use students (plural)
+        children = parent.students.all()
         
-        # Get children data for the template
+        # Get current academic year and term
+        current_year = timezone.now().year
+        academic_year = f"{current_year}/{current_year + 1}"
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        
+        # Children data with detailed information
         children_data = []
         for child in children:
-            # Get recent grades
-            recent_grades = Grade.objects.filter(
-                student=child
-            ).select_related('subject').order_by('-last_updated')[:3]
+            # Get current term grades
+            current_grades = Grade.objects.filter(
+                student=child,
+                academic_year=academic_year,
+                term=current_term.term if current_term else 1
+            ).select_related('subject')
             
-            # Get attendance summary for current month
+            # Calculate average grade
+            grade_avg = current_grades.aggregate(avg=Avg('total_score'))['avg'] or 0
+            
+            # Get attendance for current month
             current_month = timezone.now().month
-            current_year = timezone.now().year
             attendance_summary = StudentAttendance.objects.filter(
                 student=child,
-                date__month=current_month,
-                date__year=current_year
+                date__month=current_month
             ).aggregate(
                 present=Count('id', filter=Q(status='present')),
                 absent=Count('id', filter=Q(status='absent')),
@@ -555,19 +563,23 @@ class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
             )
             
             # Get fee status
-            fee_status = Fee.objects.filter(
+            fee_summary = Fee.objects.filter(
                 student=child,
-                payment_status__in=['unpaid', 'partial']
+                academic_year=academic_year,
+                term=current_term.term if current_term else 1
             ).aggregate(
-                total_due=Sum('balance'),
-                count=Count('id')
+                total_payable=Sum('amount_payable'),
+                total_paid=Sum('amount_paid'),
+                total_balance=Sum('balance')
             )
             
             children_data.append({
                 'child': child,
-                'recent_grades': recent_grades,
+                'grade_avg': round(grade_avg, 1),
                 'attendance': attendance_summary,
-                'fee_status': fee_status
+                'fee_summary': fee_summary,
+                'current_grades': current_grades.order_by('-total_score')[:3],
+                'attendance_rate': round((attendance_summary['present'] / attendance_summary['total'] * 100) if attendance_summary['total'] > 0 else 0, 1)
             })
         
         # Get upcoming events (next 7 days)
@@ -581,26 +593,37 @@ class ParentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
             Q(target_type='INDIVIDUAL', target_parents=parent)
         ).order_by('-created_at')[:5]
         
-        # Get unread messages
+        # Get unread messages count
         unread_messages = ParentMessage.objects.filter(
             receiver=self.request.user,
             is_read=False
         ).count()
         
+        # Get upcoming events
+        upcoming_events = ParentEvent.objects.filter(
+            Q(is_whole_school=True) | Q(class_level__in=child_classes),
+            start_date__gte=timezone.now(),
+            start_date__lte=next_week
+        ).order_by('start_date')[:5]
+        
+        # Get recent fee payments
+        recent_payments = FeePayment.objects.filter(
+            fee__student__in=children
+        ).select_related('fee', 'fee__student').order_by('-payment_date')[:5]
+        
         context.update({
             'parent': parent,
-            'children_data': children_data,  # Pass the processed data
+            'children_data': children_data,
             'recent_announcements': recent_announcements,
             'unread_messages': unread_messages,
-            'upcoming_events': ParentEvent.objects.filter(
-                Q(is_whole_school=True) | Q(class_level__in=child_classes),
-                start_date__gte=timezone.now(),
-                start_date__lte=next_week
-            ).order_by('start_date')[:5],
+            'upcoming_events': upcoming_events,
+            'recent_payments': recent_payments,
+            'current_academic_year': academic_year,
+            'current_term': current_term,
+            'today': timezone.now().date(),
         })
         
         return context
-
 class ParentAnnouncementListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = ParentAnnouncement
     template_name = 'core/parents/announcement_list.html'

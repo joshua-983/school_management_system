@@ -1,6 +1,6 @@
+# core/signals.py
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from core.models import AuditLog, FeePayment  # Keep your existing imports
 from django.db.models import Sum
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -17,6 +17,9 @@ def log_audit(action, instance, user, request=None):
     Centralized audit logging function with geolocation capabilities
     """
     try:
+        # Import locally to avoid circular imports
+        from core.models import AuditLog
+        
         # Create audit log instance
         audit_log = AuditLog(
             user=user,
@@ -108,6 +111,7 @@ def notify_third_party(user, target_user, action, instance):
 @receiver(post_save)
 def post_save_audit(sender, instance, created, **kwargs):
     """Signal handler for post_save events"""
+    # Skip Django built-in apps to avoid unnecessary logging
     if sender._meta.app_label in ['auth', 'admin', 'sessions', 'contenttypes']:
         return
     
@@ -121,6 +125,7 @@ def post_save_audit(sender, instance, created, **kwargs):
 @receiver(post_delete)
 def post_delete_audit(sender, instance, **kwargs):
     """Signal handler for post_delete events"""
+    # Skip Django built-in apps to avoid unnecessary logging
     if sender._meta.app_label in ['auth', 'admin', 'sessions', 'contenttypes']:
         return
     
@@ -130,19 +135,25 @@ def post_delete_audit(sender, instance, **kwargs):
     if user and user.is_authenticated:
         log_audit('DELETE', instance, user, request)
 
-@receiver(post_save, sender=FeePayment)
+@receiver(post_save, sender='core.FeePayment')
 def update_fee_status(sender, instance, **kwargs):
     """Update fee status when payment is saved"""
-    fee = instance.fee
-    fee.amount_paid = fee.payments.aggregate(Sum('amount'))['amount__sum'] or 0
-    fee.update_payment_status()
+    try:
+        fee = instance.fee
+        fee.amount_paid = fee.payments.aggregate(Sum('amount'))['amount__sum'] or 0
+        fee.update_payment_status()
+    except Exception as e:
+        logger.error(f"Error updating fee status: {str(e)}")
 
-@receiver(post_delete, sender=FeePayment)
+@receiver(post_delete, sender='core.FeePayment')
 def update_fee_status_on_delete(sender, instance, **kwargs):
     """Update fee status when payment is deleted"""
-    fee = instance.fee
-    fee.amount_paid = fee.payments.aggregate(Sum('amount'))['amount__sum'] or 0
-    fee.update_payment_status()
+    try:
+        fee = instance.fee
+        fee.amount_paid = fee.payments.aggregate(Sum('amount'))['amount__sum'] or 0
+        fee.update_payment_status()
+    except Exception as e:
+        logger.error(f"Error updating fee status on delete: {str(e)}")
 
 def get_location(ip_address):
     """Utility function to get location from IP"""
@@ -162,18 +173,118 @@ def get_location(ip_address):
         return None
 
 # Add signal for new message notifications
-@receiver(post_save, sender='core.ParentMessage')  # Use string reference
+@receiver(post_save, sender='core.ParentMessage')
 def notify_parent_message(sender, instance, created, **kwargs):
     if created:
-        # Import Notification locally to avoid circular imports
-        from core.models import Notification
+        try:
+            # Import Notification locally to avoid circular imports
+            from core.models import Notification
+            
+            # Send notification to receiver
+            Notification.objects.create(
+                recipient=instance.receiver,
+                notification_type='MESSAGE',
+                title='New Message',
+                message=f'You have a new message from {instance.sender.get_full_name()}',
+                related_object_id=instance.id,
+                related_content_type='parentmessage'
+            )
+        except Exception as e:
+            logger.error(f"Error creating parent message notification: {str(e)}")
+
+# ASSIGNMENT-RELATED SIGNALS (using string references to avoid circular imports)
+@receiver(post_save, sender='core.Assignment')
+def create_assignment_analytics(sender, instance, created, **kwargs):
+    """
+    Automatically create analytics record when assignment is created
+    """
+    if created:
+        try:
+            # Import locally to avoid circular imports
+            from core.models import AssignmentAnalytics
+            AssignmentAnalytics.objects.create(assignment=instance)
+            logger.info(f"Created analytics for new assignment: {instance.title}")
+        except Exception as e:
+            logger.error(f"Failed to create analytics for assignment {instance.id}: {str(e)}")
+
+@receiver(post_save, sender='core.StudentAssignment')
+def update_assignment_analytics_on_change(sender, instance, **kwargs):
+    """
+    Update analytics when student assignments are created or updated
+    """
+    try:
+        # Import locally to avoid circular imports
+        from core.models import AssignmentAnalytics
         
-        # Send notification to receiver
-        Notification.objects.create(
-            recipient=instance.receiver,
-            notification_type='MESSAGE',
-            title='New Message',
-            message=f'You have a new message from {instance.sender.get_full_name()}',
-            related_object_id=instance.id,
-            related_content_type='parentmessage'
+        # Get or create analytics for the assignment
+        analytics, created = AssignmentAnalytics.objects.get_or_create(
+            assignment=instance.assignment
         )
+        # Recalculate analytics
+        analytics.calculate_analytics()
+        logger.debug(f"Updated analytics for assignment: {instance.assignment.title}")
+    except Exception as e:
+        logger.error(f"Error updating assignment analytics: {str(e)}")
+
+@receiver(post_delete, sender='core.StudentAssignment')
+def update_assignment_analytics_on_delete(sender, instance, **kwargs):
+    """
+    Update analytics when student assignments are deleted
+    """
+    try:
+        if hasattr(instance.assignment, 'analytics'):
+            instance.assignment.analytics.calculate_analytics()
+            logger.debug(f"Updated analytics after deletion for assignment: {instance.assignment.title}")
+    except Exception as e:
+        logger.error(f"Error updating analytics after deletion: {str(e)}")
+
+@receiver(post_save, sender='core.Assignment')
+def audit_assignment_changes(sender, instance, created, **kwargs):
+    """Audit log for assignment changes"""
+    if sender._meta.app_label == 'core':
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+
+@receiver(post_save, sender='core.StudentAssignment')
+def audit_student_assignment_changes(sender, instance, created, **kwargs):
+    """Audit log for student assignment changes"""
+    if sender._meta.app_label == 'core':
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+
+@receiver(post_save, sender='core.Assignment')
+def notify_new_assignment(sender, instance, created, **kwargs):
+    """Send notifications when new assignments are created"""
+    if created:
+        try:
+            from core.models import Notification
+            from django.contrib.auth.models import User
+            
+            # Get all students in the class
+            students = User.objects.filter(
+                student__class_level=instance.class_assignment.class_level,
+                student__is_active=True
+            )
+            
+            for student in students:
+                Notification.objects.create(
+                    recipient=student,
+                    notification_type='ASSIGNMENT',
+                    title='New Assignment',
+                    message=f'New assignment: {instance.title} for {instance.subject.name}',
+                    related_object_id=instance.id,
+                    related_content_type='assignment'
+                )
+                
+            logger.info(f"Created notifications for new assignment: {instance.title}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create assignment notifications: {str(e)}")

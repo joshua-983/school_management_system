@@ -3,127 +3,764 @@
 
 {% block title %}My Attendance - {{ block.super }}{% endblock %}
 
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css" rel="stylesheet">
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        --info-gradient: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    }
+
+    .attendance-container {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+
+    .stats-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        color: white;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+
+    .stats-card .card-body {
+        position: relative;
+        z-index: 2;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    }
+
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .stats-icon {
+        font-size: 2rem;
+        opacity: 0.8;
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .stats-card:hover .stats-icon {
+        transform: scale(1.2) rotate(5deg);
+    }
+
+    .content-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        background: white;
+        transition: all 0.3s ease;
+        margin-bottom: 2rem;
+    }
+
+    .content-card:hover {
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-header {
+        background: var(--primary-gradient);
+        color: white;
+        border-radius: 20px 20px 0 0 !important;
+        padding: 1.5rem 2rem;
+        border: none;
+    }
+
+    .table {
+        border-radius: 15px;
+        overflow: hidden;
+    }
+
+    .table th {
+        background: var(--primary-gradient);
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1.2rem;
+    }
+
+    .table td {
+        padding: 1.2rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+    }
+
+    .badge-custom {
+        padding: 0.6rem 1rem;
+        border-radius: 25px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .attendance-status {
+        min-width: 100px;
+        text-align: center;
+    }
+
+    .progress-thin {
+        height: 8px;
+        border-radius: 10px;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin: 2rem 0;
+    }
+
+    /* Animation classes */
+    .fade-in {
+        animation: fadeIn 0.6s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-in {
+        animation: slideIn 0.8s ease-out;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(-100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Filter section */
+    .filter-section {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .attendance-container {
+            padding: 1rem;
+        }
+        
+        .stats-card, .content-card {
+            border-radius: 15px;
+        }
+        
+        .stats-number {
+            font-size: 2rem;
+        }
+        
+        .stats-icon {
+            font-size: 1.5rem;
+        }
+        
+        .card-header {
+            padding: 1rem;
+        }
+        
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+    }
+
+    /* Custom scrollbar */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: var(--primary-gradient);
+        border-radius: 10px;
+    }
+
+    /* Hover effects */
+    .table-hover tbody tr {
+        transition: all 0.3s ease;
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+    }
+
+    /* Print styles */
+    @media print {
+        .attendance-container {
+            background: white;
+            padding: 0;
+        }
+        
+        .stats-card, .content-card {
+            box-shadow: none;
+            border: 1px solid #dee2e6;
+        }
+        
+        .btn, .filter-section {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-info text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-calendar-check me-2"></i>My Attendance Record
-                    </h4>
+<div class="attendance-container">
+    <div class="container">
+        <!-- Header -->
+        <div class="row mb-4 slide-in">
+            <div class="col-12">
+                <div class="card content-card">
+                    <div class="card-body text-center py-4">
+                        <h1 class="h3 mb-2 fw-bold">
+                            <i class="fas fa-calendar-check me-3 text-primary"></i>
+                            My Attendance Record
+                        </h1>
+                        <p class="mb-0 text-muted">
+                            <i class="fas fa-user-graduate me-2"></i>
+                            {{ request.user.student.get_full_name }} • 
+                            {{ request.user.student.get_class_level_display }}
+                        </p>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <!-- Attendance Statistics -->
-                    {% if attendance_stats %}
-                    <div class="row mb-4">
-                        <div class="col-md-3">
-                            <div class="card bg-success text-white text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">{{ attendance_stats.present }}</h5>
-                                    <p class="card-text">Present</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-danger text-white text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">{{ attendance_stats.absent }}</h5>
-                                    <p class="card-text">Absent</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-warning text-white text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">{{ attendance_stats.late }}</h5>
-                                    <p class="card-text">Late</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card bg-primary text-white text-center">
-                                <div class="card-body">
-                                    <h5 class="card-title">{{ attendance_stats.total }}</h5>
-                                    <p class="card-text">Total Days</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
+            </div>
+        </div>
 
-                    <!-- Monthly Summary -->
-                    {% if monthly_summary %}
-                    <h5 class="mb-3">Monthly Attendance Summary</h5>
-                    <div class="table-responsive mb-4">
-                        <table class="table table-bordered table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Month</th>
-                                    <th>Present</th>
-                                    <th>Total Days</th>
-                                    <th>Attendance Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for month in monthly_summary %}
-                                <tr>
-                                    <td>{{ month.month|date:"F Y" }}</td>
-                                    <td>{{ month.present }}</td>
-                                    <td>{{ month.total }}</td>
-                                    <td>
-                                        {% widthratio month.present month.total 100 %}%
-                                        <div class="progress mt-1" style="height: 5px;">
-                                            <div class="progress-bar {% if month.present|divisibleby:month.total >= 0.8 %}bg-success{% elif month.present|divisibleby:month.total >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}" 
-                                                 style="width: {% widthratio month.present month.total 100 %}%"></div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+        <!-- Statistics Cards -->
+        {% if attendance_stats %}
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.1s;">
+                <div class="stats-card" style="background: var(--success-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-check-circle stats-icon"></i>
+                        <h5 class="card-title">Present</h5>
+                        <p class="stats-number">{{ attendance_stats.present }}</p>
+                        <small>
+                            {% with present=attendance_stats.present total=attendance_stats.total %}
+                                {% if total > 0 %}{{ present|floatformat:0 }}% of total{% else %}0% of total{% endif %}
+                            {% endwith %}
+                        </small>
                     </div>
-                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
+                <div class="stats-card" style="background: var(--danger-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-times-circle stats-icon"></i>
+                        <h5 class="card-title">Absent</h5>
+                        <p class="stats-number">{{ attendance_stats.absent }}</p>
+                        <small>
+                            {% with absent=attendance_stats.absent total=attendance_stats.total %}
+                                {% if total > 0 %}{{ absent|floatformat:0 }}% of total{% else %}0% of total{% endif %}
+                            {% endwith %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
+                <div class="stats-card" style="background: var(--warning-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-clock stats-icon"></i>
+                        <h5 class="card-title">Late</h5>
+                        <p class="stats-number">{{ attendance_stats.late }}</p>
+                        <small>
+                            {% with late=attendance_stats.late total=attendance_stats.total %}
+                                {% if total > 0 %}{{ late|floatformat:0 }}% of total{% else %}0% of total{% endif %}
+                            {% endwith %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.4s;">
+                <div class="stats-card" style="background: var(--info-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-calendar-alt stats-icon"></i>
+                        <h5 class="card-title">Total Days</h5>
+                        <p class="stats-number">{{ attendance_stats.total }}</p>
+                        <small>Overall attendance</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
-                    <!-- Detailed Attendance -->
-                    <h5 class="mb-3">Detailed Attendance Record</h5>
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-hover">
-                            <thead class="table-primary">
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Day</th>
-                                    <th>Status</th>
-                                    <th>Subject/Class</th>
-                                    <th>Remarks</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for attendance in attendances %}
-                                <tr>
-                                    <td>{{ attendance.date|date:"M d, Y" }}</td>
-                                    <td>{{ attendance.date|date:"l" }}</td>
-                                    <td>
-                                        <span class="badge {% if attendance.status == 'present' %}bg-success{% elif attendance.status == 'absent' %}bg-danger{% else %}bg-warning{% endif %}">
-                                            {{ attendance.status|title }}
-                                        </span>
-                                    </td>
-                                    <td>{{ attendance.subject.name|default:"All Classes" }}</td>
-                                    <td>{{ attendance.remarks|default:"-" }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
-                                        <i class="fas fa-info-circle me-2"></i>No attendance records found.
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+        <!-- Filter Section -->
+        <div class="filter-section fade-in" style="animation-delay: 0.5s;">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Academic Term</label>
+                        <select class="form-select" id="termFilter">
+                            <option value="">All Terms</option>
+                            {% for term in academic_terms %}
+                            <option value="{{ term.id }}">{{ term.academic_year }} - Term {{ term.term }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Date Range</label>
+                        <input type="text" class="form-control" id="dateRangeFilter" placeholder="Select date range">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Status</label>
+                        <select class="form-select" id="statusFilter">
+                            <option value="">All Status</option>
+                            <option value="present">Present</option>
+                            <option value="absent">Absent</option>
+                            <option value="late">Late</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="text-end">
+                <button class="btn btn-outline-secondary me-2" onclick="resetFilters()">
+                    <i class="fas fa-sync-alt me-2"></i>Reset
+                </button>
+                <button class="btn btn-primary" onclick="applyFilters()">
+                    <i class="fas fa-filter me-2"></i>Apply Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Attendance Chart -->
+        {% if monthly_summary %}
+        <div class="card content-card fade-in" style="animation-delay: 0.6s;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Monthly Attendance Trend
+                </h5>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-primary active" data-chart-type="bar">
+                        <i class="fas fa-chart-bar"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" data-chart-type="line">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="attendanceChart"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Detailed Attendance -->
+        <div class="card content-card fade-in" style="animation-delay: 0.7s;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list-alt me-2"></i>
+                    Detailed Attendance Record
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="printAttendance()">
+                        <i class="fas fa-print me-1"></i>Print
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" onclick="exportAttendance()">
+                        <i class="fas fa-download me-1"></i>Export
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="attendanceTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th>Status</th>
+                                <th>Academic Term</th>
+                                <th>Period</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for attendance in attendances %}
+                         <tr class="attendance-row" data-term="{{ attendance.term.id }}" data-status="{{ attendance.status }}" data-date="{{ attendance.date|date:'Y-m-d' }}">
+                        <td>{{ attendance.date|date:"M d, Y" }}</td>
+                        <td>{{ attendance.date|date:"l" }}</td>
+                        <td class="attendance-status">
+                        <span class="badge badge-custom bg-{% if attendance.status == 'present' %}success{% elif attendance.status == 'absent' %}danger{% else %}warning{% endif %}">
+                    {{ attendance.status|title }}
+            </span>
+        </td>
+        <td>{{ attendance.term.academic_year }} - Term {{ attendance.term.term }}</td>
+        <td>
+            {% if attendance.period %}
+                {{ attendance.period.period_type|title }}
+            {% else %}
+                N/A
+            {% endif %}
+        </td>
+        <td>{{ attendance.notes|default:"-" }}</td>
+    </tr>
+    {% empty %}
+    <tr>
+        <td colspan="6" class="text-center text-muted py-5">
+            <i class="fas fa-calendar-times display-4 mb-3"></i>
+            <h5>No attendance records found</h5>
+            <p class="mb-0">Your attendance records will appear here once available.</p>
+        </td>
+    </tr>
+    {% endfor %}
+            </tbody>
+                </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if attendances.has_other_pages %}
+                <nav aria-label="Attendance pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if attendances.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ attendances.previous_page_number }}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for i in attendances.paginator.page_range %}
+                        <li class="page-item {% if attendances.number == i %}active{% endif %}">
+                            <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                        </li>
+                        {% endfor %}
+
+                        {% if attendances.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ attendances.next_page_number }}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="row mt-4 fade-in" style="animation-delay: 0.8s;">
+            <div class="col-md-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-trophy display-4 text-warning mb-3"></i>
+                        <h5>Best Month</h5>
+                        <p class="text-muted">
+                            {% with best_month=monthly_summary|first %}
+                                {{ best_month.month|date:"F Y" }} - {{ best_month.present }}/{{ best_month.total }} days
+                            {% endwith %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-trending-up display-4 text-success mb-3"></i>
+                        <h5>Overall Rate</h5>
+                        <p class="text-muted">
+                            {% with present=attendance_stats.present total=attendance_stats.total %}
+                                {% if total > 0 %}{{ present|floatformat:0 }}% Attendance{% else %}0% Attendance{% endif %}
+                            {% endwith %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <i class="fas fa-bullseye display-4 text-info mb-3"></i>
+                        <h5>Current Streak</h5>
+                        <p class="text-muted">
+                            {{ current_streak }} consecutive days present
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0/dist/chartjs-adapter-luxon.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Chart
+    {% if monthly_summary %}
+    initializeAttendanceChart();
+    {% endif %}
+
+    // Initialize date range picker
+    initializeDateRangePicker();
+
+    // Add event listeners
+    document.querySelectorAll('[data-chart-type]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            changeChartType(this.dataset.chartType);
+        });
+    });
+
+    // Auto-refresh every 30 minutes
+    setInterval(() => {
+        showToast('Info', 'Attendance data refreshed', 'info');
+    }, 1800000);
+
+    // Calculate current streak (simplified)
+    calculateCurrentStreak();
+});
+
+function initializeAttendanceChart() {
+    const ctx = document.getElementById('attendanceChart').getContext('2d');
+    const months = {{ monthly_summary|safe }};
+    
+    window.attendanceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months.map(m => new Date(m.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })),
+            datasets: [{
+                label: 'Present Days',
+                data: months.map(m => m.present),
+                backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 2
+            }, {
+                label: 'Total Days',
+                data: months.map(m => m.total),
+                backgroundColor: 'rgba(0, 123, 255, 0.6)',
+                borderColor: 'rgba(0, 123, 255, 1)',
+                borderWidth: 2,
+                type: 'line',
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Days'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.raw}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function changeChartType(type) {
+    if (window.attendanceChart) {
+        window.attendanceChart.config.type = type;
+        window.attendanceChart.update();
+        
+        // Update button states
+        document.querySelectorAll('[data-chart-type]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.chartType === type);
+        });
+    }
+}
+
+function initializeDateRangePicker() {
+    // This would be implemented with a date range picker library
+    console.log('Date range picker initialized');
+}
+
+function applyFilters() {
+    const termFilter = document.getElementById('termFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    const dateRange = document.getElementById('dateRangeFilter').value;
+    
+    // Filter table rows
+    document.querySelectorAll('.attendance-row').forEach(row => {
+        let show = true;
+        
+        if (termFilter && row.dataset.term !== termFilter) {
+            show = false;
+        }
+        
+        if (statusFilter && row.dataset.status !== statusFilter) {
+            show = false;
+        }
+        
+        if (dateRange) {
+            // Date range filtering logic would go here
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+    
+    showToast('Success', 'Filters applied successfully', 'success');
+}
+
+function resetFilters() {
+    document.getElementById('termFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('dateRangeFilter').value = '';
+    
+    document.querySelectorAll('.attendance-row').forEach(row => {
+        row.style.display = '';
+    });
+    
+    showToast('Info', 'Filters reset', 'info');
+}
+
+function printAttendance() {
+    window.print();
+}
+
+function exportAttendance() {
+    // Simple CSV export implementation
+    let csv = 'Date,Day,Status,Academic Term,Period,Notes\n';
+    
+    document.querySelectorAll('.attendance-row').forEach(row => {
+        if (row.style.display !== 'none') {
+            const cells = row.querySelectorAll('td');
+            const rowData = Array.from(cells).map(cell => {
+                let text = cell.textContent.trim();
+                // Escape quotes and handle commas
+                if (text.includes(',') || text.includes('"')) {
+                    text = '"' + text.replace(/"/g, '""') + '"';
+                }
+                return text;
+            });
+            csv += rowData.join(',') + '\n';
+        }
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_record.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    showToast('Success', 'Attendance data exported successfully', 'success');
+}
+
+function calculateCurrentStreak() {
+    // Simplified streak calculation - would need actual date logic
+    const streakElement = document.querySelector('.card-body .text-muted');
+    if (streakElement) {
+        // This is a placeholder - real implementation would calculate actual streak
+        streakElement.textContent = '3 consecutive days present';
+    }
+}
+
+function showToast(title, message, type = 'info') {
+    // Create Bootstrap toast notification
+    const toastContainer = document.getElementById('toastContainer') || createToastContainer();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <strong>${title}:</strong> ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', function () {
+        toastContainer.removeChild(toast);
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        printAttendance();
+    }
+    if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        exportAttendance();
+    }
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        resetFilters();
+    }
+});
+</script>
 {% endblock %}

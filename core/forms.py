@@ -3,7 +3,6 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from datetime import date
 from django.core.validators import RegexValidator
 from decimal import Decimal
 from django.db.models import Q
@@ -13,8 +12,8 @@ from django.apps import apps
 import re
 from .models import (
     ParentMessage, Announcement, ReportCard, Fee, FeeCategory, Student, StudentAttendance, 
-    ClassAssignment, ParentGuardian, FeePayment, Bill, Subject, BillPayment,  # Added comma here
-    Teacher, Grade, StudentAssignment, AcademicTerm, AttendancePeriod, Assignment, TimeSlot,  # Added comma after Grade
+    ClassAssignment, ParentGuardian, FeePayment, Bill, Subject, BillPayment,  
+    Teacher, Grade, StudentAssignment, AcademicTerm, AttendancePeriod, Assignment, TimeSlot,  
     Timetable, TimetableEntry
 )
 from .models import CLASS_LEVEL_CHOICES, TERM_CHOICES
@@ -246,6 +245,7 @@ class FeeCategoryForm(forms.ModelForm):
             return ','.join(unique_levels)
         
         return class_levels
+
 class FeeForm(forms.ModelForm):
     academic_year = forms.CharField(
         help_text="Format: YYYY/YYYY or YYYY-YYYY",
@@ -456,6 +456,7 @@ class FeePaymentForm(forms.ModelForm):
                 )
         
         return cleaned_data
+
 class FeeFilterForm(forms.Form):
     academic_year = forms.CharField(required=False)
     term = forms.ChoiceField(
@@ -608,7 +609,7 @@ class TeacherRegistrationForm(forms.ModelForm):
         if email:
             # Convert to lowercase and validate format
             email = email.lower()
-            if not re.match(r'^[a-z0-9._%+-]+@[a-z00.-]+\.[a-z]{2,}$', email):
+            if not re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email):
                 raise ValidationError("Email must be in valid format with @ symbol.")
             
             # Check if email already exists in the system (only for new teachers)
@@ -689,36 +690,78 @@ class TeacherRegistrationForm(forms.ModelForm):
         
         return teacher
 
+
 class AssignmentForm(forms.ModelForm):
+    class_level = forms.ChoiceField(
+        choices=[('', 'Select Class Level')] + list(CLASS_LEVEL_CHOICES),
+        required=True,
+        label="Class Level"
+    )
+    
     class Meta:
         model = Assignment
         fields = ['title', 'description', 'assignment_type', 'subject',
-                 'class_assignment', 'due_date', 'max_score', 'weight']
+                 'due_date', 'max_score', 'weight', 'attachment']
         widgets = {
             'due_date': forms.DateTimeInput(attrs={
                 'type': 'datetime-local',
                 'class': 'form-control'
             }),
             'description': forms.Textarea(attrs={'rows': 3}),
+            'attachment': forms.FileInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+        print("DEBUG: AssignmentForm initialized")
         
+        # Set initial values
         if self.request and hasattr(self.request.user, 'teacher'):
             teacher = self.request.user.teacher
             self.fields['subject'].queryset = Subject.objects.filter(teachers=teacher)
-            self.fields['class_assignment'].queryset = ClassAssignment.objects.filter(teacher=teacher)
+            
+            # Get available class levels for this teacher
+            teacher_class_levels = ClassAssignment.objects.filter(
+                teacher=teacher
+            ).values_list('class_level', flat=True).distinct()
+            
+            # Filter class level choices to only those the teacher teaches
+            if teacher_class_levels:
+                available_choices = [
+                    (level, name) for level, name in CLASS_LEVEL_CHOICES 
+                    if level in teacher_class_levels
+                ]
+                self.fields['class_level'].choices = [('', 'Select Class Level')] + available_choices
+            else:
+                # If teacher doesn't teach any classes, disable the form
+                self.fields['class_level'].choices = [('', 'No classes assigned to you')]
+                for field_name in self.fields:
+                    self.fields[field_name].disabled = True
 
     def clean(self):
         cleaned_data = super().clean()
         
+        # Validate that required fields are present
+        class_level = cleaned_data.get('class_level')
+        subject = cleaned_data.get('subject')
+        
+        if not class_level:
+            self.add_error('class_level', "Class level is required.")
+        
+        if not subject:
+            self.add_error('subject', "Subject is required.")
+        
         # Validate teacher can only assign to their classes
         if self.request and hasattr(self.request.user, 'teacher'):
-            class_assignment = cleaned_data.get('class_assignment')
-            if class_assignment and class_assignment.teacher != self.request.user.teacher:
-                raise ValidationError("You can only create assignments for your classes")
+            if class_level and subject:
+                # Check if teacher teaches this class level and subject
+                if not ClassAssignment.objects.filter(
+                    teacher=self.request.user.teacher,
+                    class_level=class_level,
+                    subject=subject
+                ).exists():
+                    self.add_error(None, "You can only create assignments for classes and subjects you teach")
         
         return cleaned_data
 
@@ -734,161 +777,72 @@ class AssignmentForm(forms.ModelForm):
             raise ValidationError("Weight must be between 0 and 100")
         return weight
 
-class ClassAssignmentForm(forms.ModelForm):
-    class Meta:
-        model = ClassAssignment
-        fields = ['subject', 'class_level', 'academic_year', 'teacher']
-        
-    def __init__(self, *args, **kwargs):
-        self.request = kwargs.pop('request', None)
-        super().__init__(*args, **kwargs)
-        
-        if self.request and hasattr(self.request.user, 'teacher'):
-            self.fields['subject'].queryset = Subject.objects.filter(
-                teachers=self.request.user.teacher
-            )
-            # For teachers, set the teacher field to their own account and make it read-only
-            self.fields['teacher'].initial = self.request.user.teacher
-            self.fields['teacher'].widget.attrs['readonly'] = True
-            self.fields['teacher'].disabled = True
-        else:
-            # For admins, show all active teachers
-            self.fields['teacher'].queryset = Teacher.objects.filter(is_active=True)
-
-    def clean(self):
-        cleaned_data = super().clean()
-        subject = cleaned_data.get('subject')
-        class_level = cleaned_data.get('class_level')
-        academic_year = cleaned_data.get('academic_year')
-        teacher = cleaned_data.get('teacher')
-        
-        # For teachers, automatically set the teacher to themselves
-        if self.request and hasattr(self.request.user, 'teacher') and not teacher:
-            cleaned_data['teacher'] = self.request.user.teacher
-            teacher = self.request.user.teacher
-        
-        if subject and class_level and academic_year and teacher:
-            # Check if this subject-class combination already exists
-            existing_assignment = ClassAssignment.objects.filter(
-                subject=subject,
-                class_level=class_level,
-                academic_year=academic_year
-            ).exclude(pk=self.instance.pk if self.instance else None)
+    def clean_attachment(self):
+        attachment = self.cleaned_data.get('attachment')
+        if attachment:
+            # Validate file size (max 10MB)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if attachment.size > max_size:
+                raise ValidationError("File size must be less than 10MB")
             
-            if existing_assignment.exists():
-                raise ValidationError(
-                    f"This subject ({subject}) is already assigned to another teacher "
-                    f"in {class_level} for academic year {academic_year}."
+            # Validate file types
+            allowed_types = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'jpeg', 'png']
+            ext = attachment.name.split('.')[-1].lower()
+            if ext not in allowed_types:
+                raise ValidationError(f"File type not allowed. Allowed types: {', '.join(allowed_types)}")
+        
+        return attachment
+    
+    def _post_clean(self):
+        print("DEBUG: _post_clean called")
+        super()._post_clean()
+        
+        class_level = self.cleaned_data.get('class_level')
+        subject = self.cleaned_data.get('subject')
+        print(f"DEBUG: class_level={class_level}, subject={subject}")
+        
+        if class_level and subject:
+            print("DEBUG: Setting class_assignment")
+            # For teachers, find or create the specific class assignment
+            if self.request and hasattr(self.request.user, 'teacher'):
+                print(f"DEBUG: User is teacher: {self.request.user.teacher}")
+                class_assignment, created = ClassAssignment.objects.get_or_create(
+                    class_level=class_level,
+                    teacher=self.request.user.teacher,
+                    subject=subject,
+                    defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
                 )
-        
-        return cleaned_data
-
-class GradeForm(forms.ModelForm):
-    class Meta:
-        model = Grade
-        fields = ['student', 'subject', 'class_assignment', 'academic_year', 'term',
-                 'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks']
-        widgets = {
-            'academic_year': forms.TextInput(attrs={
-                'placeholder': 'YYYY/YYYY',
-                'class': 'form-control'
-            }),
-            'term': forms.Select(attrs={'class': 'form-select'}),
-            'classwork_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '30',
-                'step': '0.1'
-            }),
-            'homework_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '10',
-                'step': '0.1'
-            }),
-            'test_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '10',
-                'step': '0.1'
-            }),
-            'exam_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '50',
-                'step': '0.1'
-            }),
-            'remarks': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 2,
-                'placeholder': 'Optional comments...'
-            }),
-        }
-
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        super().__init__(*args, **kwargs)
-        
-        # Set current academic year as default
-        current_year = timezone.now().year
-        self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
-        
-        # Limit students and subjects based on user role
-        if user and hasattr(user, 'teacher'):
-            teacher = user.teacher
-            # Get students in classes taught by this teacher
-            class_levels = ClassAssignment.objects.filter(
-                teacher=teacher
-            ).values_list('class_level', flat=True)
-            self.fields['student'].queryset = Student.objects.filter(
-                class_level__in=class_levels
-            ).order_by('class_level', 'last_name', 'first_name')
+                self.instance.class_assignment = class_assignment
+                print(f"DEBUG: Class assignment set: {class_assignment}")
+            else:
+                print("DEBUG: User is not a teacher")
+                # For admins or other users, find any matching class assignment
+                class_assignment = ClassAssignment.objects.filter(
+                    class_level=class_level,
+                    subject=subject
+                ).first()
+                
+                if not class_assignment:
+                    print("DEBUG: Creating new class assignment")
+                    class_assignment = ClassAssignment.objects.create(
+                        class_level=class_level,
+                        subject=subject,
+                        academic_year=f"{timezone.now().year}/{timezone.now().year + 1}"
+                    )
+                
+                self.instance.class_assignment = class_assignment
+                print(f"DEBUG: Class assignment set: {class_assignment}")
             
-            # Get subjects and class assignments taught by this teacher
-            self.fields['subject'].queryset = teacher.subjects.all()
-            self.fields['class_assignment'].queryset = ClassAssignment.objects.filter(
-                teacher=teacher
-            )
+            print(f"DEBUG: instance.class_assignment_id = {self.instance.class_assignment_id}")
         else:
-            # Admin sees all students and subjects
-            self.fields['student'].queryset = Student.objects.all().order_by(
-                'class_level', 'last_name', 'first_name'
-            )
-            self.fields['subject'].queryset = Subject.objects.all()
-            self.fields['class_assignment'].queryset = ClassAssignment.objects.all()
-
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data['academic_year']
-        # Validate format (YYYY/YYYY or YYYY-YYYY)
-        if not re.match(r'^\d{4}[/-]\d{4}$', academic_year):
-            raise ValidationError("Academic year must be in YYYY/YYYY or YYYY-YYYY format")
-        
-        # Convert to consistent format
-        academic_year = academic_year.replace('-', '/')
-        
-        # Validate the years are consecutive
-        year1, year2 = map(int, academic_year.split('/'))
-        if year2 != year1 + 1:
-            raise ValidationError("The second year should be exactly one year after the first year")
-        
-        return academic_year
-
-    def clean(self):
-        cleaned_data = super().clean()
-        
-        # Validate class assignment matches student and subject
-        student = cleaned_data.get('student')
-        subject = cleaned_data.get('subject')
-        class_assignment = cleaned_data.get('class_assignment')
-        
-        if student and subject and class_assignment:
-            if (class_assignment.class_level != student.class_level or 
-                class_assignment.subject != subject):
-                raise ValidationError(
-                    "Class assignment doesn't match the selected student and subject"
-                )
-        
-        return cleaned_data
+            print("DEBUG: Missing class_level or subject")
+    
+    def save(self, commit=True):
+        # Let Django handle the saving, we've already set class_assignment in _post_clean
+        print("DEBUG: save() method called")
+        result = super().save(commit=commit)
+        print("DEBUG: save() completed")
+        return result
 
 class GradeEntryForm(forms.ModelForm):
     class Meta:
@@ -1042,6 +996,72 @@ class StudentAssignmentForm(forms.ModelForm):
 
         return cleaned_data
 
+class ClassAssignmentForm(forms.ModelForm):
+    class Meta:
+        model = ClassAssignment
+        fields = ['class_level', 'subject', 'teacher', 'academic_year']
+        widgets = {
+            'academic_year': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'YYYY/YYYY'
+            }),
+            'class_level': forms.Select(attrs={'class': 'form-select'}),
+            'subject': forms.Select(attrs={'class': 'form-select'}),
+            'teacher': forms.Select(attrs={'class': 'form-select'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        
+        # For teachers, limit the teacher field to themselves
+        if self.request and hasattr(self.request.user, 'teacher'):
+            self.fields['teacher'].queryset = Teacher.objects.filter(pk=self.request.user.teacher.pk)
+            self.fields['teacher'].initial = self.request.user.teacher
+            self.fields['teacher'].disabled = True
+        
+        # Set current academic year as default
+        if not self.instance.pk:
+            current_year = timezone.now().year
+            self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if academic_year:
+            # Validate format
+            if not re.match(r'^\d{4}/\d{4}$', academic_year):
+                raise forms.ValidationError("Academic year must be in format YYYY/YYYY")
+            
+            # Validate consecutive years
+            year1, year2 = map(int, academic_year.split('/'))
+            if year2 != year1 + 1:
+                raise forms.ValidationError("The second year should be exactly one year after the first year")
+        
+        return academic_year
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        class_level = cleaned_data.get('class_level')
+        subject = cleaned_data.get('subject')
+        teacher = cleaned_data.get('teacher')
+        academic_year = cleaned_data.get('academic_year')
+        
+        # Check for duplicate assignments
+        if class_level and subject and teacher and academic_year:
+            existing = ClassAssignment.objects.filter(
+                class_level=class_level,
+                subject=subject,
+                teacher=teacher,
+                academic_year=academic_year
+            ).exclude(pk=self.instance.pk if self.instance else None)
+            
+            if existing.exists():
+                raise forms.ValidationError(
+                    "This teacher is already assigned to teach this subject for this class level and academic year"
+                )
+        
+        return cleaned_data
+
 class BulkGradeUploadForm(forms.Form):
     assignment = forms.ModelChoiceField(
         queryset=Assignment.objects.none(),
@@ -1064,6 +1084,14 @@ class BulkGradeUploadForm(forms.Form):
             self.fields['assignment'].queryset = self.get_assignments_queryset(request.user)
 
     def get_assignments_queryset(self, user):
+        # Helper function to check if user is admin
+        def is_admin(user):
+            return user.is_staff or user.is_superuser
+        
+        # Helper function to check if user is teacher
+        def is_teacher(user):
+            return hasattr(user, 'teacher')
+        
         if is_admin(user):
             return Assignment.objects.all()
         elif is_teacher(user):
@@ -1266,7 +1294,7 @@ class BulkAttendanceForm(forms.Form):
         required=True
     )
     class_level = forms.ChoiceField(
-        choices=CLASS_LEVEL_CHOICES,  # ← FIXED
+        choices=CLASS_LEVEL_CHOICES,
         widget=forms.Select(attrs={'class': 'form-select'}),
         required=True
     )
@@ -1306,7 +1334,7 @@ class BulkAttendanceForm(forms.Form):
                 teacher=self.user.teacher
             ).values_list('class_level', flat=True)
             self.fields['class_level'].choices = [
-                (level, name) for level, name in CLASS_LEVEL_CHOICES  # ← FIXED
+                (level, name) for level, name in CLASS_LEVEL_CHOICES
                 if level in class_levels
             ]
 
@@ -1331,7 +1359,7 @@ class AttendanceSummaryFilterForm(forms.Form):
         required=False
     )
     class_level = forms.ChoiceField(
-        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),  # ← FIXED (1st instance)
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
         widget=forms.Select(attrs={'class': 'form-select'}),
         required=False
     )
@@ -1359,7 +1387,7 @@ class AttendanceSummaryFilterForm(forms.Form):
                 teacher=self.user.teacher
             ).values_list('class_level', flat=True)
             self.fields['class_level'].choices = [
-                (level, name) for level, name in CLASS_LEVEL_CHOICES  # ← FIXED (2nd instance)
+                (level, name) for level, name in CLASS_LEVEL_CHOICES
                 if level in class_levels
             ]
             self.fields['student'].queryset = Student.objects.filter(
@@ -1496,12 +1524,12 @@ class TimetableEntryForm(forms.ModelForm):
 
 class TimetableFilterForm(forms.Form):
     class_level = forms.ChoiceField(
-        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),  # ← FIXED
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
         required=False
     )
     academic_year = forms.CharField(required=False)
     term = forms.ChoiceField(
-        choices=[('', 'All Terms')] + list(TERM_CHOICES),  # Also fixed TERM_CHOICES
+        choices=[('', 'All Terms')] + list(TERM_CHOICES),
         required=False
     )
     day_of_week = forms.ChoiceField(
@@ -1509,7 +1537,6 @@ class TimetableFilterForm(forms.Form):
         required=False
     )
 
-#bills
 class BillGenerationForm(forms.Form):
     academic_year = forms.CharField(
         max_length=9,
@@ -1653,7 +1680,6 @@ class BillPaymentForm(forms.ModelForm):
         
         return cleaned_data
 
-
 class StudentProfileForm(forms.ModelForm):
     class Meta:
         model = Student
@@ -1670,8 +1696,6 @@ class StudentProfileForm(forms.ModelForm):
         self.fields['first_name'].disabled = True
         self.fields['last_name'].disabled = True
 
-
-
 class ParentMessageForm(forms.ModelForm):
     class Meta:
         model = ParentMessage
@@ -1683,7 +1707,7 @@ class ParentMessageForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Limit receiver choices to teachers and staff
-        from django.contrib.auth.models import User
+        User = apps.get_model(settings.AUTH_USER_MODEL)
         self.fields['receiver'].queryset = User.objects.filter(
             Q(is_staff=True) | Q(teacher__isnull=False)
-        )
+        ).distinct()

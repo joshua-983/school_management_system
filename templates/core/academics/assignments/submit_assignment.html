@@ -1,0 +1,331 @@
+<!-- core/academics/assignments/submit_assignment.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Submit Assignment - {{ object.assignment.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.submission-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 2rem 0;
+}
+
+.submission-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: none;
+}
+
+.assignment-header {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+    padding: 1.5rem;
+}
+
+.file-upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+.file-upload-area:hover {
+    border-color: #007bff;
+    background: #e3f2fd;
+}
+
+.file-upload-area.dragover {
+    border-color: #28a745;
+    background: #d4edda;
+}
+
+.file-preview {
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.file-preview img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: #6c757d;
+}
+
+.submission-info {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+}
+
+.deadline-warning {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.btn-submit {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+.btn-submit:disabled {
+    background: #6c757d;
+    transform: none;
+    box-shadow: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="submission-container">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card submission-card">
+                    <div class="assignment-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="mb-0"><i class="fas fa-file-upload me-2"></i>Submit Assignment</h2>
+                            <a href="{% url 'assignment_detail' pk=object.assignment.pk %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Assignment
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Assignment Information -->
+                        <div class="submission-info mb-4">
+                            <h4 class="text-primary">{{ object.assignment.title }}</h4>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <p class="mb-1"><strong>Subject:</strong> {{ object.assignment.subject }}</p>
+                                    <p class="mb-1"><strong>Class:</strong> {{ object.assignment.class_assignment.class_level }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-1"><strong>Due Date:</strong> {{ object.assignment.due_date|date:"M d, Y H:i" }}</p>
+                                    <p class="mb-1"><strong>Type:</strong> {{ object.assignment.get_assignment_type_display }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if object.assignment.due_date < now %}
+                        <div class="deadline-warning mb-4">
+                            <h5 class="mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Assignment Deadline Passed</h5>
+                            <p class="mb-0">This assignment was due on {{ object.assignment.due_date|date:"M d, Y H:i" }}. Late submissions may be subject to penalties.</p>
+                        </div>
+                        {% endif %}
+
+                        <!-- Current Submission Status -->
+                        {% if object.status != 'PENDING' %}
+                        <div class="alert alert-info mb-4">
+                            <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Current Submission</h6>
+                            <p class="mb-1"><strong>Status:</strong> {{ object.get_status_display }}</p>
+                            {% if object.submitted_date %}
+                            <p class="mb-1"><strong>Submitted:</strong> {{ object.submitted_date|date:"M d, Y H:i" }}</p>
+                            {% endif %}
+                            {% if object.file %}
+                            <p class="mb-0"><strong>File:</strong> {{ object.file.name|cut:"submissions/" }}</p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Submission Form -->
+                        <form method="post" enctype="multipart/form-data" id="submissionForm">
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- File Upload Area -->
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Upload Your Work</label>
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <div class="upload-icon mb-3">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                    </div>
+                                    <h5 class="mb-2">Drag & Drop your file here</h5>
+                                    <p class="text-muted mb-3">or click to browse</p>
+                                    <input type="file" name="file" id="fileInput" class="d-none" 
+                                           accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.zip">
+                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">
+                                        <i class="fas fa-folder-open me-2"></i>Choose File
+                                    </button>
+                                    <div id="filePreview" class="file-preview mt-3 d-none"></div>
+                                </div>
+                                {% if form.file.errors %}
+                                <div class="text-danger mt-2">
+                                    {% for error in form.file.errors %}
+                                    {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    Supported formats: PDF, Word, Text, Images, ZIP (Max 10MB)
+                                </small>
+                            </div>
+
+                            <!-- Text Submission -->
+                            <div class="mb-4">
+                                <label for="{{ form.submission_text.id_for_label }}" class="form-label fw-bold">
+                                    Or Write Your Submission
+                                </label>
+                                <textarea name="submission_text" id="{{ form.submission_text.id_for_label }}" 
+                                          class="form-control" rows="5" 
+                                          placeholder="Type your assignment submission here...">{{ form.submission_text.value|default:'' }}</textarea>
+                                {% if form.submission_text.errors %}
+                                <div class="text-danger mt-2">
+                                    {% for error in form.submission_text.errors %}
+                                    {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Additional Notes -->
+                            <div class="mb-4">
+                                <label for="notes" class="form-label fw-bold">Additional Notes (Optional)</label>
+                                <textarea name="notes" class="form-control" rows="3" 
+                                          placeholder="Any additional information for your teacher..."></textarea>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="{% url 'assignment_detail' pk=object.assignment.pk %}" class="btn btn-secondary me-md-2">
+                                    <i class="fas fa-times me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-submit" id="submitBtn">
+                                    <i class="fas fa-paper-plane me-2"></i>Submit Assignment
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('fileInput');
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const filePreview = document.getElementById('filePreview');
+    const submitBtn = document.getElementById('submitBtn');
+    const form = document.getElementById('submissionForm');
+
+    // File upload drag and drop functionality
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        fileUploadArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        fileUploadArea.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        fileUploadArea.addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight() {
+        fileUploadArea.classList.add('dragover');
+    }
+
+    function unhighlight() {
+        fileUploadArea.classList.remove('dragover');
+    }
+
+    fileUploadArea.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        handleFiles(files);
+    }
+
+    fileInput.addEventListener('change', function() {
+        handleFiles(this.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            const fileName = file.name;
+            const fileSize = (file.size / 1024 / 1024).toFixed(2); // MB
+            
+            // Validate file size
+            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                alert('File size must be less than 10MB');
+                fileInput.value = '';
+                return;
+            }
+
+            // Validate file type
+            const allowedTypes = ['pdf', 'doc', 'docx', 'txt', 'jpg', 'jpeg', 'png', 'zip'];
+            const fileExtension = fileName.split('.').pop().toLowerCase();
+            if (!allowedTypes.includes(fileExtension)) {
+                alert('Please select a valid file type (PDF, Word, Text, Images, ZIP)');
+                fileInput.value = '';
+                return;
+            }
+
+            // Show file preview
+            filePreview.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>${fileName}</strong> (${fileSize} MB) selected
+                </div>
+            `;
+            filePreview.classList.remove('d-none');
+        }
+    }
+
+    // Form validation
+    form.addEventListener('submit', function(e) {
+        const file = fileInput.files[0];
+        const textArea = document.getElementById('{{ form.submission_text.id_for_label }}');
+        
+        if (!file && textArea.value.trim() === '') {
+            e.preventDefault();
+            alert('Please either upload a file or write your submission text.');
+            return;
+        }
+
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Submitting...';
+    });
+});
+</script>
+{% endblock %}

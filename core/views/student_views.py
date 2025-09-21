@@ -1,19 +1,19 @@
-from django.db.models import Q, Count, Avg, Sum # Add this import
+from django.db.models import Q, Count, Avg, Sum
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.contrib import messages
 from django.urls import reverse_lazy
-from ..forms import StudentProfileForm
+from django.utils import timezone
+from datetime import timedelta
 
 from .base_views import *
-from ..models import Student, ClassAssignment, StudentAttendance
-from ..forms import StudentRegistrationForm
-from ..models import Fee
+from ..forms import StudentProfileForm, StudentRegistrationForm
+from ..models import Student, ClassAssignment, StudentAttendance, Fee, Grade, AcademicTerm, StudentAssignment, Timetable
 
 
-# Add the global CLASS_LEVEL_CHOICES constant (from your previous code)
+
 CLASS_LEVEL_CHOICES = [
     ('P1', 'Primary 1'),
     ('P2', 'Primary 2'),
@@ -176,6 +176,7 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = StudentAttendance
     template_name = 'core/students/student_attendance.html'
     context_object_name = 'attendances'
+    paginate_by = 20  # Add pagination
     
     def test_func(self):
         return is_student(self.request.user)
@@ -183,30 +184,78 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     def get_queryset(self):
         return StudentAttendance.objects.filter(
             student=self.request.user.student
-        ).order_by('-date')
+        ).select_related('term', 'period').order_by('-date')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         attendances = self.get_queryset()
         
         # Calculate attendance statistics
-        context['attendance_stats'] = attendances.aggregate(
+        attendance_stats = attendances.aggregate(
             total=Count('id'),
             present=Count('id', filter=Q(status='present')),
             absent=Count('id', filter=Q(status='absent')),
             late=Count('id', filter=Q(status='late'))
         )
         
+        # Calculate percentages for the stats
+        total = attendance_stats['total'] or 1  # Avoid division by zero
+        attendance_stats['present_percentage'] = round((attendance_stats['present'] / total) * 100)
+        attendance_stats['absent_percentage'] = round((attendance_stats['absent'] / total) * 100)
+        attendance_stats['late_percentage'] = round((attendance_stats['late'] / total) * 100)
+        
+        context['attendance_stats'] = attendance_stats
+        
         # Monthly attendance summary
         from django.db.models.functions import TruncMonth
-        context['monthly_summary'] = attendances.annotate(
+        monthly_summary = attendances.annotate(
             month=TruncMonth('date')
         ).values('month').annotate(
             present=Count('id', filter=Q(status='present')),
             total=Count('id')
         ).order_by('-month')[:6]  # Last 6 months
         
+        # Calculate percentages for monthly summary
+        for month in monthly_summary:
+            month_total = month['total'] or 1
+            month['present_percentage'] = round((month['present'] / month_total) * 100)
+        
+        context['monthly_summary'] = monthly_summary
+        
+        # Add academic terms for the filter dropdown
+        from ..models import AcademicTerm
+        context['academic_terms'] = AcademicTerm.objects.all().order_by('-start_date')
+        
+        # Calculate current streak (simplified implementation)
+        context['current_streak'] = self.calculate_current_streak(attendances)
+        
         return context
+    
+    def calculate_current_streak(self, attendances):
+        """Calculate the current consecutive days present streak"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Get recent attendance records (last 30 days)
+        thirty_days_ago = timezone.now().date() - timedelta(days=30)
+        recent_attendances = attendances.filter(
+            date__gte=thirty_days_ago
+        ).order_by('-date')
+        
+        streak = 0
+        current_date = timezone.now().date()
+        
+        # Check consecutive days from today backwards
+        for i in range(30):  # Check up to 30 days back
+            check_date = current_date - timedelta(days=i)
+            day_attendance = recent_attendances.filter(date=check_date).first()
+            
+            if day_attendance and day_attendance.status == 'present':
+                streak += 1
+            else:
+                break  # Streak broken
+        
+        return streak
 
 class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Fee
@@ -221,26 +270,160 @@ class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        student = self.request.user.student
         fees = self.get_queryset()
         
         # Calculate fee summary
-        context['fee_summary'] = fees.aggregate(
+        fee_summary = fees.aggregate(
             total_payable=Sum('amount_payable'),
             total_paid=Sum('amount_paid'),
             total_balance=Sum('balance')
         )
         
         # Summary by academic year and term
-        context['term_summary'] = fees.values('academic_year', 'term').annotate(
+        term_summary = fees.values('academic_year', 'term').annotate(
             payable=Sum('amount_payable'),
             paid=Sum('amount_paid'),
             balance=Sum('balance')
         ).order_by('-academic_year', '-term')
         
+        context.update({
+            'fee_summary': fee_summary,
+            'term_summary': term_summary,
+            'student': student
+        })
+        
         return context
 
-
-
+class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/students/student_dashboard.html'
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.request.user.student
+        
+        # Get current academic year and term
+        current_year = timezone.now().year
+        academic_year = f"{current_year}/{current_year + 1}"
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        
+        # FIXED: Get assignments for student's class level, not just existing StudentAssignment records
+        # First get all assignments for the student's class
+        class_assignments = Assignment.objects.filter(
+            class_assignment__class_level=student.class_level
+        ).select_related('subject', 'class_assignment').order_by('due_date')
+        
+        # Then get the student's specific assignment records
+        student_assignments = StudentAssignment.objects.filter(
+            student=student
+        ).select_related('assignment', 'assignment__subject').order_by('assignment__due_date')
+        
+        # Create a mapping of assignment IDs to student assignment status
+        assignment_status_map = {sa.assignment_id: sa for sa in student_assignments}
+        
+        # Combine the data for the template
+        assignments_with_status = []
+        for assignment in class_assignments:
+            student_assignment = assignment_status_map.get(assignment.id)
+            assignments_with_status.append({
+                'assignment': assignment,
+                'student_assignment': student_assignment,
+                'status': student_assignment.status if student_assignment else 'PENDING'
+            })
+        
+        # Calculate statistics based on student assignments
+        pending_assignments = student_assignments.filter(
+            status__in=['PENDING', 'LATE']
+        ).count()
+        
+        # Get assignments due soon (within 3 days)
+        due_soon = student_assignments.filter(
+            assignment__due_date__lte=timezone.now() + timedelta(days=3),
+            status__in=['PENDING', 'LATE']
+        ).count()
+        
+        # Calculate average grade for current term
+        current_grades = Grade.objects.filter(
+            student=student,
+            academic_year=academic_year,
+            term=current_term.term if current_term else 1
+        )
+        average_grade = current_grades.aggregate(Avg('total_score'))['total_score__avg'] or 0
+        
+        # Get fee status
+        fees = Fee.objects.filter(student=student)
+        total_payable = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
+        total_paid = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+        total_balance = total_payable - total_paid
+        
+        # Determine fee status
+        if total_balance <= 0:
+            fee_status = 'PAID'
+        elif total_paid > 0:
+            fee_status = 'PARTIAL'
+        else:
+            fee_status = 'UNPAID'
+        
+        # Check for overdue fees
+        overdue_fees = fees.filter(
+            due_date__lt=timezone.now().date(),
+            payment_status__in=['unpaid', 'partial']
+        ).exists()
+        
+        # Get recent grades
+        recent_grades = Grade.objects.filter(
+            student=student
+        ).select_related('subject').order_by('-last_updated')[:5]
+        
+        # Get attendance summary for current month
+        current_month = timezone.now().month
+        current_year_attendance = timezone.now().year
+        
+        attendance_summary = StudentAttendance.objects.filter(
+            student=student,
+            date__month=current_month,
+            date__year=current_year_attendance
+        ).aggregate(
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late')),
+            total=Count('id')
+        )
+        
+        # Get today's timetable
+        today_weekday = timezone.now().weekday()
+        today_timetable = Timetable.objects.filter(
+            class_level=student.class_level,
+            day_of_week=today_weekday,
+            is_active=True
+        ).prefetch_related(
+            'entries__time_slot',
+            'entries__subject',
+            'entries__teacher'
+        ).first()
+        
+        context.update({
+            'student': student,
+            'assignments_with_status': assignments_with_status,
+            'student_assignments': student_assignments,
+            'pending_assignments': pending_assignments,
+            'due_soon': due_soon,
+            'average_grade': round(average_grade, 1),
+            'fee_status': fee_status,
+            'total_balance': total_balance,
+            'overdue_fees': overdue_fees,
+            'recent_grades': recent_grades,
+            'attendance_summary': attendance_summary,
+            'today_timetable': today_timetable,
+            'current_academic_year': academic_year,
+            'current_term': current_term,
+            'today': timezone.now().date(),
+        })
+        
+        return context
 
 
 

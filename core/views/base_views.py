@@ -136,10 +136,27 @@ def student_dashboard(request):
     
     student = request.user.student
     
-    # Get current assignments with their status
+    # FIRST: Get the student's specific assignment records
     student_assignments = StudentAssignment.objects.filter(
         student=student
     ).select_related('assignment', 'assignment__subject').order_by('assignment__due_date')
+    
+    # SECOND: Get assignments for student's class level
+    class_assignments = Assignment.objects.filter(
+        class_assignment__class_level=student.class_level
+    ).select_related('subject', 'class_assignment').order_by('due_date')
+    
+    # THIRD: Create a mapping for status (now student_assignments is defined)
+    assignment_status_map = {sa.assignment_id: sa for sa in student_assignments}
+    assignments_with_status = []
+    
+    for assignment in class_assignments:
+        student_assignment = assignment_status_map.get(assignment.id)
+        assignments_with_status.append({
+            'assignment': assignment,
+            'student_assignment': student_assignment,
+            'status': student_assignment.status if student_assignment else 'PENDING'
+        })
     
     # Calculate statistics for the dashboard
     pending_assignments = student_assignments.filter(
@@ -199,6 +216,7 @@ def student_dashboard(request):
     
     context = {
         'student': student,
+        'assignments_with_status': assignments_with_status,
         'student_assignments': student_assignments,
         'pending_assignments': pending_assignments,
         'due_soon': due_soon,

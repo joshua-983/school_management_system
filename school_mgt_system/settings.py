@@ -113,9 +113,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
-                'core.context_processors.notification_count',  # ADD THIS LINE
-                'core.context_processors.user_permissions',
-                'core.context_processors.parent_status',
+                'core.context_processors.global_context',
+                
                
             ],
         },
