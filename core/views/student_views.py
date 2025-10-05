@@ -295,6 +295,7 @@ class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         return context
 
+
 class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/students/student_dashboard.html'
     
@@ -310,40 +311,52 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         academic_year = f"{current_year}/{current_year + 1}"
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         
-        # FIXED: Get assignments for student's class level, not just existing StudentAssignment records
-        # First get all assignments for the student's class
+        # FIX: Get assignments for student's class level
         class_assignments = Assignment.objects.filter(
             class_assignment__class_level=student.class_level
         ).select_related('subject', 'class_assignment').order_by('due_date')
         
-        # Then get the student's specific assignment records
+        # FIX: Get student's specific assignment records
         student_assignments = StudentAssignment.objects.filter(
             student=student
-        ).select_related('assignment', 'assignment__subject').order_by('assignment__due_date')
+        ).select_related('assignment')
         
-        # Create a mapping of assignment IDs to student assignment status
+        # Create a mapping for quick lookup
         assignment_status_map = {sa.assignment_id: sa for sa in student_assignments}
         
-        # Combine the data for the template
         assignments_with_status = []
         for assignment in class_assignments:
             student_assignment = assignment_status_map.get(assignment.id)
+            
+            # Determine if student can submit
+            can_submit = False
+            if student_assignment:
+                status = student_assignment.status
+                can_submit = status in ['PENDING', 'LATE']
+            else:
+                # If no student assignment exists, create one
+                student_assignment = StudentAssignment.objects.create(
+                    student=student,
+                    assignment=assignment,
+                    status='PENDING'
+                )
+                status = 'PENDING'
+                can_submit = True
+            
             assignments_with_status.append({
                 'assignment': assignment,
                 'student_assignment': student_assignment,
-                'status': student_assignment.status if student_assignment else 'PENDING'
+                'status': status,
+                'can_submit': can_submit,
+                'is_overdue': assignment.due_date < timezone.now(),
+                'due_soon': assignment.due_date <= timezone.now() + timedelta(days=3)
             })
         
-        # Calculate statistics based on student assignments
-        pending_assignments = student_assignments.filter(
-            status__in=['PENDING', 'LATE']
-        ).count()
-        
-        # Get assignments due soon (within 3 days)
-        due_soon = student_assignments.filter(
-            assignment__due_date__lte=timezone.now() + timedelta(days=3),
-            status__in=['PENDING', 'LATE']
-        ).count()
+        # Calculate statistics - FIXED
+        pending_assignments = len([a for a in assignments_with_status if a['status'] in ['PENDING', 'LATE']])
+        submitted_assignments = len([a for a in assignments_with_status if a['status'] in ['SUBMITTED', 'GRADED']])
+        graded_assignments = len([a for a in assignments_with_status if a['status'] == 'GRADED'])
+        due_soon_assignments = len([a for a in assignments_with_status if a['due_soon'] and a['status'] in ['PENDING', 'LATE']])
         
         # Calculate average grade for current term
         current_grades = Grade.objects.filter(
@@ -359,7 +372,6 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         total_paid = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
         total_balance = total_payable - total_paid
         
-        # Determine fee status
         if total_balance <= 0:
             fee_status = 'PAID'
         elif total_paid > 0:
@@ -367,7 +379,6 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         else:
             fee_status = 'UNPAID'
         
-        # Check for overdue fees
         overdue_fees = fees.filter(
             due_date__lt=timezone.now().date(),
             payment_status__in=['unpaid', 'partial']
@@ -408,9 +419,10 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         context.update({
             'student': student,
             'assignments_with_status': assignments_with_status,
-            'student_assignments': student_assignments,
             'pending_assignments': pending_assignments,
-            'due_soon': due_soon,
+            'submitted_assignments': submitted_assignments,
+            'graded_assignments': graded_assignments,
+            'due_soon': due_soon_assignments,
             'average_grade': round(average_grade, 1),
             'fee_status': fee_status,
             'total_balance': total_balance,
@@ -421,26 +433,7 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'current_academic_year': academic_year,
             'current_term': current_term,
             'today': timezone.now().date(),
+            'now': timezone.now(),
         })
         
         return context
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

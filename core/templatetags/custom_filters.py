@@ -23,3 +23,8 @@ def multiply(value, arg):
         return float(value) * float(arg)
     except (ValueError, TypeError):
         return 0
+
+@register.filter
+def in_list(value, arg):
+    """Check if value is in the comma-separated list"""
+    return value in arg.split(',')

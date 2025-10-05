@@ -24,8 +24,15 @@ from .views.fee_views import (
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.teacher_views import TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
-from .views.assignment_views import (AssignmentListView, AssignmentDetailView, AssignmentCreateView, AssignmentUpdateView, AssignmentDeleteView, SubmitAssignmentView,
-AssignmentCalendarView, AssignmentEventJsonView)
+
+# UPDATE THESE IMPORTS - ADD THE MISSING VIEWS
+from .views.assignment_views import (
+    AssignmentListView, AssignmentDetailView, AssignmentCreateView, 
+    AssignmentUpdateView, AssignmentDeleteView, SubmitAssignmentView,
+    AssignmentCalendarView, AssignmentEventJsonView,
+    GradeAssignmentView, BulkGradeAssignmentView, AssignmentAnalyticsView, AssignmentExportView
+)
+
 from .views.grade_views import (
     GradeListView, GradeUpdateView, BulkGradeUploadView, GradeEntryView, GradeReportView,
     BestStudentsView, grade_delete, GradeUploadTemplateView
@@ -97,7 +104,8 @@ urlpatterns = [
     
     # Fee Reports
     path('reports/fees/', FeeReportView.as_view(), name='fee_report'),
-# bill
+    
+    # bill
     path('bills/', BillListView.as_view(), name='bill_list'),
     path('bills/generate/', BillGenerateView.as_view(), name='bill_generate'),
     path('bills/<int:pk>/', BillDetailView.as_view(), name='bill_detail'),
@@ -115,7 +123,7 @@ urlpatterns = [
     path('teachers/<int:pk>/edit/', TeacherUpdateView.as_view(), name='teacher_edit'),
     path('teachers/<int:pk>/delete/', TeacherDeleteView.as_view(), name='teacher_delete'),
    
-    # Assignment URLs
+    # Assignment URLs - UPDATED SECTION
     path('assignments/', AssignmentListView.as_view(), name='assignment_list'),
     path('assignments/create/', AssignmentCreateView.as_view(), name='assignment_create'),
     path('assignments/<int:pk>/', AssignmentDetailView.as_view(), name='assignment_detail'),
@@ -125,7 +133,12 @@ urlpatterns = [
     path('assignments/calendar/', AssignmentCalendarView.as_view(), name='assignment_calendar'),
     path('assignments/calendar/events/', AssignmentEventJsonView.as_view(), name='assignment_calendar_events'),
     
-    
+    # ADD THESE MISSING ASSIGNMENT URL PATTERNS:
+    path('assignments/grade/<int:pk>/', GradeAssignmentView.as_view(), name='grade_assignment'),
+    path('assignments/<int:pk>/analytics/', AssignmentAnalyticsView.as_view(), name='assignment_analytics'),
+    path('assignments/<int:pk>/export/', AssignmentExportView.as_view(), name='assignment_export'),
+    path('assignments/<int:pk>/bulk-grade/', BulkGradeAssignmentView.as_view(), name='bulk_grade_assignment'),
+    path('api/grade-assignment/', GradeAssignmentView.as_view(), name='api_grade_assignment'),
     # Class Assignment URLs
     path('class-assignments/', ClassAssignmentListView.as_view(), name='class_assignment_list'),
     path('class-assignments/create/', ClassAssignmentCreateView.as_view(), name='class_assignment_create'),
@@ -143,6 +156,7 @@ urlpatterns = [
     path('best-students/', BestStudentsView.as_view(), name='best_students'),
     path('grades/delete/<int:pk>/', grade_delete, name='grade_delete'),
     path('api/calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
+    
     # Report Cards
     path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
     path('report-card/create/', CreateReportCardView.as_view(), name='create_report_card'), 
@@ -189,8 +203,6 @@ urlpatterns = [
     path('parent/fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
     path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
     path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
-    
-    
     
     # Analytics Dashboard
     path('analytics/', AnalyticsDashboardView.as_view(), name='analytics_dashboard'),

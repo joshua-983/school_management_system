@@ -136,33 +136,39 @@ def student_dashboard(request):
     
     student = request.user.student
     
-    # FIRST: Get the student's specific assignment records
-    student_assignments = StudentAssignment.objects.filter(
-        student=student
-    ).select_related('assignment', 'assignment__subject').order_by('assignment__due_date')
-    
-    # SECOND: Get assignments for student's class level
+    # FIX: Get assignments for student's class level
     class_assignments = Assignment.objects.filter(
         class_assignment__class_level=student.class_level
     ).select_related('subject', 'class_assignment').order_by('due_date')
     
-    # THIRD: Create a mapping for status (now student_assignments is defined)
+    # FIX: Get student's specific assignment records
+    student_assignments = StudentAssignment.objects.filter(student=student)
+    
+    # Create mapping and assignments with status
     assignment_status_map = {sa.assignment_id: sa for sa in student_assignments}
     assignments_with_status = []
     
     for assignment in class_assignments:
         student_assignment = assignment_status_map.get(assignment.id)
+        if not student_assignment:
+            # Create missing student assignment
+            student_assignment = StudentAssignment.objects.create(
+                student=student,
+                assignment=assignment,
+                status='PENDING'
+            )
+        
         assignments_with_status.append({
             'assignment': assignment,
             'student_assignment': student_assignment,
-            'status': student_assignment.status if student_assignment else 'PENDING'
+            'status': student_assignment.status
         })
     
-    # Calculate statistics for the dashboard
+    # Rest of your existing logic...
     pending_assignments = student_assignments.filter(
         status__in=['PENDING', 'LATE']
     ).count()
-    
+
     # Get assignments due soon (within 3 days)
     due_soon = student_assignments.filter(
         assignment__due_date__lte=timezone.now() + timezone.timedelta(days=3),

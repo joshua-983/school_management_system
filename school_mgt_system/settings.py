@@ -37,9 +37,8 @@ INSTALLED_APPS = [
     'guardian',
     'django_filters',
     'debug_toolbar',
-    
-    
 ]
+
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 

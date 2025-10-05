@@ -707,14 +707,31 @@ class AssignmentForm(forms.ModelForm):
                 'type': 'datetime-local',
                 'class': 'form-control'
             }),
-            'description': forms.Textarea(attrs={'rows': 3}),
+            'description': forms.Textarea(attrs={
+                'rows': 3,
+                'class': 'form-control',
+                'placeholder': 'Describe the assignment requirements...'
+            }),
             'attachment': forms.FileInput(attrs={'class': 'form-control'}),
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter assignment title...'
+            }),
+            'max_score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1',
+                'max': '100'
+            }),
+            'weight': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1',
+                'max': '100'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
-        print("DEBUG: AssignmentForm initialized")
         
         # Set initial values
         if self.request and hasattr(self.request.user, 'teacher'):
@@ -734,7 +751,6 @@ class AssignmentForm(forms.ModelForm):
                 ]
                 self.fields['class_level'].choices = [('', 'Select Class Level')] + available_choices
             else:
-                # If teacher doesn't teach any classes, disable the form
                 self.fields['class_level'].choices = [('', 'No classes assigned to you')]
                 for field_name in self.fields:
                     self.fields[field_name].disabled = True
@@ -742,7 +758,6 @@ class AssignmentForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         
-        # Validate that required fields are present
         class_level = cleaned_data.get('class_level')
         subject = cleaned_data.get('subject')
         
@@ -755,13 +770,14 @@ class AssignmentForm(forms.ModelForm):
         # Validate teacher can only assign to their classes
         if self.request and hasattr(self.request.user, 'teacher'):
             if class_level and subject:
-                # Check if teacher teaches this class level and subject
                 if not ClassAssignment.objects.filter(
                     teacher=self.request.user.teacher,
                     class_level=class_level,
                     subject=subject
                 ).exists():
-                    self.add_error(None, "You can only create assignments for classes and subjects you teach")
+                    self.add_error(None, 
+                        f"You are not assigned to teach {subject.name} for {dict(CLASS_LEVEL_CHOICES).get(class_level)}"
+                    )
         
         return cleaned_data
 
@@ -773,19 +789,17 @@ class AssignmentForm(forms.ModelForm):
 
     def clean_weight(self):
         weight = self.cleaned_data.get('weight')
-        if weight and (weight < 0 or weight > 100):
-            raise ValidationError("Weight must be between 0 and 100")
+        if weight and (weight < 1 or weight > 100):
+            raise ValidationError("Weight must be between 1 and 100")
         return weight
 
     def clean_attachment(self):
         attachment = self.cleaned_data.get('attachment')
         if attachment:
-            # Validate file size (max 10MB)
             max_size = 10 * 1024 * 1024  # 10MB
             if attachment.size > max_size:
                 raise ValidationError("File size must be less than 10MB")
             
-            # Validate file types
             allowed_types = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'jpeg', 'png']
             ext = attachment.name.split('.')[-1].lower()
             if ext not in allowed_types:
@@ -793,56 +807,110 @@ class AssignmentForm(forms.ModelForm):
         
         return attachment
     
-    def _post_clean(self):
-        print("DEBUG: _post_clean called")
-        super()._post_clean()
-        
+    def save(self, commit=True):
+        # Set the class_assignment before saving
         class_level = self.cleaned_data.get('class_level')
         subject = self.cleaned_data.get('subject')
-        print(f"DEBUG: class_level={class_level}, subject={subject}")
         
         if class_level and subject:
-            print("DEBUG: Setting class_assignment")
-            # For teachers, find or create the specific class assignment
-            if self.request and hasattr(self.request.user, 'teacher'):
-                print(f"DEBUG: User is teacher: {self.request.user.teacher}")
-                class_assignment, created = ClassAssignment.objects.get_or_create(
-                    class_level=class_level,
-                    teacher=self.request.user.teacher,
-                    subject=subject,
-                    defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
-                )
-                self.instance.class_assignment = class_assignment
-                print(f"DEBUG: Class assignment set: {class_assignment}")
-            else:
-                print("DEBUG: User is not a teacher")
-                # For admins or other users, find any matching class assignment
-                class_assignment = ClassAssignment.objects.filter(
-                    class_level=class_level,
-                    subject=subject
-                ).first()
-                
-                if not class_assignment:
-                    print("DEBUG: Creating new class assignment")
-                    class_assignment = ClassAssignment.objects.create(
-                        class_level=class_level,
-                        subject=subject,
-                        academic_year=f"{timezone.now().year}/{timezone.now().year + 1}"
-                    )
-                
-                self.instance.class_assignment = class_assignment
-                print(f"DEBUG: Class assignment set: {class_assignment}")
+            # Get or create the class assignment
+            class_assignment, created = ClassAssignment.objects.get_or_create(
+                class_level=class_level,
+                subject=subject,
+                teacher=self.request.user.teacher if hasattr(self.request.user, 'teacher') else None,
+                defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
+            )
+            self.instance.class_assignment = class_assignment
+        
+        return super().save(commit=commit)
+
+class StudentAssignmentSubmissionForm(forms.ModelForm):
+    """Form for students to submit their assignments"""
+    class Meta:
+        model = StudentAssignment
+        fields = ['file', 'feedback']
+        widgets = {
+            'file': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': '.pdf,.doc,.docx,.txt,.zip,.rar,.jpg,.jpeg,.png'
+            }),
+            'feedback': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Add any comments about your submission...'
+            }),
+        }
+        labels = {
+            'file': 'Upload Your Work',
+            'feedback': 'Comments (Optional)'
+        }
+        help_texts = {
+            'file': 'Supported formats: PDF, Word, Excel, Images (Max 10MB)',
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.assignment = kwargs.pop('assignment', None)
+        super().__init__(*args, **kwargs)
+        
+        # Make file required for new submissions
+        if not self.instance.pk or not self.instance.file:
+            self.fields['file'].required = True
+
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        if file:
+            # Validate file size (max 10MB)
+            max_size = 10 * 1024 * 1024  # 10MB
+            if file.size > max_size:
+                raise ValidationError("File size must be less than 10MB")
             
-            print(f"DEBUG: instance.class_assignment_id = {self.instance.class_assignment_id}")
-        else:
-            print("DEBUG: Missing class_level or subject")
-    
+            # Validate file types
+            allowed_types = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'jpeg', 'png']
+            ext = file.name.split('.')[-1].lower()
+            if ext not in allowed_types:
+                raise ValidationError(f"File type not allowed. Allowed types: {', '.join(allowed_types)}")
+        
+        return file
+
     def save(self, commit=True):
-        # Let Django handle the saving, we've already set class_assignment in _post_clean
-        print("DEBUG: save() method called")
-        result = super().save(commit=commit)
-        print("DEBUG: save() completed")
-        return result
+        student_assignment = super().save(commit=False)
+        student_assignment.status = 'SUBMITTED'
+        student_assignment.submitted_date = timezone.now()
+        
+        if commit:
+            student_assignment.save()
+        
+        return student_assignment
+
+class TeacherGradingForm(forms.ModelForm):
+    """Form for teachers to grade student assignments"""
+    class Meta:
+        model = StudentAssignment
+        fields = ['score', 'feedback', 'status']
+        widgets = {
+            'score': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'max': '100'
+            }),
+            'feedback': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Provide feedback to the student...'
+            }),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+        }
+    
+    def clean_score(self):
+        score = self.cleaned_data.get('score')
+        if score is not None:
+            assignment = self.instance.assignment
+            if score < 0 or score > assignment.max_score:
+                raise ValidationError(
+                    f"Score must be between 0 and {assignment.max_score}"
+                )
+        return score
 
 class GradeEntryForm(forms.ModelForm):
     class Meta:

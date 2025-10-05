@@ -1,6 +1,8 @@
+<!-- core/students/student_dashboard.html -->
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
+{% load assignment_filters %}
 
 {% block title %}Student Dashboard - School Management System{% endblock %}
 
@@ -182,6 +184,78 @@
         to { transform: translateX(0); opacity: 1; }
     }
 
+    /* Assignment specific styles */
+    .countdown-timer {
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.4rem 0.8rem;
+        border-radius: 15px;
+        background: rgba(255, 193, 7, 0.2);
+        color: #856404;
+        transition: all 0.3s ease;
+    }
+
+    .countdown-timer.urgent {
+        background: rgba(220, 53, 69, 0.2);
+        color: #dc3545;
+    }
+
+    .countdown-timer.warning {
+        background: rgba(255, 193, 7, 0.4);
+        color: #856404;
+    }
+
+    .grade-progress {
+        height: 20px;
+        border-radius: 10px;
+        background: #e9ecef;
+        overflow: hidden;
+    }
+
+    .grade-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 1s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .assignment-actions .btn {
+        margin: 0.1rem;
+        font-size: 0.8rem;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+
+    .stat-item {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .stat-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #4361ee;
+    }
+
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .dashboard-container {
@@ -209,6 +283,15 @@
         .table-responsive {
             font-size: 0.9rem;
         }
+        
+        .assignment-actions .btn {
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
+        }
     }
 
     /* Custom scrollbar */
@@ -224,37 +307,6 @@
     .table-responsive::-webkit-scrollbar-thumb {
         background: var(--primary-gradient);
         border-radius: 10px;
-    }
-
-    /* Countdown timer for assignments */
-    .countdown-timer {
-        font-size: 0.85rem;
-        font-weight: 600;
-        padding: 0.4rem 0.8rem;
-        border-radius: 15px;
-        background: rgba(255, 193, 7, 0.2);
-        color: #856404;
-    }
-
-    /* Grade progress bars */
-    .grade-progress {
-        height: 20px;
-        border-radius: 10px;
-        background: #e9ecef;
-        overflow: hidden;
-    }
-
-    .grade-progress-bar {
-        height: 100%;
-        border-radius: 10px;
-        transition: width 1s ease-in-out;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.7rem;
-        font-weight: 600;
-        color: white;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
     }
 </style>
 {% endblock %}
@@ -273,8 +325,17 @@
                         </h1>
                         <p class="mb-0 text-muted">
                             <i class="fas fa-calendar-alt me-2"></i>
-                            Today is <span id="current-date"></span>
+                            Today is <span id="current-date"></span> • 
+                            <i class="fas fa-clock me-2"></i>
+                            <span id="current-time"></span>
                         </p>
+                        <div class="mt-2">
+                            <span class="badge bg-primary">{{ student.get_class_level_display }}</span>
+                            <span class="badge bg-secondary">{{ current_academic_year }}</span>
+                            {% if current_term %}
+                            <span class="badge bg-info">Term {{ current_term.term }}</span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -282,263 +343,419 @@
 
         <!-- Statistics Cards -->
         <div class="row mb-4">
-            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.1s;">
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.1s;">
                 <div class="stats-card" style="background: var(--primary-gradient);">
                     <div class="card-body">
                         <i class="fas fa-tasks stats-icon"></i>
                         <h5 class="card-title">Pending Assignments</h5>
                         <p class="stats-number">{{ pending_assignments }}</p>
-                        <a href="{% url 'assignment_list' %}" class="text-white text-decoration-none d-flex align-items-center">
-                            <span>View Assignments</span>
-                            <i class="fas fa-arrow-right ms-2"></i>
-                        </a>
+                        <small class="opacity-80">{{ due_soon }} due soon</small>
                     </div>
                 </div>
             </div>
             
-            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
                 <div class="stats-card" style="background: var(--success-gradient);">
                     <div class="card-body">
                         <i class="fas fa-chart-line stats-icon"></i>
                         <h5 class="card-title">Average Grade</h5>
                         <p class="stats-number">{{ average_grade|default:"N/A" }}</p>
-                        <a href="{% url 'student_grades' %}" class="text-white text-decoration-none d-flex align-items-center">
-                            <span>View Grades</span>
-                            <i class="fas fa-arrow-right ms-2"></i>
-                        </a>
+                        <small class="opacity-80">
+                            {% if recent_grades %}{{ recent_grades|length }} recent grades{% endif %}
+                        </small>
                     </div>
                 </div>
             </div>
             
-            <div class="col-xl-4 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
                 <div class="stats-card" style="background: var(--info-gradient);">
                     <div class="card-body">
                         <i class="fas fa-money-bill-wave stats-icon"></i>
                         <h5 class="card-title">Fee Status</h5>
                         <p class="stats-number">
                             {% if fee_status == 'PAID' %}
-                                <span class="badge bg-success badge-custom">Paid</span>
+                                <span class="badge bg-success">Paid</span>
                             {% elif fee_status == 'PARTIAL' %}
-                                <span class="badge bg-warning badge-custom">Partial</span>
+                                <span class="badge bg-warning">Partial</span>
                             {% else %}
-                                <span class="badge bg-danger badge-custom">Unpaid</span>
+                                <span class="badge bg-danger">Unpaid</span>
                             {% endif %}
                         </p>
-                        <a href="{% url 'student_fees' %}" class="text-white text-decoration-none d-flex align-items-center">
-                            <span>View Details</span>
-                            <i class="fas fa-arrow-right ms-2"></i>
-                        </a>
+                        <small class="opacity-80">
+                            {% if overdue_fees %}Overdue fees{% else %}Up to date{% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.4s;">
+                <div class="stats-card" style="background: var(--warning-gradient);">
+                    <div class="card-body">
+                        <i class="fas fa-calendar-check stats-icon"></i>
+                        <h5 class="card-title">Attendance</h5>
+                        <p class="stats-number">
+                            {% widthratio attendance_summary.present attendance_summary.total 100 %}%
+                        </p>
+                        <small class="opacity-80">
+                            {{ attendance_summary.present }}/{{ attendance_summary.total }} days
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Current Assignments -->
-        <div class="card content-card fade-in" style="animation-delay: 0.4s;">
+        <div class="card content-card fade-in" style="animation-delay: 0.5s;">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-book-open me-2"></i>
-                    Current Assignments
+                    My Assignments
+                    <span class="badge bg-light text-dark ms-2">{{ assignments_with_status|length }} total</span>
                 </h5>
-                <span class="badge bg-primary rounded-pill">{{ assignments_with_status|length }} assignments</span>
+                <div>
+                    <a href="{% url 'assignment_list' %}" class="btn btn-light btn-sm me-2">
+                        <i class="fas fa-list me-1"></i>View All
+                    </a>
+                    <a href="{% url 'assignment_calendar' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-calendar me-1"></i>Calendar
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 {% if assignments_with_status %}
+                <!-- Assignment Statistics -->
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number text-primary">{{ pending_assignments }}</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number text-warning">{{ due_soon }}</div>
+                        <div class="stat-label">Due Soon</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number text-info">{{ submitted_assignments }}</div>
+                        <div class="stat-label">Submitted</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number text-success">{{ graded_assignments }}</div>
+                        <div class="stat-label">Graded</div>
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Title</th>
+                                <th>Assignment</th>
                                 <th>Subject</th>
                                 <th>Due Date</th>
                                 <th>Time Left</th>
                                 <th>Status</th>
-                                <th>Score</th>
-                                <th>Progress</th>
+                                <th>Max Score</th>
+                                <th>Your Score</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for assignment_data in assignments_with_status %}
-                            <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:5 }}0.1s">
+                            <tr class="fade-in {% if assignment_data.is_overdue %}table-warning{% elif assignment_data.due_soon %}table-info{% endif %}" 
+                                style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
                                 <td>
-                                    <strong>{{ assignment_data.assignment.title }}</strong>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-{% if assignment_data.assignment.assignment_type == 'QUIZ' %}question-circle{% elif assignment_data.assignment.assignment_type == 'PROJECT' %}project-diagram{% else %}file-alt{% endif %} text-primary me-2"></i>
+                                        <div>
+                                            <strong class="d-block">{{ assignment_data.assignment.title }}</strong>
+                                            <small class="text-muted">{{ assignment_data.assignment.get_assignment_type_display }}</small>
+                                        </div>
+                                    </div>
+                                    {% if assignment_data.is_overdue %}
+                                    <span class="badge bg-danger mt-1">Overdue</span>
+                                    {% elif assignment_data.due_soon %}
+                                    <span class="badge bg-warning mt-1">Due Soon</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark">{{ assignment_data.assignment.subject.name }}</span>
                                 </td>
                                 <td>
-                                    {{ assignment_data.assignment.due_date|date:"M d, Y" }}
+                                    <small class="d-block">{{ assignment_data.assignment.due_date|date:"M d, Y" }}</small>
+                                    <small class="text-muted">{{ assignment_data.assignment.due_date|date:"H:i" }}</small>
                                 </td>
                                 <td>
-                                    <span class="countdown-timer" data-due-date="{{ assignment_data.assignment.due_date|date:'U' }}">
+                                    <span class="countdown-timer {% if assignment_data.is_overdue %}urgent{% elif assignment_data.due_soon %}warning{% endif %}" 
+                                          data-due-date="{{ assignment_data.assignment.due_date|date:'U' }}"
+                                          data-assignment-id="{{ assignment_data.assignment.id }}">
                                         <i class="fas fa-clock me-1"></i>
-                                        <span class="countdown-text"></span>
+                                        <span class="countdown-text">Loading...</span>
                                     </span>
                                 </td>
                                 <td class="assignment-status">
-                                    <span class="badge badge-custom bg-{% if assignment_data.status == 'SUBMITTED' %}success{% elif assignment_data.status == 'LATE' %}warning{% elif assignment_data.status == 'GRADED' %}info{% else %}secondary{% endif %}">
-                                        {{ assignment_data.status }}
-                                    </span>
+                                    {% if assignment_data.status == 'GRADED' %}
+                                        <span class="badge badge-custom bg-success">
+                                            <i class="fas fa-check me-1"></i>Graded
+                                        </span>
+                                    {% elif assignment_data.status == 'SUBMITTED' %}
+                                        <span class="badge badge-custom bg-info">
+                                            <i class="fas fa-paper-plane me-1"></i>Submitted
+                                        </span>
+                                    {% elif assignment_data.status == 'LATE' %}
+                                        <span class="badge badge-custom bg-warning">
+                                            <i class="fas fa-clock me-1"></i>Late
+                                        </span>
+                                    {% else %}
+                                        <span class="badge badge-custom bg-secondary">
+                                            <i class="fas fa-clock me-1"></i>Pending
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td>
-                                    {% if assignment_data.student_assignment and assignment_data.student_assignment.score is not None %}
-                                        <strong>{{ assignment_data.student_assignment.score }}</strong>/{{ assignment_data.assignment.max_score }}
+                                    <strong>{{ assignment_data.assignment.max_score }}</strong>
+                                    <small class="text-muted d-block">points</small>
+                                </td>
+                                <td>
+                                    {% if assignment_data.student_assignment.score is not None %}
+                                        <strong class="text-success">{{ assignment_data.student_assignment.score }}</strong>
+                                        <div class="progress mt-1" style="height: 6px;">
+                                            <div class="progress-bar bg-success" 
+                                                 style="width: {% widthratio assignment_data.student_assignment.score assignment_data.assignment.max_score 100 %}%">
+                                            </div>
+                                        </div>
                                     {% else %}
                                         <span class="text-muted">-</span>
                                     {% endif %}
                                 </td>
-                                <td style="width: 120px;">
-                                    {% if assignment_data.student_assignment and assignment_data.student_assignment.score is not None %}
-                                    <div class="grade-progress">
-                                        <div class="grade-progress-bar bg-{% if assignment_data.student_assignment.score >= assignment_data.assignment.max_score|multiply:0.8 %}success{% elif assignment_data.student_assignment.score >= assignment_data.assignment.max_score|multiply:0.6 %}warning{% else %}danger{% endif %}" 
-                                             style="width: {% widthratio assignment_data.student_assignment.score assignment_data.assignment.max_score 100 %}%">
-                                            {% widthratio assignment_data.student_assignment.score assignment_data.assignment.max_score 100 %}%
-                                        </div>
-                                    </div>
-                                    {% else %}
-                                    <div class="progress">
-                                        <div class="progress-bar bg-secondary" style="width: 0%">0%</div>
-                                    </div>
-                                    {% endif %}
-                                </td>
                                 <td>
-                                    {% if assignment_data.student_assignment %}
-                                        <a href="{% url 'assignment_detail' assignment_data.assignment.pk %}" class="btn btn-sm btn-primary btn-action">
-                                            <i class="fas fa-eye me-1"></i> View
+                                    <div class="assignment-actions">
+                                        <!-- View Details -->
+                                        <a href="{% url 'assignment_detail' assignment_data.assignment.pk %}" 
+                                           class="btn btn-sm btn-outline-primary mb-1" 
+                                           title="View Assignment Details">
+                                            <i class="fas fa-eye"></i>
                                         </a>
-                                    {% else %}
-                                        <span class="text-muted">Not assigned</span>
+                                        
+                                        <!-- Submit/Resubmit -->
+                                        {% if assignment_data.can_submit %}
+                                        <a href="{% url 'submit_assignment' assignment_data.student_assignment.pk %}" 
+                                           class="btn btn-sm {% if assignment_data.status == 'PENDING' %}btn-success{% else %}btn-warning{% endif %} mb-1"
+                                           title="{% if assignment_data.status == 'PENDING' %}Submit Assignment{% else %}Resubmit Assignment{% endif %}">
+                                            <i class="fas fa-{% if assignment_data.status == 'PENDING' %}paper-plane{% else %}redo{% endif %}"></i>
+                                        </a>
+                                        {% endif %}
+                                        
+                                        <!-- View Submission -->
+                                        {% if assignment_data.status == 'SUBMITTED' or assignment_data.status == 'GRADED' or assignment_data.status == 'LATE' %}
+                                        <a href="{% url 'submit_assignment' assignment_data.student_assignment.pk %}" 
+                                           class="btn btn-sm btn-outline-info mb-1"
+                                           title="View Submission">
+                                            <i class="fas fa-file-alt"></i>
+                                        </a>
+                                        {% endif %}
+                                        </div>
+                                    
+                                    {% if assignment_data.student_assignment.submitted_date %}
+                                    <small class="text-muted d-block mt-1">
+                                        Submitted: {{ assignment_data.student_assignment.submitted_date|date:"M d" }}
+                                    </small>
+                                    {% endif %}
+                                    
+                                    {% if assignment_data.student_assignment.feedback %}
+                                    <small class="text-success d-block mt-1" title="Teacher Feedback">
+                                        <i class="fas fa-comment"></i> Feedback
+                                    </small>
                                     {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <div>
+                        <a href="{% url 'assignment_list' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-2"></i>View All Assignments
+                        </a>
+                        <a href="{% url 'assignment_calendar' %}" class="btn btn-outline-info ms-2">
+                            <i class="fas fa-calendar me-2"></i>Assignment Calendar
+                        </a>
+                    </div>
+                    <div class="text-muted">
+                        Showing {{ assignments_with_status|length }} assignments
+                    </div>
                 </div>
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-book-open display-4 text-muted mb-3"></i>
-                    <h5 class="text-muted">No current assignments</h5>
-                    <p class="text-muted">You're all caught up with your assignments!</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Recent Grades -->
-        <div class="card content-card fade-in" style="animation-delay: 0.5s;">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-graduation-cap me-2"></i>
-                    Recent Grades
-                </h5>
-                <span class="badge bg-primary rounded-pill">{{ recent_grades|length }} grades</span>
-            </div>
-            <div class="card-body">
-                {% if recent_grades %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Assignment</th>
-                                <th>Score</th>
-                                <th>Grade</th>
-                                <th>Date</th>
-                                <th>Performance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for grade in recent_grades %}
-                            <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
-                                <td>
-                                    <strong>{{ grade.subject.name }}</strong>
-                                </td>
-                                <td>
-                                    {% if grade.assignment %}
-                                        {{ grade.assignment.title|truncatewords:3 }}
-                                    {% else %}
-                                        <span class="text-muted">Term Grade</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <strong>{{ grade.total_score }}</strong>/100
-                                </td>
-                                <td>
-                                    <span class="grade-badge bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}info{% elif grade.total_score >= 50 %}warning{% else %}danger{% endif %}">
-                                        {% if grade.total_score >= 90 %}A+
-                                        {% elif grade.total_score >= 80 %}A
-                                        {% elif grade.total_score >= 70 %}B+
-                                        {% elif grade.total_score >= 60 %}B
-                                        {% elif grade.total_score >= 50 %}C+
-                                        {% elif grade.total_score >= 40 %}C
-                                        {% elif grade.total_score >= 30 %}D
-                                        {% else %}F{% endif %}
-                                    </span>
-                                </td>
-                                <td>
-                                    {{ grade.last_updated|date:"M d, Y" }}
-                                </td>
-                                <td style="width: 120px;">
-                                    <div class="grade-progress">
-                                        <div class="grade-progress-bar bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}warning{% else %}danger{% endif %}" 
-                                             style="width: {{ grade.total_score }}%">
-                                            {{ grade.total_score }}%
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-end mt-4">
-                    <a href="{% url 'student_grades' %}" class="btn btn-primary btn-action">
-                        <i class="fas fa-list me-2"></i> View All Grades
+                    <h5 class="text-muted">No assignments found</h5>
+                    <p class="text-muted">You don't have any assignments at the moment.</p>
+                    <a href="{% url 'assignment_list' %}" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Browse All Assignments
                     </a>
                 </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-graduation-cap display-4 text-muted mb-3"></i>
-                    <h5 class="text-muted">No recent grades</h5>
-                    <p class="text-muted">Your grades will appear here once available</p>
-                </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="row mt-4 fade-in" style="animation-delay: 0.6s;">
-            <div class="col-md-4 mb-3">
-                <div class="card content-card text-center h-100">
+        <!-- Recent Grades & Quick Actions -->
+        <div class="row">
+            <!-- Recent Grades -->
+            <div class="col-lg-8">
+                <div class="card content-card fade-in" style="animation-delay: 0.6s;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-graduation-cap me-2"></i>
+                            Recent Grades
+                        </h5>
+                        <span class="badge bg-primary rounded-pill">{{ recent_grades|length }} grades</span>
+                    </div>
                     <div class="card-body">
-                        <i class="fas fa-calendar-check display-4 text-primary mb-3"></i>
-                        <h5>View Attendance</h5>
-                        <p class="text-muted">Check your attendance record</p>
-                        <a href="{% url 'student_attendance' %}" class="btn btn-outline-primary btn-action">View Attendance</a>
+                        {% if recent_grades %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Assignment</th>
+                                        <th>Score</th>
+                                        <th>Grade</th>
+                                        <th>Date</th>
+                                        <th>Performance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for grade in recent_grades %}
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:7 }}0.1s">
+                                        <td>
+                                            <strong>{{ grade.subject.name }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if grade.assignment %}
+                                                {{ grade.assignment.title|truncatewords:3 }}
+                                            {% else %}
+                                                <span class="text-muted">Term Grade</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <strong>{{ grade.total_score }}</strong>/100
+                                        </td>
+                                        <td>
+                                            <span class="grade-badge bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}info{% elif grade.total_score >= 50 %}warning{% else %}danger{% endif %}">
+                                                {% if grade.total_score >= 90 %}A+
+                                                {% elif grade.total_score >= 80 %}A
+                                                {% elif grade.total_score >= 70 %}B+
+                                                {% elif grade.total_score >= 60 %}B
+                                                {% elif grade.total_score >= 50 %}C+
+                                                {% elif grade.total_score >= 40 %}C
+                                                {% elif grade.total_score >= 30 %}D
+                                                {% else %}F{% endif %}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {{ grade.last_updated|date:"M d, Y" }}
+                                        </td>
+                                        <td style="width: 120px;">
+                                            <div class="grade-progress">
+                                                <div class="grade-progress-bar bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}warning{% else %}danger{% endif %}" 
+                                                     style="width: {{ grade.total_score }}%">
+                                                    {{ grade.total_score }}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <a href="{% url 'student_grades' %}" class="btn btn-primary btn-action">
+                                <i class="fas fa-list me-2"></i> View All Grades
+                            </a>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-graduation-cap display-4 text-muted mb-3"></i>
+                            <h5 class="text-muted">No recent grades</h5>
+                            <p class="text-muted">Your grades will appear here once available</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-3">
-                <div class="card content-card text-center h-100">
+
+            <!-- Quick Actions -->
+            <div class="col-lg-4">
+                <div class="card content-card fade-in" style="animation-delay: 0.7s;">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bolt me-2"></i>
+                            Quick Actions
+                        </h5>
+                    </div>
                     <div class="card-body">
-                        <i class="fas fa-money-bill-wave display-4 text-success mb-3"></i>
-                        <h5>Fee Payments</h5>
-                        <p class="text-muted">View and manage fees</p>
-                        <a href="{% url 'student_fees' %}" class="btn btn-outline-success btn-action">View Fees</a>
+                        <div class="d-grid gap-3">
+                            <a href="{% url 'student_attendance' %}" class="btn btn-outline-primary btn-action text-start">
+                                <i class="fas fa-calendar-check me-3"></i>
+                                <div>
+                                    <strong>View Attendance</strong>
+                                    <small class="d-block text-muted">Check your attendance record</small>
+                                </div>
+                            </a>
+                            
+                            <a href="{% url 'student_fees' %}" class="btn btn-outline-success btn-action text-start">
+                                <i class="fas fa-money-bill-wave me-3"></i>
+                                <div>
+                                    <strong>Fee Payments</strong>
+                                    <small class="d-block text-muted">View and manage fees</small>
+                                </div>
+                            </a>
+                            
+                            <a href="{% url 'student_profile' %}" class="btn btn-outline-info btn-action text-start">
+                                <i class="fas fa-user-cog me-3"></i>
+                                <div>
+                                    <strong>Profile Settings</strong>
+                                    <small class="d-block text-muted">Manage your profile</small>
+                                </div>
+                            </a>
+
+                            {% if today_timetable %}
+                            <a href="#" class="btn btn-outline-warning btn-action text-start">
+                                <i class="fas fa-clock me-3"></i>
+                                <div>
+                                    <strong>Today's Schedule</strong>
+                                    <small class="d-block text-muted">View today's timetable</small>
+                                </div>
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="card content-card text-center h-100">
+
+                <!-- Today's Timetable -->
+                {% if today_timetable %}
+                <div class="card content-card fade-in mt-4" style="animation-delay: 0.8s;">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i>
+                            Today's Schedule
+                        </h5>
+                    </div>
                     <div class="card-body">
-                        <i class="fas fa-user-cog display-4 text-info mb-3"></i>
-                        <h5>Profile Settings</h5>
-                        <p class="text-muted">Manage your profile</p>
-                        <a href="{% url 'student_profile' %}" class="btn btn-outline-info btn-action">Profile Settings</a>
+                        {% for entry in today_timetable.entries.all %}
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="flex-shrink-0">
+                                <span class="badge bg-primary">{{ entry.time_slot.start_time|time:"H:i" }}</span>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <strong>{{ entry.subject.name }}</strong>
+                                <small class="d-block text-muted">{{ entry.teacher.get_full_name }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -548,51 +765,72 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Update current date
-    function updateCurrentDate() {
+    // Update current date and time
+    function updateDateTime() {
         const now = new Date();
-        const options = { 
+        const dateOptions = { 
             weekday: 'long', 
             year: 'numeric', 
             month: 'long', 
             day: 'numeric' 
         };
-        document.getElementById('current-date').textContent = now.toLocaleDateString('en-US', options);
+        const timeOptions = {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        };
+        
+        document.getElementById('current-date').textContent = now.toLocaleDateString('en-US', dateOptions);
+        document.getElementById('current-time').textContent = now.toLocaleTimeString('en-US', timeOptions);
     }
-    updateCurrentDate();
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
 
-    // Countdown timers for assignments
+    // Enhanced countdown timers with urgency levels
     function updateCountdowns() {
         const countdownElements = document.querySelectorAll('.countdown-timer');
+        const now = new Date();
         
         countdownElements.forEach(element => {
-            const dueDate = new Date(element.getAttribute('data-due-date') * 1000);
-            const now = new Date();
+            const dueDate = new Date(parseInt(element.getAttribute('data-due-date')) * 1000);
             const distance = dueDate - now;
+            
+            // Remove all urgency classes
+            element.classList.remove('urgent', 'warning');
             
             if (distance < 0) {
                 element.querySelector('.countdown-text').textContent = 'Expired';
-                element.style.background = 'rgba(220, 53, 69, 0.2)';
-                element.style.color = '#dc3545';
+                element.classList.add('urgent');
+                element.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Expired';
             } else {
                 const days = Math.floor(distance / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 
+                let countdownText = '';
                 if (days > 0) {
-                    element.querySelector('.countdown-text').textContent = `${days}d ${hours}h`;
+                    countdownText = `${days}d ${hours}h`;
+                    if (days <= 1) {
+                        element.classList.add('urgent');
+                    } else if (days <= 3) {
+                        element.classList.add('warning');
+                    }
                 } else if (hours > 0) {
-                    element.querySelector('.countdown-text').textContent = `${hours}h left`;
+                    countdownText = `${hours}h ${minutes}m`;
+                    element.classList.add('urgent');
                 } else {
-                    const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-                    element.querySelector('.countdown-text').textContent = `${minutes}m left`;
+                    countdownText = `${minutes}m`;
+                    element.classList.add('urgent');
                 }
+                
+                element.querySelector('.countdown-text').textContent = countdownText;
             }
         });
     }
 
     // Initial update and set interval
     updateCountdowns();
-    setInterval(updateCountdowns, 60000); // Update every minute
+    setInterval(updateCountdowns, 30000); // Update every 30 seconds
 
     // Animate progress bars
     const progressBars = document.querySelectorAll('.progress-bar, .grade-progress-bar');
@@ -604,43 +842,120 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     });
 
-    // Add hover effects to table rows
-    const tableRows = document.querySelectorAll('tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.zIndex = '10';
-        });
-        
-        row.addEventListener('mouseleave', function() {
-            this.style.zIndex = '1';
+    // Add loading states to action buttons
+    document.querySelectorAll('.assignment-actions a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            const originalHTML = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            this.style.pointerEvents = 'none';
+            
+            // Restore after 2 seconds or when page navigates
+            setTimeout(() => {
+                this.innerHTML = originalHTML;
+                this.style.pointerEvents = 'auto';
+            }, 2000);
         });
     });
 
     // Auto-refresh dashboard every 5 minutes
     setInterval(() => {
-        showToast('Info', 'Dashboard refreshed', 'info');
+        // Visual feedback for refresh
+        const cards = document.querySelectorAll('.content-card');
+        cards.forEach(card => {
+            card.style.transform = 'scale(1.01)';
+            setTimeout(() => {
+                card.style.transform = 'scale(1)';
+            }, 300);
+        });
+        
+        showToast('Info', 'Dashboard updated', 'info');
     }, 300000); // 5 minutes
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+R to refresh
+        if (e.ctrlKey && e.key === 'r') {
+            e.preventDefault();
+            window.location.reload();
+        }
+        // Alt+A for assignments
+        if (e.altKey && e.key === 'a') {
+            e.preventDefault();
+            window.location.href = "{% url 'assignment_list' %}";
+        }
+        // Alt+G for grades
+        if (e.altKey && e.key === 'g') {
+            e.preventDefault();
+            window.location.href = "{% url 'student_grades' %}";
+        }
+        // Alt+S for first submit button
+        if (e.altKey && e.key === 's') {
+            e.preventDefault();
+            const firstSubmitBtn = document.querySelector('.btn-success');
+            if (firstSubmitBtn) {
+                firstSubmitBtn.focus();
+                firstSubmitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    });
+
+    // Add hover effects to table rows
+    const tableRows = document.querySelectorAll('tbody tr');
+    tableRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateX(5px)';
+            this.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateX(0)';
+            this.style.boxShadow = 'none';
+        });
+    });
 });
 
+// Toast notification function
 function showToast(title, message, type = 'info') {
-    // Toast implementation would go here
-    console.log(`${title}: ${message} (${type})`);
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} border-0`;
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="fas ${type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} me-2"></i>
+                <strong>${title}:</strong> ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, {
+        autohide: true,
+        delay: 3000
+    });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
 }
 
-// Keyboard shortcuts
-document.addEventListener('keydown', function(e) {
-    if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        window.location.reload();
-    }
-    if (e.altKey && e.key === 'a') {
-        e.preventDefault();
-        window.location.href = "{% url 'assignment_list' %}";
-    }
-    if (e.altKey && e.key === 'g') {
-        e.preventDefault();
-        window.location.href = "{% url 'student_grades' %}";
-    }
-});
+// Utility function for smooth scrolling
+function smoothScrollTo(element) {
+    element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+    });
+}
 </script>
 {% endblock %}

@@ -17,6 +17,7 @@ import logging
 from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, Student, CLASS_LEVEL_CHOICES, AssignmentAnalytics
 from .base_views import is_admin, is_teacher, is_student
 from ..forms import AssignmentForm, StudentAssignmentForm
+from core.forms import StudentAssignmentSubmissionForm
 
 logger = logging.getLogger(__name__)
 
@@ -265,13 +266,44 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         assignment = self.object
         
-        # This data is now available without causing extra database hits
-        student_assignments = assignment.student_assignments.all()
-        context['student_assignments'] = student_assignments
+        # Add user role flags
+        from .base_views import is_admin, is_teacher, is_student
+        context['is_teacher'] = is_teacher(self.request.user)
+        context['is_student'] = is_student(self.request.user)
+        context['is_admin'] = is_admin(self.request.user)
+        
+        # Handle student assignments with privacy protection
+        if is_student(self.request.user):
+            # Students only see their own assignment
+            try:
+                student_assignment = StudentAssignment.objects.get(
+                    assignment=assignment,
+                    student=self.request.user.student
+                )
+                context['student_assignment'] = student_assignment
+                context['student_assignment_id'] = student_assignment.id
+            except StudentAssignment.DoesNotExist:
+                context['student_assignment'] = None
+                context['student_assignment_id'] = None
+                
+            # Students don't see other students' submissions
+            context['student_assignments'] = StudentAssignment.objects.none()
+            context['submitted_count'] = 0
+            context['submission_rate'] = 0
+        else:
+            # Teachers/admins see all submissions
+            student_assignments = assignment.student_assignments.all()
+            context['student_assignments'] = student_assignments
+            
+            # Calculate submission statistics
+            total_students = student_assignments.count()
+            submitted_count = student_assignments.exclude(status='PENDING').count()
+            context['submitted_count'] = submitted_count
+            context['submission_rate'] = (submitted_count / total_students * 100) if total_students > 0 else 0
         
         # Add counts for the detail page
-        context['submitted_count'] = student_assignments.exclude(status='PENDING').count()
-        context['graded_count'] = student_assignments.filter(status='GRADED').count()
+        student_assignments_all = assignment.student_assignments.all()
+        context['graded_count'] = student_assignments_all.filter(status='GRADED').count()
         
         # Get analytics data
         try:
@@ -281,7 +313,7 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
             logger.error(f"Error getting analytics for assignment {assignment.id}: {str(e)}")
             context['analytics'] = None
         
-        # Permission check for editing - use functions from base_views
+        # Permission check for editing
         if is_teacher(self.request.user):
             context['can_edit'] = (assignment.class_assignment.teacher == self.request.user.teacher)
         else:
@@ -339,23 +371,95 @@ class AssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
         messages.success(request, 'Assignment deleted successfully!')
         return super().delete(request, *args, **kwargs)
 
+# GradeAssignmentView
+
 class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
     """AJAX view to grade a student's assignment submission."""
     
     def test_func(self):
-        # Ensure the user is a teacher and owns the assignment
-        student_assignment_id = self.kwargs.get('pk')
-        self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
-        return is_teacher(self.request.user) and self.student_assignment.assignment.class_assignment.teacher == self.request.user.teacher
+        try:
+            # Ensure the user is a teacher and owns the assignment
+            student_assignment_id = self.kwargs.get('pk')
+            self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
+            
+            # Allow admins to grade any assignment
+            if is_admin(self.request.user):
+                return True
+                
+            # Check if user is a teacher and owns the assignment
+            if is_teacher(self.request.user):
+                return self.student_assignment.assignment.class_assignment.teacher == self.request.user.teacher
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error in test_func for GradeAssignmentView: {str(e)}")
+            return False
+
+    def get(self, request, *args, **kwargs):
+        """Return current grade information for the assignment"""
+        try:
+            # Ensure test_func has set self.student_assignment
+            if not hasattr(self, 'student_assignment'):
+                student_assignment_id = self.kwargs.get('pk')
+                self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
+            
+            # Since there's no graded_date field, we'll use current time for newly graded assignments
+            # or submitted_date for already graded ones
+            graded_date = None
+            if self.student_assignment.status == 'GRADED':
+                if self.student_assignment.submitted_date:
+                    graded_date = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+                else:
+                    graded_date = "Recently graded"
+            
+            return JsonResponse({
+                'success': True,
+                'score': float(self.student_assignment.score) if self.student_assignment.score else None,
+                'feedback': self.student_assignment.feedback,
+                'max_score': self.student_assignment.assignment.max_score,
+                'status': self.student_assignment.status,
+                'graded_date': graded_date,
+                'submitted_date': self.student_assignment.submitted_date.strftime("%b. %d, %Y") if self.student_assignment.submitted_date else None,
+                'is_late': self.student_assignment.is_late()
+            })
+        except Exception as e:
+            logger.error(f"Error in GradeAssignmentView GET: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
 
     def post(self, request, *args, **kwargs):
         try:
+            # Ensure test_func has set self.student_assignment
+            if not hasattr(self, 'student_assignment'):
+                student_assignment_id = self.kwargs.get('pk')
+                self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
+            
             grade = request.POST.get('grade')
             feedback = request.POST.get('feedback', '')
-            self.student_assignment.grade = grade
+            
+            # Validate grade
+            if grade and grade.strip():
+                try:
+                    grade_value = float(grade)
+                    if grade_value < 0 or grade_value > self.student_assignment.assignment.max_score:
+                        return JsonResponse({
+                            'success': False, 
+                            'error': f'Score must be between 0 and {self.student_assignment.assignment.max_score}'
+                        })
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Invalid score format'})
+            else:
+                return JsonResponse({'success': False, 'error': 'Score is required'})
+            
+            # Update the student assignment
+            self.student_assignment.score = grade_value
             self.student_assignment.feedback = feedback
             self.student_assignment.status = 'GRADED'
-            self.student_assignment.graded_date = timezone.now()
+            
+            # Ensure submitted_date is set (if not already set)
+            if not self.student_assignment.submitted_date:
+                self.student_assignment.submitted_date = timezone.now()
+                
             self.student_assignment.save()
 
             # Update analytics
@@ -364,40 +468,56 @@ class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
             except Exception as e:
                 logger.error(f"Error updating analytics after grading: {str(e)}")
 
-            return JsonResponse({
+            # Prepare response data
+            response_data = {
                 'success': True, 
-                'grade': grade, 
-                'graded_date': self.student_assignment.graded_date.strftime("%b. %d, %Y"),
-                'feedback': feedback
-            })
+                'grade': grade_value, 
+                'feedback': feedback,
+                'status': 'GRADED'
+            }
+            
+            # Add dates to response
+            if self.student_assignment.submitted_date:
+                response_data['submitted_date'] = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+                response_data['graded_date'] = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+            else:
+                response_data['graded_date'] = 'Just now'
+            
+            return JsonResponse(response_data)
+            
         except Exception as e:
+            logger.error(f"Error in GradeAssignmentView POST: {str(e)}")
             return JsonResponse({'success': False, 'error': str(e)})
+
 
 class SubmitAssignmentView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = StudentAssignment
-    form_class = StudentAssignmentForm
+    form_class = StudentAssignmentSubmissionForm
     template_name = 'core/academics/assignments/submit_assignment.html'
 
     def test_func(self):
-        # Ensure the current user is the student linked to this StudentAssignment
         student_assignment = self.get_object()
         return is_student(self.request.user) and student_assignment.student == self.request.user.student
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['assignment'] = self.object.assignment
+        return kwargs
+
     def form_valid(self, form):
-        form.instance.status = 'SUBMITTED'
-        form.instance.submitted_date = timezone.now()
+        messages.success(self.request, 'Assignment submitted successfully!')
+        response = super().form_valid(form)
         
         # Update analytics
         try:
-            form.instance.assignment.update_analytics()
+            self.object.assignment.update_analytics()
         except Exception as e:
             logger.error(f"Error updating analytics after submission: {str(e)}")
             
-        messages.success(self.request, 'Assignment submitted successfully!')
-        return super().form_valid(form)
+        return response
 
     def get_success_url(self):
-        return reverse_lazy('assignment_detail', kwargs={'pk': self.object.assignment.pk})
+        return reverse_lazy('student_dashboard')
 
 class AssignmentCalendarView(LoginRequiredMixin, TemplateView):
     template_name = 'core/academics/assignments/assignment_calendar.html'

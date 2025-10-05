@@ -4,7 +4,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
+from django.core.validators import (
+    MinValueValidator,
+    MaxValueValidator,
+    RegexValidator,
+)
 from django.utils import timezone
 from django.urls import reverse
 from django.core.exceptions import ValidationError
@@ -13,13 +17,12 @@ from django.utils.safestring import mark_safe
 from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-from django.db.models import Q, Count, Avg, Sum, Case, When, IntegerField, FloatField
+from django.db.models import Q, Count, Avg, Sum
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
-
 # ===== SHARED CONSTANTS (Moved to top to avoid circular imports) =====
 GENDER_CHOICES = [
     ('M', 'Male'),
@@ -659,6 +662,7 @@ class FeePayment(models.Model):
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
+
 # In your Assignment class, fix the indentation and structure:
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [
@@ -697,27 +701,22 @@ class Assignment(models.Model):
         return f"{self.get_assignment_type_display()} - {self.subject} ({self.class_assignment.get_class_level_display()})"
     
     def clean(self):
-        """Validate that class_assignment is set"""
         if not self.class_assignment_id:
             raise ValidationError("Class assignment is required.")
         
-        # Validate that due date is in the future
         if self.due_date and self.due_date <= timezone.now():
             raise ValidationError({'due_date': 'Due date must be in the future'})
     
     def save(self, *args, **kwargs):
-        self.clean()  # Run validation before saving
+        self.clean()
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        
-        # If this is a new assignment, create StudentAssignment records
+
         if is_new:
-            self.create_student_assignments()
-            # Comment out notification for now to avoid errors
-            # self.send_assignment_notifications()
+            from django.db import transaction
+            transaction.on_commit(lambda: self.create_student_assignments())
     
     def get_status_summary(self):
-        """Get summary of assignment statuses"""
         return {
             'total': self.total_students,
             'pending': self.pending_students,
@@ -727,7 +726,6 @@ class Assignment(models.Model):
         }
     
     def get_completion_percentage(self):
-        """Get the percentage of students who have submitted"""
         summary = self.get_status_summary()
         total = summary['total']
         if total == 0:
@@ -737,48 +735,39 @@ class Assignment(models.Model):
         return round((completed / total) * 100, 1)
     
     def is_overdue(self):
-        """Check if the assignment is overdue for any student"""
         return self.due_date < timezone.now()
     
     def create_student_assignments(self):
-        """Create StudentAssignment records for all students in this class"""
-        from django.db import transaction
-        
         try:
-            with transaction.atomic():
-                students = Student.objects.filter(
-                    class_level=self.class_assignment.class_level,
-                    is_active=True
-                )
-                
-                student_assignments = [
-                    StudentAssignment(
-                        student=student,
-                        assignment=self,
-                        status='PENDING'
+            students = Student.objects.filter(
+                class_level=self.class_assignment.class_level,
+                is_active=True
+            )
+        
+            student_assignments = []
+            for student in students:
+                if not StudentAssignment.objects.filter(
+                    student=student, 
+                    assignment=self
+                ).exists():
+                    student_assignments.append(
+                        StudentAssignment(
+                            student=student,
+                            assignment=self,
+                            status='PENDING'
+                        )
                     )
-                    for student in students
-                ]
-                
-                # Use bulk_create for better performance
-                StudentAssignment.objects.bulk_create(
-                    student_assignments,
-                    ignore_conflicts=False  # Changed to False to catch errors
-                )
+        
+            if student_assignments:
+                StudentAssignment.objects.bulk_create(student_assignments)
                 logger.info(f"Created {len(student_assignments)} student assignments for assignment {self.id}")
-                
+            else:
+                logger.info(f"No new student assignments needed for assignment {self.id}")
+            
         except Exception as e:
-            # Re-raise the error to prevent assignment creation if student assignments fail
             logger.error(f"Error creating student assignments for assignment {self.id}: {str(e)}")
-            raise ValidationError(f"Failed to create student assignments: {str(e)}")
-    
-    # Comment out notification method for now to avoid errors
-    # def send_assignment_notifications(self):
-    #     """Send notifications to students about the new assignment"""
-    #     pass  # Implement this later
     
     def get_analytics(self, recalculate=False):
-        """Get analytics for this assignment, optionally recalculating"""
         analytics, created = AssignmentAnalytics.objects.get_or_create(
             assignment=self
         )
@@ -789,11 +778,9 @@ class Assignment(models.Model):
         return analytics
     
     def update_analytics(self):
-        """Force update of analytics"""
         return self.get_analytics(recalculate=True)
     
     def get_quick_stats(self):
-        """Get quick statistics without full analytics calculation"""
         student_assignments = self.student_assignments.all()
             
         return {
@@ -802,6 +789,7 @@ class Assignment(models.Model):
             'graded': student_assignments.filter(status='GRADED').count(),
             'pending': student_assignments.filter(status='PENDING').count(),
         }
+
 class StudentAssignment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='student_assignments')
