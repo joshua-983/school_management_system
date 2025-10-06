@@ -50,30 +50,33 @@ TERM_CHOICES = [
     (3, 'Term 3'),
 ]
 
+
 # Image path functions
 def student_image_path(instance, filename):
     ext = filename.split('.')[-1]
     filename = f"{instance.student_id}.{ext}"
     return os.path.join('students', filename)
 
+
 def teacher_image_path(instance, filename):
     return f'teachers/{instance.employee_id}/{filename}'
+
 
 def parent_image_path(instance, filename):
     return f'parents/{instance.parent_id}/{filename}'
 
-# ===== MODELS =====
 
 class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=10, unique=True)
     description = models.TextField(blank=True)
-    
+
     class Meta:
         ordering = ['name']
-    
+
     def __str__(self):
         return f"{self.name} ({self.code})"
+
 
 class Student(models.Model):
     student_id = models.CharField(max_length=20, unique=True)
@@ -92,10 +95,10 @@ class Student(models.Model):
     class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
     admission_date = models.DateField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
-    
+
     class Meta:
         ordering = ['class_level', 'last_name', 'first_name']
-    
+ 
     def __str__(self):
         return f"{self.get_full_name()} ({self.student_id}) - {self.get_class_level_display()}"
     
@@ -146,6 +149,7 @@ class Student(models.Model):
             self.student_id = f'STUD{current_year}{class_level}{new_sequence:03d}'
             
         super().save(*args, **kwargs)
+
 
 class Teacher(models.Model):
     user = models.OneToOneField(
@@ -663,7 +667,6 @@ class FeePayment(models.Model):
                 return receipt_number
 
 
-# In your Assignment class, fix the indentation and structure:
 class Assignment(models.Model):
     ASSIGNMENT_TYPES = [
         ('HOMEWORK', 'Homework'),
@@ -706,16 +709,8 @@ class Assignment(models.Model):
         
         if self.due_date and self.due_date <= timezone.now():
             raise ValidationError({'due_date': 'Due date must be in the future'})
-    
-    def save(self, *args, **kwargs):
-        self.clean()
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
 
-        if is_new:
-            from django.db import transaction
-            transaction.on_commit(lambda: self.create_student_assignments())
-    
+
     def get_status_summary(self):
         return {
             'total': self.total_students,
@@ -736,16 +731,27 @@ class Assignment(models.Model):
     
     def is_overdue(self):
         return self.due_date < timezone.now()
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+
+        if is_new:
+            from django.db import transaction
+            transaction.on_commit(lambda: self.create_student_assignments())
     
     def create_student_assignments(self):
+        """Create StudentAssignment records for all students in the class"""
         try:
             students = Student.objects.filter(
                 class_level=self.class_assignment.class_level,
                 is_active=True
             )
-        
+            
             student_assignments = []
             for student in students:
+                # Check if StudentAssignment already exists to avoid duplicates
                 if not StudentAssignment.objects.filter(
                     student=student, 
                     assignment=self
@@ -757,13 +763,13 @@ class Assignment(models.Model):
                             status='PENDING'
                         )
                     )
-        
+            
             if student_assignments:
                 StudentAssignment.objects.bulk_create(student_assignments)
                 logger.info(f"Created {len(student_assignments)} student assignments for assignment {self.id}")
             else:
                 logger.info(f"No new student assignments needed for assignment {self.id}")
-            
+                
         except Exception as e:
             logger.error(f"Error creating student assignments for assignment {self.id}: {str(e)}")
     
@@ -789,6 +795,47 @@ class Assignment(models.Model):
             'graded': student_assignments.filter(status='GRADED').count(),
             'pending': student_assignments.filter(status='PENDING').count(),
         }
+
+
+# Assignment Template Model
+class AssignmentTemplate(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    assignment_type = models.CharField(max_length=10, choices=Assignment.ASSIGNMENT_TYPES)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    max_score = models.PositiveSmallIntegerField(default=100)
+    weight = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(100)]
+    )
+    attachment = models.FileField(upload_to='assignment_templates/', blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_public = models.BooleanField(default=False)
+    
+    def create_assignment_from_template(self, class_levels, due_date):
+        """Create actual assignments from this template"""
+        assignments = []
+        for class_level in class_levels:
+            class_assignment = ClassAssignment.objects.filter(
+                class_level=class_level,
+                subject=self.subject
+            ).first()
+            
+            if class_assignment:
+                assignment = Assignment.objects.create(
+                    title=self.title,
+                    description=self.description,
+                    assignment_type=self.assignment_type,
+                    subject=self.subject,
+                    class_assignment=class_assignment,
+                    due_date=due_date,
+                    max_score=self.max_score,
+                    weight=self.weight,
+                    attachment=self.attachment
+                )
+                assignments.append(assignment)
+        
+        return assignments
+
 
 class StudentAssignment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)

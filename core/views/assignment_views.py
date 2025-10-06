@@ -48,7 +48,7 @@ class AssignmentListView(LoginRequiredMixin, ListView):
     template_name = 'core/academics/assignments/assignment_list.html'
     context_object_name = 'assignments'
     paginate_by = 10
-    
+
     def get_queryset(self):
         queryset = super().get_queryset().select_related(
             'subject', 'class_assignment', 'class_assignment__teacher'
@@ -85,19 +85,15 @@ class AssignmentListView(LoginRequiredMixin, ListView):
 
         queryset = queryset.filter(filters)
         
-        # User-specific filtering
+        # User-specific filtering - FIXED FOR STUDENTS
         if is_teacher(self.request.user):
             queryset = queryset.filter(class_assignment__teacher=self.request.user.teacher)
         elif is_student(self.request.user):
             # Get the student's class level and filter assignments for that level
             student_class_level = self.request.user.student.class_level
             queryset = queryset.filter(class_assignment__class_level=student_class_level)
-            
-            # Ensure student can only see their own assignments with proper relationship
-            queryset = queryset.filter(
-                student_assignments__student=self.request.user.student
-            )
-        
+
+
         # Apply sorting
         if sort == 'title':
             queryset = queryset.order_by('title')
@@ -251,6 +247,8 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             for error in errors:
                 messages.error(self.request, f"{field}: {error}")
         return super().form_invalid(form)
+
+
 class AssignmentDetailView(LoginRequiredMixin, DetailView):
     model = Assignment
     template_name = 'core/academics/assignments/assignment_detail.html'
@@ -274,17 +272,22 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
         
         # Handle student assignments with privacy protection
         if is_student(self.request.user):
-            # Students only see their own assignment
-            try:
-                student_assignment = StudentAssignment.objects.get(
-                    assignment=assignment,
-                    student=self.request.user.student
+            # FIX: Get or create StudentAssignment for the student
+            student_assignment, created = StudentAssignment.objects.get_or_create(
+                assignment=assignment,
+                student=self.request.user.student,
+                defaults={'status': 'PENDING'}
+            )
+            
+            # Log when new StudentAssignment records are created
+            if created:
+                logger.info(
+                    f"Created new StudentAssignment for student {self.request.user.student.student_id} "
+                    f"({self.request.user.student.get_full_name()}) and assignment '{assignment.title}' (ID: {assignment.id})"
                 )
-                context['student_assignment'] = student_assignment
-                context['student_assignment_id'] = student_assignment.id
-            except StudentAssignment.DoesNotExist:
-                context['student_assignment'] = None
-                context['student_assignment_id'] = None
+            
+            context['student_assignment'] = student_assignment
+            context['student_assignment_id'] = student_assignment.id
                 
             # Students don't see other students' submissions
             context['student_assignments'] = StudentAssignment.objects.none()
@@ -496,6 +499,7 @@ class SubmitAssignmentView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     template_name = 'core/academics/assignments/submit_assignment.html'
 
     def test_func(self):
+        # FIX: Ensure student can only submit their own assignments
         student_assignment = self.get_object()
         return is_student(self.request.user) and student_assignment.student == self.request.user.student
 
@@ -505,6 +509,8 @@ class SubmitAssignmentView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
+        # Set submitted date when form is valid
+        self.object.submitted_date = timezone.now()
         messages.success(self.request, 'Assignment submitted successfully!')
         response = super().form_valid(form)
         
@@ -517,23 +523,32 @@ class SubmitAssignmentView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return response
 
     def get_success_url(self):
-        return reverse_lazy('student_dashboard')
+        return reverse_lazy('assignment_detail', kwargs={'pk': self.object.assignment.pk})
+
 
 class AssignmentCalendarView(LoginRequiredMixin, TemplateView):
     template_name = 'core/academics/assignments/assignment_calendar.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
         # Get year and month from URL parameters, default to current
         now = timezone.now()
         year = int(self.kwargs.get('year', now.year))
         month = int(self.kwargs.get('month', now.month))
         context['month'] = month
         context['year'] = year
+        
+        # Add user role information for template
+        from .base_views import is_admin, is_teacher, is_student
+        context['is_teacher'] = is_teacher(self.request.user)
+        context['is_student'] = is_student(self.request.user)
+        context['is_admin'] = is_admin(self.request.user)
+        
         return context
 
 class AssignmentEventJsonView(LoginRequiredMixin, View):
-    """JSON endpoint for calendar events."""
+    """ENHANCED JSON endpoint for calendar events with color coding by status"""
     
     def get(self, request, *args, **kwargs):
         start = request.GET.get('start')
@@ -550,31 +565,119 @@ class AssignmentEventJsonView(LoginRequiredMixin, View):
         else:
             end_date = None
 
-        queryset = Assignment.objects.all()
-        # Apply user filters (same logic as your ListView)
-        if is_teacher(request.user):
-            queryset = queryset.filter(class_assignment__teacher=request.user.teacher)
-        elif is_student(request.user):
-            queryset = queryset.filter(class_assignment__class_level=request.user.student.class_level)
+        # ENHANCED: Different data based on user role
+        if is_student(request.user):
+            # For students, use StudentAssignment to get status-based colors
+            student = request.user.student
+            student_assignments = StudentAssignment.objects.filter(
+                student=student
+            ).select_related('assignment', 'assignment__subject')
+            
+            # Filter by date range for the calendar
+            if start_date and end_date:
+                student_assignments = student_assignments.filter(
+                    assignment__due_date__date__gte=start_date, 
+                    assignment__due_date__date__lte=end_date
+                )
 
-        # Filter by date range for the calendar
-        if start_date and end_date:
-            queryset = queryset.filter(due_date__date__gte=start_date, due_date__date__lte=end_date)
+            events = []
+            for sa in student_assignments:
+                color = self.get_assignment_color(sa)
+                events.append({
+                    'title': sa.assignment.title,
+                    'start': sa.assignment.due_date.isoformat(),
+                    'end': sa.assignment.due_date.isoformat(),
+                    'color': color,
+                    'textColor': 'white' if color in ['#dc3545', '#28a745', '#007bff'] else 'black',
+                    'url': reverse('assignment_detail', kwargs={'pk': sa.assignment.pk}),
+                    'extendedProps': {
+                        'subject': sa.assignment.subject.name,
+                        'type': sa.assignment.get_assignment_type_display(),
+                        'status': sa.status,
+                        'status_display': sa.get_status_display(),
+                        'is_overdue': sa.assignment.due_date < timezone.now(),
+                        'can_submit': sa.status in ['PENDING', 'LATE'],
+                        'score': float(sa.score) if sa.score else None,
+                    }
+                })
+                
+        else:
+            # For teachers/admins, show all assignments
+            queryset = Assignment.objects.all()
+            
+            # Apply user filters
+            if is_teacher(request.user):
+                queryset = queryset.filter(class_assignment__teacher=request.user.teacher)
+            
+            # Filter by date range for the calendar
+            if start_date and end_date:
+                queryset = queryset.filter(due_date__date__gte=start_date, due_date__date__lte=end_date)
 
-        events = []
-        for assignment in queryset:
-            events.append({
-                'title': assignment.title,
-                'start': assignment.due_date.isoformat(),
-                'end': assignment.due_date.isoformat(),
-                'url': reverse('assignment_detail', kwargs={'pk': assignment.pk}),
-                'color': 'red' if assignment.due_date < timezone.now() else '#3a87ad',
-                'extendedProps': {
-                    'subject': assignment.subject.name,
-                    'type': assignment.get_assignment_type_display(),
-                }
-            })
+            events = []
+            for assignment in queryset:
+                # For teachers, color based on submission status
+                submission_stats = assignment.get_quick_stats()
+                color = self.get_teacher_assignment_color(assignment, submission_stats)
+                
+                events.append({
+                    'title': assignment.title,
+                    'start': assignment.due_date.isoformat(),
+                    'end': assignment.due_date.isoformat(),
+                    'color': color,
+                    'textColor': 'white',
+                    'url': reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+                    'extendedProps': {
+                        'subject': assignment.subject.name,
+                        'type': assignment.get_assignment_type_display(),
+                        'class_level': assignment.class_assignment.get_class_level_display(),
+                        'total_students': submission_stats['total_students'],
+                        'submitted_count': submission_stats['submitted'],
+                        'graded_count': submission_stats['graded'],
+                        'submission_rate': round((submission_stats['submitted'] / submission_stats['total_students'] * 100) if submission_stats['total_students'] > 0 else 0, 1),
+                    }
+                })
+        
         return JsonResponse(events, safe=False)
+    
+    def get_assignment_color(self, student_assignment):
+        """Get color based on assignment status and urgency for students"""
+        now = timezone.now()
+        due_date = student_assignment.assignment.due_date
+        
+        if student_assignment.status == 'GRADED':
+            return '#28a745'  # Green - graded
+        elif student_assignment.status == 'SUBMITTED':
+            return '#17a2b8'  # Blue - submitted but not graded
+        elif student_assignment.status == 'LATE':
+            return '#dc3545'  # Red - late submission
+        elif due_date < now:
+            return '#dc3545'  # Red - overdue and not submitted
+        elif (due_date - now).days <= 1:
+            return '#ffc107'  # Yellow - due very soon (1 day)
+        elif (due_date - now).days <= 3:
+            return '#fd7e14'  # Orange - due soon (3 days)
+        else:
+            return '#007bff'  # Blue - normal (more than 3 days)
+    
+    def get_teacher_assignment_color(self, assignment, submission_stats):
+        """Get color based on submission statistics for teachers"""
+        now = timezone.now()
+        
+        if assignment.due_date < now:
+            if submission_stats['submitted'] == submission_stats['total_students']:
+                return '#28a745'  # Green - all submitted (past due)
+            elif submission_stats['submitted'] >= submission_stats['total_students'] * 0.8:
+                return '#17a2b8'  # Blue - good submission rate (past due)
+            else:
+                return '#dc3545'  # Red - poor submission rate (past due)
+        else:
+            # Assignment not yet due
+            if submission_stats['submitted'] == submission_stats['total_students']:
+                return '#20c997'  # Teal - all submitted early
+            elif submission_stats['submitted'] >= submission_stats['total_students'] * 0.5:
+                return '#007bff'  # Blue - good progress
+            else:
+                return '#6c757d'  # Gray - low submission rate
 
 class BulkGradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Bulk grade multiple student assignments at once"""

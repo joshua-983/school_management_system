@@ -698,6 +698,31 @@ class AssignmentForm(forms.ModelForm):
         label="Class Level"
     )
     
+    # NEW: Bulk assignment creation for multiple classes
+    multiple_classes = forms.MultipleChoiceField(
+        choices=[],
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={
+            'class': 'multiple-classes-checkboxes'
+        }),
+        label="Also create for these classes",
+        help_text="Select additional classes to create this same assignment for"
+    )
+    
+    # NEW: Assignment templates for quick creation
+    template = forms.ChoiceField(
+        choices=[
+            ('', 'No template - Custom assignment'),
+            ('HOMEWORK', 'Homework Template'),
+            ('CLASSWORK', 'Classwork Template'), 
+            ('TEST', 'Test Template'),
+            ('EXAM', 'Examination Template')
+        ],
+        required=False,
+        label="Use template",
+        help_text="Quickly fill assignment details using a template"
+    )
+
     class Meta:
         model = Assignment
         fields = ['title', 'description', 'assignment_type', 'subject',
@@ -727,6 +752,10 @@ class AssignmentForm(forms.ModelForm):
                 'min': '1',
                 'max': '100'
             }),
+            'assignment_type': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_assignment_type_custom'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -750,16 +779,28 @@ class AssignmentForm(forms.ModelForm):
                     if level in teacher_class_levels
                 ]
                 self.fields['class_level'].choices = [('', 'Select Class Level')] + available_choices
+                
+                # NEW: Set up multiple classes field (exclude the primary class_level)
+                multiple_class_choices = [
+                    (level, name) for level, name in available_choices
+                ]
+                self.fields['multiple_classes'].choices = multiple_class_choices
             else:
                 self.fields['class_level'].choices = [('', 'No classes assigned to you')]
                 for field_name in self.fields:
                     self.fields[field_name].disabled = True
+
+        # NEW: Add template change listener via JavaScript data attribute
+        self.fields['template'].widget.attrs.update({
+            'onchange': 'applyAssignmentTemplate(this)'
+        })
 
     def clean(self):
         cleaned_data = super().clean()
         
         class_level = cleaned_data.get('class_level')
         subject = cleaned_data.get('subject')
+        multiple_classes = cleaned_data.get('multiple_classes', [])
         
         if not class_level:
             self.add_error('class_level', "Class level is required.")
@@ -767,16 +808,39 @@ class AssignmentForm(forms.ModelForm):
         if not subject:
             self.add_error('subject', "Subject is required.")
         
+        # NEW: Validate that multiple_classes doesn't include the primary class_level
+        if class_level and class_level in multiple_classes:
+            self.add_error('multiple_classes', 
+                f"Primary class {dict(CLASS_LEVEL_CHOICES).get(class_level)} is automatically included. "
+                f"Remove it from additional classes."
+            )
+            # Remove the duplicate from multiple_classes
+            cleaned_data['multiple_classes'] = [cls for cls in multiple_classes if cls != class_level]
+        
         # Validate teacher can only assign to their classes
         if self.request and hasattr(self.request.user, 'teacher'):
+            teacher = self.request.user.teacher
+            
+            # Validate primary class assignment
             if class_level and subject:
                 if not ClassAssignment.objects.filter(
-                    teacher=self.request.user.teacher,
+                    teacher=teacher,
                     class_level=class_level,
                     subject=subject
                 ).exists():
                     self.add_error(None, 
                         f"You are not assigned to teach {subject.name} for {dict(CLASS_LEVEL_CHOICES).get(class_level)}"
+                    )
+            
+            # NEW: Validate multiple classes assignments
+            for additional_class in multiple_classes:
+                if not ClassAssignment.objects.filter(
+                    teacher=teacher,
+                    class_level=additional_class,
+                    subject=subject
+                ).exists():
+                    self.add_error('multiple_classes', 
+                        f"You are not assigned to teach {subject.name} for {dict(CLASS_LEVEL_CHOICES).get(additional_class)}"
                     )
         
         return cleaned_data
@@ -808,6 +872,11 @@ class AssignmentForm(forms.ModelForm):
         return attachment
     
     def save(self, commit=True):
+        # NEW: Apply template if selected
+        template = self.cleaned_data.get('template')
+        if template:
+            self.apply_template(template)
+        
         # Set the class_assignment before saving
         class_level = self.cleaned_data.get('class_level')
         subject = self.cleaned_data.get('subject')
@@ -822,7 +891,94 @@ class AssignmentForm(forms.ModelForm):
             )
             self.instance.class_assignment = class_assignment
         
-        return super().save(commit=commit)
+        # Save the primary assignment first
+        assignment = super().save(commit=commit)
+        
+        # NEW: Create assignments for multiple classes
+        if commit:
+            multiple_classes = self.cleaned_data.get('multiple_classes', [])
+            if multiple_classes:
+                self.create_multiple_class_assignments(assignment, multiple_classes)
+        
+        return assignment
+    
+    def apply_template(self, template):
+        """Apply template settings to the form instance"""
+        template_configs = {
+            'HOMEWORK': {
+                'assignment_type': 'HOMEWORK',
+                'max_score': 100,
+                'weight': 10,
+                'description': 'Complete the following exercises. Show all your work and submit by the due date.'
+            },
+            'CLASSWORK': {
+                'assignment_type': 'CLASSWORK', 
+                'max_score': 50,
+                'weight': 5,
+                'description': 'In-class assignment to be completed during the lesson. Work independently and show your reasoning.'
+            },
+            'TEST': {
+                'assignment_type': 'TEST',
+                'max_score': 100, 
+                'weight': 30,
+                'description': 'Assessment covering recent topics. Read all questions carefully and manage your time effectively.'
+            },
+            'EXAM': {
+                'assignment_type': 'EXAM',
+                'max_score': 100,
+                'weight': 50,
+                'description': 'End of term examination. Comprehensive assessment of all topics covered this term.'
+            }
+        }
+        
+        if template in template_configs:
+            config = template_configs[template]
+            self.instance.assignment_type = config['assignment_type']
+            self.instance.max_score = config['max_score']
+            self.instance.weight = config['weight']
+            
+            # Only set description if it's empty or the default placeholder
+            current_desc = self.cleaned_data.get('description', '')
+            if not current_desc or current_desc == self.fields['description'].initial:
+                self.instance.description = config['description']
+    
+    def create_multiple_class_assignments(self, primary_assignment, class_levels):
+        """Create duplicate assignments for additional classes"""
+        created_count = 0
+        teacher = self.request.user.teacher if hasattr(self.request.user, 'teacher') else None
+        
+        for class_level in class_levels:
+            try:
+                # Get or create class assignment for this class level
+                class_assignment, created = ClassAssignment.objects.get_or_create(
+                    class_level=class_level,
+                    subject=primary_assignment.subject,
+                    teacher=teacher,
+                    defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
+                )
+                
+                # Create the duplicate assignment
+                Assignment.objects.create(
+                    title=primary_assignment.title,
+                    description=primary_assignment.description,
+                    assignment_type=primary_assignment.assignment_type,
+                    subject=primary_assignment.subject,
+                    class_assignment=class_assignment,
+                    due_date=primary_assignment.due_date,
+                    max_score=primary_assignment.max_score,
+                    weight=primary_assignment.weight,
+                    attachment=primary_assignment.attachment
+                )
+                created_count += 1
+                
+            except Exception as e:
+                logger.error(f"Error creating assignment for class {class_level}: {str(e)}")
+                # Continue with other classes even if one fails
+        
+        # Log the bulk creation
+        if created_count > 0:
+            logger.info(f"Created {created_count} additional assignments for classes: {class_levels}")
+
 
 class StudentAssignmentSubmissionForm(forms.ModelForm):
     """Form for students to submit their assignments"""

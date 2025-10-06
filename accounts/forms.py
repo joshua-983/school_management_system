@@ -7,16 +7,17 @@ from django.core.exceptions import ValidationError
 User = get_user_model()
 
 class CustomUserCreationForm(UserCreationForm):
-    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={'class': 'form-control'}))
+    email = forms.EmailField(required=True, widget=forms.EmailInput(attrs={'class': 
+'form-control'}))
     phone_number = forms.CharField(max_length=10, required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    
+
     class Meta:
         model = User
-        fields = ('username', 'email', 'password1', 'password2', 'phone_number')
+        fields = ('username', 'email', 'password1', 'password2', 'phone_number')    
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
         }
-        
+
     def clean_email(self):
         email = self.cleaned_data.get('email').lower()
         if User.objects.filter(email=email).exists():
@@ -26,7 +27,7 @@ class CustomUserCreationForm(UserCreationForm):
 class CustomUserChangeForm(UserChangeForm):
     class Meta:
         model = User
-        fields = ('username', 'email', 'phone_number', 'address', 'date_of_birth')
+        fields = ('username', 'email', 'phone_number', 'address', 'date_of_birth')  
 
 class CustomAuthenticationForm(AuthenticationForm):
     username = forms.CharField(
@@ -37,7 +38,7 @@ class CustomAuthenticationForm(AuthenticationForm):
         label='Password',
         widget=forms.PasswordInput(attrs={'class': 'form-control'})
     )
-    
+
     def clean(self):
         username = self.cleaned_data.get('username')
         password = self.cleaned_data.get('password')
@@ -50,20 +51,20 @@ class CustomAuthenticationForm(AuthenticationForm):
                     username = user.username
                 except User.DoesNotExist:
                     pass
-            
+
             self.user_cache = authenticate(
                 self.request,
                 username=username,
                 password=password
             )
-            
+
             if self.user_cache is None:
                 raise ValidationError(
                     self.error_messages['invalid_login'],
                     code='invalid_login',
                     params={'username': self.username_field.verbose_name},
                 )
-            
+
             self.confirm_login_allowed(self.user_cache)
 
         return self.cleaned_data

@@ -188,6 +188,67 @@
     display: none;
 }
 
+/* NEW: Calendar Legend Styles */
+.calendar-legend {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+}
+
+.legend-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-right: 1rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+/* NEW: Status badges for preview */
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.submission-stats {
+    background: #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+}
+
+.stat-bar {
+    height: 8px;
+    background: #dee2e6;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.25rem 0;
+}
+
+.stat-progress {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
 @media (max-width: 768px) {
     .calendar-container {
         padding: 1rem 0;
@@ -210,6 +271,12 @@
     .calendar-filters .row {
         flex-direction: column;
         gap: 1rem;
+    }
+    
+    .calendar-legend {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
     }
 }
 </style>
@@ -237,6 +304,62 @@
                 </div>
                 
                 <div class="calendar-card">
+                    <!-- NEW: Calendar Legend -->
+                    <div class="calendar-legend">
+                        <div class="legend-title">Color Legend:</div>
+                        {% if is_student %}
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #28a745;"></div>
+                            <span>Graded</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #17a2b8;"></div>
+                            <span>Submitted</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #007bff;"></div>
+                            <span>Upcoming</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #fd7e14;"></div>
+                            <span>Due Soon (3 days)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #ffc107;"></div>
+                            <span>Due Tomorrow</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #dc3545;"></div>
+                            <span>Overdue/Late</span>
+                        </div>
+                        {% elif is_teacher or is_admin %}
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #28a745;"></div>
+                            <span>All Submitted</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #20c997;"></div>
+                            <span>All Submitted Early</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #17a2b8;"></div>
+                            <span>Good Progress</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #007bff;"></div>
+                            <span>Normal Progress</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #6c757d;"></div>
+                            <span>Low Submissions</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #dc3545;"></div>
+                            <span>Poor Submission Rate</span>
+                        </div>
+                        {% endif %}
+                    </div>
+
                     <!-- Quick Stats -->
                     <div class="row calendar-stats">
                         <div class="col-md-4 stat-item">
@@ -321,6 +444,37 @@
             <div class="mb-3">
                 <strong>Due:</strong> <span id="previewDue"></span>
             </div>
+            
+            <!-- NEW: Status Information -->
+            <div class="mb-3" id="previewStatusContainer">
+                <strong>Status:</strong> <span id="previewStatus"></span>
+            </div>
+            
+            <!-- NEW: Student-specific info -->
+            <div class="mb-3" id="previewStudentInfo">
+                <strong>Your Status:</strong> <span id="previewStudentStatus"></span>
+                <div id="previewScore" class="mt-1"></div>
+            </div>
+            
+            <!-- NEW: Teacher-specific info -->
+            <div class="mb-3" id="previewTeacherInfo">
+                <strong>Submission Stats:</strong>
+                <div class="submission-stats">
+                    <div class="d-flex justify-content-between">
+                        <span>Submitted:</span>
+                        <span id="previewSubmittedCount"></span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Graded:</span>
+                        <span id="previewGradedCount"></span>
+                    </div>
+                    <div class="stat-bar">
+                        <div class="stat-progress bg-success" id="previewProgressBar"></div>
+                    </div>
+                    <small class="text-muted" id="previewSubmissionRate"></small>
+                </div>
+            </div>
+            
             <div class="text-end">
                 <a href="#" class="btn btn-primary" id="previewLink">View Details</a>
             </div>
@@ -387,10 +541,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAssignmentPreview(info.event);
             },
             eventDidMount: function(info) {
-                // Add custom styling based on event properties
-                if (info.event.extendedProps.overdue) {
-                    info.el.style.fontWeight = 'bold';
+                // Add enhanced tooltips with more information
+                const extendedProps = info.event.extendedProps;
+                let tooltipContent = `
+                    <strong>${info.event.title}</strong><br>
+                    <small>Subject: ${extendedProps.subject}</small><br>
+                    <small>Type: ${extendedProps.type}</small>
+                `;
+
+                {% if is_student %}
+                tooltipContent += `<br><small>Status: ${extendedProps.status_display}</small>`;
+                if (extendedProps.score !== null) {
+                    tooltipContent += `<br><small>Score: ${extendedProps.score}</small>`;
                 }
+                if (extendedProps.is_overdue) {
+                    tooltipContent += `<br><small class="text-danger">⚠️ Overdue</small>`;
+                }
+                {% elif is_teacher or is_admin %}
+                tooltipContent += `
+                    <br><small>Class: ${extendedProps.class_level}</small>
+                    <br><small>Submissions: ${extendedProps.submitted_count}/${extendedProps.total_students}</small>
+                    <br><small>Rate: ${extendedProps.submission_rate}%</small>
+                `;
+                {% endif %}
+
+                // Add bootstrap tooltip
+                new bootstrap.Tooltip(info.el, {
+                    title: tooltipContent,
+                    html: true,
+                    placement: 'top'
+                });
                 
                 // Add hover effect
                 info.el.addEventListener('mouseenter', function() {
@@ -442,8 +622,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateStats(events) {
         const now = new Date();
         const total = events.length;
-        const upcoming = events.filter(event => new Date(event.start) > now).length;
-        const overdue = events.filter(event => new Date(event.start) < now && event.color === 'red').length;
+        
+        // Enhanced stats calculation based on user role
+        let upcoming = 0;
+        let overdue = 0;
+        
+        events.forEach(event => {
+            const eventDate = new Date(event.start);
+            if (eventDate > now) {
+                upcoming++;
+            } else if (event.color === '#dc3545' || event.color === '#ffc107' || event.color === '#fd7e14') {
+                overdue++;
+            }
+        });
 
         document.getElementById('totalAssignments').textContent = total;
         document.getElementById('upcomingAssignments').textContent = upcoming;
@@ -452,20 +643,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Show assignment preview
     function showAssignmentPreview(event) {
-        const previewTitle = document.getElementById('previewTitle');
-        const previewSubject = document.getElementById('previewSubject');
-        const previewClass = document.getElementById('previewClass');
-        const previewType = document.getElementById('previewType');
-        const previewDue = document.getElementById('previewDue');
-        const previewLink = document.getElementById('previewLink');
+        const extendedProps = event.extendedProps;
         
-        previewTitle.textContent = event.title;
-        previewSubject.textContent = event.extendedProps.subject || 'N/A';
-        previewClass.textContent = event.extendedProps.class_level || 'N/A';
-        previewType.textContent = event.extendedProps.type || 'N/A';
+        // Update basic preview information
+        document.getElementById('previewTitle').textContent = event.title;
+        document.getElementById('previewSubject').textContent = extendedProps.subject || 'N/A';
+        document.getElementById('previewClass').textContent = extendedProps.class_level || 'N/A';
+        document.getElementById('previewType').textContent = extendedProps.type || 'N/A';
+        document.getElementById('previewLink').href = event.url;
         
         const dueDate = new Date(event.start);
-        previewDue.textContent = dueDate.toLocaleString('en-US', {
+        document.getElementById('previewDue').textContent = dueDate.toLocaleString('en-US', {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
@@ -473,15 +661,71 @@ document.addEventListener('DOMContentLoaded', function() {
             hour: '2-digit',
             minute: '2-digit'
         });
+
+        // NEW: Show user-specific information
+        {% if is_student %}
+        // Student preview
+        document.getElementById('previewTeacherInfo').style.display = 'none';
+        document.getElementById('previewStudentInfo').style.display = 'block';
         
-        previewLink.href = event.url;
+        const statusBadge = getStatusBadge(extendedProps.status, extendedProps.is_overdue);
+        document.getElementById('previewStudentStatus').innerHTML = statusBadge;
         
+        if (extendedProps.score !== null) {
+            document.getElementById('previewScore').innerHTML = `
+                <strong>Score:</strong> <span class="text-success">${extendedProps.score}</span>
+            `;
+        } else {
+            document.getElementById('previewScore').innerHTML = `
+                <strong>Score:</strong> <span class="text-muted">Not graded yet</span>
+            `;
+        }
+        {% elif is_teacher or is_admin %}
+        // Teacher preview
+        document.getElementById('previewStudentInfo').style.display = 'none';
+        document.getElementById('previewTeacherInfo').style.display = 'block';
+        
+        document.getElementById('previewSubmittedCount').textContent = 
+            `${extendedProps.submitted_count}/${extendedProps.total_students}`;
+        document.getElementById('previewGradedCount').textContent = 
+            `${extendedProps.graded_count || 0}/${extendedProps.total_students}`;
+        document.getElementById('previewSubmissionRate').textContent = 
+            `Submission Rate: ${extendedProps.submission_rate}%`;
+        
+        // Update progress bar
+        const progressBar = document.getElementById('previewProgressBar');
+        const progressRate = extendedProps.submission_rate || 0;
+        progressBar.style.width = `${progressRate}%`;
+        progressBar.className = `stat-progress ${getProgressBarColor(progressRate)}`;
+        {% endif %}
+
         // Show preview
         previewOverlay.style.display = 'block';
         assignmentPreview.style.display = 'block';
         
         // Add click outside to close
         previewOverlay.onclick = closeAssignmentPreview;
+    }
+
+    // Helper function to get status badge HTML
+    function getStatusBadge(status, isOverdue) {
+        const statusConfig = {
+            'GRADED': { class: 'bg-success', text: 'Graded' },
+            'SUBMITTED': { class: 'bg-info', text: 'Submitted' },
+            'LATE': { class: 'bg-warning', text: 'Late' },
+            'PENDING': { class: isOverdue ? 'bg-danger' : 'bg-secondary', text: isOverdue ? 'Overdue' : 'Pending' }
+        };
+        
+        const config = statusConfig[status] || { class: 'bg-secondary', text: status };
+        return `<span class="status-badge ${config.class}">${config.text}</span>`;
+    }
+
+    // Helper function to get progress bar color
+    function getProgressBarColor(rate) {
+        if (rate >= 80) return 'bg-success';
+        if (rate >= 50) return 'bg-info';
+        if (rate >= 20) return 'bg-warning';
+        return 'bg-danger';
     }
 
     function closeAssignmentPreview() {

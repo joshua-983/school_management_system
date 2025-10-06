@@ -1,7 +1,15 @@
 # core/mixins.py
-from django.contrib.auth.mixins import AccessMixin
+from django.contrib.auth.mixins import AccessMixin, LoginRequiredMixin
 from django_otp import user_has_device
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse_lazy
+
+
+class TwoFactorLoginRequiredMixin(LoginRequiredMixin):
+    """LoginRequiredMixin that works with django-two-factor-auth"""
+    login_url = reverse_lazy('two_factor:login')
+
+
 class OTPRequiredMixin(AccessMixin):
     """Verify that the user is authenticated and has verified OTP."""
     def dispatch(self, request, *args, **kwargs):
@@ -10,7 +18,6 @@ class OTPRequiredMixin(AccessMixin):
         if not user_has_device(request.user):
             return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
-
 
 
 class TeacherOwnershipRequiredMixin:

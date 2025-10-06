@@ -165,6 +165,58 @@
         text-align: center;
     }
 
+    /* NEW: Assignment category sections */
+    .assignment-category {
+        margin-bottom: 2rem;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+
+    .assignment-category-header {
+        padding: 1rem 1.5rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .assignment-category.overdue .assignment-category-header {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+    }
+
+    .assignment-category.due-soon .assignment-category-header {
+        background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+        color: white;
+    }
+
+    .assignment-category.upcoming .assignment-category-header {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+    }
+
+    .assignment-category.completed .assignment-category-header {
+        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        color: white;
+    }
+
+    .assignment-category-body {
+        background: #f8f9fa;
+        padding: 1.5rem;
+    }
+
+    .empty-category {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+
+    .empty-category i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
     /* Animation classes */
     .fade-in {
         animation: fadeIn 0.6s ease-in;
@@ -292,6 +344,10 @@
         .stats-grid {
             grid-template-columns: 1fr 1fr;
         }
+
+        .assignment-category-body {
+            padding: 1rem;
+        }
     }
 
     /* Custom scrollbar */
@@ -404,13 +460,13 @@
             </div>
         </div>
 
-        <!-- Current Assignments -->
+        <!-- Current Assignments - ENHANCED WITH CATEGORIES -->
         <div class="card content-card fade-in" style="animation-delay: 0.5s;">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-book-open me-2"></i>
                     My Assignments
-                    <span class="badge bg-light text-dark ms-2">{{ assignments_with_status|length }} total</span>
+                    <span class="badge bg-light text-dark ms-2">{{ assignments.count }} total</span>
                 </h5>
                 <div>
                     <a href="{% url 'assignment_list' %}" class="btn btn-light btn-sm me-2">
@@ -422,7 +478,7 @@
                 </div>
             </div>
             <div class="card-body">
-                {% if assignments_with_status %}
+                {% if assignments %}
                 <!-- Assignment Statistics -->
                 <div class="stats-grid">
                     <div class="stat-item">
@@ -443,133 +499,327 @@
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Assignment</th>
-                                <th>Subject</th>
-                                <th>Due Date</th>
-                                <th>Time Left</th>
-                                <th>Status</th>
-                                <th>Max Score</th>
-                                <th>Your Score</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for assignment_data in assignments_with_status %}
-                            <tr class="fade-in {% if assignment_data.is_overdue %}table-warning{% elif assignment_data.due_soon %}table-info{% endif %}" 
-                                style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-{% if assignment_data.assignment.assignment_type == 'QUIZ' %}question-circle{% elif assignment_data.assignment.assignment_type == 'PROJECT' %}project-diagram{% else %}file-alt{% endif %} text-primary me-2"></i>
-                                        <div>
-                                            <strong class="d-block">{{ assignment_data.assignment.title }}</strong>
-                                            <small class="text-muted">{{ assignment_data.assignment.get_assignment_type_display }}</small>
-                                        </div>
-                                    </div>
-                                    {% if assignment_data.is_overdue %}
-                                    <span class="badge bg-danger mt-1">Overdue</span>
-                                    {% elif assignment_data.due_soon %}
-                                    <span class="badge bg-warning mt-1">Due Soon</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="badge bg-light text-dark">{{ assignment_data.assignment.subject.name }}</span>
-                                </td>
-                                <td>
-                                    <small class="d-block">{{ assignment_data.assignment.due_date|date:"M d, Y" }}</small>
-                                    <small class="text-muted">{{ assignment_data.assignment.due_date|date:"H:i" }}</small>
-                                </td>
-                                <td>
-                                    <span class="countdown-timer {% if assignment_data.is_overdue %}urgent{% elif assignment_data.due_soon %}warning{% endif %}" 
-                                          data-due-date="{{ assignment_data.assignment.due_date|date:'U' }}"
-                                          data-assignment-id="{{ assignment_data.assignment.id }}">
-                                        <i class="fas fa-clock me-1"></i>
-                                        <span class="countdown-text">Loading...</span>
-                                    </span>
-                                </td>
-                                <td class="assignment-status">
-                                    {% if assignment_data.status == 'GRADED' %}
-                                        <span class="badge badge-custom bg-success">
-                                            <i class="fas fa-check me-1"></i>Graded
-                                        </span>
-                                    {% elif assignment_data.status == 'SUBMITTED' %}
-                                        <span class="badge badge-custom bg-info">
-                                            <i class="fas fa-paper-plane me-1"></i>Submitted
-                                        </span>
-                                    {% elif assignment_data.status == 'LATE' %}
-                                        <span class="badge badge-custom bg-warning">
-                                            <i class="fas fa-clock me-1"></i>Late
-                                        </span>
-                                    {% else %}
-                                        <span class="badge badge-custom bg-secondary">
-                                            <i class="fas fa-clock me-1"></i>Pending
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <strong>{{ assignment_data.assignment.max_score }}</strong>
-                                    <small class="text-muted d-block">points</small>
-                                </td>
-                                <td>
-                                    {% if assignment_data.student_assignment.score is not None %}
-                                        <strong class="text-success">{{ assignment_data.student_assignment.score }}</strong>
-                                        <div class="progress mt-1" style="height: 6px;">
-                                            <div class="progress-bar bg-success" 
-                                                 style="width: {% widthratio assignment_data.student_assignment.score assignment_data.assignment.max_score 100 %}%">
+                <!-- NEW: Categorized Assignments -->
+                
+                <!-- Overdue Assignments -->
+                {% if overdue_assignments %}
+                <div class="assignment-category overdue mb-4">
+                    <div class="assignment-category-header">
+                        <div>
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Overdue Assignments ({{ overdue_assignments|length }})
+                        </div>
+                        <span class="badge bg-danger">Urgent</span>
+                    </div>
+                    <div class="assignment-category-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Assignment</th>
+                                        <th>Subject</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sa in overdue_assignments %}
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-alt text-danger me-2"></i>
+                                                <div>
+                                                    <strong class="d-block">{{ sa.assignment.title }}</strong>
+                                                    <small class="text-muted">{{ sa.assignment.get_assignment_type_display }}</small>
+                                                </div>
                                             </div>
-                                        </div>
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="assignment-actions">
-                                        <!-- View Details -->
-                                        <a href="{% url 'assignment_detail' assignment_data.assignment.pk %}" 
-                                           class="btn btn-sm btn-outline-primary mb-1" 
-                                           title="View Assignment Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        
-                                        <!-- Submit/Resubmit -->
-                                        {% if assignment_data.can_submit %}
-                                        <a href="{% url 'submit_assignment' assignment_data.student_assignment.pk %}" 
-                                           class="btn btn-sm {% if assignment_data.status == 'PENDING' %}btn-success{% else %}btn-warning{% endif %} mb-1"
-                                           title="{% if assignment_data.status == 'PENDING' %}Submit Assignment{% else %}Resubmit Assignment{% endif %}">
-                                            <i class="fas fa-{% if assignment_data.status == 'PENDING' %}paper-plane{% else %}redo{% endif %}"></i>
-                                        </a>
-                                        {% endif %}
-                                        
-                                        <!-- View Submission -->
-                                        {% if assignment_data.status == 'SUBMITTED' or assignment_data.status == 'GRADED' or assignment_data.status == 'LATE' %}
-                                        <a href="{% url 'submit_assignment' assignment_data.student_assignment.pk %}" 
-                                           class="btn btn-sm btn-outline-info mb-1"
-                                           title="View Submission">
-                                            <i class="fas fa-file-alt"></i>
-                                        </a>
-                                        {% endif %}
-                                        </div>
-                                    
-                                    {% if assignment_data.student_assignment.submitted_date %}
-                                    <small class="text-muted d-block mt-1">
-                                        Submitted: {{ assignment_data.student_assignment.submitted_date|date:"M d" }}
-                                    </small>
-                                    {% endif %}
-                                    
-                                    {% if assignment_data.student_assignment.feedback %}
-                                    <small class="text-success d-block mt-1" title="Teacher Feedback">
-                                        <i class="fas fa-comment"></i> Feedback
-                                    </small>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">{{ sa.assignment.subject.name }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="d-block">{{ sa.assignment.due_date|date:"M d, Y" }}</small>
+                                            <small class="text-muted">{{ sa.assignment.due_date|date:"H:i" }}</small>
+                                        </td>
+                                        <td class="assignment-status">
+                                            <span class="badge badge-custom bg-danger">
+                                                <i class="fas fa-clock me-1"></i>Overdue
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="assignment-actions">
+                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
+                                                   class="btn btn-sm btn-outline-primary mb-1" 
+                                                   title="View Assignment Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'submit_assignment' sa.pk %}" 
+                                                   class="btn btn-sm btn-warning mb-1"
+                                                   title="Submit Assignment">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
+                {% endif %}
+
+                <!-- Due Soon Assignments -->
+                {% if due_soon_assignments %}
+                <div class="assignment-category due-soon mb-4">
+                    <div class="assignment-category-header">
+                        <div>
+                            <i class="fas fa-clock me-2"></i>
+                            Due Soon (Next 3 Days) ({{ due_soon_assignments|length }})
+                        </div>
+                        <span class="badge bg-warning">Priority</span>
+                    </div>
+                    <div class="assignment-category-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Assignment</th>
+                                        <th>Subject</th>
+                                        <th>Due Date</th>
+                                        <th>Time Left</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sa in due_soon_assignments %}
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:7 }}0.1s">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-alt text-warning me-2"></i>
+                                                <div>
+                                                    <strong class="d-block">{{ sa.assignment.title }}</strong>
+                                                    <small class="text-muted">{{ sa.assignment.get_assignment_type_display }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">{{ sa.assignment.subject.name }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="d-block">{{ sa.assignment.due_date|date:"M d, Y" }}</small>
+                                            <small class="text-muted">{{ sa.assignment.due_date|date:"H:i" }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="countdown-timer warning" 
+                                                  data-due-date="{{ sa.assignment.due_date|date:'U' }}">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span class="countdown-text">Loading...</span>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="assignment-actions">
+                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
+                                                   class="btn btn-sm btn-outline-primary mb-1" 
+                                                   title="View Assignment Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'submit_assignment' sa.pk %}" 
+                                                   class="btn btn-sm btn-success mb-1"
+                                                   title="Submit Assignment">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Upcoming Assignments -->
+                {% if upcoming_assignments %}
+                <div class="assignment-category upcoming mb-4">
+                    <div class="assignment-category-header">
+                        <div>
+                            <i class="fas fa-calendar me-2"></i>
+                            Upcoming Assignments ({{ upcoming_assignments|length }})
+                        </div>
+                        <span class="badge bg-info">Future</span>
+                    </div>
+                    <div class="assignment-category-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Assignment</th>
+                                        <th>Subject</th>
+                                        <th>Due Date</th>
+                                        <th>Time Left</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sa in upcoming_assignments %}
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:8 }}0.1s">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-alt text-info me-2"></i>
+                                                <div>
+                                                    <strong class="d-block">{{ sa.assignment.title }}</strong>
+                                                    <small class="text-muted">{{ sa.assignment.get_assignment_type_display }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">{{ sa.assignment.subject.name }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="d-block">{{ sa.assignment.due_date|date:"M d, Y" }}</small>
+                                            <small class="text-muted">{{ sa.assignment.due_date|date:"H:i" }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="countdown-timer" 
+                                                  data-due-date="{{ sa.assignment.due_date|date:'U' }}">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <span class="countdown-text">Loading...</span>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="assignment-actions">
+                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
+                                                   class="btn btn-sm btn-outline-primary mb-1" 
+                                                   title="View Assignment Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'submit_assignment' sa.pk %}" 
+                                                   class="btn btn-sm btn-outline-success mb-1"
+                                                   title="Submit Assignment">
+                                                    <i class="fas fa-paper-plane"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Completed Assignments -->
+                {% if completed_assignments %}
+                <div class="assignment-category completed">
+                    <div class="assignment-category-header">
+                        <div>
+                            <i class="fas fa-check-circle me-2"></i>
+                            Completed Assignments ({{ completed_assignments|length }})
+                        </div>
+                        <span class="badge bg-success">Done</span>
+                    </div>
+                    <div class="assignment-category-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Assignment</th>
+                                        <th>Subject</th>
+                                        <th>Submitted Date</th>
+                                        <th>Status</th>
+                                        <th>Score</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for sa in completed_assignments %}
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:9 }}0.1s">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-file-alt text-success me-2"></i>
+                                                <div>
+                                                    <strong class="d-block">{{ sa.assignment.title }}</strong>
+                                                    <small class="text-muted">{{ sa.assignment.get_assignment_type_display }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">{{ sa.assignment.subject.name }}</span>
+                                        </td>
+                                        <td>
+                                            {% if sa.submitted_date %}
+                                                <small class="d-block">{{ sa.submitted_date|date:"M d, Y" }}</small>
+                                                <small class="text-muted">{{ sa.submitted_date|date:"H:i" }}</small>
+                                            {% else %}
+                                                <span class="text-muted">Not submitted</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="assignment-status">
+                                            {% if sa.status == 'GRADED' %}
+                                                <span class="badge badge-custom bg-success">
+                                                    <i class="fas fa-check me-1"></i>Graded
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-custom bg-info">
+                                                    <i class="fas fa-paper-plane me-1"></i>Submitted
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if sa.score is not None %}
+                                                <strong class="text-success">{{ sa.score }}</strong>/{{ sa.assignment.max_score }}
+                                                <div class="progress mt-1" style="height: 6px;">
+                                                    <div class="progress-bar bg-success" 
+                                                         style="width: {% widthratio sa.score sa.assignment.max_score 100 %}%">
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="assignment-actions">
+                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
+                                                   class="btn btn-sm btn-outline-primary mb-1" 
+                                                   title="View Assignment Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'submit_assignment' sa.pk %}" 
+                                                   class="btn btn-sm btn-outline-info mb-1"
+                                                   title="View Submission">
+                                                    <i class="fas fa-file-alt"></i>
+                                                </a>
+                                            </div>
+                                            {% if sa.feedback %}
+                                            <small class="text-success d-block mt-1" title="Teacher Feedback">
+                                                <i class="fas fa-comment"></i> Feedback
+                                            </small>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Empty States for Categories -->
+                {% if not overdue_assignments and not due_soon_assignments and not upcoming_assignments and not completed_assignments %}
+                <div class="text-center py-5">
+                    <i class="fas fa-book-open display-4 text-muted mb-3"></i>
+                    <h5 class="text-muted">No assignments found</h5>
+                    <p class="text-muted">You don't have any assignments at the moment.</p>
+                    <a href="{% url 'assignment_list' %}" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Browse All Assignments
+                    </a>
+                </div>
+                {% endif %}
 
                 <!-- Quick Actions -->
                 <div class="d-flex justify-content-between align-items-center mt-4">
@@ -582,9 +832,11 @@
                         </a>
                     </div>
                     <div class="text-muted">
-                        Showing {{ assignments_with_status|length }} assignments
+                        Total: {{ assignments.count }} assignments • 
+                        Completion: {{ completion_rate|floatformat:0 }}%
                     </div>
                 </div>
+
                 {% else %}
                 <div class="text-center py-5">
                     <i class="fas fa-book-open display-4 text-muted mb-3"></i>
@@ -911,6 +1163,43 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.transform = 'translateX(0)';
             this.style.boxShadow = 'none';
         });
+    });
+
+    // NEW: Smooth scroll to assignment categories
+    function scrollToCategory(category) {
+        const element = document.querySelector(`.assignment-category.${category}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Add highlight effect
+            element.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.5)';
+            setTimeout(() => {
+                element.style.boxShadow = '';
+            }, 2000);
+        }
+    }
+
+    // NEW: Quick navigation for assignment categories
+    document.addEventListener('keydown', function(e) {
+        if (e.altKey) {
+            switch(e.key) {
+                case '1':
+                    e.preventDefault();
+                    scrollToCategory('overdue');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    scrollToCategory('due-soon');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    scrollToCategory('upcoming');
+                    break;
+                case '4':
+                    e.preventDefault();
+                    scrollToCategory('completed');
+                    break;
+            }
+        }
     });
 });
 

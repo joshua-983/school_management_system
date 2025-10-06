@@ -1,9 +1,17 @@
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView, View
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import UserPassesTestMixin
 from django.db import transaction
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 from django.db.models import Avg, Max, Min, Count, Sum, Q
 from django.core.files.base import ContentFile
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.urls import reverse_lazy
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.db.models import F, ExpressionWrapper, FloatField
+import json
+import logging
 from openpyxl import load_workbook
 from io import BytesIO, StringIO
 import csv
@@ -11,11 +19,15 @@ from decimal import Decimal
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+from ..mixins import TwoFactorLoginRequiredMixin
 from .base_views import *
 from ..models import Grade, Assignment, StudentAssignment, ReportCard, Student, Subject, ClassAssignment
 from ..forms import GradeEntryForm, ReportCardForm, ReportCardFilterForm, BulkGradeUploadForm
 
-class GradeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+logger = logging.getLogger(__name__)
+
+# UPDATED: All views now use TwoFactorLoginRequiredMixin
+class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Grade
     template_name = 'core/academics/grades/grade_list.html'
     context_object_name = 'grades'
@@ -120,9 +132,9 @@ def grade_delete(request, pk):
         messages.success(request, 'Grade record deleted successfully.')
         return redirect('grade_list')
 
-class GradeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Grade
-    form_class = GradeEntryForm  # Changed from GradeForm to GradeEntryForm
+    form_class = GradeEntryForm
     template_name = 'core/academics/grades/grade_form.html'
     
     def get_object(self, queryset=None):
@@ -254,7 +266,7 @@ class GradeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         context['is_teacher'] = is_teacher(self.request.user)
         return context
 
-class BulkGradeUploadView(LoginRequiredMixin, UserPassesTestMixin, View):
+class BulkGradeUploadView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View):
     template_name = 'core/academics/grades/bulk_grade_upload.html'
     
     def test_func(self):
@@ -308,7 +320,7 @@ class BulkGradeUploadView(LoginRequiredMixin, UserPassesTestMixin, View):
             student=student,
             subject=assignment.subject,
             class_assignment=assignment.class_assignment,
-            academic_year=academic_year,  # Use converted format
+            academic_year=academic_year,
             term=term,
             defaults={
                 'homework_score': 0,
@@ -401,11 +413,8 @@ class GradeUploadTemplateView(View):
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="grade_upload_template.csv"'
         return response
-    
 
-#GRADE ENTRIES
-
-class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
     template_name = 'core/academics/grades/grade_entry.html'
@@ -465,36 +474,49 @@ class GradeEntryView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         
         return kwargs
 
+    @transaction.atomic
     def form_valid(self, form):
-        # Set the class_assignment automatically based on student's class and subject
-        student = form.cleaned_data['student']
-        subject = form.cleaned_data['subject']
-        
         try:
-            class_assignment = ClassAssignment.objects.get(
-                class_level=student.class_level,
-                subject=subject
-            )
-            form.instance.class_assignment = class_assignment
-        except ClassAssignment.DoesNotExist:
-            form.add_error(None, "No class assignment exists for this student's class and subject")
+            student = form.cleaned_data['student']
+            subject = form.cleaned_data['subject']
+            academic_year = form.cleaned_data['academic_year']
+            term = form.cleaned_data['term']
+            
+            # Check for duplicate grade
+            existing_grade = Grade.objects.filter(
+                student=student,
+                subject=subject, 
+                academic_year=academic_year,
+                term=term
+            ).exists()
+            
+            if existing_grade:
+                form.add_error(None, "A grade already exists for this student, subject, term, and academic year.")
+                return self.form_invalid(form)
+            
+            # Set class_assignment
+            try:
+                class_assignment = ClassAssignment.objects.get(
+                    class_level=student.class_level,
+                    subject=subject
+                )
+                form.instance.class_assignment = class_assignment
+            except ClassAssignment.DoesNotExist:
+                form.add_error(None, "No class assignment exists for this student's class and subject")
+                return self.form_invalid(form)
+            
+            form.instance.recorded_by = self.request.user
+            form.instance.calculate_total_score()
+            form.instance.determine_ges_grade()
+            
+            messages.success(self.request, 'Grade successfully recorded!')
+            return super().form_valid(form)
+            
+        except Exception as e:
+            logger.error(f"Error saving grade: {str(e)}")
+            messages.error(self.request, 'Error saving grade. Please try again.')
             return self.form_invalid(form)
-        
-        # Set recorded by
-        form.instance.recorded_by = self.request.user
-        
-        # Auto-calculate total score
-        form.instance.calculate_total_score()
-        form.instance.determine_ges_grade()
-        
-        messages.success(self.request, 'Grade successfully recorded!')
-        return super().form_valid(form)
 
-    def get_success_url(self):
-        messages.success(self.request, 'Grade recorded successfully!')
-        return super().get_success_url()
-
-# Add API view for real-time calculations
 class CalculateGradeAPI(View):
     def post(self, request):
         try:
@@ -547,9 +569,7 @@ class CalculateGradeAPI(View):
         }
         return descriptions.get(grade, '')
 
-
-#grade reports
-class GradeReportView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+class GradeReportView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/academics/grades/grade_report.html'
     
     def test_func(self):
@@ -596,7 +616,7 @@ class GradeReportView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
                 )
             ).order_by('ges_grade')
             
-            passing_rate = grades.filter(is_passing=True).count() / grades.count() * 100 if grades.count() > 0 else 0
+            passing_rate = grades.filter(total_score__gte=50).count() / grades.count() * 100 if grades.count() > 0 else 0
             
             context.update({
                 'selected_subject': subject,
@@ -612,23 +632,27 @@ class GradeReportView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         
         return context
 
-#best students view
-class BestStudentsView(LoginRequiredMixin, TemplateView):
+class BestStudentsView(TwoFactorLoginRequiredMixin, TemplateView):
     template_name = 'core/academics/grades/best_students.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        top_students = Student.objects.annotate(
-            avg_grade=Avg('grades__score')
-        ).order_by('-avg_grade')[:10]
         
-        # Debug output
-        print(f"Found {len(top_students)} top students")
-        for student in top_students:
-            print(f"Student: {student.full_name}, Avg Grade: {student.avg_grade}")
+        # Get current academic year
+        current_year = timezone.now().year
+        academic_year = f"{current_year}/{current_year + 1}"
+        
+        # Get top students by average grade
+        top_students = Student.objects.annotate(
+            avg_grade=Avg('grade__total_score')
+        ).filter(
+            grade__academic_year=academic_year,
+            is_active=True
+        ).order_by('-avg_grade')[:10]
         
         context.update({
             'top_students': top_students,
-            'current_year': timezone.now().year
+            'current_year': current_year,
+            'academic_year': academic_year
         })
         return context

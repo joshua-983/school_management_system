@@ -13,7 +13,6 @@ from ..forms import StudentProfileForm, StudentRegistrationForm
 from ..models import Student, ClassAssignment, StudentAttendance, Fee, Grade, AcademicTerm, StudentAssignment, Timetable
 
 
-
 CLASS_LEVEL_CHOICES = [
     ('P1', 'Primary 1'),
     ('P2', 'Primary 2'),
@@ -44,7 +43,7 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['class_levels'] = CLASS_LEVEL_CHOICES  # Use the global constant
+        context['class_levels'] = CLASS_LEVEL_CHOICES
         
         # Calculate statistics
         queryset = self.get_queryset()
@@ -311,52 +310,51 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         academic_year = f"{current_year}/{current_year + 1}"
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         
-        # FIX: Get assignments for student's class level
-        class_assignments = Assignment.objects.filter(
-            class_assignment__class_level=student.class_level
-        ).select_related('subject', 'class_assignment').order_by('due_date')
-        
-        # FIX: Get student's specific assignment records
-        student_assignments = StudentAssignment.objects.filter(
+        # ENHANCED: Get assignments with better organization
+        assignments = StudentAssignment.objects.filter(
             student=student
-        ).select_related('assignment')
+        ).select_related(
+            'assignment', 
+            'assignment__subject',
+            'assignment__class_assignment'
+        ).order_by('assignment__due_date')
         
-        # Create a mapping for quick lookup
-        assignment_status_map = {sa.assignment_id: sa for sa in student_assignments}
+        # ENHANCED: Categorize assignments for better UX
+        today = timezone.now()
+        context['overdue_assignments'] = [
+            sa for sa in assignments 
+            if sa.assignment.due_date < today and sa.status in ['PENDING', 'LATE']
+        ]
         
-        assignments_with_status = []
-        for assignment in class_assignments:
-            student_assignment = assignment_status_map.get(assignment.id)
-            
-            # Determine if student can submit
-            can_submit = False
-            if student_assignment:
-                status = student_assignment.status
-                can_submit = status in ['PENDING', 'LATE']
-            else:
-                # If no student assignment exists, create one
-                student_assignment = StudentAssignment.objects.create(
-                    student=student,
-                    assignment=assignment,
-                    status='PENDING'
-                )
-                status = 'PENDING'
-                can_submit = True
-            
-            assignments_with_status.append({
-                'assignment': assignment,
-                'student_assignment': student_assignment,
-                'status': status,
-                'can_submit': can_submit,
-                'is_overdue': assignment.due_date < timezone.now(),
-                'due_soon': assignment.due_date <= timezone.now() + timedelta(days=3)
-            })
+        context['due_soon_assignments'] = [
+            sa for sa in assignments 
+            if sa.assignment.due_date <= today + timedelta(days=3) 
+            and sa.status in ['PENDING', 'LATE']
+            and sa.assignment.due_date >= today
+        ]
         
-        # Calculate statistics - FIXED
-        pending_assignments = len([a for a in assignments_with_status if a['status'] in ['PENDING', 'LATE']])
-        submitted_assignments = len([a for a in assignments_with_status if a['status'] in ['SUBMITTED', 'GRADED']])
-        graded_assignments = len([a for a in assignments_with_status if a['status'] == 'GRADED'])
-        due_soon_assignments = len([a for a in assignments_with_status if a['due_soon'] and a['status'] in ['PENDING', 'LATE']])
+        context['upcoming_assignments'] = [
+            sa for sa in assignments 
+            if sa.assignment.due_date > today + timedelta(days=3)
+            and sa.status in ['PENDING', 'LATE']
+        ]
+        
+        context['completed_assignments'] = [
+            sa for sa in assignments 
+            if sa.status in ['SUBMITTED', 'GRADED']
+        ]
+        
+        # Progress statistics
+        total_assignments = assignments.count()
+        completed_count = len(context['completed_assignments'])
+        context['completion_rate'] = (completed_count / total_assignments * 100) if total_assignments > 0 else 0
+        
+        # KEEP ALL YOUR EXISTING CONTEXT DATA:
+        # Calculate statistics
+        pending_assignments = len([a for a in assignments if a.status in ['PENDING', 'LATE']])
+        submitted_assignments = len([a for a in assignments if a.status in ['SUBMITTED', 'GRADED']])
+        graded_assignments = len([a for a in assignments if a.status == 'GRADED'])
+        due_soon_assignments = len(context['due_soon_assignments'])
         
         # Calculate average grade for current term
         current_grades = Grade.objects.filter(
@@ -418,7 +416,7 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         
         context.update({
             'student': student,
-            'assignments_with_status': assignments_with_status,
+            'assignments': assignments,  # Keep original for backward compatibility if needed
             'pending_assignments': pending_assignments,
             'submitted_assignments': submitted_assignments,
             'graded_assignments': graded_assignments,

@@ -1,0 +1,411 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Teacher Analytics - School Management System{% endblock %}
+
+{% block extra_css %}
+<style>
+.analytics-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.analytics-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.progress-sm {
+    height: 8px;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card analytics-card bg-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-2">
+                                <i class="fas fa-chart-line me-3"></i>
+                                {% if current_teacher %}
+                                {{ current_teacher.user.get_full_name }}'s Analytics
+                                {% else %}
+                                Teacher Analytics Overview
+                                {% endif %}
+                            </h2>
+                            <p class="mb-0 opacity-75">
+                                Performance metrics and assignment statistics
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <i class="fas fa-analytics display-4 opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if current_teacher %}
+    <!-- Teacher-specific Analytics -->
+    <div class="row">
+        <!-- Key Metrics -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card analytics-card border-start border-primary border-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <div class="text-primary font-weight-bold text-uppercase mb-1">
+                                Total Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_assignments }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-book fa-2x text-primary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card analytics-card border-start border-success border-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <div class="text-success font-weight-bold text-uppercase mb-1">
+                                Submission Rate
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ average_submission_rate }}%
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card analytics-card border-start border-info border-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <div class="text-info font-weight-bold text-uppercase mb-1">
+                                Average Score
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ average_score }}%
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-bar fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card analytics-card border-start border-warning border-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <div class="text-warning font-weight-bold text-uppercase mb-1">
+                                Active Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ active_assignments }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-tasks fa-2x text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Statistics -->
+    <div class="row">
+        <!-- Assignment Status -->
+        <div class="col-lg-6 mb-4">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>Assignment Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="stat-number text-primary">{{ total_assignments }}</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-number text-success">{{ active_assignments }}</div>
+                            <div class="stat-label">Active</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-number text-info">{{ completed_assignments }}</div>
+                            <div class="stat-label">Completed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Work Status -->
+        <div class="col-lg-6 mb-4">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user-graduate me-2"></i>Student Work Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="stat-number text-primary">{{ total_student_assignments }}</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-number text-success">{{ graded_count }}</div>
+                            <div class="stat-label">Graded</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-number text-warning">{{ submitted_count }}</div>
+                            <div class="stat-label">Submitted</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="stat-number text-danger">{{ pending_count }}</div>
+                            <div class="stat-label">Pending</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Performance -->
+    {% if subject_performance %}
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-book-open me-2"></i>Subject Performance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Assignments</th>
+                                    <th>Avg Score</th>
+                                    <th>Submission Rate</th>
+                                    <th>Performance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subject in subject_performance %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ subject.subject.name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ subject.subject.code }}</small>
+                                    </td>
+                                    <td>{{ subject.assignment_count }}</td>
+                                    <td>
+                                        <span class="fw-bold {% if subject.average_score >= 70 %}text-success{% elif subject.average_score >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ subject.average_score }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress progress-sm flex-grow-1 me-2">
+                                                <div class="progress-bar bg-success" style="width: {{ subject.submission_rate }}%"></div>
+                                            </div>
+                                            <span class="small">{{ subject.submission_rate }}%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if subject.average_score >= 70 %}
+                                        <span class="badge bg-success">Excellent</span>
+                                        {% elif subject.average_score >= 50 %}
+                                        <span class="badge bg-warning">Good</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Needs Attention</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Assignments -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Recent Assignments</h5>
+                </div>
+                <div class="card-body">
+                    {% for assignment in recent_assignments %}
+                    <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">{{ assignment.title }}</h6>
+                            <small class="text-muted">
+                                {{ assignment.subject.name }} • {{ assignment.class_assignment.get_class_level_display }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                Due: {{ assignment.due_date|date:"M d, Y" }}
+                            </small>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="badge bg-{% if assignment.due_date < now %}danger{% else %}primary{% endif %}">
+                                {{ assignment.get_assignment_type_display }}
+                            </span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No recent assignments</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming Deadlines -->
+        <div class="col-lg-6 mb-4">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Deadlines</h5>
+                </div>
+                <div class="card-body">
+                    {% for assignment in upcoming_deadlines %}
+                    <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">{{ assignment.title }}</h6>
+                            <small class="text-muted">
+                                {{ assignment.subject.name }} • {{ assignment.get_assignment_type_display }}
+                            </small>
+                            <br>
+                            <small class="text-{% if assignment.due_date < now %}danger{% else %}warning{% endif %}">
+                                Due: {{ assignment.due_date|date:"M d, Y H:i" }}
+                            </small>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="badge bg-{% if assignment.due_date < now %}danger{% else %}warning{% endif %}">
+                                {{ assignment.due_date|timeuntil }}
+                            </span>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No upcoming deadlines</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% elif all_teachers %}
+    <!-- All Teachers Overview (Admin View) -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card analytics-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chalkboard-teacher me-2"></i>All Teachers Performance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Teacher</th>
+                                    <th>Email</th>
+                                    <th>Total Assignments</th>
+                                    <th>Avg Submission Rate</th>
+                                    <th>Avg Score</th>
+                                    <th>Performance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stats in teacher_stats %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ stats.teacher.user.get_full_name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ stats.teacher.employee_id }}</small>
+                                    </td>
+                                    <td>{{ stats.teacher.user.email }}</td>
+                                    <td>{{ stats.total_assignments }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress progress-sm flex-grow-1 me-2">
+                                                <div class="progress-bar bg-info" style="width: {{ stats.average_submission_rate }}%"></div>
+                                            </div>
+                                            <span class="small">{{ stats.average_submission_rate }}%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {% if stats.average_score >= 70 %}text-success{% elif stats.average_score >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ stats.average_score }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if stats.total_assignments > 10 and stats.average_score >= 70 %}
+                                        <span class="badge bg-success">Excellent</span>
+                                        {% elif stats.total_assignments > 5 %}
+                                        <span class="badge bg-warning">Good</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">New</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No teacher data available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -56,13 +56,14 @@
                     <i class="bi bi-speedometer2 me-2"></i>
                     Teacher Dashboard
                 </h2>
-                <span class="badge bg-primary fs-6">Welcome, {{ request.user.get_full_name }}</span>
+                <span class="badge bg-primary fs-6">Welcome, {{ teacher.user.get_full_name }}</span>
             </div>
         </div>
     </div>
 
+    <!-- Statistics Cards -->
     <div class="row">
-        <div class="col-md-4 mb-4">
+        <div class="col-md-3 mb-4">
             <div class="card stats-card text-white bg-primary h-100">
                 <div class="card-body">
                     <h5 class="card-title">
@@ -76,42 +77,140 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-4">
-            <div class="card stats-card text-white bg-success h-100">
+        <div class="col-md-3 mb-4">
+            <div class="card stats-card text-white bg-warning h-100">
                 <div class="card-body">
                     <h5 class="card-title">
                         <i class="bi bi-clipboard-check me-2"></i>
-                        Pending Assignments
+                        To Grade
                     </h5>
-                    <p class="display-4">{{ pending_assignments }}</p>
-                    <a href="{% url 'assignment_list' %}?status=PENDING" class="text-white text-decoration-none">
-                        View Assignments <i class="bi bi-arrow-right"></i>
+                    <p class="display-4">{{ pending_grading_count }}</p>
+                    <a href="{% url 'assignment_list' %}?status=SUBMITTED" class="text-white text-decoration-none">
+                        Grade Now <i class="bi bi-arrow-right"></i>
                     </a>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-4">
+        <div class="col-md-3 mb-4">
             <div class="card stats-card text-white bg-info h-100">
                 <div class="card-body">
                     <h5 class="card-title">
                         <i class="bi bi-people-fill me-2"></i>
                         Students
                     </h5>
-                    <p class="display-4">{{ total_students }}</p>
+                    <p class="display-4">{{ student_count }}</p>
                     <a href="{% url 'student_list' %}" class="text-white text-decoration-none">
                         View Students <i class="bi bi-arrow-right"></i>
                     </a>
                 </div>
             </div>
         </div>
+        <div class="col-md-3 mb-4">
+            <div class="card stats-card text-white bg-success h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-journal-text me-2"></i>
+                        Total Assignments
+                    </h5>
+                    <p class="display-4">{{ total_assignments }}</p>
+                    <a href="{% url 'assignment_list' %}" class="text-white text-decoration-none">
+                        View All <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <!-- Recent Submissions Needing Grading -->
+    {% if recent_submissions %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Recent Submissions Needing Grading
+                        <span class="badge bg-light text-dark ms-2">{{ recent_submissions|length }}</span>
+                    </h5>
+                    <a href="{% url 'assignment_list' %}?status=SUBMITTED" class="btn btn-light btn-sm">
+                        View All Submissions
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Assignment</th>
+                                    <th>Subject</th>
+                                    <th>Class</th>
+                                    <th>Submitted</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for submission in recent_submissions %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ submission.student.get_full_name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ submission.student.student_id }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ submission.assignment.title }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ submission.assignment.subject.name }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info text-dark">{{ submission.assignment.class_assignment.get_class_level_display }}</span>
+                                    </td>
+                                    <td>
+                                        {% if submission.submitted_date %}
+                                        <span class="text-success">
+                                            {{ submission.submitted_date|date:"M d, Y" }}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">{{ submission.submitted_date|timesince }} ago</small>
+                                        {% else %}
+                                        <span class="text-muted">Not submitted</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if submission.status == 'LATE' %}danger{% else %}warning{% endif %}">
+                                            {{ submission.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'grade_assignment' submission.pk %}" class="btn btn-sm btn-primary"
+                                           data-bs-toggle="tooltip" title="Grade Assignment">
+                                            <i class="bi bi-pencil"></i> Grade
+                                        </a>
+                                        <a href="{% url 'assignment_detail' submission.assignment.pk %}" class="btn btn-sm btn-info"
+                                           data-bs-toggle="tooltip" title="View Assignment">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Assignments -->
     <div class="row">
         <div class="col-12">
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="bi bi-clock-history me-2"></i>
+                        <i class="bi bi-journal-text me-2"></i>
                         Recent Assignments
                     </h5>
                     <a href="{% url 'assignment_list' %}" class="btn btn-light btn-sm">
@@ -145,19 +244,27 @@
                                         <span class="badge bg-info text-dark">{{ assignment.class_assignment.get_class_level_display }}</span>
                                     </td>
                                     <td>
-                                        <span class="{% if assignment.due_date < time_now %}text-danger{% endif %}">
+                                        <span class="{% if assignment.due_date < now %}text-danger{% else %}text-success{% endif %}">
                                             {{ assignment.due_date|date:"M d, Y H:i" }}
                                         </span>
+                                        {% if assignment.due_date > now %}
+                                        <br>
+                                        <small class="text-muted">Due in {{ assignment.due_date|timeuntil }}</small>
+                                        {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if assignment.due_date < time_now %}danger{% else %}success{% endif %}">
-                                            {% if assignment.due_date < time_now %}Overdue{% else %}Active{% endif %}
+                                        <span class="badge bg-{% if assignment.due_date < now %}danger{% else %}success{% endif %}">
+                                            {% if assignment.due_date < now %}Overdue{% else %}Active{% endif %}
                                         </span>
                                     </td>
                                     <td>
                                         <a href="{% url 'assignment_detail' assignment.pk %}" class="btn btn-sm btn-info"
                                            data-bs-toggle="tooltip" title="View Assignment">
                                             <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="{% url 'assignment_update' assignment.pk %}" class="btn btn-sm btn-warning"
+                                           data-bs-toggle="tooltip" title="Edit Assignment">
+                                            <i class="bi bi-pencil"></i>
                                         </a>
                                     </td>
                                 </tr>
@@ -176,6 +283,63 @@
         </div>
     </div>
 
+    <!-- Upcoming Deadlines -->
+    {% if upcoming_deadlines %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock me-2"></i>
+                        Upcoming Deadlines (Next 7 Days)
+                    </h5>
+                    <span class="badge bg-light text-dark">{{ upcoming_deadlines|length }} assignments</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for assignment in upcoming_deadlines %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body">
+                                    <h6 class="card-title text-danger">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        {{ assignment.title }}
+                                    </h6>
+                                    <p class="card-text mb-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-book me-1"></i>
+                                            {{ assignment.subject.name }}
+                                        </small>
+                                    </p>
+                                    <p class="card-text mb-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-people me-1"></i>
+                                            {{ assignment.class_assignment.get_class_level_display }}
+                                        </small>
+                                    </p>
+                                    <p class="card-text">
+                                        <strong class="text-danger">
+                                            <i class="bi bi-clock me-1"></i>
+                                            Due: {{ assignment.due_date|date:"M d, Y H:i" }}
+                                        </strong>
+                                    </p>
+                                    <div class="d-grid">
+                                        <a href="{% url 'assignment_detail' assignment.pk %}" class="btn btn-sm btn-outline-danger">
+                                            View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- My Classes -->
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -210,7 +374,7 @@
                                            class="btn btn-primary">
                                             <i class="bi bi-graph-up me-1"></i> Grades
                                         </a>
-                                        <a href="{% url 'assignment_add' %}?class_assignment={{ class_assignment.pk }}" 
+                                        <a href="{% url 'assignment_create' %}?class_assignment={{ class_assignment.pk }}" 
                                            class="btn btn-success">
                                             <i class="bi bi-plus-circle me-1"></i> Assignment
                                         </a>

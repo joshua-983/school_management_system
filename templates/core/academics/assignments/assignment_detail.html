@@ -310,7 +310,7 @@
                 </div>
             </div>
 
-            <!-- Student Submission Section -->
+            <!-- Student Submission Section - FIXED -->
             {% if is_student %}
             <div class="card info-card mb-4 fade-in" style="animation-delay: 0.3s;">
                 <div class="card-header bg-white">
@@ -372,45 +372,76 @@
                             </div>
                             {% endif %}
                         </div>
-                        {% else %}
+
+                        {% elif student_assignment.status == 'SUBMITTED' or student_assignment.status == 'LATE' %}
                         <div class="alert alert-info border-0 rounded-3">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <i class="fas fa-info-circle me-2"></i>
                                     <strong>Assignment Submitted</strong>
                                     <p class="mb-0 mt-1">Your assignment is being reviewed by your teacher.</p>
+                                    {% if student_assignment.submitted_date %}
+                                    <small class="text-muted">Submitted on: {{ student_assignment.submitted_date|date:"M j, Y, g:i a" }}</small>
+                                    {% endif %}
                                 </div>
                                 <span class="badge stat-badge bg-info">
                                     {{ student_assignment.get_status_display }}
                                 </span>
                             </div>
                         </div>
-                        {% endif %}
-                    {% else %}
-                    <div class="alert alert-warning due-date-alert border-warning">
-                        <div class="d-flex">
-                            <i class="fas fa-exclamation-triangle text-warning me-3 fs-4"></i>
-                            <div>
-                                <h6 class="alert-heading">Assignment Not Submitted</h6>
-                                <p class="mb-2">You haven't submitted this assignment yet. Please make sure to submit before the due date.</p>
-                                {% if assignment.is_overdue %}
-                                <div class="alert alert-danger mt-2 mb-0 rounded-2">
-                                    <i class="fas fa-clock-history me-1"></i>
-                                    This assignment is now overdue!
-                                </div>
-                                {% else %}
-                                <small class="text-muted">Time remaining: <span id="time-remaining"></span></small>
-                                {% endif %}
+
+                        {% if student_assignment.file %}
+                        <div class="mt-3">
+                            <h6 class="text-muted mb-2">Your Submission</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file text-info me-2"></i>
+                                <a href="{{ student_assignment.file.url }}" class="text-decoration-none" download>
+                                    Download Your Submission
+                                </a>
                             </div>
                         </div>
-                        
-                        {% if not assignment.is_overdue %}
-                        <div class="text-center mt-3">
-                            <a href="{% url 'submit_assignment' student_assignment_id %}" class="btn btn-success btn-lg">
-                                <i class="fas fa-paper-plane me-2"></i>Submit Assignment
-                            </a>
+                        {% endif %}
+
+                        {% else %}
+                        <!-- PENDING status - Show submission form -->
+                        <div class="alert alert-warning due-date-alert border-warning">
+                            <div class="d-flex">
+                                <i class="fas fa-exclamation-triangle text-warning me-3 fs-4"></i>
+                                <div>
+                                    <h6 class="alert-heading">Assignment Not Submitted</h6>
+                                    <p class="mb-2">You haven't submitted this assignment yet. Please make sure to submit before the due date.</p>
+                                    {% if assignment.is_overdue %}
+                                    <div class="alert alert-danger mt-2 mb-0 rounded-2">
+                                        <i class="fas fa-clock-history me-1"></i>
+                                        This assignment is now overdue!
+                                    </div>
+                                    {% else %}
+                                    <small class="text-muted">Time remaining: <span id="time-remaining"></span></small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            {% if not assignment.is_overdue %}
+                            <div class="text-center mt-3">
+                                <a href="{% url 'submit_assignment' student_assignment.id %}" class="btn btn-success btn-lg">
+                                    <i class="fas fa-paper-plane me-2"></i>Submit Assignment
+                                </a>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
+
+                    {% else %}
+                    <!-- No student_assignment exists - This should not happen with our fix, but keep as fallback -->
+                    <div class="alert alert-danger border-0 rounded-3">
+                        <div class="d-flex">
+                            <i class="fas fa-exclamation-circle text-danger me-3 fs-4"></i>
+                            <div>
+                                <h6 class="alert-heading">Assignment Not Available</h6>
+                                <p class="mb-2">This assignment is not available for submission. Please contact your teacher if you believe this is an error.</p>
+                            </div>
+                        </div>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -455,8 +486,8 @@
             </div>
             {% endif %}
 
-            <!-- Student Submission Form -->
-            {% if is_student and not student_assignment and not assignment.is_overdue %}
+            <!-- Student Submission Card - FIXED -->
+            {% if is_student and student_assignment and student_assignment.status == 'PENDING' and not assignment.is_overdue %}
             <div class="card info-card fade-in student-submission" style="animation-delay: 0.6s;">
                 <div class="card-header bg-transparent border-0">
                     <h5 class="mb-0"><i class="fas fa-paper-plane me-2 text-success"></i>Submit Assignment</h5>
@@ -466,7 +497,7 @@
                         <i class="fas fa-file-upload display-4 text-muted mb-3"></i>
                         <h6>Ready to submit your work?</h6>
                         <p class="text-muted small">Click below to start the submission process</p>
-                        <a href="{% url 'submit_assignment' student_assignment_id %}" class="btn btn-success mt-2">
+                        <a href="{% url 'submit_assignment' student_assignment.id %}" class="btn btn-success mt-2">
                             <i class="fas fa-upload me-2"></i>Submit Assignment
                         </a>
                     </div>

@@ -3,79 +3,87 @@
 {% block title %}Bulk Grade Upload{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Bulk Grade Upload</h5>
-    </div>
-    <div class="card-body">
-        {% if messages %}
-        <div class="alert alert-info">
-            {% for message in messages %}
-            <div{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</div>
-            {% endfor %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-upload me-2"></i>Bulk Grade Upload
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                    <div class="alert alert-info">
+                        {% for message in messages %}
+                        <div{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-info">
+                        <h6>Instructions:</h6>
+                        <ol>
+                            <li>Download the <a href="{% url 'grade_upload_template' %}" class="alert-link">template file</a> (CSV or Excel)</li>
+                            <li>Fill in the student IDs and scores</li>
+                            <li>Select the correct assignment and term</li>
+                            <li>Upload the completed file below</li>
+                        </ol>
+                        <p class="mb-0">Required columns: <code>student_id</code> and <code>score</code></p>
+                        <p class="mt-2"><strong>Note:</strong> Scores must be between 0 and the assignment's maximum score.</p>
+                    </div>
+                    
+                    <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.assignment.id_for_label }}" class="form-label">Assignment *</label>
+                            {{ form.assignment }}
+                            {% if form.assignment.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.assignment.errors.as_text }}
+                                </div>
+                            {% endif %}
+                            <small class="text-muted">Filtered by your teaching assignments</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.term.id_for_label }}" class="form-label">Term *</label>
+                            {{ form.term }}
+                            {% if form.term.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.term.errors.as_text }}
+                                </div>
+                            {% endif %}
+                            <small class="text-muted">Select the current academic term</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.file.id_for_label }}" class="form-label">Grade File *</label>
+                            {{ form.file }}
+                            {% if form.file.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.file.errors.as_text }}
+                                </div>
+                            {% endif %}
+                            <small class="text-muted">Accepted formats: .csv, .xlsx, .xls (Max 5MB)</small>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-1"></i> Back to Grades
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="uploadBtn">
+                                <span class="upload-text">
+                                    <i class="bi bi-upload me-1"></i> Upload Grades
+                                </span>
+                                <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-        {% endif %}
-        
-        <div class="alert alert-info">
-            <h6>Instructions:</h6>
-            <ol>
-                <li>Download the <a href="{% url 'grade_upload_template' %}">template file</a> (CSV or Excel)</li>
-                <li>Fill in the student IDs and scores</li>
-                <li>Select the correct assignment and term</li>
-                <li>Upload the completed file below</li>
-            </ol>
-            <p class="mb-0">Required columns: <code>student_id</code> and <code>score</code></p>
-            <p class="mt-2"><strong>Note:</strong> Scores must be between 0 and the assignment's maximum score.</p>
-        </div>
-        
-        <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
-            {% csrf_token %}
-            
-            <div class="mb-3">
-                <label for="{{ form.assignment.id_for_label }}" class="form-label">Assignment *</label>
-                {{ form.assignment }}
-                {% if form.assignment.errors %}
-                    <div class="invalid-feedback d-block">
-                        {{ form.assignment.errors.as_text }}
-                    </div>
-                {% endif %}
-                <small class="text-muted">Filtered by your teaching assignments</small>
-            </div>
-            
-            <div class="mb-3">
-                <label for="{{ form.term.id_for_label }}" class="form-label">Term *</label>
-                {{ form.term }}
-                {% if form.term.errors %}
-                    <div class="invalid-feedback d-block">
-                        {{ form.term.errors.as_text }}
-                    </div>
-                {% endif %}
-                <small class="text-muted">Select the current academic term</small>
-            </div>
-            
-            <div class="mb-3">
-                <label for="{{ form.file.id_for_label }}" class="form-label">Grade File *</label>
-                {{ form.file }}
-                {% if form.file.errors %}
-                    <div class="invalid-feedback d-block">
-                        {{ form.file.errors.as_text }}
-                    </div>
-                {% endif %}
-                <small class="text-muted">Accepted formats: .csv, .xlsx, .xls (Max 5MB)</small>
-            </div>
-            
-            <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-1"></i> Back to Grades
-                </a>
-                <button type="submit" class="btn btn-primary" id="uploadBtn">
-                    <span class="upload-text">
-                        <i class="fas fa-upload me-1"></i> Upload Grades
-                    </span>
-                    <span class="spinner-border spinner-border-sm d-none" role="status"></span>
-                </button>
-            </div>
-        </form>
     </div>
 </div>
 

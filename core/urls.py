@@ -1,19 +1,27 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+
+# FIXED: Import from teacher_views (singular) not teachers_views (plural)
+from .views.teacher_views import (
+    TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView,
+    TeacherAssignmentAnalyticsView, TeacherDetailAnalyticsView  # Add the analytics views
+)
+
 from .views.grade_views import CalculateGradeAPI
 # Import from the new modular views
 from .views.bill_views import BillListView, BillDetailView, BillGenerateView
-from .views.base_views import home, admin_dashboard, teacher_dashboard, student_dashboard
-from .views.student_views import StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, StudentDeleteView, StudentGradeListView, StudentAttendanceView, StudentFeeListView, StudentProfileView
-from .views.parents_views import (
-    ParentCreateView, ParentUpdateView, ParentDeleteView, parent_dashboard,
-    ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
-    ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView
+from .views.base_views import home, admin_dashboard, teacher_dashboard
+# REMOVED: student_dashboard function import since we're using class-based view
+from .views.student_views import (
+    StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, 
+    StudentDeleteView, StudentGradeListView, StudentAttendanceView, 
+    StudentFeeListView, StudentProfileView, StudentDashboardView
 )
-
-# Add these imports to your existing parents_views imports
 from .views.parents_views import (
-    ParentDashboardView, ParentAnnouncementListView, ParentMessageListView,
+    ParentCreateView, ParentUpdateView, ParentDeleteView,
+    ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
+    ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
+    ParentDashboardView, ParentAnnouncementListView, ParentMessageListView,  # KEEP THESE
     ParentMessageCreateView, ParentCalendarView, ParentMessageDetailView
 )
 from .views.fee_views import (
@@ -22,7 +30,7 @@ from .views.fee_views import (
     FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView
 )
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
-from .views.teacher_views import TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView
+# REMOVE THIS DUPLICATE IMPORT: from .views.teacher_views import TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
 
 # UPDATE THESE IMPORTS - ADD THE MISSING VIEWS
@@ -58,12 +66,15 @@ router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
 urlpatterns = [
     # API endpoints
     path('api/', include(router.urls)),
-    path('__debug__/', include('debug_toolbar.urls')),
+    # REMOVED: Debug Toolbar URL - it's already in main urls.py
+    
     # Home and dashboards
     path('', home, name='home'),
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
     path('teacher-dashboard/', teacher_dashboard, name='teacher_dashboard'),
-    path('student-dashboard/', student_dashboard, name='student_dashboard'),
+    
+    # FIXED: Use class-based StudentDashboardView instead of function view
+    path('student-dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
     
     # Student URLs
     path('students/', StudentListView.as_view(), name='student_list'),
@@ -117,13 +128,16 @@ urlpatterns = [
     path('subjects/<int:pk>/delete/', SubjectDeleteView.as_view(), name='subject_delete'),
     path('subjects/<int:pk>/', SubjectDetailView.as_view(), name='subject_detail'),
     
-    # Teacher URLs
+    # Teacher URLs - FIXED: Use the correct imports from teacher_views
     path('teachers/', TeacherListView.as_view(), name='teacher_list'),
     path('teachers/add/', TeacherCreateView.as_view(), name='teacher_add'),
     path('teachers/<int:pk>/edit/', TeacherUpdateView.as_view(), name='teacher_edit'),
     path('teachers/<int:pk>/delete/', TeacherDeleteView.as_view(), name='teacher_delete'),
+    # FIXED: Use direct imports from teacher_views
+    path('teachers/analytics/', TeacherAssignmentAnalyticsView.as_view(), name='teacher_analytics'),
+    path('teachers/<int:pk>/analytics/', TeacherDetailAnalyticsView.as_view(), name='teacher_analytics_detail'),
    
-    # Assignment URLs - UPDATED SECTION
+    # Assignment URLs - FIXED: Removed duplicate assignment creation URL
     path('assignments/', AssignmentListView.as_view(), name='assignment_list'),
     path('assignments/create/', AssignmentCreateView.as_view(), name='assignment_create'),
     path('assignments/<int:pk>/', AssignmentDetailView.as_view(), name='assignment_detail'),
@@ -133,18 +147,18 @@ urlpatterns = [
     path('assignments/calendar/', AssignmentCalendarView.as_view(), name='assignment_calendar'),
     path('assignments/calendar/events/', AssignmentEventJsonView.as_view(), name='assignment_calendar_events'),
     
-    # ADD THESE MISSING ASSIGNMENT URL PATTERNS:
+    # Assignment grading and analytics URLs
     path('assignments/grade/<int:pk>/', GradeAssignmentView.as_view(), name='grade_assignment'),
     path('assignments/<int:pk>/analytics/', AssignmentAnalyticsView.as_view(), name='assignment_analytics'),
     path('assignments/<int:pk>/export/', AssignmentExportView.as_view(), name='assignment_export'),
     path('assignments/<int:pk>/bulk-grade/', BulkGradeAssignmentView.as_view(), name='bulk_grade_assignment'),
     path('api/grade-assignment/', GradeAssignmentView.as_view(), name='api_grade_assignment'),
+    
     # Class Assignment URLs
     path('class-assignments/', ClassAssignmentListView.as_view(), name='class_assignment_list'),
     path('class-assignments/create/', ClassAssignmentCreateView.as_view(), name='class_assignment_create'),
     path('class-assignments/<int:pk>/update/', ClassAssignmentUpdateView.as_view(), name='class_assignment_update'),
     path('class-assignments/<int:pk>/delete/', ClassAssignmentDeleteView.as_view(), name='class_assignment_delete'),
-    path('assignments/add/', AssignmentCreateView.as_view(), name='assignment_add'),
     
     # Grade URLs
     path('grades/', GradeListView.as_view(), name='grade_list'),
@@ -181,28 +195,24 @@ urlpatterns = [
     path('attendance/load-periods/', load_periods, name='load_periods'),
     path('student-attendance/', StudentAttendanceListView.as_view(), name='student_attendance_list'),
     
-    # Parent URLs
-    path('parent/dashboard/', parent_dashboard, name='parent_dashboard'),
-    path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
-    path('parent/children/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
-    path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
-    path('parent/fees/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
-    path('parent/fees/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_fee_payment'),
-    path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
-    path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
-    path('parent/report-cards/<int:student_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
-    path('parent/report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
-    
-    # Add to your urls.py in the parent section
-    
-    # Parent URLs
+    # Parent URLs - FIXED: Added missing parent URLs
     path('parent/dashboard/', ParentDashboardView.as_view(), name='parent_dashboard'),
     path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
     path('parent/child/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
     path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
     path('parent/fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
+    path('parent/fee/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_fee_payment'),
     path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
     path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
+    path('parent/report-cards/<int:student_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
+    path('parent/report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
+    
+    # ADD THESE MISSING PARENT URLS:
+    path('parent/announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
+    path('parent/messages/', ParentMessageListView.as_view(), name='parent_messages'),
+    path('parent/messages/create/', ParentMessageCreateView.as_view(), name='parent_message_create'),
+    path('parent/messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
+    path('parent/calendar/', ParentCalendarView.as_view(), name='parent_calendar'),
     
     # Analytics Dashboard
     path('analytics/', AnalyticsDashboardView.as_view(), name='analytics_dashboard'),

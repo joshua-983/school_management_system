@@ -4,7 +4,6 @@ Django settings for school_mgt_system project.
 
 from pathlib import Path
 import os
-from asgiref.sync import sync_to_async
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,71 +11,49 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 SECRET_KEY = 'django-insecure-o9z-*rh4=)fvlhj^+v!nq9%&jf_c$y9%1s&x^3&=$=%yz4yw)1'
 DEBUG = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '::1']
 
 # Application definition
 INSTALLED_APPS = [
-    'daphne',  # Must be first
-    'channels',  # Second
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core',
-    'accounts',
-    'django_extensions',
+    'django.contrib.humanize',
     'django.contrib.admindocs',
+
     'crispy_forms',
     'crispy_bootstrap5',
-    'django.contrib.humanize',
+    'django_extensions',
     'rest_framework',
-    'django_otp',
-    'django_otp.plugins.otp_totp',
     'guardian',
     'django_filters',
-    'debug_toolbar',
+    
+    # Local apps
+    'core',
+    'accounts',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_otp.middleware.OTPMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
 ]
 
 ROOT_URLCONF = 'school_mgt_system.urls'
 ASGI_APPLICATION = 'school_mgt_system.asgi.application'
 WSGI_APPLICATION = 'school_mgt_system.wsgi.application'
-
-# Channel Layers Configuration (Updated)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"  # Using in-memory for development
-    }
-}
-
-# For production, use this Redis config instead:
-"""
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("redis://:password@127.0.0.1:6379/0")],  # Add password if configured
-            "symmetric_encryption_keys": [SECRET_KEY],
-        },
-    },
-}
-"""
 
 # Database
 DATABASES = {
@@ -94,15 +71,13 @@ DATABASES = {
 }
 
 # Templates
-
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'templates'),  # Base templates
-            os.path.join(BASE_DIR, 'core', 'templates'),  # Core app templates
-            os.path.join(BASE_DIR, 'accounts', 'templates'),  # Accounts app templates
+            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'core', 'templates'),
+            os.path.join(BASE_DIR, 'accounts', 'templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -113,14 +88,10 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
                 'core.context_processors.global_context',
-                
-               
             ],
         },
     },
 ]
-
-
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -158,60 +129,41 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Authentication
 AUTH_USER_MODEL = 'accounts.CustomUser'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL = 'two_factor:login'
 
 # Email settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
-# For production:
-"""
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'your-smtp-server.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'admin2@gmail.com'
-EMAIL_HOST_PASSWORD = 'Admin@1355'
-"""
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'admin2@gmail.com'
 
 # Session settings
-SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_AGE = 1209600
 
-# Security settings (development only)
+# Security settings
 if DEBUG:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_SSL_REDIRECT = False
 
-# In settings.py
-CSRF_COOKIE_SECURE = True  # If using HTTPS
-CSRF_COOKIE_HTTPONLY = True  # Recommended for security
+CSRF_COOKIE_HTTPONLY = True
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'guardian.backends.ObjectPermissionBackend',
 )
 
-ANONYMOUS_USER_NAME = None  # Disable anonymous user
+ANONYMOUS_USER_NAME = None
 
-AUTH_PASSWORD_VALIDATORS = [
-    # ... existing validators ...
-    {
-        'NAME': 'core.validators.ComplexityValidator',
-    },
-]
 
-# Password rotation (90 days)
-PASSWORD_ROTATION_DAYS = 90
+# Channel layers
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
 
-# Add to your settings
-TWILIO_ACCOUNT_SID = 'your_account_sid'
-TWILIO_AUTH_TOKEN = 'your_auth_token'
-TWILIO_PHONE_NUMBER = '+1234567890'
-OTP_TWILIO_NO_DELIVERY = False
-OTP_TWILIO_CHALLENGE_MESSAGE = 'Your verification code is {token}'
-
+# Cache
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -223,32 +175,23 @@ CACHES = {
     }
 }
 
-# Session engine
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 
-# Cache timeouts
-CACHE_MIDDLEWARE_SECONDS = 60 * 15  # 15 minutes
+# Debug Toolbar configuration
+DEBUG_TOOLBAR_CONFIG = {
+    'SHOW_TOOLBAR_CALLBACK': lambda request: True,
+}
 
-# settings.py
-GEOIP_PATH = '/mnt/e/projects/school/data/geoip/GeoLite2-City/GeoLite2-City.mmdb'  # Full path to file
+INTERNAL_IPS = [
+    '127.0.0.1',
+    'localhost',
+]
+
+# GeoIP
+GEOIP_PATH = '/mnt/e/projects/school/data/geoip/GeoLite2-City/GeoLite2-City.mmdb'
 GEOIP_CITY = 'GeoLite2-City.mmdb'
 GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
 
-
-DEBUG_TOOLBAR_CONFIG = {
-    "RENDER_PANELS": False,
-    "SKIP_TEMPLATE_PREFIXES": (
-        'django/forms/widgets/',
-        'admin/',
-    ),
-    "IS_ASYNC": True,
-}
-
-# Use sync_to_async for the callback
-
-@sync_to_async
-def show_toolbar(request):
-    if request.path.startswith('/admin/'):
-        return False
-    return True
+# Password rotation
+PASSWORD_ROTATION_DAYS = 90
