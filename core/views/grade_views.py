@@ -482,6 +482,29 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             academic_year = form.cleaned_data['academic_year']
             term = form.cleaned_data['term']
             
+            # Validate scores against Ghanaian weight limits
+            scores = {
+                'classwork': form.cleaned_data.get('classwork_score', 0),
+                'homework': form.cleaned_data.get('homework_score', 0),
+                'test': form.cleaned_data.get('test_score', 0),
+                'exam': form.cleaned_data.get('exam_score', 0)
+            }
+            
+            # Validate score limits
+            max_scores = {
+                'classwork': 30,  # 30%
+                'homework': 10,   # 10%
+                'test': 10,       # 10%
+                'exam': 50        # 50%
+            }
+            
+            for score_type, score in scores.items():
+                max_score = max_scores[score_type]
+                if score > max_score:
+                    form.add_error(f'{score_type}_score', 
+                                 f'{score_type.title()} score cannot exceed {max_score}')
+                    return self.form_invalid(form)
+            
             # Check for duplicate grade
             existing_grade = Grade.objects.filter(
                 student=student,
@@ -506,10 +529,13 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                 return self.form_invalid(form)
             
             form.instance.recorded_by = self.request.user
+            
+            # Calculate and save grade using model methods
             form.instance.calculate_total_score()
             form.instance.determine_ges_grade()
             
-            messages.success(self.request, 'Grade successfully recorded!')
+            messages.success(self.request, 
+                           f'Grade successfully recorded! Total: {form.instance.total_score} - {form.instance.get_ges_grade_display()}')
             return super().form_valid(form)
             
         except Exception as e:
@@ -517,57 +543,65 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             messages.error(self.request, 'Error saving grade. Please try again.')
             return self.form_invalid(form)
 
+
 class CalculateGradeAPI(View):
     def post(self, request):
         try:
             data = json.loads(request.body)
             
-            # Calculate total score using same logic as Django model
+            # Calculate using standardized Ghanaian weights
             classwork = float(data.get('classwork_score', 0))
-            homework = float(data.get('homework_score', 0))
+            homework = float(data.get('homework_score', 0)) 
             test = float(data.get('test_score', 0))
             exam = float(data.get('exam_score', 0))
             
-            # Apply weights (matching Django model)
-            total_score = (classwork + homework + test + exam)
+            # Apply Ghanaian weight system (scores already reflect their weight percentages)
+            total_score = classwork + homework + test + exam
             
-            # Get letter grade
-            letter_grade = self.get_letter_grade(total_score)
-            description = self.get_grade_description(letter_grade)
+            # Get GES grade
+            ges_grade, description = self.get_ges_grade_info(total_score)
             
             return JsonResponse({
                 'total_score': round(total_score, 1),
-                'letter_grade': letter_grade,
-                'grade_description': description
+                'letter_grade': ges_grade,
+                'grade_description': description,
+                'is_passing': total_score >= 40.0,
+                'performance_level': self.get_performance_level(total_score)
             })
             
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            logger.error(f"Error calculating grade: {str(e)}")
+            return JsonResponse({'error': 'Invalid data provided'}, status=400)
     
-    def get_letter_grade(self, score):
-        if score >= 90: return 'A+'
-        elif score >= 80: return 'A'
-        elif score >= 70: return 'B+'
-        elif score >= 60: return 'B'
-        elif score >= 50: return 'C+'
-        elif score >= 40: return 'C'
-        elif score >= 30: return 'D'
-        elif score >= 20: return 'E'
-        else: return 'F'
+    def get_ges_grade_info(self, score):
+        """Get GES grade and description"""
+        if score >= 90: 
+            return '1', 'Excellent - Outstanding performance'
+        elif score >= 80: 
+            return '2', 'Very Good - Strong performance'
+        elif score >= 70: 
+            return '3', 'Good - Above average performance'
+        elif score >= 60: 
+            return '4', 'Satisfactory - Meets expectations'
+        elif score >= 50: 
+            return '5', 'Fair - Needs improvement'
+        elif score >= 40: 
+            return '6', 'Marginal - Below expectations'
+        elif score >= 30: 
+            return '7', 'Poor - Significant improvement needed'
+        elif score >= 20: 
+            return '8', 'Very Poor - Concerning performance'
+        else: 
+            return '9', 'Fail - Immediate intervention required'
     
-    def get_grade_description(self, grade):
-        descriptions = {
-            'A+': 'Excellent - Outstanding performance',
-            'A': 'Very Good - Strong performance',
-            'B+': 'Good - Above average performance',
-            'B': 'Satisfactory - Meets expectations',
-            'C+': 'Fair - Needs improvement',
-            'C': 'Marginal - Below expectations',
-            'D': 'Poor - Significant improvement needed',
-            'E': 'Very Poor - Concerning performance',
-            'F': 'Fail - Immediate intervention required'
-        }
-        return descriptions.get(grade, '')
+    def get_performance_level(self, score):
+        """Get performance level category"""
+        if score >= 80: return 'Excellent'
+        elif score >= 70: return 'Very Good'
+        elif score >= 60: return 'Good'
+        elif score >= 50: return 'Satisfactory' 
+        elif score >= 40: return 'Fair'
+        else: return 'Poor'
 
 class GradeReportView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/academics/grades/grade_report.html'

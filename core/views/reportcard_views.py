@@ -10,6 +10,15 @@ from django.shortcuts import render, redirect, get_object_or_404
 from ..models import ReportCard, Student, Subject, Grade, ClassAssignment
 from .base_views import is_student, is_teacher, is_admin
 from ..forms import ReportCardForm, ReportCardFilterForm
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.exceptions import PermissionDenied
+
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Q, Count
+from django.utils import timezone
+
+
 
 
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
@@ -23,40 +32,148 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
             student = self.request.user.student
             report_cards = ReportCard.objects.filter(
                 student=student
-            ).order_by('-academic_year', '-term')
+            ).select_related('student').order_by('-academic_year', '-term')
         
         elif is_teacher(self.request.user):
             # Get classes this teacher teaches
-            classes = ClassAssignment.objects.filter(
+            teacher_classes = ClassAssignment.objects.filter(
                 teacher=self.request.user.teacher
             ).values_list('class_level', flat=True)
             
-            # Get students in those classes
-            students = Student.objects.filter(class_level__in=classes)
-            
-            # Get report cards for those students
+            # Get report cards for students in those classes
             report_cards = ReportCard.objects.filter(
-                student__in=students
-            ).order_by('-academic_year', '-term')
+                student__class_level__in=teacher_classes
+            ).select_related('student').order_by('-academic_year', '-term')
         else:
             # Admin or other users see all report cards
-            report_cards = ReportCard.objects.all().order_by('-academic_year', '-term')
+            report_cards = ReportCard.objects.all().select_related('student').order_by('-academic_year', '-term')
         
-        # Debug output
-        print(f"Found {report_cards.count()} report cards")
-        for rc in report_cards:
-            print(f"Report Card: {rc.id}, Student: {rc.student.id if rc.student else 'None'}")
+        # Apply filters from GET parameters
+        academic_year = self.request.GET.get('academic_year')
+        term = self.request.GET.get('term')
+        class_level = self.request.GET.get('class_level')
+        status = self.request.GET.get('status')
+        search = self.request.GET.get('search')
+        grade_range = self.request.GET.get('grade_range')
+        sort_by = self.request.GET.get('sort_by')
         
-        context['report_cards'] = report_cards
+        if academic_year:
+            report_cards = report_cards.filter(academic_year=academic_year)
+        if term:
+            report_cards = report_cards.filter(term=term)
+        if class_level:
+            report_cards = report_cards.filter(student__class_level=class_level)
+        if status == 'published':
+            report_cards = report_cards.filter(is_published=True)
+        elif status == 'draft':
+            report_cards = report_cards.filter(is_published=False)
+        if search:
+            report_cards = report_cards.filter(
+                Q(student__first_name__icontains=search) |
+                Q(student__last_name__icontains=search) |
+                Q(student__student_id__icontains=search)
+            )
+        if grade_range:
+            if grade_range == 'A':
+                report_cards = report_cards.filter(overall_grade__in=['A+', 'A'])
+            elif grade_range == 'B':
+                report_cards = report_cards.filter(overall_grade__in=['B+', 'B'])
+            elif grade_range == 'C':
+                report_cards = report_cards.filter(overall_grade__in=['C+', 'C'])
+            elif grade_range == 'D':
+                report_cards = report_cards.filter(overall_grade__in=['D+', 'D'])
+            elif grade_range == 'E':
+                report_cards = report_cards.filter(overall_grade='E')
+        
+        # Apply sorting
+        if sort_by == 'score_asc':
+            report_cards = report_cards.order_by('average_score')
+        elif sort_by == 'score_desc':
+            report_cards = report_cards.order_by('-average_score')
+        elif sort_by == 'name_asc':
+            report_cards = report_cards.order_by('student__last_name', 'student__first_name')
+        elif sort_by == 'name_desc':
+            report_cards = report_cards.order_by('-student__last_name', '-student__first_name')
+        elif sort_by == 'recent':
+            report_cards = report_cards.order_by('-updated_at')
+        else:
+            report_cards = report_cards.order_by('-academic_year', '-term', 'student__last_name')
+        
+        # Calculate statistics
+        total_count = report_cards.count()
+        published_count = report_cards.filter(is_published=True).count()
+        draft_count = report_cards.filter(is_published=False).count()
+        
+        # Calculate average score (handle None values)
+        valid_scores = report_cards.exclude(average_score__isnull=True)
+        avg_score = valid_scores.aggregate(avg=Avg('average_score'))['avg'] or 0
+        
+        # Calculate needs attention count (grades E, D, D+, C)
+        needs_attention_count = report_cards.filter(
+            overall_grade__in=['E', 'D', 'D+', 'C']
+        ).count()
+        
+        # Calculate current term count
+        current_year = timezone.now().year
+        current_academic_year = f"{current_year}/{current_year + 1}"
+        current_term_count = report_cards.filter(
+            academic_year=current_academic_year,
+            term=2  # You can make this dynamic based on current date
+        ).count()
+        
+        # Pagination
+        paginator = Paginator(report_cards, 20)  # Show 20 report cards per page
+        page = self.request.GET.get('page')
+        try:
+            report_cards_page = paginator.page(page)
+        except PageNotAnInteger:
+            report_cards_page = paginator.page(1)
+        except EmptyPage:
+            report_cards_page = paginator.page(paginator.num_pages)
+        
+        context.update({
+            'report_cards': report_cards_page,
+            'total_count': total_count,
+            'published_count': published_count,
+            'draft_count': draft_count,
+            'avg_score': round(avg_score, 1),
+            'needs_attention_count': needs_attention_count,
+            'current_term_count': current_term_count,
+            'is_teacher': is_teacher(self.request.user),
+            'is_admin': is_admin(self.request.user),
+            'is_student': is_student(self.request.user),
+        })
+        
         return context
-    
-class CreateReportCardView(CreateView):
+
+
+class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = ReportCard
     form_class = ReportCardForm
-    template_name = 'create_report_card.html'
+    template_name = 'core/academics/report_cards/create_report_card.html'  # Fixed path
     success_url = reverse_lazy('report_card_dashboard')
     
+    def test_func(self):
+        """Only teachers and admins can create report cards"""
+        return is_teacher(self.request.user) or is_admin(self.request.user)
+    
+    def handle_no_permission(self):
+        if self.request.user.is_authenticated:
+            raise PermissionDenied("You don't have permission to create report cards")
+        return super().handle_no_permission()
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+    
     def form_valid(self, form):
+        # Set the created_by field
+        form.instance.created_by = self.request.user
+        
+        # Calculate initial grades
+        form.instance.calculate_grades()
+        
         response = super().form_valid(form)
         messages.success(self.request, f'Report card for {form.instance.student.get_full_name()} created successfully!')
         return response

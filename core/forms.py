@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.apps import apps
 import re
+from core.utils import is_teacher, is_admin
 from .models import (
     ParentMessage, Announcement, ReportCard, Fee, FeeCategory, Student, StudentAttendance, 
     ClassAssignment, ParentGuardian, FeePayment, Bill, Subject, BillPayment,  
@@ -1069,47 +1070,22 @@ class TeacherGradingForm(forms.ModelForm):
         return score
 
 class GradeEntryForm(forms.ModelForm):
+    # Replace class_assignment with class_level selection
+    class_level = forms.ChoiceField(
+        choices=CLASS_LEVEL_CHOICES,
+        required=True,
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'id': 'id_class_level'
+        }),
+        help_text="Select the student's class level"
+    )
+    
     class Meta:
         model = Grade
-        fields = ['student', 'subject', 'class_assignment', 'academic_year', 'term',
+        fields = ['student', 'subject', 'class_level', 'academic_year', 'term',
                  'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks']
-        
-        widgets = {
-            'academic_year': forms.TextInput(attrs={
-                'placeholder': 'YYYY/YYYY',
-                'class': 'form-control'
-            }),
-            'term': forms.Select(attrs={'class': 'form-select'}),
-            'classwork_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '30',
-                'step': '0.1'
-            }),
-            'homework_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '10',
-                'step': '0.1'
-            }),
-            'test_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '10',
-                'step': '0.1'
-            }),
-            'exam_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '50',
-                'step': '0.1'
-            }),
-            'remarks': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 2,
-                'placeholder': 'Optional comments...'
-            }),
-        }
+        # Note: class_assignment is handled automatically
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -1118,43 +1094,120 @@ class GradeEntryForm(forms.ModelForm):
         # Set current academic year as default
         current_year = timezone.now().year
         self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+        self.initial['term'] = 2  # Default to current term
         
-        # Limit students and subjects based on user role
+        # If editing existing grade, set class_level from student
+        if self.instance and self.instance.pk:
+            self.initial['class_level'] = self.instance.student.class_level
+        
+        # Role-based filtering
         if user and hasattr(user, 'teacher'):
             teacher = user.teacher
-            # Get students in classes taught by this teacher
-            class_levels = ClassAssignment.objects.filter(
+            # Get class levels taught by this teacher
+            teacher_class_levels = ClassAssignment.objects.filter(
                 teacher=teacher
-            ).values_list('class_level', flat=True)
+            ).values_list('class_level', flat=True).distinct()
+            
+            # Filter students by teacher's class levels
             self.fields['student'].queryset = Student.objects.filter(
-                class_level__in=class_levels
+                class_level__in=teacher_class_levels,
+                is_active=True
             ).order_by('class_level', 'last_name', 'first_name')
             
-            # Get subjects taught by this teacher
+            # Filter subjects taught by this teacher
             self.fields['subject'].queryset = teacher.subjects.all()
-            self.fields['class_assignment'].queryset = ClassAssignment.objects.filter(
-                teacher=teacher
-            )
+            
+            # Limit class_level choices to what teacher teaches
+            self.fields['class_level'].choices = [
+                (level, display) for level, display in CLASS_LEVEL_CHOICES 
+                if level in teacher_class_levels
+            ]
         else:
             # Admin sees all students and subjects
-            self.fields['student'].queryset = Student.objects.all().order_by(
-                'class_level', 'last_name', 'first_name'
-            )
+            self.fields['student'].queryset = Student.objects.filter(
+                is_active=True
+            ).order_by('class_level', 'last_name', 'first_name')
             self.fields['subject'].queryset = Subject.objects.all()
-            self.fields['class_assignment'].queryset = ClassAssignment.objects.all()
+
+        # Set widget attributes for better styling
+        self.fields['student'].widget.attrs.update({
+            'class': 'form-select',
+            'data-placeholder': 'Select a student'
+        })
+        self.fields['subject'].widget.attrs.update({
+            'class': 'form-select', 
+            'data-placeholder': 'Select a subject'
+        })
+        self.fields['academic_year'].widget.attrs.update({
+            'class': 'form-control',
+            'placeholder': 'YYYY/YYYY'
+        })
+        self.fields['term'].widget.attrs.update({
+            'class': 'form-select'
+        })
 
     def clean(self):
         cleaned_data = super().clean()
         student = cleaned_data.get('student')
-        class_assignment = cleaned_data.get('class_assignment')
+        subject = cleaned_data.get('subject')
+        class_level = cleaned_data.get('class_level')
+        academic_year = cleaned_data.get('academic_year')
+        term = cleaned_data.get('term')
         
-        # Validate class assignment matches student's class level
-        if student and class_assignment and student.class_level != class_assignment.class_level:
+        # Validate required fields are present
+        if not all([student, subject, class_level, academic_year, term]):
+            return cleaned_data  # Let field validation handle missing required fields
+        
+        # Auto-determine class_assignment based on class_level and subject
+        try:
+            class_assignment = ClassAssignment.objects.get(
+                class_level=class_level,
+                subject=subject,
+                academic_year=academic_year
+            )
+            # Set the class_assignment on the instance
+            self.instance.class_assignment = class_assignment
+        except ClassAssignment.DoesNotExist:
+            class_display = dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
             raise ValidationError(
-                "The selected class assignment doesn't match the student's class level"
+                f"No class assignment found for {class_display} - {subject.name} in {academic_year}. "
+                f"Please ensure the subject is assigned to this class."
+            )
+        
+        # Validate student's class matches selected class_level
+        if student and student.class_level != class_level:
+            raise ValidationError({
+                'class_level': f"Selected class level ({self.get_class_level_display(class_level)}) "
+                              f"doesn't match student's actual class ({student.get_class_level_display()})"
+            })
+        
+        # Prevent duplicate grades
+        existing_grade = Grade.objects.filter(
+            student=student,
+            subject=subject,
+            academic_year=academic_year,
+            term=term
+        )
+        if self.instance.pk:
+            existing_grade = existing_grade.exclude(pk=self.instance.pk)
+        if existing_grade.exists():
+            raise ValidationError(
+                "A grade already exists for this student, subject, term, and academic year."
             )
         
         return cleaned_data
+
+    def get_class_level_display(self, class_level):
+        """Helper method to get display name for class level"""
+        return dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
+
+    def save(self, commit=True):
+        # Class assignment is already set in clean method
+        # Calculate total score and GES grade before saving
+        self.instance.calculate_total_score()
+        self.instance.determine_ges_grade()
+        return super().save(commit=commit)
+
 
 class StudentAssignmentForm(forms.ModelForm):
     class Meta:
@@ -1691,18 +1744,97 @@ class ReportCardForm(forms.ModelForm):
                 ('', 'Select Academic Year'),
                 ('2023/2024', '2023/2024'),
                 ('2024/2025', '2024/2025'),
-            ]),
+                ('2025/2026', '2025/2026'),
+            ], attrs={'class': 'form-select'}),
             'term': forms.Select(choices=[
                 ('', 'Select Term'),
                 (1, 'Term 1'),
                 (2, 'Term 2'),
                 (3, 'Term 3'),
-            ]),
+            ], attrs={'class': 'form-select'}),
+            'student': forms.Select(attrs={'class': 'form-select'}),
+            'is_published': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.fields['student'].queryset = Student.objects.all().order_by('first_name', 'last_name')
+        
+        # Set current academic year as default
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        current_academic_year = f"{current_year}/{next_year}"
+        
+        if not self.instance.pk:
+            self.initial['academic_year'] = current_academic_year
+        
+        # Import here to avoid circular imports
+        from .models import Student, ClassAssignment
+        
+        # Filter students based on user role
+        if self.user and self.user.is_authenticated:
+            if is_teacher(self.user):
+                # Teachers can only create report cards for students in their classes
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=self.user.teacher
+                ).values_list('class_level', flat=True)
+                
+                self.fields['student'].queryset = Student.objects.filter(
+                    class_level__in=teacher_classes,
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            elif is_admin(self.user):
+                # Admins can see all active students
+                self.fields['student'].queryset = Student.objects.filter(
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            else:
+                # Others cannot create report cards
+                self.fields['student'].queryset = Student.objects.none()
+        else:
+            self.fields['student'].queryset = Student.objects.none()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        student = cleaned_data.get('student')
+        academic_year = cleaned_data.get('academic_year')
+        term = cleaned_data.get('term')
+
+        if student and academic_year and term:
+            # Check for duplicate report cards
+            existing_report_card = ReportCard.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term
+            )
+            
+            if self.instance.pk:
+                existing_report_card = existing_report_card.exclude(pk=self.instance.pk)
+            
+            if existing_report_card.exists():
+                raise forms.ValidationError(
+                    f"A report card already exists for {student.get_full_name()} "
+                    f"for {academic_year} Term {term}."
+                )
+
+        return cleaned_data
+
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if academic_year:
+            # Validate format
+            if not re.match(r'^\d{4}/\d{4}$', academic_year):
+                raise forms.ValidationError("Academic year must be in format YYYY/YYYY")
+            
+            # Validate consecutive years
+            try:
+                year1, year2 = map(int, academic_year.split('/'))
+                if year2 != year1 + 1:
+                    raise forms.ValidationError("The second year should be exactly one year after the first year")
+            except (ValueError, IndexError):
+                raise forms.ValidationError("Invalid academic year format")
+        
+        return academic_year
 
 class TimeSlotForm(forms.ModelForm):
     class Meta:

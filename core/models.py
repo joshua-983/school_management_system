@@ -1023,16 +1023,43 @@ class Grade(models.Model):
         ('N/A', 'Not Available'),
     ]
 
+    # Ghana Education Service Standard Weights
+    HOMEWORK_WEIGHT = 10   # 10% of total
+    CLASSWORK_WEIGHT = 30  # 30% of total  
+    TEST_WEIGHT = 10       # 10% of total
+    EXAM_WEIGHT = 50       # 50% of total
+
     student = models.ForeignKey('Student', on_delete=models.CASCADE)
     subject = models.ForeignKey('Subject', on_delete=models.CASCADE)
     class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE)
     academic_year = models.CharField(max_length=9, validators=[RegexValidator(r'^\d{4}/\d{4}$')])
-    term = models.PositiveSmallIntegerField(choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')])
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
 
-    classwork_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(30)], verbose_name="Classwork (30%)")
-    homework_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(10)], verbose_name="Homework (10%)")
-    test_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(10)], verbose_name="Test (10%)")
-    exam_score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(50)], verbose_name="Exam (50%)")
+    # Updated with proper max values based on weights
+    classwork_score = models.DecimalField(
+        max_digits=5, decimal_places=2, 
+        validators=[MinValueValidator(0), MaxValueValidator(CLASSWORK_WEIGHT)],
+        verbose_name=f"Classwork ({CLASSWORK_WEIGHT}%)",
+        default=0
+    )
+    homework_score = models.DecimalField(
+        max_digits=5, decimal_places=2, 
+        validators=[MinValueValidator(0), MaxValueValidator(HOMEWORK_WEIGHT)],
+        verbose_name=f"Homework ({HOMEWORK_WEIGHT}%)",
+        default=0
+    )
+    test_score = models.DecimalField(
+        max_digits=5, decimal_places=2, 
+        validators=[MinValueValidator(0), MaxValueValidator(TEST_WEIGHT)],
+        verbose_name=f"Test ({TEST_WEIGHT}%)", 
+        default=0
+    )
+    exam_score = models.DecimalField(
+        max_digits=5, decimal_places=2, 
+        validators=[MinValueValidator(0), MaxValueValidator(EXAM_WEIGHT)],
+        verbose_name=f"Exam ({EXAM_WEIGHT}%)",
+        default=0
+    )
 
     total_score = models.DecimalField(max_digits=5, decimal_places=2, editable=False, null=True, blank=True)
     ges_grade = models.CharField(max_length=3, choices=GES_GRADE_CHOICES, editable=False, default='N/A')
@@ -1049,69 +1076,104 @@ class Grade(models.Model):
         super().save(*args, **kwargs)
 
     def calculate_total_score(self):
+        """Calculate total score using standardized Ghanaian weights"""
         try:
+            # Simply sum the scores since they're already weighted by their max values
             self.total_score = (
-                self.classwork_score + 
-                self.homework_score + 
-                self.test_score + 
-                self.exam_score
+                (self.classwork_score or 0) + 
+                (self.homework_score or 0) + 
+                (self.test_score or 0) + 
+                (self.exam_score or 0)
             )
         except (TypeError, AttributeError):
             self.total_score = None
 
     def determine_ges_grade(self):
+        """Determine GES grade based on Ghana Education Service standards"""
         if self.total_score is None:
             self.ges_grade = 'N/A'
             return
 
         score = float(self.total_score)
         
-        if score >= 90: self.ges_grade = '1'
-        elif score >= 80: self.ges_grade = '2'
-        elif score >= 70: self.ges_grade = '3'
-        elif score >= 60: self.ges_grade = '4'
-        elif score >= 50: self.ges_grade = '5'
-        elif score >= 40: self.ges_grade = '6'
-        elif score >= 30: self.ges_grade = '7'
-        elif score >= 20: self.ges_grade = '8'
-        else: self.ges_grade = '9'
+        # Ghana Education Service Grading Scale
+        if score >= 90: 
+            self.ges_grade = '1'
+        elif score >= 80: 
+            self.ges_grade = '2'
+        elif score >= 70: 
+            self.ges_grade = '3'
+        elif score >= 60: 
+            self.ges_grade = '4' 
+        elif score >= 50: 
+            self.ges_grade = '5'
+        elif score >= 40: 
+            self.ges_grade = '6'
+        elif score >= 30: 
+            self.ges_grade = '7'
+        elif score >= 20: 
+            self.ges_grade = '8'
+        else: 
+            self.ges_grade = '9'
+
+    def get_grade_description(self):
+        """Get descriptive text for the grade"""
+        descriptions = {
+            '1': 'Excellent - Outstanding performance',
+            '2': 'Very Good - Strong performance', 
+            '3': 'Good - Above average performance',
+            '4': 'Satisfactory - Meets expectations',
+            '5': 'Fair - Needs improvement',
+            '6': 'Marginal - Below expectations',
+            '7': 'Poor - Significant improvement needed',
+            '8': 'Very Poor - Concerning performance',
+            '9': 'Fail - Immediate intervention required',
+            'N/A': 'Grade not available'
+        }
+        return descriptions.get(self.ges_grade, '')
+
+    def is_passing(self):
+        """Check if grade is passing (GES standards - 40% and above)"""
+        return self.total_score and float(self.total_score) >= 40.0
+
+    def get_performance_level(self):
+        """Get performance level category"""
+        if not self.total_score:
+            return 'Unknown'
+            
+        score = float(self.total_score)
+        if score >= 80: return 'Excellent'
+        elif score >= 70: return 'Very Good'
+        elif score >= 60: return 'Good' 
+        elif score >= 50: return 'Satisfactory'
+        elif score >= 40: return 'Fair'
+        else: return 'Poor'
 
     def __str__(self):
         return f"{self.student} - {self.subject} ({self.academic_year} Term {self.term}): {self.ges_grade}"
 
     @classmethod
-    def get_best_students(cls):
-        from django.db.models import Avg, Max
+    def get_subject_statistics(cls, subject, class_level, academic_year, term):
+        """Get statistics for a specific subject, class, and term"""
+        grades = cls.objects.filter(
+            subject=subject,
+            student__class_level=class_level,
+            academic_year=academic_year,
+            term=term
+        ).exclude(total_score__isnull=True)
         
-        classes = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
-        results = {}
-        current_year = f"{timezone.now().year}/{timezone.now().year + 1}"
-        
-        for class_level in classes:
-            best_avg = cls.objects.filter(
-                student__class_level=class_level,
-                academic_year=current_year
-            ).values('student').annotate(
-                avg_score=Avg('total_score')
-            ).order_by('-avg_score').first()
+        if not grades.exists():
+            return None
             
-            if best_avg:
-                best_student = Student.objects.get(id=best_avg['student'])
-                results[class_level] = {
-                    'student': best_student,
-                    'average': best_avg['avg_score']
-                }
+        scores = [float(grade.total_score) for grade in grades]
         
-        overall_best = cls.objects.filter(academic_year=current_year).order_by('-total_score').first()
-        
-        if overall_best:
-            results['overall'] = {
-                'student': overall_best.student,
-                'average': float(overall_best.total_score),
-                'class_level': overall_best.student.class_level
-            }
-        
-        return results
+        return {
+            'count': len(scores),
+            'average': round(sum(scores) / len(scores), 2),
+            'highest': max(scores),
+            'lowest': min(scores),
+            'passing_rate': round(len([s for s in scores if s >= 40]) / len(scores) * 100, 1)
+        }
 
 # School Configuration
 class SchoolConfiguration(models.Model):
@@ -1304,6 +1366,7 @@ class ReportCard(models.Model):
         super().save(*args, **kwargs)
     
     def calculate_grades(self):
+        """Calculate average score and overall grade from student's grades"""
         grades = Grade.objects.filter(
             student=self.student,
             academic_year=self.academic_year,
@@ -1311,15 +1374,22 @@ class ReportCard(models.Model):
         )
         
         if grades.exists():
-            total_score = sum(grade.total_score for grade in grades)
+            total_score = sum(grade.total_score for grade in grades if grade.total_score)
             self.average_score = total_score / grades.count()
             self.overall_grade = self.calculate_grade(self.average_score)
         else:
             self.average_score = 0.00
             self.overall_grade = ''
+        
+        # Don't save here - let the view handle saving
     
     @staticmethod
     def calculate_grade(score):
+        """Calculate letter grade based on score"""
+        if not score:
+            return ''
+            
+        score = float(score)
         if score >= 90: return 'A+'
         elif score >= 80: return 'A'
         elif score >= 70: return 'B+'
@@ -1329,6 +1399,27 @@ class ReportCard(models.Model):
         elif score >= 30: return 'D+'
         elif score >= 20: return 'D'
         else: return 'E'
+    
+    def get_absolute_url(self):
+        return reverse('report_card_detail', kwargs={
+            'student_id': self.student.id,
+            'report_card_id': self.id
+        })
+    
+    def can_user_access(self, user):
+        """Check if user has permission to view this report card"""
+        if is_admin(user):
+            return True
+        if is_student(user) and user.student == self.student:
+            return True
+        if is_teacher(user):
+            return ClassAssignment.objects.filter(
+                class_level=self.student.class_level,
+                teacher=user.teacher
+            ).exists()
+        if is_parent(user):
+            return self.student in user.parentguardian.students.all()
+        return False
 
 # Attendance Management
 class AcademicTerm(models.Model):

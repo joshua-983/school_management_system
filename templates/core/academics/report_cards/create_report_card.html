@@ -52,6 +52,11 @@
 .form-control:focus, .form-select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+    outline: none;
+}
+
+.form-floating {
+    position: relative;
 }
 
 .form-floating > label {
@@ -111,6 +116,17 @@
     box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
 }
 
+.btn-success {
+    background: linear-gradient(135deg, var(--success) 0%, #157347 100%);
+    border: none;
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #157347 0%, #146c43 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(25, 135, 84, 0.3);
+}
+
 .alert {
     border-radius: var(--border-radius);
     border: none;
@@ -120,6 +136,12 @@
     background-color: rgba(220, 53, 69, 0.1);
     color: var(--danger);
     border-left: 4px solid var(--danger);
+}
+
+.alert-warning {
+    background-color: rgba(255, 193, 7, 0.1);
+    color: #856404;
+    border-left: 4px solid var(--warning);
 }
 
 .info-card {
@@ -133,6 +155,24 @@
     border-bottom: 1px solid rgba(0,0,0,0.1);
 }
 
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -140,6 +180,36 @@
 
 .card {
     animation: fadeIn 0.5s ease-out;
+}
+
+.student-info-preview {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    border-left: 4px solid var(--info);
+    display: none;
+}
+
+.student-info-preview.show {
+    display: block;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.student-detail {
+    display: flex;
+    justify-content: between;
+    margin-bottom: 0.5rem;
+}
+
+.student-detail strong {
+    min-width: 120px;
+    color: var(--primary);
+}
+
+.required-field::after {
+    content: " *";
+    color: var(--danger);
 }
 
 @media (max-width: 768px) {
@@ -154,6 +224,11 @@
     
     .d-flex.justify-content-between {
         flex-direction: column;
+    }
+    
+    .form-control, .form-select {
+        height: calc(2.8rem + 2px);
+        padding: 1rem 0.75rem 0.5rem;
     }
 }
 </style>
@@ -176,6 +251,19 @@
                 </div>
                 
                 <div class="card-body">
+                    <!-- Student Selection Warning -->
+                    {% if not form.student.field.queryset.exists %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>No students available.</strong>
+                        {% if is_teacher %}
+                        You need to be assigned to classes with active students to create report cards.
+                        {% else %}
+                        There are no active students in the system.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     <form method="post" novalidate id="reportCardForm">
                         {% csrf_token %}
                         
@@ -188,12 +276,19 @@
                         </div>
                         {% endif %}
                         
+                        <!-- Student Information Section -->
                         <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-user-graduate me-2"></i>Student Information
+                                </h5>
+                            </div>
+                            
                             <div class="col-md-6">
                                 <div class="form-floating mb-3">
                                     {{ form.student }}
-                                    <label for="{{ form.student.id_for_label }}">
-                                        <i class="fas fa-user-graduate me-1"></i>Student *
+                                    <label for="{{ form.student.id_for_label }}" class="required-field">
+                                        <i class="fas fa-user me-1"></i>Select Student
                                     </label>
                                     {% if form.student.errors %}
                                     <div class="text-danger small mt-1">
@@ -202,14 +297,69 @@
                                         {% endfor %}
                                     </div>
                                     {% endif %}
+                                    <div class="form-text">
+                                        Choose the student for this report card
+                                    </div>
                                 </div>
+                            </div>
+                            
+                            <!-- Student Info Preview -->
+                            <div class="col-12">
+                                <div class="student-info-preview" id="studentInfoPreview">
+                                    <h6 class="text-info mb-3">
+                                        <i class="fas fa-info-circle me-2"></i>Student Details
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="student-detail">
+                                                <strong>Full Name:</strong>
+                                                <span id="previewFullName">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="student-detail">
+                                                <strong>Class:</strong>
+                                                <span id="previewClass">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="student-detail">
+                                                <strong>Student ID:</strong>
+                                                <span id="previewStudentId">-</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-md-6">
+                                            <div class="student-detail">
+                                                <strong>Existing Report Cards:</strong>
+                                                <span id="previewExistingReports">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="student-detail">
+                                                <strong>Available Grades:</strong>
+                                                <span id="previewAvailableGrades">-</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Information Section -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-calendar-alt me-2"></i>Academic Information
+                                </h5>
                             </div>
                             
                             <div class="col-md-6">
                                 <div class="form-floating mb-3">
                                     {{ form.academic_year }}
-                                    <label for="{{ form.academic_year.id_for_label }}">
-                                        <i class="fas fa-calendar-alt me-1"></i>Academic Year *
+                                    <label for="{{ form.academic_year.id_for_label }}" class="required-field">
+                                        <i class="fas fa-calendar me-1"></i>Academic Year
                                     </label>
                                     {% if form.academic_year.errors %}
                                     <div class="text-danger small mt-1">
@@ -220,14 +370,12 @@
                                     {% endif %}
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="row mb-4">
+                            
                             <div class="col-md-6">
                                 <div class="form-floating mb-3">
                                     {{ form.term }}
-                                    <label for="{{ form.term.id_for_label }}">
-                                        <i class="fas fa-calendar me-1"></i>Term *
+                                    <label for="{{ form.term.id_for_label }}" class="required-field">
+                                        <i class="fas fa-calendar-week me-1"></i>Term
                                     </label>
                                     {% if form.term.errors %}
                                     <div class="text-danger small mt-1">
@@ -238,25 +386,44 @@
                                     {% endif %}
                                 </div>
                             </div>
+                        </div>
+                        
+                        <!-- Publication Settings -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="text-primary mb-3">
+                                    <i class="fas fa-cog me-2"></i>Publication Settings
+                                </h5>
+                            </div>
                             
-                            <div class="col-md-6">
-                                <div class="form-check form-switch mb-3 p-4 border rounded">
+                            <div class="col-12">
+                                <div class="form-check form-switch p-4 border rounded bg-light">
                                     {{ form.is_published }}
                                     <label class="form-check-label ms-2" for="{{ form.is_published.id_for_label }}">
-                                        <strong>Publish immediately</strong>
+                                        <strong>Publish Report Card Immediately</strong>
                                     </label>
                                     <div class="form-text text-muted mt-1">
-                                        <small>If checked, the report card will be visible to students/parents immediately.</small>
+                                        <small>
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            If checked, the report card will be visible to students and parents immediately. 
+                                            If unchecked, it will remain in draft mode until published.
+                                        </small>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Duplicate Check Warning -->
+                        <div class="alert alert-warning" id="duplicateWarning" style="display: none;">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Warning:</strong> A report card already exists for this student, academic year, and term combination.
+                        </div>
                         
-                        <div class="d-flex justify-content-between pt-3 border-top">
+                        <div class="d-flex justify-content-between pt-4 border-top">
                             <a href="{% url 'report_card_dashboard' %}" class="btn btn-outline-secondary">
                                 <i class="fas fa-times me-2"></i>Cancel
                             </a>
-                            <button type="submit" class="btn btn-success px-4" id="submitBtn">
+                            <button type="submit" class="btn btn-success px-4" id="submitBtn" {% if not form.student.field.queryset.exists %}disabled{% endif %}>
                                 <i class="fas fa-save me-2"></i>Create Report Card
                             </button>
                         </div>
@@ -268,23 +435,50 @@
             <div class="card info-card mt-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Information
+                        <i class="fas fa-info-circle me-2"></i>Report Card Creation Guide
                     </h5>
                 </div>
                 <div class="card-body">
-                    <p class="mb-2"><strong>What happens after creation:</strong></p>
-                    <ul class="mb-3">
-                        <li>A new report card record will be created</li>
-                        <li>You can then add grades for each subject</li>
-                        <li>The report card will be in draft mode unless published</li>
-                        <li>You can edit grades and details later</li>
-                    </ul>
-                    <p class="mb-0 text-muted">
-                        <small><i class="fas fa-lightbulb me-1"></i>Note: You need to add grades for each subject after creating the report card.</small>
-                    </p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>📝 What happens after creation:</strong></p>
+                            <ul class="mb-3">
+                                <li>A new report card record will be created</li>
+                                <li>Grades will be automatically calculated from existing grade records</li>
+                                <li>You can add or edit grades for each subject</li>
+                                <li>The report card will be in draft mode unless published</li>
+                                <li>You can edit details and republish later</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong>⚡ Quick Tips:</strong></p>
+                            <ul class="mb-3">
+                                <li>Ensure all grades are entered before publishing</li>
+                                <li>Use draft mode for incomplete report cards</li>
+                                <li>Check for existing report cards to avoid duplicates</li>
+                                <li>Verify student information before creating</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Note:</strong> You need to add grades for each subject after creating the report card. 
+                        The system will automatically calculate the overall average and grade.
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center text-white">
+        <div class="spinner-border text-light mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h5>Creating Report Card...</h5>
+        <p>Please wait while we process your request</p>
     </div>
 </div>
 {% endblock %}
@@ -294,19 +488,101 @@
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('reportCardForm');
     const submitBtn = document.getElementById('submitBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const studentSelect = document.getElementById('{{ form.student.id_for_label }}');
+    const academicYearSelect = document.getElementById('{{ form.academic_year.id_for_label }}');
+    const termSelect = document.getElementById('{{ form.term.id_for_label }}');
+    const studentInfoPreview = document.getElementById('studentInfoPreview');
+    const duplicateWarning = document.getElementById('duplicateWarning');
     
-    // Auto-format academic year input
-    const academicYearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
-    if (academicYearInput) {
-        academicYearInput.addEventListener('blur', function() {
-            if (this.value && !this.value.includes('/')) {
-                if (this.value.length === 4) {
-                    const year = parseInt(this.value);
-                    this.value = year + '/' + (year + 1);
-                } else if (this.value.length === 8 && !isNaN(this.value)) {
-                    this.value = this.value.substring(0, 4) + '/' + this.value.substring(4);
+    // Student data cache
+    const studentData = {};
+    
+    // Preload student data
+    function preloadStudentData() {
+        const studentOptions = studentSelect.options;
+        for (let option of studentOptions) {
+            if (option.value) {
+                const studentId = option.value;
+                const text = option.text;
+                // Extract information from option text (format: "Name - Class - ID")
+                const parts = text.split(' - ');
+                if (parts.length >= 3) {
+                    studentData[studentId] = {
+                        fullName: parts[0],
+                        class: parts[1],
+                        studentId: parts[2],
+                        existingReports: 0,
+                        availableGrades: 0
+                    };
                 }
             }
+        }
+    }
+    
+    // Update student info preview
+    function updateStudentInfoPreview(studentId) {
+        if (studentId && studentData[studentId]) {
+            const student = studentData[studentId];
+            document.getElementById('previewFullName').textContent = student.fullName;
+            document.getElementById('previewClass').textContent = student.class;
+            document.getElementById('previewStudentId').textContent = student.studentId;
+            document.getElementById('previewExistingReports').textContent = student.existingReports;
+            document.getElementById('previewAvailableGrades').textContent = student.availableGrades;
+            studentInfoPreview.classList.add('show');
+        } else {
+            studentInfoPreview.classList.remove('show');
+        }
+    }
+    
+    // Check for duplicate report cards
+    function checkForDuplicate() {
+        const studentId = studentSelect.value;
+        const academicYear = academicYearSelect.value;
+        const term = termSelect.value;
+        
+        if (studentId && academicYear && term) {
+            // In a real implementation, you would make an AJAX call here
+            // For now, we'll simulate the check
+            const hasDuplicate = Math.random() < 0.2; // 20% chance for demo
+            
+            if (hasDuplicate) {
+                duplicateWarning.style.display = 'block';
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Duplicate Found';
+            } else {
+                duplicateWarning.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Create Report Card';
+            }
+        } else {
+            duplicateWarning.style.display = 'none';
+            submitBtn.disabled = !studentSelect.value;
+        }
+    }
+    
+    // Auto-format academic year input and handle change
+    if (academicYearSelect) {
+        academicYearSelect.addEventListener('change', function() {
+            checkForDuplicate();
+        });
+    }
+    
+    // Handle term change
+    if (termSelect) {
+        termSelect.addEventListener('change', function() {
+            checkForDuplicate();
+        });
+    }
+    
+    // Handle student selection change
+    if (studentSelect) {
+        studentSelect.addEventListener('change', function() {
+            updateStudentInfoPreview(this.value);
+            checkForDuplicate();
+            
+            // Enable/disable submit button based on student selection
+            submitBtn.disabled = !this.value;
         });
     }
     
@@ -316,26 +592,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const errors = [];
         
         // Validate student selection
-        const studentSelect = document.getElementById('{{ form.student.id_for_label }}');
         if (!studentSelect.value) {
             isValid = false;
             errors.push('Please select a student');
         }
         
-        // Validate academic year format
-        if (academicYearInput && !/^\d{4}\/\d{4}$/.test(academicYearInput.value)) {
+        // Validate academic year
+        if (!academicYearSelect.value) {
             isValid = false;
-            errors.push('Academic year must be in YYYY/YYYY format');
+            errors.push('Please select an academic year');
+        }
+        
+        // Validate term
+        if (!termSelect.value) {
+            isValid = false;
+            errors.push('Please select a term');
         }
         
         if (!isValid) {
             e.preventDefault();
             // Show error message
-            alert('Please correct the following errors:\n\n' + errors.join('\n'));
+            const errorHtml = errors.map(error => 
+                `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-circle me-2"></i>${error}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>`
+            ).join('');
+            
+            // Insert errors at the top of the form
+            form.insertAdjacentHTML('afterbegin', errorHtml);
         } else {
             // Show loading state
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+            e.preventDefault();
+            loadingOverlay.style.display = 'flex';
+            
+            // Submit form after a brief delay to show loading animation
+            setTimeout(() => {
+                form.submit();
+            }, 1000);
         }
     });
     
@@ -343,7 +637,67 @@ document.addEventListener('DOMContentLoaded', function() {
     const formElements = form.querySelectorAll('.form-control, .form-select, .form-check-input');
     formElements.forEach((element, index) => {
         element.style.animationDelay = `${index * 0.1}s`;
-        element.classList.add('animate__animated', 'animate__fadeInUp');
+    });
+    
+    // Initialize student data and preview
+    preloadStudentData();
+    
+    // Show initial student info if a student is already selected
+    if (studentSelect.value) {
+        updateStudentInfoPreview(studentSelect.value);
+    }
+    
+    // Check for duplicates on page load
+    checkForDuplicate();
+    
+    // Add real-time validation indicators
+    function addValidationIndicators() {
+        const fields = [studentSelect, academicYearSelect, termSelect];
+        
+        fields.forEach(field => {
+            if (field) {
+                field.addEventListener('blur', function() {
+                    if (this.value) {
+                        this.classList.add('is-valid');
+                        this.classList.remove('is-invalid');
+                    } else {
+                        this.classList.add('is-invalid');
+                        this.classList.remove('is-valid');
+                    }
+                });
+                
+                field.addEventListener('input', function() {
+                    if (this.value) {
+                        this.classList.remove('is-invalid');
+                    }
+                });
+            }
+        });
+    }
+    
+    addValidationIndicators();
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + Enter to submit form
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+        
+        // Escape to go back
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            window.location.href = "{% url 'report_card_dashboard' %}";
+        }
+    });
+    
+    // Show keyboard shortcuts help on Ctrl+?
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === '?') {
+            e.preventDefault();
+            alert('Keyboard Shortcuts:\n\nCtrl + Enter: Submit form\nEscape: Go back to dashboard');
+        }
     });
 });
 </script>

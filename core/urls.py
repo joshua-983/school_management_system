@@ -172,8 +172,8 @@ urlpatterns = [
     path('api/calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
     
     # Report Cards
-    path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
-    path('report-card/create/', CreateReportCardView.as_view(), name='create_report_card'), 
+    path('report-cards/create/', CreateReportCardView.as_view(), name='create_report_card'),
+    path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'), 
     path('report-card/<int:student_id>/', ReportCardView.as_view(), name='report_card'),
     path('report-card/<int:student_id>/<int:report_card_id>/', ReportCardView.as_view(), name='report_card_detail'),
     path('report-card/pdf/<int:student_id>/', ReportCardPDFView.as_view(), name='report_card_pdf'),

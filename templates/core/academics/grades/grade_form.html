@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}
-    {% if form.instance.pk %}Edit Grade{% else %}Add New Grade{% endif %}
+    {% if form.instance.pk %}Edit Grade - {{ form.instance.student.get_full_name }}{% else %}Add New Grade{% endif %}
 {% endblock %}
 
 {% block extra_css %}
@@ -34,68 +35,119 @@
     padding: 1.5rem;
 }
 
-.input-group-text {
-    background-color: #f8f9fa;
+/* Form styling fixes */
+.form-control, .form-select {
+    height: calc(3.2rem + 2px);
+    padding: 0.75rem;
+    border-radius: 8px;
     border: 1px solid #dee2e6;
+    background-color: #fff;
+    font-size: 1rem;
+    color: #212529 !important;
 }
 
 .form-control:focus, .form-select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+    color: #212529 !important;
 }
 
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+/* Score input styling */
 .score-input {
     text-align: center;
     font-weight: 600;
+    font-size: 1.1rem;
+    color: #212529 !important;
+    background: #fff !important;
+    border: 2px solid #e9ecef;
 }
 
 .score-input:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+    color: #212529 !important;
+    background: #fff !important;
 }
 
+/* Total display styling */
 .total-display {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border: 2px dashed #dee2e6;
     border-radius: var(--border-radius);
-    padding: 1.5rem;
+    padding: 2rem;
+    margin-top: 1rem;
 }
 
 .grade-badge {
     font-size: 1.1rem;
     padding: 0.5em 1em;
     border-radius: 8px;
+    color: white;
+    font-weight: 600;
 }
 
-.grade-A { background-color: var(--success); }
-.grade-B { background-color: #20c997; }
-.grade-C { background-color: var(--warning); color: #000; }
-.grade-D { background-color: #fd7e14; }
-.grade-E { background-color: var(--danger); }
-.grade-F { background-color: var(--secondary); }
+.grade-1 { background-color: var(--success); }
+.grade-2 { background-color: #20c997; }
+.grade-3 { background-color: var(--info); }
+.grade-4 { background-color: var(--primary); }
+.grade-5 { background-color: var(--warning); color: #000; }
+.grade-6 { background-color: #fd7e14; }
+.grade-7 { background-color: #ff6b6b; }
+.grade-8 { background-color: var(--danger); }
+.grade-9 { background-color: var(--secondary); }
 
 .progress {
-    height: 10px;
-    border-radius: 5px;
-    margin-top: 0.5rem;
+    height: 12px;
+    border-radius: 6px;
+    margin-top: 1rem;
+    background-color: #e9ecef;
 }
 
 .readonly-field {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    padding: 0.75rem;
-    min-height: calc(3.5rem + 2px);
+    border-radius: 8px;
+    padding: 1rem;
+    min-height: auto;
+    color: #495057;
+    font-weight: 500;
 }
 
-@media (max-width: 768px) {
-    .total-display {
-        padding: 1rem;
-    }
-    
-    .grade-badge {
-        font-size: 1rem;
-    }
+.score-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    transition: var(--transition);
+    height: 100%;
+    background: #fff;
+}
+
+.score-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+.score-card .card-body {
+    padding: 1.5rem;
+}
+
+.weight-badge {
+    font-size: 0.75rem;
+    border-radius: 20px;
+    padding: 0.25rem 0.5rem;
+    background: var(--primary);
+    color: white;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: var(--secondary);
+    margin-top: 0.5rem;
 }
 
 /* Animation for total score update */
@@ -107,11 +159,82 @@
 .highlight {
     animation: highlightUpdate 1s ease;
 }
+
+.ghana-standards {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+}
+
+/* Fix column spacing */
+.row.g-3 {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+}
+
+.row.g-3 > [class*="col-"] {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+/* Ensure text visibility */
+.text-visible {
+    color: #212529 !important;
+}
+
+/* Responsive fixes */
+@media (max-width: 768px) {
+    .total-display {
+        padding: 1rem;
+    }
+    
+    .grade-badge {
+        font-size: 1rem;
+    }
+    
+    .score-card .card-body {
+        padding: 1rem;
+    }
+    
+    .form-control, .form-select {
+        height: calc(2.8rem + 2px);
+        padding: 0.5rem;
+    }
+}
+
+/* Error styling */
+.invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--danger);
+}
+
+.is-invalid {
+    border-color: var(--danger) !important;
+}
+
+/* Textarea styling */
+textarea.form-control {
+    height: auto !important;
+    min-height: 100px;
+    color: #212529 !important;
+}
+
+/* Ensure all text is visible */
+.card-body {
+    color: #212529;
+}
+
+.form-text {
+    color: #6c757d !important;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container-fluid py-4">
     {% if messages %}
         {% for message in messages %}
         <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3">
@@ -125,187 +248,279 @@
         {% endfor %}
     {% endif %}
 
-    <div class="card shadow">
-        <div class="card-header text-white">
-            <h4 class="mb-0">
-                <i class="bi bi-journal-bookmark me-2"></i>
-                {% if form.instance.pk %}Edit Grade{% else %}Add New Grade{% endif %}
-            </h4>
-        </div>
-        <div class="card-body">
-            <form method="post" id="gradeForm" novalidate>
-                {% csrf_token %}
-                
-                {% if form.non_field_errors %}
-                    <div class="alert alert-danger">
-                        {% for error in form.non_field_errors %}
-                            <i class="bi bi-exclamation-triangle me-2"></i> {{ error }}
-                        {% endfor %}
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="bi bi-journal-bookmark me-2"></i>
+                            {% if form.instance.pk %}Edit Grade{% else %}Add New Grade{% endif %}
+                        </h4>
+                        <span class="badge bg-light text-dark">
+                            {% if form.instance.pk %}Editing{% else %}Creating{% endif %} Grade
+                        </span>
                     </div>
-                {% endif %}
-                
-                <div class="row g-3 mb-4">
-                    <!-- Student Info (readonly for existing grades) -->
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Student</label>
-                        <div class="readonly-field">
-                            <div class="d-flex align-items-center h-100">
-                                <i class="bi bi-person-circle me-2 text-muted"></i>
-                                <span>{{ form.instance.student.get_full_name|default:form.instance.student.user.username }}</span>
+                </div>
+                <div class="card-body">
+                    <!-- Ghana Education Service Standards -->
+                    <div class="alert alert-info ghana-standards mb-4">
+                        <h6 class="alert-heading mb-3">
+                            <i class="bi bi-info-circle me-2"></i>Ghana Education Service Standards
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong class="text-visible">Grading Weights:</strong>
+                                <ul class="mb-2 text-visible">
+                                    <li>Classwork: 30% (Max: 30 points)</li>
+                                    <li>Homework: 10% (Max: 10 points)</li>
+                                    <li>Test: 10% (Max: 10 points)</li>
+                                    <li>Exam: 50% (Max: 50 points)</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong class="text-visible">Passing Grade:</strong>
+                                <ul class="mb-0 text-visible">
+                                    <li>40% and above: Passing</li>
+                                    <li>Below 40%: Needs Improvement</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Class</label>
-                        <div class="readonly-field">
-                            <div class="d-flex align-items-center h-100">
-                                <i class="bi bi-people-fill me-2 text-muted"></i>
-                                <span>{{ form.instance.class_assignment.class_level }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Subject</label>
-                        <div class="readonly-field">
-                            <div class="d-flex align-items-center h-100">
-                                <i class="bi bi-book me-2 text-muted"></i>
-                                <span>{{ form.instance.subject.name }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Academic Year</label>
-                        <div class="readonly-field">
-                            <div class="d-flex align-items-center h-100">
-                                <i class="bi bi-calendar me-2 text-muted"></i>
-                                <span>{{ form.instance.academic_year }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Score Inputs -->
-                    <div class="col-md-3">
-                        <label for="{{ form.homework_score.id_for_label }}" class="form-label fw-bold">Homework</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control score-input {% if form.homework_score.errors %}is-invalid{% endif %}" 
-                                   id="{{ form.homework_score.id_for_label }}" 
-                                   name="{{ form.homework_score.html_name }}"
-                                   value="{{ form.homework_score.value|default:0 }}"
-                                   min="0" max="100" step="0.1"
-                                   oninput="calculateTotal()">
-                            <span class="input-group-text">%</span>
-                            {% if form.homework_score.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.homework_score.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">Max: 100%</small>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label for="{{ form.classwork_score.id_for_label }}" class="form-label fw-bold">Classwork</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control score-input {% if form.classwork_score.errors %}is-invalid{% endif %}" 
-                                   id="{{ form.classwork_score.id_for_label }}" 
-                                   name="{{ form.classwork_score.html_name }}"
-                                   value="{{ form.classwork_score.value|default:0 }}"
-                                   min="0" max="100" step="0.1"
-                                   oninput="calculateTotal()">
-                            <span class="input-group-text">%</span>
-                            {% if form.classwork_score.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.classwork_score.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">Max: 100%</small>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label for="{{ form.test_score.id_for_label }}" class="form-label fw-bold">Test</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control score-input {% if form.test_score.errors %}is-invalid{% endif %}" 
-                                   id="{{ form.test_score.id_for_label }}" 
-                                   name="{{ form.test_score.html_name }}"
-                                   value="{{ form.test_score.value|default:0 }}"
-                                   min="0" max="100" step="0.1"
-                                   oninput="calculateTotal()">
-                            <span class="input-group-text">%</span>
-                            {% if form.test_score.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.test_score.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">Max: 100%</small>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label for="{{ form.exam_score.id_for_label }}" class="form-label fw-bold">Exam</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control score-input {% if form.exam_score.errors %}is-invalid{% endif %}" 
-                                   id="{{ form.exam_score.id_for_label }}" 
-                                   name="{{ form.exam_score.html_name }}"
-                                   value="{{ form.exam_score.value|default:0 }}"
-                                   min="0" max="100" step="0.1"
-                                   oninput="calculateTotal()">
-                            <span class="input-group-text">%</span>
-                            {% if form.exam_score.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.exam_score.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <small class="text-muted">Max: 100%</small>
-                    </div>
-                    
-                    <!-- Total Score Display -->
-                    <div class="col-12">
-                        <div class="total-display text-center highlight" id="totalDisplay">
-                            <h5 class="mb-2">Calculated Total Score</h5>
-                            <div class="display-4 fw-bold text-primary mb-2" id="totalScore">0</div>
-                            <div class="grade-badge d-inline-block mb-2" id="gradeBadge">--</div>
-                            <div class="progress">
-                                <div class="progress-bar" id="totalProgress" role="progressbar" 
-                                     style="width: 0%;" 
-                                     aria-valuenow="0" 
-                                     aria-valuemin="0" 
-                                     aria-valuemax="100"></div>
-                            </div>
-                            <small class="text-muted" id="gradeDescription"></small>
-                        </div>
-                    </div>
-                    
-                    <!-- Remarks -->
-                    <div class="col-12">
-                        <label for="{{ form.remarks.id_for_label }}" class="form-label fw-bold">Teacher's Remarks</label>
-                        <textarea class="form-control {% if form.remarks.errors %}is-invalid{% endif %}" 
-                                  id="{{ form.remarks.id_for_label }}" 
-                                  name="{{ form.remarks.html_name }}" 
-                                  rows="3"
-                                  placeholder="Enter any comments about the student's performance">{{ form.remarks.value|default:'' }}</textarea>
-                        {% if form.remarks.errors %}
-                            <div class="invalid-feedback">
-                                {{ form.remarks.errors.0 }}
+
+                    <form method="post" id="gradeForm" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    <i class="bi bi-exclamation-triangle me-2"></i> {{ error }}
+                                {% endfor %}
                             </div>
                         {% endif %}
-                        <small class="text-muted">Optional comments about the student's performance</small>
-                    </div>
+                        
+                        <!-- Student Information Section -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="text-primary mb-3">
+                                    <i class="bi bi-person-vcard me-2"></i>Student Information
+                                </h5>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-visible">Student Name</label>
+                                <div class="readonly-field">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-person-circle me-2 text-muted"></i>
+                                        <span class="text-visible">{{ form.instance.student.get_full_name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-visible">Class Level</label>
+                                <div class="readonly-field">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-people-fill me-2 text-muted"></i>
+                                        <span class="text-visible">{{ form.instance.student.get_class_level_display }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-visible">Subject</label>
+                                <div class="readonly-field">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-book me-2 text-muted"></i>
+                                        <span class="text-visible">{{ form.instance.subject.name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold text-visible">Academic Year & Term</label>
+                                <div class="readonly-field">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-calendar me-2 text-muted"></i>
+                                        <span class="text-visible">{{ form.instance.academic_year }} - Term {{ form.instance.term }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Current Grade Display -->
+                            <div class="col-12 mb-3">
+                                <label class="form-label fw-bold text-visible">Current Grade</label>
+                                <div class="readonly-field">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <span class="fw-bold text-visible">{{ form.instance.total_score|default:"0" }}</span>
+                                            <span class="text-muted">/100 points</span>
+                                        </div>
+                                        {% if form.instance.ges_grade and form.instance.ges_grade != 'N/A' %}
+                                        <span class="grade-badge grade-{{ form.instance.ges_grade }}">
+                                            {{ form.instance.get_ges_grade_display }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">No Grade</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scores Section -->
+                        <div class="card mb-4 border-primary">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-visible">
+                                    <i class="bi bi-calculator me-2"></i>Update Scores
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <!-- Classwork -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card score-card h-100">
+                                            <div class="card-body text-center">
+                                                <label for="{{ form.classwork_score.id_for_label }}" class="form-label fw-bold text-visible">Classwork</label>
+                                                {{ form.classwork_score }}
+                                                <div class="mt-2">
+                                                    <span class="weight-badge">30% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 30 points</div>
+                                                {% if form.classwork_score.errors %}
+                                                    <div class="invalid-feedback">
+                                                        {{ form.classwork_score.errors }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Homework -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card score-card h-100">
+                                            <div class="card-body text-center">
+                                                <label for="{{ form.homework_score.id_for_label }}" class="form-label fw-bold text-visible">Homework</label>
+                                                {{ form.homework_score }}
+                                                <div class="mt-2">
+                                                    <span class="weight-badge">10% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 10 points</div>
+                                                {% if form.homework_score.errors %}
+                                                    <div class="invalid-feedback">
+                                                        {{ form.homework_score.errors }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Test -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card score-card h-100">
+                                            <div class="card-body text-center">
+                                                <label for="{{ form.test_score.id_for_label }}" class="form-label fw-bold text-visible">Test</label>
+                                                {{ form.test_score }}
+                                                <div class="mt-2">
+                                                    <span class="weight-badge">10% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 10 points</div>
+                                                {% if form.test_score.errors %}
+                                                    <div class="invalid-feedback">
+                                                        {{ form.test_score.errors }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Exam -->
+                                    <div class="col-md-6 col-lg-3">
+                                        <div class="card score-card h-100">
+                                            <div class="card-body text-center">
+                                                <label for="{{ form.exam_score.id_for_label }}" class="form-label fw-bold text-visible">Exam</label>
+                                                {{ form.exam_score }}
+                                                <div class="mt-2">
+                                                    <span class="weight-badge">50% weight</span>
+                                                </div>
+                                                <div class="help-text">Max: 50 points</div>
+                                                {% if form.exam_score.errors %}
+                                                    <div class="invalid-feedback">
+                                                        {{ form.exam_score.errors }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Updated Total Score Display -->
+                                <div class="row mt-4">
+                                    <div class="col-12">
+                                        <div class="total-display text-center highlight" id="totalDisplay">
+                                            <h5 class="mb-3 text-visible">Updated Total Score</h5>
+                                            <div class="display-4 fw-bold text-primary mb-2 text-visible" id="totalScore">
+                                                {{ form.instance.total_score|default:"0" }}
+                                            </div>
+                                            <div class="grade-badge d-inline-block mb-3" id="gradeBadge">
+                                                {{ form.instance.ges_grade|default:"--" }}
+                                            </div>
+                                            <div class="progress mb-3">
+                                                <div class="progress-bar" id="totalProgress" role="progressbar" 
+                                                     style="width: {{ form.instance.total_score|default:0 }}%;" 
+                                                     aria-valuenow="{{ form.instance.total_score|default:0 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100"></div>
+                                            </div>
+                                            <small class="text-muted d-block" id="gradeDescription">
+                                                {% if form.instance.ges_grade and form.instance.ges_grade != 'N/A' %}
+                                                    {{ form.instance.get_ges_grade_display }}
+                                                {% else %}
+                                                    Enter scores to calculate grade
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Remarks Section -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0 text-visible">
+                                    <i class="bi bi-chat-text me-2"></i>Teacher's Remarks
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="{{ form.remarks.id_for_label }}" class="form-label fw-bold text-visible">Additional Comments</label>
+                                    {{ form.remarks }}
+                                    {% if form.remarks.errors %}
+                                        <div class="invalid-feedback">
+                                            {{ form.remarks.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="help-text">Optional comments about the student's performance, behavior, or areas for improvement</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between pt-3 border-top">
+                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i> Back to Grade List
+                            </a>
+                            <div>
+                                <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                                    <i class="bi bi-save me-2"></i> 
+                                    {% if form.instance.pk %}Update Grade{% else %}Save Grade{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
                 </div>
-                
-                <div class="d-flex justify-content-between mt-4 pt-3 border-top">
-                    <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-2"></i> Back to List
-                    </a>
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                        <i class="bi bi-save me-2"></i> {% if form.instance.pk %}Update{% else %}Save{% endif %} Grade
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
@@ -317,28 +532,47 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('gradeForm');
     const submitBtn = document.getElementById('submitBtn');
     const scoreFields = [
-        'homework_score', 
         'classwork_score', 
+        'homework_score', 
         'test_score', 
         'exam_score'
     ];
     
+    // Ghanaian weight standards
+    const WEIGHTS = {
+        classwork_score: 30,
+        homework_score: 10,
+        test_score: 10,
+        exam_score: 50
+    };
+    
+    // Initialize all score inputs with proper styling
+    function initializeScoreInputs() {
+        scoreFields.forEach(field => {
+            const input = document.getElementById(`id_${field}`);
+            if (input) {
+                // Ensure proper styling
+                input.classList.add('score-input', 'form-control', 'text-visible');
+                input.style.color = '#212529';
+                input.style.backgroundColor = '#fff';
+            }
+        });
+    }
+    
     // Calculate and display total score
     function calculateTotal() {
         let total = 0;
-        let count = 0;
+        let hasScores = false;
         
         scoreFields.forEach(field => {
             const input = document.getElementById(`id_${field}`);
-            if (input && input.value) {
+            if (input && input.value !== '') {
                 total += parseFloat(input.value) || 0;
-                count++;
+                hasScores = true;
             }
         });
         
-        // Calculate average if we have scores
-        const average = count > 0 ? total / count : 0;
-        const roundedAverage = Math.round(average * 10) / 10;
+        const roundedTotal = Math.round(total * 10) / 10;
         
         // Update display
         const totalElement = document.getElementById('totalScore');
@@ -347,79 +581,118 @@ document.addEventListener('DOMContentLoaded', function() {
         const descriptionElement = document.getElementById('gradeDescription');
         const totalDisplay = document.getElementById('totalDisplay');
         
-        totalElement.textContent = roundedAverage;
-        totalDisplay.classList.add('highlight');
-        setTimeout(() => totalDisplay.classList.remove('highlight'), 1000);
-        
-        // Update progress bar
-        progressElement.style.width = roundedAverage + '%';
-        progressElement.setAttribute('aria-valuenow', roundedAverage);
-        
-        // Determine grade and description
-        let grade = '';
-        let description = '';
-        let gradeClass = '';
-        
-        if (roundedAverage >= 90) {
-            grade = 'A+';
-            description = 'Excellent - Outstanding performance';
-            gradeClass = 'grade-A';
-        } else if (roundedAverage >= 80) {
-            grade = 'A';
-            description = 'Very Good - Strong performance';
-            gradeClass = 'grade-A';
-        } else if (roundedAverage >= 70) {
-            grade = 'B+';
-            description = 'Good - Above average performance';
-            gradeClass = 'grade-B';
-        } else if (roundedAverage >= 60) {
-            grade = 'B';
-            description = 'Satisfactory - Meets expectations';
-            gradeClass = 'grade-B';
-        } else if (roundedAverage >= 50) {
-            grade = 'C+';
-            description = 'Fair - Needs improvement';
-            gradeClass = 'grade-C';
-        } else if (roundedAverage >= 40) {
-            grade = 'C';
-            description = 'Marginal - Below expectations';
-            gradeClass = 'grade-C';
-        } else if (roundedAverage >= 30) {
-            grade = 'D';
-            description = 'Poor - Significant improvement needed';
-            gradeClass = 'grade-D';
-        } else if (roundedAverage >= 20) {
-            grade = 'E';
-            description = 'Very Poor - Concerning performance';
-            gradeClass = 'grade-E';
-        } else {
-            grade = 'F';
-            description = 'Fail - Immediate intervention required';
-            gradeClass = 'grade-F';
+        if (totalElement && hasScores) {
+            totalElement.textContent = roundedTotal.toFixed(1);
+            totalDisplay.classList.add('highlight');
+            setTimeout(() => totalDisplay.classList.remove('highlight'), 1000);
+            
+            // Update progress bar
+            const progressWidth = Math.min(roundedTotal, 100);
+            progressElement.style.width = progressWidth + '%';
+            progressElement.setAttribute('aria-valuenow', progressWidth);
+            
+            // Determine grade and description
+            let grade = '';
+            let description = '';
+            let gradeClass = '';
+            let isPassing = false;
+            
+            // Ghana Education Service Grading System
+            if (roundedTotal >= 90) {
+                grade = '1';
+                description = 'Excellent - Outstanding performance';
+                gradeClass = 'grade-1';
+                isPassing = true;
+            } else if (roundedTotal >= 80) {
+                grade = '2';
+                description = 'Very Good - Strong performance';
+                gradeClass = 'grade-2';
+                isPassing = true;
+            } else if (roundedTotal >= 70) {
+                grade = '3';
+                description = 'Good - Above average performance';
+                gradeClass = 'grade-3';
+                isPassing = true;
+            } else if (roundedTotal >= 60) {
+                grade = '4';
+                description = 'Satisfactory - Meets expectations';
+                gradeClass = 'grade-4';
+                isPassing = true;
+            } else if (roundedTotal >= 50) {
+                grade = '5';
+                description = 'Fair - Needs improvement';
+                gradeClass = 'grade-5';
+                isPassing = true;
+            } else if (roundedTotal >= 40) {
+                grade = '6';
+                description = 'Marginal - Below expectations';
+                gradeClass = 'grade-6';
+                isPassing = true;
+            } else if (roundedTotal >= 30) {
+                grade = '7';
+                description = 'Poor - Significant improvement needed';
+                gradeClass = 'grade-7';
+                isPassing = false;
+            } else if (roundedTotal >= 20) {
+                grade = '8';
+                description = 'Very Poor - Concerning performance';
+                gradeClass = 'grade-8';
+                isPassing = false;
+            } else {
+                grade = '9';
+                description = 'Fail - Immediate intervention required';
+                gradeClass = 'grade-9';
+                isPassing = false;
+            }
+            
+            badgeElement.textContent = grade;
+            badgeElement.className = 'grade-badge ' + gradeClass;
+            
+            let descriptionHTML = description;
+            if (isPassing) {
+                descriptionHTML += ' <span class="badge bg-success ms-2">Passing</span>';
+            } else {
+                descriptionHTML += ' <span class="badge bg-danger ms-2">Needs Improvement</span>';
+            }
+            descriptionElement.innerHTML = descriptionHTML;
+            progressElement.className = 'progress-bar ' + gradeClass;
         }
-        
-        badgeElement.textContent = grade;
-        badgeElement.className = 'grade-badge ' + gradeClass;
-        descriptionElement.textContent = description;
-        progressElement.className = 'progress-bar ' + gradeClass;
     }
     
     // Add event listeners to all score fields
-    scoreFields.forEach(field => {
-        const input = document.getElementById(`id_${field}`);
-        if (input) {
-            input.addEventListener('input', calculateTotal);
-            input.addEventListener('change', function() {
-                if (this.value < 0) this.value = 0;
-                if (this.value > 100) this.value = 100;
-                calculateTotal();
-            });
-        }
-    });
+    function setupScoreListeners() {
+        scoreFields.forEach(field => {
+            const input = document.getElementById(`id_${field}`);
+            if (input) {
+                input.addEventListener('input', calculateTotal);
+                input.addEventListener('change', function() {
+                    const max = WEIGHTS[field] || 100;
+                    let value = parseFloat(this.value) || 0;
+                    
+                    // Validate range
+                    if (value < 0) {
+                        value = 0;
+                        this.value = 0;
+                    } else if (value > max) {
+                        value = max;
+                        this.value = max;
+                    }
+                    
+                    calculateTotal();
+                });
+                
+                // Trigger calculation if there's already a value
+                if (input.value) {
+                    calculateTotal();
+                }
+            }
+        });
+    }
     
     // Form submission handler
     form.addEventListener('submit', function(e) {
-        const total = parseFloat(document.getElementById('totalScore').textContent);
+        const totalElement = document.getElementById('totalScore');
+        const total = totalElement ? parseFloat(totalElement.textContent) : 0;
         
         if (total > 100) {
             e.preventDefault();
@@ -427,16 +700,51 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
+        // Validate individual scores
+        let isValid = true;
+        const errorMessages = [];
+        
+        scoreFields.forEach(field => {
+            const input = document.getElementById(`id_${field}`);
+            const max = WEIGHTS[field];
+            const value = parseFloat(input.value) || 0;
+            
+            if (value > max) {
+                isValid = false;
+                input.classList.add('is-invalid');
+                errorMessages.push(`${field.replace('_score', '').charAt(0).toUpperCase() + field.replace('_score', '').slice(1)} score cannot exceed ${max}`);
+            } else {
+                input.classList.remove('is-invalid');
+            }
+        });
+        
+        if (!isValid) {
+            e.preventDefault();
+            const errorHtml = errorMessages.map(msg => `<li>${msg}</li>`).join('');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <h6 class="alert-heading">Please correct the following errors:</h6>
+                <ul class="mb-0">${errorHtml}</ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            form.insertBefore(alertDiv, form.firstChild);
+            return false;
+        }
+        
+        // Show loading state
         submitBtn.disabled = true;
         submitBtn.innerHTML = `
             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            Processing...
+            {% if form.instance.pk %}Updating...{% else %}Saving...{% endif %}
         `;
         return true;
     });
     
-    // Initial calculation
-    calculateTotal();
+    // Initialize everything
+    initializeScoreInputs();
+    setupScoreListeners();
+    calculateTotal(); // Initial calculation
 });
 </script>
 {% endblock %}
