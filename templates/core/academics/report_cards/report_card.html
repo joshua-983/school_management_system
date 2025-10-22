@@ -7,401 +7,611 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <style>
 :root {
-    --primary: #4361ee;
-    --primary-dark: #3a56d4;
+    --primary: #2c3e50;
+    --primary-dark: #1a252f;
     --secondary: #6c757d;
-    --success: #198754;
-    --danger: #dc3545;
-    --warning: #ffc107;
-    --info: #0dcaf0;
-    --light: #f8f9fa;
-    --dark: #212529;
+    --success: #27ae60;
+    --danger: #e74c3c;
+    --warning: #f39c12;
+    --info: #3498db;
+    --light: #ecf0f1;
+    --dark: #2c3e50;
+    --accent: #2980b9;
     --border-radius: 12px;
-    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-    --transition: all 0.3s ease;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    --transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.card {
-    border: none;
-    border-radius: var(--border-radius);
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.report-card-container {
+    background: white;
+    border-radius: 20px;
     box-shadow: var(--shadow);
-    transition: var(--transition);
+    overflow: hidden;
+    margin: 2rem auto;
+    max-width: 1200px;
 }
 
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-}
-
-.card-header {
+.report-header {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
-    padding: 1.5rem;
+    color: white;
+    padding: 2.5rem;
+    position: relative;
+    overflow: hidden;
 }
 
-.school-info {
-    text-align: center;
+.report-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    transform: rotate(45deg);
+    animation: shine 3s infinite;
 }
 
-.school-info h2 {
+@keyframes shine {
+    0% { transform: translateX(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) rotate(45deg); }
+}
+
+.school-logo {
+    border: 4px solid rgba(255,255,255,0.2);
+    border-radius: 15px;
+    padding: 10px;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.school-name {
+    font-family: 'Georgia', serif;
     font-weight: 700;
-    margin-bottom: 0.5rem;
-    font-size: 1.8rem;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
 
-.school-info h4 {
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    font-size: 1.2rem;
+.school-motto {
+    font-style: italic;
+    opacity: 0.9;
+    font-size: 1.1rem;
 }
 
-.school-logo img {
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+.student-info-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    border-left: 5px solid var(--accent);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
 }
 
 .info-item {
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    background: #f8f9fa;
-    border-radius: 8px;
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border-left: 4px solid var(--info);
 }
 
 .info-label {
     font-weight: 600;
     color: var(--primary);
-    margin-right: 0.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .info-value {
     color: var(--dark);
+    font-weight: 500;
+    font-size: 1.1rem;
 }
 
-.table {
-    border-radius: var(--border-radius);
+.performance-table {
+    border-radius: 15px;
     overflow: hidden;
+    box-shadow: var(--shadow);
+    margin: 2rem 0;
 }
 
-.table thead th {
+.performance-table thead th {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
     border: none;
-    font-weight: 500;
-    padding: 1rem;
+    font-weight: 600;
+    padding: 1.25rem;
     text-align: center;
     vertical-align: middle;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.table tbody td {
-    padding: 0.75rem;
+.performance-table tbody td {
+    padding: 1rem;
     vertical-align: middle;
     border-color: #f1f3f4;
     text-align: center;
-}
-
-.table tbody tr {
+    font-weight: 500;
     transition: var(--transition);
 }
 
-.table tbody tr:hover {
-    background-color: rgba(67, 97, 238, 0.05);
+.performance-table tbody tr {
+    transition: var(--transition);
+}
+
+.performance-table tbody tr:hover {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e3f2fd 100%);
+    transform: translateX(5px);
 }
 
 .grade-badge {
-    font-size: 0.9rem;
-    padding: 0.5rem 1rem;
-    min-width: 45px;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+    min-width: 50px;
     text-align: center;
-    border-radius: 20px;
-    font-weight: 600;
-}
-
-.grade-Aplus, .grade-A { background: linear-gradient(135deg, #28a745 0%, #218838 100%); color: white; }
-.grade-Bplus, .grade-B { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; }
-.grade-Cplus, .grade-C { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #000; }
-.grade-Dplus, .grade-D { background: linear-gradient(135deg, #fd7e14 0%, #d66a0a 100%); color: white; }
-.grade-E { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; }
-
-.signature-line {
-    border-top: 2px dashed #dee2e6;
-    padding-top: 1.5rem;
-    margin-top: 1.5rem;
-}
-
-.signature-line p {
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-}
-
-.btn {
-    border-radius: 8px;
-    padding: 0.75rem 1.5rem;
-    font-weight: 500;
+    border-radius: 25px;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     transition: var(--transition);
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+.grade-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.grade-Aplus, .grade-A { 
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); 
+    color: white; 
+}
+.grade-Bplus, .grade-B { 
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); 
+    color: white; 
+}
+.grade-Cplus, .grade-C { 
+    background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%); 
+    color: #000; 
+}
+.grade-Dplus, .grade-D { 
+    background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); 
+    color: white; 
+}
+.grade-E { 
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); 
+    color: white; 
+}
+
+.summary-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: var(--shadow);
     border: none;
+    transition: var(--transition);
+    overflow: hidden;
 }
 
-.btn-primary:hover {
-    background: linear-gradient(135deg, var(--primary-dark) 0%, #2f48c9 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
+.summary-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
 }
 
-.alert-warning {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffecb5 100%);
+.summary-card .card-header {
+    background: linear-gradient(135deg, var(--info) 0%, var(--accent) 100%);
+    color: white;
     border: none;
-    border-left: 4px solid var(--warning);
-    border-radius: var(--border-radius);
+    padding: 1.25rem;
+    font-weight: 600;
 }
 
-.chart-container {
-    position: relative;
-    height: 220px;
-    width: 100%;
+.summary-card .card-body {
+    padding: 1.5rem;
 }
 
 .grading-scale-table {
     font-size: 0.9rem;
+    border-radius: 10px;
+    overflow: hidden;
 }
 
 .grading-scale-table th {
-    background: linear-gradient(135deg, var(--info) 0%, #0bacbf 100%);
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
     color: white;
+    font-weight: 600;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+.signature-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    margin-top: 2rem;
+    border-top: 3px solid var(--primary);
+}
+
+.signature-line {
+    text-align: center;
+    padding: 1rem;
+}
+
+.signature-name {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.signature-space {
+    border-top: 2px dashed #bdc3c7;
+    padding-top: 2rem;
+    margin-top: 0.5rem;
+    color: #7f8c8d;
+}
+
+.action-buttons {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: var(--transition);
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+}
+
+.btn-info {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.overall-performance {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+    color: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.performance-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    text-align: center;
+}
+
+.stat-item {
+    background: rgba(255,255,255,0.1);
+    padding: 1rem;
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .animate-element {
-    animation: fadeIn 0.6s ease-out;
+    animation: fadeInUp 0.8s ease-out;
 }
 
+/* Print Styles */
 @media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+    
+    .report-card-container {
+        box-shadow: none !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+    }
+    
     .no-print {
         display: none !important;
     }
     
-    body {
-        background-color: white !important;
-        color: black !important;
-        font-size: 12pt;
+    .btn {
+        display: none !important;
     }
     
-    .container-fluid {
-        padding: 0 !important;
-    }
-    
-    .card {
-        border: none !important;
+    .performance-table {
         box-shadow: none !important;
-        margin: 0 !important;
     }
     
     .grade-badge {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        border: 1px solid rgba(0,0,0,0.1) !important;
-    }
-    
-    .table {
-        font-size: 10pt;
-    }
-    
-    .card-header {
-        padding: 10px !important;
-    }
-    
-    h2, h3, h4, h5 {
-        margin-top: 5px;
-        margin-bottom: 5px;
-    }
-    
-    .btn, .alert {
-        display: none !important;
+        border: 1px solid #000 !important;
     }
 }
 
+/* Mobile Responsive */
 @media (max-width: 768px) {
-    .school-info h2 {
-        font-size: 1.4rem;
+    .report-header {
+        padding: 1.5rem;
+        text-align: center;
     }
     
-    .school-info h4 {
-        font-size: 1rem;
+    .school-name {
+        font-size: 1.5rem;
     }
     
-    .table-responsive {
-        border-radius: var(--border-radius);
+    .info-grid {
+        grid-template-columns: 1fr;
     }
     
-    .table thead {
+    .performance-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    .performance-table {
+        font-size: 0.8rem;
+    }
+    
+    .performance-table thead {
         display: none;
     }
     
-    .table tbody tr {
+    .performance-table tbody tr {
         display: block;
         margin-bottom: 1rem;
-        border: 1px solid #dee2e6;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
-    .table tbody td {
+    .performance-table tbody td {
         display: block;
         text-align: right;
-        padding: 0.75rem;
         position: relative;
+        padding-left: 50%;
         border: none;
-        border-bottom: 1px solid #f1f3f4;
+        border-bottom: 1px solid #eee;
     }
     
-    .table tbody td:before {
+    .performance-table tbody td:before {
         content: attr(data-label);
         position: absolute;
-        left: 0.75rem;
+        left: 1rem;
         font-weight: 600;
         color: var(--primary);
+        text-align: left;
     }
-    
-    .btn-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 1rem;
-    }
-    
-    .btn {
-        flex: 1;
-        min-width: 120px;
-    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, #1a252f 100%);
 }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="card shadow-lg">
-        <!-- Report Card Header -->
-        <div class="card-header text-white">
-            <div class="d-flex justify-content-between align-items-center flex-wrap">
-                <div class="school-logo mb-3 mb-md-0">
-                    <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="60" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iOCIgZmlsbD0iIzQzNjFlZSIvPgo8dGV4dCB4PSIzMCIgeT0iMzUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkxPR088L3RleHQ+Cjwvc3ZnPgo='">
+    <div class="report-card-container">
+        <!-- Professional Header -->
+        <div class="report-header">
+            <div class="row align-items-center">
+                <div class="col-md-2 text-center">
+                    <div class="school-logo d-inline-block">
+                        <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="80" 
+                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiByeD0iMTIiIGZpbGw9IiMyYzNlNTAiLz4KPHN2ZyB4PSIyMCIgeT0iMjAiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiPgo8cGF0aCBkPSJNMTIgMTQuMjVMMy4yNyA3LjE5QTcuOTUgNy45NSAwIDAgMSAxMiA0YzQuNDIgMCA4IDMuNTggOCA4IDAgMS45Ni0uOCAzLjc3LTIuMSA1LjA4YTUuOTYgNS45NiAwIDAgMS0uNzIuNjVNNTEuNSA3LjVhNCA0IDAgMSAwIDAtOCA0IDQgMCAwIDAgMCA4eiIvPgo8L3N2Zz4KPC9zdmc+Cg=='">
+                    </div>
                 </div>
-                <div class="school-info mx-2">
-                    <h2 class="mb-0">SCHOOL MANAGEMENT SYSTEM</h2>
-                    <h4 class="mb-0">OFFICIAL REPORT CARD</h4>
-                    <p class="mb-0">123 Education Street, City, Country</p>
+                <div class="col-md-8 text-center">
+                    <h1 class="school-name mb-2">JUDITH INTERNATIONAL SCHOOL</h1>
+                    <h3 class="school-motto mb-3">"Excellence in Education and Character Development"</h3>
+                    <h2 class="mb-0">OFFICIAL ACADEMIC REPORT CARD</h2>
                 </div>
-                <div class="report-card-id text-end">
-                    <p class="mb-0">ID: {{ report_card.id|default:"DRAFT" }}</p>
-                    <p class="mb-0">{{ academic_year }} - Term {{ term }}</p>
+                <div class="col-md-2 text-center">
+                    <div class="report-id bg-white text-dark p-3 rounded" style="opacity: 0.9;">
+                        <strong>ID: {{ report_card.id|default:"DRAFT" }}</strong>
+                        <br>
+                        <small>{{ academic_year }} - Term {{ term }}</small>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Student Information Section -->
-        <div class="card-body">
-            <div class="row mb-4 border-bottom pb-3 animate-element">
-                <div class="col-md-6">
-                    <div class="info-item">
-                        <span class="info-label"><strong>Student Name:</strong></span>
-                        <span class="info-value">{{ student.get_full_name }}</span>
+        <!-- Student Information -->
+        <div class="container-fluid p-4">
+            <div class="student-info-section animate-element">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Student Name</div>
+                                <div class="info-value">{{ student.get_full_name }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Student ID</div>
+                                <div class="info-value">{{ student.student_id }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Class Level</div>
+                                <div class="info-value">{{ student.get_class_level_display }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Academic Year</div>
+                                <div class="info-value">{{ academic_year }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Term</div>
+                                <div class="info-value">{{ term }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Gender</div>
+                                <div class="info-value">{{ student.get_gender_display }}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="info-item">
-                        <span class="info-label"><strong>Student ID:</strong></span>
-                        <span class="info-value">{{ student.student_id }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label"><strong>Class:</strong></span>
-                        <span class="info-value">{{ student.get_class_level_display }}</span>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="info-item">
-                        <span class="info-label"><strong>Gender:</strong></span>
-                        <span class="info-value">{{ student.get_gender_display }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label"><strong>Academic Year:</strong></span>
-                        <span class="info-value">{{ academic_year }}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label"><strong>Term:</strong></span>
-                        <span class="info-value">{{ term }}</span>
+                    <div class="col-md-4 text-center">
+                        <div class="student-photo-placeholder bg-light rounded p-4">
+                            <i class="fas fa-user-graduate fa-4x text-muted mb-2"></i>
+                            <p class="text-muted mb-0">Student Photo</p>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Overall Performance Summary -->
+            {% if grades %}
+            <div class="overall-performance animate-element" style="animation-delay: 0.2s">
+                <div class="performance-stats">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ average_score|floatformat:1 }}%</div>
+                        <div class="stat-label">Overall Average</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ overall_grade }}</div>
+                        <div class="stat-label">Final Grade</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ grades|length }}</div>
+                        <div class="stat-label">Subjects</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">
+                            {% with passed=grades|length %}
+                            {{ passed }}/{{ passed }}
+                            {% endwith %}
+                        </div>
+                        <div class="stat-label">Subjects Passed</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Academic Performance Table -->
-            <div class="table-responsive mb-4 animate-element" style="animation-delay: 0.2s">
-                <table class="table table-bordered table-hover">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th>Subject</th>
-                            <th class="text-center">Homework<br><small>(20%)</small></th>
-                            <th class="text-center">Classwork<br><small>(30%)</small></th>
-                            <th class="text-center">Test<br><small>(10%)</small></th>
-                            <th class="text-center">Exam<br><small>(40%)</small></th>
-                            <th class="text-center">Total<br><small>(100%)</small></th>
-                            <th class="text-center">Grade</th>
-                            <th class="text-center">Remarks</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for grade in grades %}
-                        <tr class="animate-element" style="animation-delay: {{ forloop.counter0|add:3|multiply:0.1 }}s">
-                            <td data-label="Subject">{{ grade.subject.name }}</td>
-                            <td data-label="Homework" class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
-                            <td data-label="Classwork" class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
-                            <td data-label="Test" class="text-center">{{ grade.test_score|floatformat:1 }}</td>
-                            <td data-label="Exam" class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
-                            <td data-label="Total" class="text-center">{{ grade.total_score|floatformat:1 }}</td>
-                            <td data-label="Grade" class="text-center">
-                                <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
-                                    {{ grade.grade }}
-                                </span>
-                            </td>
-                            <td data-label="Remarks" class="text-center">{{ grade.remarks|default:"-" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center text-muted py-4">No grades available for this period</td>
-                        </tr>
-                        {% endfor %}
-                        {% if grades %}
-                        <tr class="table-active fw-bold animate-element" style="animation-delay: 0.4s">
-                            <td colspan="5" class="text-end">OVERALL AVERAGE:</td>
-                            <td class="text-center">{{ average_score|floatformat:1 }}</td>
-                            <td class="text-center">
-                                <span class="badge grade-badge grade-{{ overall_grade|cut:'+'|cut:' ' }}">
-                                    {{ overall_grade }}
-                                </span>
-                            </td>
-                            <td class="text-center">-</td>
-                        </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
+            <div class="animate-element" style="animation-delay: 0.3s">
+                <div class="performance-table">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th class="text-center">Homework<br><small class="text-light">(20%)</small></th>
+                                <th class="text-center">Classwork<br><small class="text-light">(30%)</small></th>
+                                <th class="text-center">Test<br><small class="text-light">(10%)</small></th>
+                                <th class="text-center">Exam<br><small class="text-light">(40%)</small></th>
+                                <th class="text-center">Total<br><small class="text-light">(100%)</small></th>
+                                <th class="text-center">Grade</th>
+                                <th class="text-center">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for grade in grades %}
+                            <tr class="animate-element" style="animation-delay: {{ forloop.counter0|add:4|multiply:0.1 }}s">
+                                <td data-label="Subject" class="fw-bold">{{ grade.subject.name }}</td>
+                                <td data-label="Homework" class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
+                                <td data-label="Classwork" class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
+                                <td data-label="Test" class="text-center">{{ grade.test_score|floatformat:1 }}</td>
+                                <td data-label="Exam" class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
+                                <td data-label="Total" class="text-center fw-bold">{{ grade.total_score|floatformat:1 }}</td>
+                                <td data-label="Grade" class="text-center">
+                                    <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
+                                        {{ grade.grade }}
+                                    </span>
+                                </td>
+                                <td data-label="Remarks" class="text-center">{{ grade.remarks|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-5">
+                                    <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                    No grades available for this academic period
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <!-- Additional Information Sections -->
-            <div class="row mb-4">
+            <!-- Summary Sections -->
+            <div class="row mt-4">
                 <!-- Grading Scale -->
-                <div class="col-md-6 mb-3 animate-element" style="animation-delay: 0.5s">
-                    <div class="card h-100">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><i class="fas fa-scale-balanced me-2"></i>Grading Scale</h5>
+                <div class="col-md-6 mb-4 animate-element" style="animation-delay: 0.5s">
+                    <div class="summary-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Grading System</h5>
                         </div>
                         <div class="card-body p-0">
-                            <table class="table table-sm table-striped mb-0 grading-scale-table">
+                            <table class="table table-sm mb-0 grading-scale-table">
                                 <thead>
                                     <tr>
                                         <th>Grade</th>
@@ -410,13 +620,13 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td>A+</td><td>90 - 100</td><td>Excellent</td></tr>
+                                    <tr><td>A+</td><td>90 - 100</td><td>Outstanding</td></tr>
                                     <tr><td>A</td><td>80 - 89</td><td>Excellent</td></tr>
-                                    <tr><td>B+</td><td>70 - 79</td><td>Good</td></tr>
+                                    <tr><td>B+</td><td>70 - 79</td><td>Very Good</td></tr>
                                     <tr><td>B</td><td>60 - 69</td><td>Good</td></tr>
-                                    <tr><td>C+</td><td>50 - 59</td><td>Average</td></tr>
-                                    <tr><td>C</td><td>40 - 49</td><td>Below Average</td></tr>
-                                    <tr><td>D+</td><td>30 - 39</td><td>Poor</td></tr>
+                                    <tr><td>C+</td><td>50 - 59</td><td>Above Average</td></tr>
+                                    <tr><td>C</td><td>40 - 49</td><td>Average</td></tr>
+                                    <tr><td>D+</td><td>30 - 39</td><td>Below Average</td></tr>
                                     <tr><td>D</td><td>20 - 29</td><td>Poor</td></tr>
                                     <tr><td>E</td><td>0 - 19</td><td>Fail</td></tr>
                                 </tbody>
@@ -426,10 +636,10 @@
                 </div>
 
                 <!-- Performance Chart -->
-                <div class="col-md-6 mb-3 animate-element" style="animation-delay: 0.6s">
-                    <div class="card h-100">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><i class="fas fa-chart-column me-2"></i>Performance Summary</h5>
+                <div class="col-md-6 mb-4 animate-element" style="animation-delay: 0.6s">
+                    <div class="summary-card h-100">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Performance Analysis</h5>
                         </div>
                         <div class="card-body">
                             {% if grades %}
@@ -438,8 +648,8 @@
                             </div>
                             {% else %}
                             <div class="text-center text-muted py-4">
-                                <i class="fas fa-chart-pie fa-3x mb-3"></i>
-                                <p>No data available for chart</p>
+                                <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                                <p>Performance data not available</p>
                             </div>
                             {% endif %}
                         </div>
@@ -448,54 +658,73 @@
             </div>
 
             <!-- Signature Section -->
-            <div class="row mb-3 animate-element" style="animation-delay: 0.7s">
-                <div class="col-md-6">
-                    <div class="signature-line">
-                        <p>Class Teacher's Signature: _________________________</p>
-                        <p>Date: _________________________</p>
+            <div class="signature-section animate-element" style="animation-delay: 0.7s">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="signature-line">
+                            <div class="signature-name">Class Teacher</div>
+                            <div class="signature-space"></div>
+                            <small>Signature & Date</small>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="signature-line">
-                        <p>Principal's Signature: _________________________</p>
-                        <p>Date: _________________________</p>
+                    <div class="col-md-4 text-center">
+                        <div class="signature-line">
+                            <div class="signature-name">Head of Department</div>
+                            <div class="signature-space"></div>
+                            <small>Signature & Date</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="signature-line">
+                            <div class="signature-name">School Principal</div>
+                            <div class="signature-space"></div>
+                            <small>Signature & Date</small>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="d-flex justify-content-between mt-4 no-print animate-element" style="animation-delay: 0.8s">
-                <div>
-                    {% if not report_card and is_teacher %}
-                    <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <input type="hidden" name="academic_year" value="{{ academic_year }}">
-                        <input type="hidden" name="term" value="{{ term }}">
-                        <button type="submit" class="btn btn-success me-2">
-                            <i class="fas fa-save me-2"></i> Save Report Card
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
-                
-                <div class="btn-group">
-                    <button onclick="window.print()" class="btn btn-info me-2">
-                        <i class="fas fa-print me-2"></i> Print Report
-                    </button>
-                    <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
-                       class="btn btn-info me-2">
-                        <i class="fas fa-file-pdf me-2"></i> Download PDF
-                    </a>
-                    <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
-                    </a>
+            <div class="action-buttons no-print animate-element" style="animation-delay: 0.8s">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        {% if not report_card and is_teacher %}
+                        <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="academic_year" value="{{ academic_year }}">
+                            <input type="hidden" name="term" value="{{ term }}">
+                            <button type="submit" class="btn btn-success me-2">
+                                <i class="fas fa-save me-2"></i> Save Official Report
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group">
+                            <button onclick="window.print()" class="btn btn-info me-2">
+                                <i class="fas fa-print me-2"></i> Print
+                            </button>
+                            <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
+                               class="btn btn-warning me-2">
+                                <i class="fas fa-file-pdf me-2"></i> Export PDF
+                            </a>
+                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i> Dashboard
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {% if not report_card %}
             <div class="alert alert-warning mt-3 no-print animate-element" style="animation-delay: 0.9s">
-                <i class="fas fa-exclamation-triangle me-2"></i> This is a preview of the report card. 
-                {% if is_teacher %}Please save it to make it permanent.{% else %}This is not an official document.{% endif %}
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                    <div>
+                        <strong>Preview Mode</strong> - This is a draft preview of the report card. 
+                        {% if is_teacher %}Save it to create an official record.{% else %}This document is not yet finalized.{% endif %}
+                    </div>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -505,75 +734,49 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Only initialize chart if grades exist
+    // Initialize performance chart
     {% if grades %}
     const ctx = document.getElementById('performanceChart').getContext('2d');
     
-    // Prepare data for chart
     const subjects = [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}];
     const scores = [{% for grade in grades %}{{ grade.total_score }},{% endfor %}];
-    const gradeColors = [
-        {% for grade in grades %}
-        '{% if grade.grade == "A+" or grade.grade == "A" %}#28a745{% elif grade.grade == "B+" or grade.grade == "B" %}#17a2b8{% elif grade.grade == "C+" or grade.grade == "C" %}#ffc107{% elif grade.grade == "D+" or grade.grade == "D" %}#fd7e14{% else %}#dc3545{% endif %}',
-        {% endfor %}
-    ];
     
-    const chart = new Chart(ctx, {
+    // Generate colors based on performance
+    const gradeColors = scores.map(score => {
+        if (score >= 80) return '#27ae60';
+        if (score >= 70) return '#3498db';
+        if (score >= 60) return '#f1c40f';
+        if (score >= 50) return '#f39c12';
+        if (score >= 40) return '#e67e22';
+        return '#e74c3c';
+    });
+
+    new Chart(ctx, {
         type: 'bar',
         data: {
             labels: subjects,
             datasets: [{
-                label: 'Score (%)',
+                label: 'Performance Score',
                 data: scores,
                 backgroundColor: gradeColors,
-                borderColor: gradeColors.map(color => color.replace(')', ', 0.8)').replace('rgb', 'rgba')),
-                borderWidth: 1,
-                borderRadius: 6,
+                borderColor: gradeColors.map(color => color),
+                borderWidth: 2,
+                borderRadius: 8,
                 barPercentage: 0.7,
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: 'Score (%)',
-                        color: '#6c757d',
-                        font: {
-                            weight: 'bold'
-                        }
-                    },
-                    ticks: {
-                        stepSize: 10,
-                        color: '#6c757d'
-                    },
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#6c757d',
-                        maxRotation: 45,
-                        minRotation: 45
-                    },
-                    grid: {
-                        display: false
-                    }
-                }
-            },
             plugins: {
                 legend: {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    backgroundColor: 'rgba(44, 62, 80, 0.9)',
                     titleFont: {
                         size: 14,
                         weight: 'bold'
@@ -583,33 +786,86 @@ document.addEventListener('DOMContentLoaded', function() {
                     },
                     callbacks: {
                         label: function(context) {
-                            return context.parsed.y.toFixed(1) + '%';
+                            return `Score: ${context.parsed.y.toFixed(1)}%`;
                         }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
                     }
                 }
             }
         }
     });
     {% endif %}
-    
-    // Add print functionality enhancement
+
+    // Enhanced print functionality
     const printBtn = document.querySelector('[onclick="window.print()"]');
     if (printBtn) {
-        printBtn.addEventListener('click', function() {
-            // Show loading state
-            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Preparing...';
+        printBtn.addEventListener('click', function(e) {
+            e.preventDefault();
             
-            // Reset after a short delay
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Preparing...';
+            this.disabled = true;
+            
             setTimeout(() => {
-                this.innerHTML = '<i class="fas fa-print me-2"></i> Print Report';
-            }, 1500);
+                window.print();
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }, 1000);
+            }, 1000);
         });
     }
-    
-    // Add animation to elements
-    const animateElements = document.querySelectorAll('.animate-element');
-    animateElements.forEach((element, index) => {
-        element.style.animationDelay = `${index * 0.1 + 0.3}s`;
+
+    // Add scroll animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.animationPlayState = 'running';
+            }
+            });
+    }, observerOptions);
+
+    document.querySelectorAll('.animate-element').forEach(el => {
+        observer.observe(el);
+    });
+
+    // Add loading state for PDF download
+    document.querySelectorAll('a[href*="report_card_pdf"]').forEach(link => {
+        link.addEventListener('click', function(e) {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating PDF...';
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+            }, 3000);
+        });
     });
 });
 </script>

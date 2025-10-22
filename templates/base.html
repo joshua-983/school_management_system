@@ -11,6 +11,9 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         :root {
             --primary-color: #3a7bd5;
@@ -22,6 +25,90 @@
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             min-height: 100vh;
+        }
+        
+        /* Announcement Banner Styles */
+        .announcement-container {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            z-index: 9999;
+            transition: left 0.3s ease;
+        }
+        
+        .announcement-alert {
+            padding: 12px 20px;
+            margin: 0;
+            border-radius: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideDown 0.5s ease-out;
+        }
+        
+        .announcement-alert[data-priority="URGENT"] {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border-left: 4px solid #ff6b6b;
+        }
+        
+        .announcement-alert[data-priority="HIGH"] {
+            background: linear-gradient(135deg, #fd7e14, #e55a00);
+            color: white;
+            border-left: 4px solid #ffa94d;
+        }
+        
+        .announcement-alert[data-priority="NORMAL"] {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+            border-left: 4px solid #66d9e8;
+        }
+        
+        .announcement-alert[data-priority="LOW"] {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            border-left: 4px solid #adb5bd;
+        }
+        
+        .alert-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert-icon {
+            font-size: 1.2em;
+        }
+        
+        .alert-title {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .btn-dismiss {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 5px;
+            opacity: 0.7;
+        }
+        
+        .btn-dismiss:hover {
+            opacity: 1;
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
         
         /* Top Navigation */
@@ -117,6 +204,10 @@
             margin-left: 0;
         }
         
+        .sidebar-collapsed .announcement-container {
+            left: 0;
+        }
+        
         /* Toggle Button */
         .sidebar-toggle {
             background: none;
@@ -165,6 +256,10 @@
                 left: 0;
             }
             
+            .announcement-container {
+                left: 0;
+            }
+            
             .main-content {
                 margin-left: 0;
             }
@@ -196,12 +291,39 @@
             right: -5px;
             font-size: 0.7rem;
         }
+
+        /* Fix notification dropdown links */
+        .dropdown-notifications .dropdown-item {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-notifications .dropdown-item:hover {
+            background-color: #f8f9fa;
+            transform: translateX(2px);
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Sidebar Overlay for Mobile -->
     <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Announcement Banner -->
+    <div id="announcement-banner" class="announcement-container">
+        <div class="announcement-ticker">
+            <div class="announcement-alert" data-priority="URGENT" style="display: none;">
+                <div class="alert-content">
+                    <span class="alert-icon">📢</span>
+                    <strong class="alert-title"></strong>
+                    <span class="alert-message"></span>
+                </div>
+                <button class="btn-dismiss" onclick="dismissAnnouncement(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Side Navigation -->
     <nav class="sidebar">
@@ -215,15 +337,62 @@
         <ul class="sidebar-nav">
             {% if user.is_authenticated %}
             <!-- Dashboard -->
-            <a class="nav-link {% if request.path == dashboard_url %}active{% endif %}" 
-            href="{% if user.is_superuser %}
-            {% url 'admin_dashboard' %}{% elif user.teacher %}
-            {% url 'teacher_dashboard' %}{% elif user.student %}
-            {% url 'student_dashboard' %}{% elif user.parentguardian %}
-            {% url 'parent_dashboard' %}{% endif %}">
-            <span>Dashboard</span>
+            <li class="nav-item">
+                <a class="nav-link" href="
+                {% if user.is_superuser %}{% url 'admin_dashboard' %}
+                {% elif user.teacher %}{% url 'teacher_dashboard' %}
+                {% elif user.student %}{% url 'student_dashboard' %}
+                {% elif user.parentguardian %}{% url 'parent_dashboard' %}
+                {% else %}{% url 'home' %}{% endif %}">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    <span>Dashboard</span>
                 </a>
             </li>
+            
+            <!-- Parent Portal - ONLY for Parents -->
+            {% if user.parentguardian %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#parentPortalMenu">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Parent Portal</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="parentPortalMenu">
+                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
+                        <i class="bi bi-speedometer"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_children_list' %}">
+                        <i class="bi bi-people"></i>
+                        <span>My Children</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_attendance_list' %}">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Attendance</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                        <i class="bi bi-card-checklist"></i>
+                        <span>Report Cards</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_messages' %}">
+                        <i class="bi bi-chat-dots"></i>
+                        <span>Messages</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_announcements' %}">
+                        <i class="bi bi-megaphone"></i>
+                        <span>Announcements</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_calendar' %}">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Calendar</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
             
             <!-- Academics Section -->
             <li class="nav-item">
@@ -234,22 +403,22 @@
                 </a>
                 <div class="sub-menu collapse" id="academicsMenu">
                     <!-- Assignments - Show to students, parents, teachers and admin -->
-                    {% if user.student or is_parent or user.is_superuser or user.teacher %}
+                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'assignment_list' %}">
                         <i class="bi bi-journal-text"></i>
                         <span>Assignments</span>
                     </a>
                     {% endif %}
+                    
                     <a class="nav-link" href="{% url 'assignment_calendar' %}">
-                    <i class="bi bi-calendar-event"></i>
-                    <span>Assignment Calendar</span>
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Assignment Calendar</span>
                     </a>
-                    {% endif %}
                     
                     <!-- Attendance - Show to admin, teachers, and parents -->
-                    {% if user.is_superuser or user.teacher or is_parent %}
+                    {% if user.is_superuser or user.teacher or user.parentguardian %}
                     <a class="nav-link" href="{% url 'attendance_dashboard' %}">
-                        <i class="bi bi-calendar-event"></i>
+                        <i class="bi bi-calendar-check"></i>
                         <span>Attendance</span>
                     </a>
                     {% endif %}
@@ -263,7 +432,7 @@
                     {% endif %}
                     
                     <!-- Grades - Show to students, parents, teachers and admin -->
-                    {% if user.student or is_parent or user.is_superuser or user.teacher %}
+                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'grade_list' %}">
                         <i class="bi bi-clipboard-data"></i>
                         <span>Grades</span>
@@ -276,7 +445,7 @@
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Card</span>
                     </a>
-                    {% elif is_parent %}
+                    {% elif user.parentguardian %}
                     <a class="nav-link" href="{% url 'parent_report_card_list' %}">
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Cards</span>
@@ -306,27 +475,105 @@
                     <i class="bi bi-chevron-down float-end"></i>
                 </a>
                 <div class="sub-menu collapse" id="timetableMenu">
-                    {% if is_admin or is_teacher %}
+                    {% if user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'timetable_list' %}">
                         <i class="bi bi-gear"></i>
                         <span>Manage Timetables</span>
                     </a>
                     {% endif %}
-                    {% if is_teacher %}
+                    {% if user.teacher %}
                     <a class="nav-link" href="{% url 'teacher_timetable' %}">
                         <i class="bi bi-person"></i>
                         <span>My Schedule</span>
                     </a>
                     {% endif %}
-                    {% if is_student %}
+                    {% if user.student %}
                     <a class="nav-link" href="{% url 'student_timetable' %}">
                         <i class="bi bi-calendar"></i>
                         <span>Class Timetable</span>
                     </a>
                     {% endif %}
+                    {% if user.parentguardian %}
+                    <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <i class="bi bi-calendar"></i>
+                        <span>Children's Timetable</span>
+                    </a>
+                    {% endif %}
                 </div>
             </li>
 
+            <!-- Announcements Menu - For Admin/Teachers -->
+            {% if user.is_superuser or user.teacher %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#announcementMenu">
+                    <i class="bi bi-megaphone"></i>
+                    <span>Announcements</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="announcementMenu">
+                    <a class="nav-link" href="{% url 'announcement_list' %}">
+                        <i class="bi bi-list"></i>
+                        <span>All Announcements</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'create_announcement' %}">
+                        <i class="bi bi-plus-circle"></i>
+                        <span>Create Announcement</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+
+            <!-- Parent Management - ONLY for Admin/Teachers -->
+            {% if user.is_superuser or user.teacher %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#parentManagementMenu">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Parent Management</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="parentManagementMenu">
+                    <a class="nav-link" href="{% url 'parent_directory' %}">
+                        <i class="bi bi-people"></i>
+                        <span>Parent Directory</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'bulk_parent_message' %}">
+                        <i class="bi bi-envelope"></i>
+                        <span>Bulk Messaging</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_communication_log' %}">
+                        <i class="bi bi-chat-left-text"></i>
+                        <span>Communication Log</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_engagement_dashboard' %}">
+                        <i class="bi bi-graph-up"></i>
+                        <span>Engagement Dashboard</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+            
+            <!-- Student-specific menu items -->
+            {% if user.student %}
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_grades' %}">
+                    <i class="bi bi-clipboard-data"></i>
+                    <span>My Grades</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_attendance' %}">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>My Attendance</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_fees' %}">
+                    <i class="bi bi-credit-card"></i>
+                    <span>My Fees</span>
+                </a>
+            </li>
+            {% endif %}
+            
             <!-- HR Management (Admin Only) -->
             {% if user.is_superuser %}
             <li class="nav-item">
@@ -347,31 +594,9 @@
                 </div>
             </li>
             {% endif %}
-
-            {% if user.student %}
-<!-- Student-specific menu items -->
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'student_grades' %}">
-        <i class="bi bi-clipboard-data"></i>
-        <span>My Grades</span>
-    </a>
-</li>
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'student_attendance' %}">
-        <i class="bi bi-calendar-event"></i>
-        <span>My Attendance</span>
-    </a>
-</li>
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'student_fees' %}">
-        <i class="bi bi-credit-card"></i>
-        <span>My Fees</span>
-    </a>
-</li>
-{% endif %}
             
             <!-- Finance -->
-            {% if user.is_superuser or is_parent %}
+            {% if user.is_superuser or user.parentguardian %}
             <li class="nav-item">
                 <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
                     <i class="bi bi-cash-stack"></i>
@@ -388,7 +613,7 @@
                         <i class="bi bi-graph-up"></i>
                         <span>Reports</span>
                     </a>
-                    {% elif is_parent %}
+                    {% elif user.parentguardian %}
                     <a class="nav-link" href="{% url 'parent_fee_list' %}">
                         <i class="bi bi-credit-card"></i>
                         <span>Fee Payments</span>
@@ -398,45 +623,28 @@
             </li>
             {% endif %}
             
-            <!-- Parent Portal (For Parent Users) -->
-            {% if is_parent %}
-            <li class="nav-item">
-                <a class="nav-link" data-bs-toggle="collapse" href="#parentMenu">
-                    <i class="bi bi-people-fill"></i>
-                    <span>Parent Portal</span>
-                    <i class="bi bi-chevron-down float-end"></i>
-                </a>
-                <div class="sub-menu collapse" id="parentMenu">
-                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
-                        <i class="bi bi-speedometer"></i>
-                        <span>Dashboard</span>
-                    </a>
-                    <a class="nav-link" href="{% url 'parent_children_list' %}">
-                        <i class="bi bi-list-ul"></i>
-                        <span>My Children</span>
-                    </a>
-                    <a class="nav-link" href="{% url 'parent_attendance_list' %}">
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Attendance</span>
-                    </a>
-                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
-                        <i class="bi bi-credit-card"></i>
-                        <span>Fee Payments</span>
-                    </a>
-                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
-                        <i class="bi bi-card-checklist"></i>
-                        <span>Report Cards</span>
-                    </a>
-                </div>
-            </li>
-            {% endif %}
-            
             <!-- Analytics (for admin/teachers) -->
-            {% if is_admin or is_teacher %}
+            {% if user.is_superuser or user.teacher %}
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'analytics_dashboard' %}">
                     <i class="bi bi-graph-up"></i>
                     <span>Analytics</span>
+                </a>
+            </li>
+            {% endif %}
+
+            {% else %}
+            <!-- Show these menu items for non-authenticated users -->
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'signin' %}">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    <span>Sign In</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'signup' %}">
+                    <i class="bi bi-person-plus me-2"></i>
+                    <span>Sign Up</span>
                 </a>
             </li>
             {% endif %}
@@ -472,7 +680,8 @@
                             {% for notification in recent_notifications %}
                             <li>
                                 <a class="dropdown-item {% if not notification.is_read %}fw-bold{% endif %}" 
-                                   href="{{ notification.link|default:'#' }}">
+                                   href="{{ notification.link|default:'#' }}"
+                                   onclick="handleNotificationClick(this, event)">
                                     <div class="d-flex w-100 justify-content-between">
                                         <span>{{ notification.title }}</span>
                                         <small class="text-muted">{{ notification.created_at|timesince }} ago</small>
@@ -494,7 +703,7 @@
                             <i class="bi bi-person-circle me-1"></i>
                             {% if user.teacher %}{{ user.teacher.get_full_name }}
                             {% elif user.student %}{{ user.student.get_full_name }}
-                            {% elif is_parent %}{{ user_parentguardian.full_name }}
+                            {% elif user.parentguardian %}{{ user.parentguardian.get_user_full_name }}
                             {% else %}{{ user.username }}
                             {% endif %}
                         </a>
@@ -569,7 +778,7 @@
                     <ul class="list-unstyled">
                         <li><a href="{% url 'home' %}" class="text-white">Home</a></li>
                         {% if user.is_authenticated %}
-                        <li><a href="{% if is_parent %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
+                        <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
                         <li><a href="{% url 'grade_list' %}" class="text-white">Grades</a></li>
                         {% endif %}
                     </ul>
@@ -577,7 +786,7 @@
                 <div class="col-md-4">
                     <h5>Contact Us</h5>
                     <ul class="list-unstyled text-muted">
-                        <li><i class="bi bi-envelope me-2"></i> info@judithschool.edu</li>
+                        <li><i class="bi bi-envelope me-2"></i> mensahbedijosh983@gmail.com</li>
                         <li><i class="bi bi-telephone me-2"></i> +2330541345564</li>
                         <li><i class="bi bi-geo-alt me-2"></i> judithschool.edu</li>
                     </ul>
@@ -605,8 +814,134 @@
             }
         }
         
-        // Auto-collapse sidebar on mobile after navigation
+        // Handle notification clicks
+        function handleNotificationClick(linkElement, event) {
+            // Prevent the dropdown from closing immediately
+            event.stopPropagation();
+            
+            const href = linkElement.getAttribute('href');
+            
+            // Only navigate if it's a valid link (not '#')
+            if (href && href !== '#') {
+                // Close the dropdown manually
+                const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationsMenu'));
+                if (dropdown) {
+                    dropdown.hide();
+                }
+                
+                // Navigate to the link after a small delay
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 100);
+            }
+            // If href is '#' or empty, just let the dropdown close (default behavior)
+        }
+
+        // Announcement Banner Functions
+        function loadActiveAnnouncements() {
+            fetch('/announcements/active/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.announcements && data.announcements.length > 0) {
+                        // Show the first announcement
+                        showAnnouncement(data.announcements[0]);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading announcements:', error);
+                });
+        }
+
+        function showAnnouncement(announcement) {
+            const banner = document.querySelector('.announcement-alert');
+            banner.style.display = 'flex';
+            banner.setAttribute('data-priority', announcement.priority);
+            banner.setAttribute('data-announcement-id', announcement.id);
+            
+            banner.querySelector('.alert-title').textContent = announcement.title + ':';
+            banner.querySelector('.alert-message').textContent = announcement.message;
+        }
+
+        function dismissAnnouncement(button) {
+            const announcementEl = button.closest('.announcement-alert');
+            const announcementId = announcementEl.getAttribute('data-announcement-id');
+            
+            // Hide immediately
+            announcementEl.style.display = 'none';
+            
+            // Send dismiss request to server
+            fetch(`/announcements/${announcementId}/dismiss/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Failed to dismiss announcement');
+                }
+            })
+            .catch(error => {
+                console.error('Error dismissing announcement:', error);
+            });
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // WebSocket handling for real-time announcements
+        // This would connect to your WebSocket endpoint
+        function connectToAnnouncementWebSocket() {
+            // Replace with your actual WebSocket URL
+            const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+            const wsUrl = `${wsScheme}://${window.location.host}/ws/notifications/`;
+            
+            try {
+                const ws = new WebSocket(wsUrl);
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'announcement') {
+                        showAnnouncement(data.announcement);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(connectToAnnouncementWebSocket, 5000);
+                };
+                
+                return ws;
+            } catch (error) {
+                console.error('WebSocket connection failed:', error);
+                // Retry connection after 10 seconds
+                setTimeout(connectToAnnouncementWebSocket, 10000);
+            }
+        }
+
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Load announcements
+            loadActiveAnnouncements();
+            
+            // Connect to WebSocket for real-time announcements
+            // Uncomment when WebSocket is set up
+            // connectToAnnouncementWebSocket();
+            
             if (window.innerWidth < 992) {
                 const navLinks = document.querySelectorAll('.nav-link');
                 navLinks.forEach(link => {
@@ -649,6 +984,20 @@
                         }
                     }
                 }
+            });
+
+            // Alternative notification click handler for better compatibility
+            document.querySelectorAll('.dropdown-notifications .dropdown-item').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    const href = this.getAttribute('href');
+                    if (href && href !== '#') {
+                        // Close dropdown for valid links
+                        const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationsMenu'));
+                        if (dropdown) {
+                            dropdown.hide();
+                        }
+                    }
+                });
             });
         });
     </script>

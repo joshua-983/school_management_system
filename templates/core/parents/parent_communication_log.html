@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}Parent Communication Log - School Management System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Parent Communication Log</h2>
+    <a href="{% url 'bulk_parent_message' %}" class="btn btn-primary">
+        <i class="bi bi-envelope-plus"></i> New Message
+    </a>
+</div>
+
+<!-- Communication Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ total_messages }}</h3>
+                <p class="mb-0">Total Messages Sent</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ read_messages }}</h3>
+                <p class="mb-0">Read Messages</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>{{ unread_messages }}</h3>
+                <p class="mb-0">Unread Messages</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ response_count }}</h3>
+                <p class="mb-0">Parent Responses</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Messages Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>To</th>
+                        <th>Subject</th>
+                        <th>Message Preview</th>
+                        <th>Sent</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for message in messages %}
+                    <tr>
+                        <td>
+                            <strong>{{ message.receiver.get_full_name }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% if message.parent %}
+                                    {{ message.parent.get_relationship_display }} of 
+                                    {% for student in message.parent.students.all %}
+                                        {{ student.get_full_name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>{{ message.subject }}</td>
+                        <td>
+                            <small class="text-muted">
+                                {{ message.message|truncatechars:100 }}
+                            </small>
+                        </td>
+                        <td>
+                            <small>{{ message.timestamp|date:"M d, Y" }}</small>
+                            <br>
+                            <small class="text-muted">{{ message.timestamp|time }}</small>
+                        </td>
+                        <td>
+                            {% if message.is_read %}
+                            <span class="badge bg-success">Read</span>
+                            {% else %}
+                            <span class="badge bg-warning">Unread</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary view-message" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#messageModal"
+                                    data-subject="{{ message.subject }}"
+                                    data-message="{{ message.message }}"
+                                    data-receiver="{{ message.receiver.get_full_name }}"
+                                    data-timestamp="{{ message.timestamp|date:'M d, Y H:i' }}"
+                                    data-status="{% if message.is_read %}Read{% else %}Unread{% endif %}">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-chat-left-text display-4 d-block mb-2"></i>
+                            No messages sent yet
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                </li>
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Message Detail Modal -->
+<div class="modal fade" id="messageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="messageModalTitle">Message Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <strong>To:</strong> <span id="modalReceiver"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Subject:</strong> <span id="modalSubject"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Sent:</strong> <span id="modalTimestamp"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Status:</strong> <span id="modalStatus"></span>
+                </div>
+                <hr>
+                <div>
+                    <strong>Message:</strong>
+                    <div class="border p-3 mt-2 bg-light rounded" id="modalMessage"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Message detail modal
+    const viewButtons = document.querySelectorAll('.view-message');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            document.getElementById('modalReceiver').textContent = this.dataset.receiver;
+            document.getElementById('modalSubject').textContent = this.dataset.subject;
+            document.getElementById('modalMessage').textContent = this.dataset.message;
+            document.getElementById('modalTimestamp').textContent = this.dataset.timestamp;
+            document.getElementById('modalStatus').textContent = this.dataset.status;
+        });
+    });
+});
+</script>
+{% endblock %}

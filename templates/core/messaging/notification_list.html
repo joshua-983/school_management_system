@@ -20,23 +20,29 @@
             {% if notifications %}
             <div class="list-group">
                 {% for notification in notifications %}
-                <a href="{{ notification.link|default:'#' }}" 
-                   class="list-group-item list-group-item-action {% if not notification.is_read %}list-group-item-primary{% endif %}"
-                   onclick="markAsRead(event, {{ notification.id }})">
+                <div class="list-group-item {% if not notification.is_read %}list-group-item-primary{% endif %}">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">
                             <i class="bi 
-                                {% if notification.notification_type == 'info' %}bi-info-circle
-                                {% elif notification.notification_type == 'warning' %}bi-exclamation-triangle
-                                {% elif notification.notification_type == 'alert' %}bi-exclamation-octagon
-                                {% else %}bi-check-circle{% endif %}"></i>
+                                {% if notification.notification_type == 'GRADE' %}bi-award
+                                {% elif notification.notification_type == 'FEE' %}bi-currency-dollar
+                                {% elif notification.notification_type == 'ASSIGNMENT' %}bi-journal-text
+                                {% else %}bi-bell{% endif %}"></i>
                             {{ notification.title }}
                         </h6>
-                        <small>{{ notification.created_at|timesince }} ago</small>
+                        <div>
+                            {% if not notification.is_read %}
+                            <button class="btn btn-sm btn-outline-success mark-read-btn" 
+                                    data-notification-id="{{ notification.id }}">
+                                Mark read
+                            </button>
+                            {% endif %}
+                            <small class="text-muted ms-2">{{ notification.created_at|timesince }} ago</small>
+                        </div>
                     </div>
                     <p class="mb-1">{{ notification.message }}</p>
                     <small class="text-muted">{{ notification.get_notification_type_display }}</small>
-                </a>
+                </div>
                 {% endfor %}
             </div>
             {% else %}
@@ -48,10 +54,7 @@
 
 <script>
 // Mark single notification as read
-function markAsRead(event, notificationId) {
-    event.preventDefault();
-    const link = event.currentTarget.href;
-    
+function markAsRead(notificationId) {
     fetch(`/notifications/${notificationId}/mark-read/`, {
         method: 'POST',
         headers: {
@@ -60,7 +63,13 @@ function markAsRead(event, notificationId) {
         },
     }).then(response => {
         if (response.ok) {
-            window.location.href = link;
+            // Update UI
+            const notificationElement = document.querySelector(`[data-notification-id="${notificationId}"]`).closest('.list-group-item');
+            notificationElement.classList.remove('list-group-item-primary');
+            document.querySelector(`[data-notification-id="${notificationId}"]`).remove();
+            
+            // Update badge count
+            updateNotificationBadge();
         }
     });
 }
@@ -76,15 +85,46 @@ document.getElementById('markAllReadBtn').addEventListener('click', function() {
     }).then(response => response.json())
       .then(data => {
           if (data.status === 'success') {
-              // Update UI
+              // Update UI - remove highlighted notifications and mark-read buttons
               document.querySelectorAll('.list-group-item-primary').forEach(item => {
                   item.classList.remove('list-group-item-primary');
               });
-              // Update badge count in navbar
-              const badge = document.querySelector('.notification-badge');
-              if (badge) badge.remove();
+              document.querySelectorAll('.mark-read-btn').forEach(btn => {
+                  btn.remove();
+              });
+              
+              // Update badge count
+              updateNotificationBadge();
+              
+              // Show success message
+              alert('All notifications marked as read!');
           }
       });
 });
+
+// Add event listeners to mark-read buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.mark-read-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const notificationId = this.getAttribute('data-notification-id');
+            markAsRead(notificationId);
+        });
+    });
+});
+
+// Function to update notification badge
+function updateNotificationBadge() {
+    const badge = document.querySelector('.notification-badge');
+    if (badge) {
+        // You might want to make an API call to get the actual count
+        // For now, we'll just remove the badge if no unread notifications are visible
+        const unreadCount = document.querySelectorAll('.list-group-item-primary').length;
+        if (unreadCount === 0) {
+            badge.remove();
+        } else {
+            badge.textContent = unreadCount;
+        }
+    }
+}
 </script>
 {% endblock %}

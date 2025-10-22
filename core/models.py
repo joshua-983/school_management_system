@@ -21,6 +21,7 @@ from django.db.models import Q, Count, Avg, Sum
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 # ===== SHARED CONSTANTS (Moved to top to avoid circular imports) =====
@@ -543,8 +544,9 @@ class Fee(models.Model):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
 
     def update_payment_status(self):
+        """Update payment status with grace period logic"""
         tolerance = Decimal('1.00')
-        grace_period = 5
+        grace_period = 5  # 5 days grace period
         today = timezone.now().date()
         effective_due_date = self.due_date + timedelta(days=grace_period)
         difference = abs(self.amount_payable - self.amount_paid)
@@ -560,23 +562,66 @@ class Fee(models.Model):
         else:
             self.payment_status = 'unpaid'
 
-    def save(self, *args, **kwargs):
-        self.balance = self.amount_payable - self.amount_paid
-        self.update_payment_status()
-        
-        if self.payment_status == 'paid' and not self.payment_date:
-            self.payment_date = timezone.now().date()
-            
-        super().save(*args, **kwargs)
+    @property
+    def payment_percentage(self):
+        """Calculate payment percentage"""
+        if self.amount_payable > 0:
+            return (self.amount_paid / self.amount_payable) * 100
+        return 0
+    
+    @property
+    def is_overdue(self):
+        """Check if fee is overdue (without grace period for display purposes)"""
+        if self.due_date and self.payment_status != 'paid':
+            return self.due_date < timezone.now().date()
+        return False
+    
+    @property
+    def is_effectively_overdue(self):
+        """Check if fee is overdue with grace period consideration"""
+        if self.due_date and self.payment_status != 'paid':
+            grace_period = 5
+            effective_due_date = self.due_date + timedelta(days=grace_period)
+            return timezone.now().date() > effective_due_date
+        return False
 
     def clean(self):
+        """Validate the fee data"""
         if self.amount_paid > self.amount_payable:
             raise ValidationError({'amount_paid': 'Amount paid cannot exceed amount payable'})
         
+        # Only validate if manually setting status to paid
         if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
-            raise ValidationError({'payment_status': 'Cannot mark as paid when amount paid is less than payable'})
+            raise ValidationError({
+                'payment_status': 'Cannot mark as paid when amount paid is less than payable'
+            })
+        
+        # Validate due date is not in the past for new fees
+        if not self.pk and self.due_date < timezone.now().date():
+            raise ValidationError({
+                'due_date': 'Due date cannot be in the past for new fees'
+            })
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate balance and update payment status before saving"""
+        # Calculate balance first
+        self.balance = self.amount_payable - self.amount_paid
+        
+        # Update payment status using the dedicated method
+        self.update_payment_status()
+        
+        # Set payment date if status is paid and no date exists
+        if self.payment_status == 'paid' and not self.payment_date:
+            self.payment_date = timezone.now().date()
+        
+        # Clear payment date if status changes from paid
+        elif self.payment_status != 'paid' and self.payment_date:
+            self.payment_date = None
+            
+        super().save(*args, **kwargs)
 
     def get_payment_status_html(self):
+        """Get HTML badge for payment status"""
         status_display = self.get_payment_status_display()
         color_map = {
             'paid': 'success',
@@ -586,6 +631,43 @@ class Fee(models.Model):
         }
         color = color_map.get(self.payment_status, 'primary')
         return mark_safe(f'<span class="badge bg-{color}">{status_display}</span>')
+    
+    def get_payment_progress_html(self):
+        """Get HTML progress bar for payment"""
+        percentage = self.payment_percentage
+        color = 'success' if percentage == 100 else 'warning' if percentage > 0 else 'danger'
+        
+        return mark_safe(f'''
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-{color}" role="progressbar" 
+                     style="width: {percentage}%" 
+                     aria-valuenow="{percentage}" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                </div>
+            </div>
+            <small class="text-muted">{percentage:.1f}% paid</small>
+        ''')
+    
+    def can_accept_payment(self):
+        """Check if this fee can accept additional payments"""
+        return self.balance > 0 and self.payment_status != 'paid'
+    
+    def get_remaining_days(self):
+        """Get remaining days until due date"""
+        if not self.due_date:
+            return None
+        
+        today = timezone.now().date()
+        remaining = (self.due_date - today).days
+        
+        if remaining < 0:
+            return f"{abs(remaining)} days overdue"
+        elif remaining == 0:
+            return "Due today"
+        else:
+            return f"{remaining} days remaining"
+
 
 class FeeInstallment(models.Model):
     fee = models.ForeignKey(Fee, on_delete=models.CASCADE, related_name='installments')
@@ -704,12 +786,9 @@ class Assignment(models.Model):
         return f"{self.get_assignment_type_display()} - {self.subject} ({self.class_assignment.get_class_level_display()})"
     
     def clean(self):
-        if not self.class_assignment_id:
-            raise ValidationError("Class assignment is required.")
-        
+        # REMOVED the class_assignment validation since we handle it in the form
         if self.due_date and self.due_date <= timezone.now():
             raise ValidationError({'due_date': 'Due date must be in the future'})
-
 
     def get_status_summary(self):
         return {
@@ -733,7 +812,7 @@ class Assignment(models.Model):
         return self.due_date < timezone.now()
 
     def save(self, *args, **kwargs):
-        self.clean()
+        # REMOVED: self.clean() - don't call clean in save method
         is_new = self.pk is None
         super().save(*args, **kwargs)
 
@@ -795,7 +874,6 @@ class Assignment(models.Model):
             'graded': student_assignments.filter(status='GRADED').count(),
             'pending': student_assignments.filter(status='PENDING').count(),
         }
-
 
 # Assignment Template Model
 class AssignmentTemplate(models.Model):
@@ -1204,54 +1282,255 @@ class Notification(models.Model):
         ('GRADE', 'Grade Update'),
         ('FEE', 'Fee Payment'),
         ('ASSIGNMENT', 'Assignment'),
+        ('ATTENDANCE', 'Attendance'),
         ('GENERAL', 'General'),
     ]
     
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    notification_type = models.CharField(max_length=10, choices=NOTIFICATION_TYPES)
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES, default='GENERAL')
     title = models.CharField(max_length=200)
     message = models.TextField()
     related_object_id = models.PositiveIntegerField(null=True, blank=True)
     related_content_type = models.CharField(max_length=50, blank=True)
+    link = models.CharField(max_length=500, blank=True, null=True)  # Added explicit link field
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', 'created_at']),
+            models.Index(fields=['created_at']),
+        ]
     
     def __str__(self):
-        return f"{self.get_notification_type_display()} - {self.title}"
+        return f"{self.get_notification_type_display()} - {self.title} - {self.recipient.username}"
     
     def get_absolute_url(self):
+        """
+        Get the URL for this notification, prioritizing explicit link field,
+        then trying to construct from related objects
+        """
+        # First try the explicit link field
+        if self.link:
+            return self.link
+            
+        # Then try to construct from related objects
         if self.related_object_id and self.related_content_type:
             try:
+                from django.apps import apps
                 model_class = apps.get_model('core', self.related_content_type)
                 obj = model_class.objects.get(pk=self.related_object_id)
-                return obj.get_absolute_url()
-            except:
-                pass
+                if hasattr(obj, 'get_absolute_url'):
+                    return obj.get_absolute_url()
+            except Exception as e:
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Could not get absolute URL for notification {self.id}: {str(e)}")
+        
+        # Fallback to notification list
+        from django.urls import reverse
         return reverse('notification_list')
     
     def mark_as_read(self):
+        """Mark notification as read and send WebSocket update"""
         if not self.is_read:
             self.is_read = True
-            self.save()
+            self.save(update_fields=['is_read'])
             self.send_ws_update()
+            return True
+        return False
     
     def send_ws_update(self):
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
+        """Send WebSocket update for this notification"""
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{self.recipient.id}',
+                {
+                    'type': 'notification_update',
+                    'action': 'single_read',
+                    'notification_id': self.id,
+                    'unread_count': self.get_unread_count_for_user()
+                }
+            )
+        except Exception as e:
+            logger.error(f"WebSocket update failed for notification {self.id}: {str(e)}")
+    
+    @classmethod
+    def get_unread_count_for_user(cls, user):
+        """Get unread notification count for a user"""
+        return cls.objects.filter(recipient=user, is_read=False).count()
+    
+    @classmethod
+    def create_notification(cls, recipient, title, message, notification_type="GENERAL", link=None, 
+                          related_object=None):
+        """
+        Class method to create a notification with proper error handling
+        """
+        try:
+            notification = cls.objects.create(
+                recipient=recipient,
+                title=title,
+                message=message,
+                notification_type=notification_type,
+                link=link
+            )
+            
+            # Set related object if provided
+            if related_object:
+                notification.related_object_id = related_object.pk
+                notification.related_content_type = related_object._meta.model_name
+                notification.save()
+            
+            # Send WebSocket update
+            notification.send_new_notification_ws()
+            
+            return notification
+            
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to create notification: {str(e)}")
+            return None
+    
+    def send_new_notification_ws(self):
+        """Send WebSocket update for new notification"""
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{self.recipient.id}',
+                {
+                    'type': 'notification_update',
+                    'action': 'new_notification',
+                    'notification_id': self.id,
+                    'notification_title': self.title,
+                    'notification_message': self.message,
+                    'notification_type': self.notification_type,
+                    'unread_count': self.get_unread_count_for_user(self.recipient),
+                    'created_at': self.created_at.isoformat(),
+                }
+            )
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"WebSocket new notification update failed: {str(e)}")
+    
+    @classmethod
+    def mark_all_read_for_user(cls, user):
+        """Mark all notifications as read for a user"""
+        updated_count = cls.objects.filter(recipient=user, is_read=False).update(is_read=True)
         
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            f'notifications_{self.recipient.id}',
-            {
-                'type': 'notification_update',
-                'action': 'single_read',
-                'notification_id': self.id,
-                'unread_count': self.recipient.notifications.filter(is_read=False).count()
-            }
+        if updated_count > 0:
+            # Send WebSocket update
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f'notifications_{user.id}',
+                    {
+                        'type': 'notification_update',
+                        'action': 'mark_all_read',
+                        'unread_count': 0
+                    }
+                )
+            except Exception as e:
+                logger = logging.getLogger(__name__)
+                logger.error(f"WebSocket mark all read update failed: {str(e)}")
+        
+        return updated_count
+    
+    @classmethod
+    def get_recent_notifications(cls, user, count=5):
+        """Get recent notifications for a user"""
+        return cls.objects.filter(recipient=user).order_by('-created_at')[:count]
+    
+    @classmethod
+    def create_assignment_notification(cls, assignment, students=None):
+        """
+        Create notifications for students about a new assignment
+        """
+        from core.models import Student
+        from django.urls import reverse
+        
+        if students is None:
+            # Get all students in the class level
+            students = Student.objects.filter(class_level=assignment.class_assignment.class_level)
+        
+        notifications_created = 0
+        for student in students:
+            notification = cls.create_notification(
+                recipient=student.user,
+                title="New Assignment Created",
+                message=f"New assignment '{assignment.title}' has been created for {assignment.subject.name}. Due date: {assignment.due_date.strftime('%b %d, %Y at %I:%M %p')}",
+                notification_type="ASSIGNMENT",
+                link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+                related_object=assignment
+            )
+            if notification:
+                notifications_created += 1
+        
+        return notifications_created
+    
+    @classmethod
+    def create_grading_notification(cls, student_assignment):
+        """
+        Create notification for student when assignment is graded
+        """
+        from django.urls import reverse
+        
+        assignment = student_assignment.assignment
+        student = student_assignment.student
+        
+        # Calculate percentage
+        percentage = (student_assignment.score / assignment.max_score) * 100
+        
+        # Performance message
+        if percentage >= 80:
+            performance_msg = "Excellent work!"
+        elif percentage >= 70:
+            performance_msg = "Good job!"
+        elif percentage >= 50:
+            performance_msg = "Satisfactory performance."
+        else:
+            performance_msg = "Needs improvement."
+        
+        notification = cls.create_notification(
+            recipient=student.user,
+            title="Assignment Graded",
+            message=(
+                f"Your assignment '{assignment.title}' has been graded. "
+                f"Score: {student_assignment.score}/{assignment.max_score} ({percentage:.1f}%). "
+                f"{performance_msg}"
+            ),
+            notification_type="GRADE",
+            link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+            related_object=student_assignment
         )
+        
+        return notification is not None
+    
+    @property
+    def is_recent(self):
+        """Check if notification was created in the last 24 hours"""
+        from django.utils import timezone
+        from datetime import timedelta
+        return self.created_at >= timezone.now() - timedelta(hours=24)
+    
+    @property
+    def formatted_created_at(self):
+        """Return formatted created date"""
+        from django.utils.timesince import timesince
+        return f"{timesince(self.created_at)} ago"
+
 
 # Audit Log
 class AuditLog(models.Model):
@@ -1299,27 +1578,98 @@ class AuditLog(models.Model):
             ip_address=ip_address
         )
 
-# Announcement
-class Announcement(models.Model):
-    TARGET_CHOICES = [
-        ('ALL', 'All Users'),
-        ('STUDENTS', 'Students'),
-        ('TEACHERS', 'Teachers'),
-        ('ADMINS', 'Administrators'),
+# Add this to core/models.py
+# Add this to core/models.py after the SecurityEvent model
+
+class SecurityEvent(models.Model):
+    EVENT_TYPES = [
+        ('login_success', 'Login Success'),
+        ('login_failed', 'Login Failed'),
+        ('password_change', 'Password Change'),
+        ('user_created', 'User Created'),
+        ('user_deleted', 'User Deleted'),
+        ('permission_change', 'Permission Change'),
+        ('data_access', 'Data Access'),
+        ('configuration_change', 'Configuration Change'),
     ]
     
-    title = models.CharField(max_length=200)
-    content = models.TextField()
-    target_roles = models.CharField(max_length=20, choices=TARGET_CHOICES, default='ALL')
-    attachment = models.FileField(upload_to='announcements/', blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    SEVERITY_LEVELS = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+    user = models.ForeignKey(
+        'accounts.CustomUser', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='security_events'
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    description = models.TextField()
+    severity = models.CharField(max_length=10, choices=SEVERITY_LEVELS, default='low')
+    metadata = models.JSONField(default=dict, blank=True)
     
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-timestamp']
+        verbose_name = 'Security Event'
+        verbose_name_plural = 'Security Events'
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['event_type']),
+            models.Index(fields=['severity']),
+            models.Index(fields=['user', '-timestamp']),
+        ]
     
     def __str__(self):
-        return self.title
+        username = self.user.username if self.user else 'System'
+        return f"{self.get_event_type_display()} - {username} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
+
+class AuditAlertRule(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    severity = models.CharField(max_length=10, choices=SecurityEvent.SEVERITY_LEVELS, default='medium')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.name
+
+class AuditReport(models.Model):
+    REPORT_TYPES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('custom', 'Custom'),
+    ]
+    
+    name = models.CharField(max_length=100)
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPES, default='daily')
+    generated_at = models.DateTimeField(auto_now_add=True)
+    report_file = models.FileField(upload_to='audit_reports/', null=True, blank=True)
+    is_downloaded = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return self.name
+
+class DataRetentionPolicy(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    retention_days = models.IntegerField(default=365)
+    applies_to = models.CharField(max_length=100)  # e.g., 'security_events', 'audit_logs', etc.
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name
+
+
 
 # Report Card
 class ReportCard(models.Model):
@@ -1682,3 +2032,82 @@ def get_unread_count(user):
     Get count of unread notifications for a user
     """
     return Notification.objects.filter(recipient=user, is_read=False).count()
+
+
+# Announcements
+
+class Announcement(models.Model):
+    PRIORITY_CHOICES = [
+        ('LOW', 'Low'),
+        ('NORMAL', 'Normal'),
+        ('HIGH', 'High'),
+        ('URGENT', 'Urgent'),
+    ]
+    
+    TARGET_CHOICES = [
+        ('ALL', 'All Users'),
+        ('STUDENTS', 'Students'),
+        ('TEACHERS', 'Teachers'),
+        ('ADMINS', 'Administrators'),
+    ]
+    
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='NORMAL')
+    target_roles = models.CharField(max_length=20, choices=TARGET_CHOICES, default='ALL')
+    target_class_levels = models.CharField(
+        max_length=100, 
+        blank=True, 
+        help_text="Comma-separated class levels (e.g., P1,P2,P3) or leave blank for all"
+    )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+    start_date = models.DateTimeField(default=timezone.now)
+    end_date = models.DateTimeField(blank=True, null=True)
+    attachment = models.FileField(upload_to='announcements/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return self.title
+    
+    def is_expired(self):
+        """Check if announcement has expired"""
+        if self.end_date:
+            return timezone.now() > self.end_date
+        return False
+    
+    def is_active_now(self):
+        """Check if announcement is currently active"""
+        return self.is_active and not self.is_expired()
+    
+    def get_target_class_levels(self):
+        """Get list of target class levels"""
+        if not self.target_class_levels:
+            return []
+        return [level.strip() for level in self.target_class_levels.split(',')]
+    
+    def is_for_class_level(self, class_level):
+        """Check if announcement is for a specific class level"""
+        if not self.target_class_levels:  # Empty means all classes
+            return True
+        return class_level in self.get_target_class_levels()
+
+
+class UserAnnouncementView(models.Model):
+    """Track which users have seen/dismissed which announcements"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE)
+    dismissed = models.BooleanField(default=False)
+    viewed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'announcement')
+        verbose_name = 'User Announcement View'
+        verbose_name_plural = 'User Announcement Views'
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.announcement.title} ({'Dismissed' if self.dismissed else 'Viewed'})"

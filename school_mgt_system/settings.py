@@ -4,6 +4,7 @@ Django settings for school_mgt_system project.
 
 from pathlib import Path
 import os
+from celery.schedules import crontab  # Fixed import
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,12 +27,15 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'django.contrib.admindocs',
 
+    # Third-party apps
     'crispy_forms',
     'crispy_bootstrap5',
     'django_extensions',
     'rest_framework',
     'guardian',
     'django_filters',
+    'django_celery_beat',  # Added for Celery beat
+    'django_celery_results',  # Added for Celery results
     
     # Local apps
     'core',
@@ -66,6 +70,7 @@ DATABASES = {
         'PORT': '3306',
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'connect_timeout': 10,
         }
     }
 }
@@ -88,6 +93,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django.template.context_processors.media',
                 'core.context_processors.global_context',
+                'core.context_processors.notification_context',
             ],
         },
     },
@@ -138,7 +144,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'admin2@gmail.com'
 
 # Session settings
-SESSION_COOKIE_AGE = 1209600
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 
 # Security settings
 if DEBUG:
@@ -154,7 +160,6 @@ AUTHENTICATION_BACKENDS = (
 )
 
 ANONYMOUS_USER_NAME = None
-
 
 # Channel layers
 CHANNEL_LAYERS = {
@@ -188,10 +193,91 @@ INTERNAL_IPS = [
     'localhost',
 ]
 
-# GeoIP
-GEOIP_PATH = '/mnt/e/projects/school/data/geoip/GeoLite2-City/GeoLite2-City.mmdb'
-GEOIP_CITY = 'GeoLite2-City.mmdb'
-GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
 
-# Password rotation
+# Celery Beat Schedule (Fixed syntax)
+CELERY_BEAT_SCHEDULE = {
+    'generate-daily-reports': {
+        'task': 'core.tasks.generate_daily_reports',
+        'schedule': crontab(hour=23, minute=0),  # Daily at 11 PM
+    },
+    'apply-data-retention': {
+        'task': 'core.tasks.apply_data_retention',
+        'schedule': crontab(hour=0, minute=0, day_of_month='1'),  # Fixed: First day of month at midnight
+    },
+    'cleanup-old-sessions': {
+        'task': 'core.tasks.cleanup_old_sessions',
+        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
+    },
+}
+
+# Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20
+}
+
+# Guardian settings
+GUARDIAN_GET_INIT_ANONYMOUS_USER = 'accounts.models.get_anonymous_user_instance'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'debug.log'),
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+}
+
+# GeoIP Settings (commented out as they require database files)
+# GEOIP_PATH = os.path.join(BASE_DIR, 'data', 'geoip')
+# GEOIP_CITY = 'GeoLite2-City.mmdb'
+# GEOIP_COUNTRY = 'GeoLite2-Country.mmdb'
+
+# Password policy
 PASSWORD_ROTATION_DAYS = 90
+
+# File upload settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+
+# Custom settings
+SCHOOL_NAME = "School Management System"
+VERSION = "1.0.0"

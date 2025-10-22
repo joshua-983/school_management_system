@@ -18,6 +18,8 @@ from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, St
 from .base_views import is_admin, is_teacher, is_student
 from ..forms import AssignmentForm, StudentAssignmentForm
 from core.forms import StudentAssignmentSubmissionForm
+from django.shortcuts import render, redirect
+
 
 logger = logging.getLogger(__name__)
 
@@ -207,46 +209,56 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['request'] = self.request
+        print(f"DEBUG VIEW: get_form_kwargs called, adding request to form")
         return kwargs
     
     def form_valid(self, form):
-        try:
-            # This will call our custom save method
-            return super().form_valid(form)
-        except ValidationError as e:
-            # Handle validation errors from the model
-            form.add_error(None, str(e))
-            return self.form_invalid(form)
-        except Exception as e:
-            # Handle other errors
-            logger.error(f"Error creating assignment: {str(e)}")
-            form.add_error(None, f"Error creating assignment: {str(e)}")
-            return self.form_invalid(form)
-    def get_success_url(self):
-        return reverse_lazy('assignment_detail', kwargs={'pk': self.object.pk})
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Add class levels to context
-        context['class_levels'] = CLASS_LEVEL_CHOICES
+        print(f"DEBUG VIEW: form_valid called")
         
-        # Add available classes for the current teacher
-        if is_teacher(self.request.user):
-            context['available_classes'] = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher
-            )
-        else:  # Admin
-            context['available_classes'] = ClassAssignment.objects.all()
+        # Save the assignment first
+        response = super().form_valid(form)
+        
+        # Send notifications to students after assignment is created
+        self.send_assignment_notifications()
+        
+        messages.success(self.request, 'Assignment created successfully!')
+        print(f"DEBUG VIEW: form_valid completed, object pk = {self.object.pk}")
+        return response
+    
+    def send_assignment_notifications(self):
+        """Send notifications to all students in the class about the new assignment"""
+        assignment = self.object
+        
+        try:
+            # Get all students in the class level
+            from core.models import Student
+            students = Student.objects.filter(class_level=assignment.class_assignment.class_level)
             
-        return context
+            for student in students:
+                # Create notification for each student
+                create_notification(
+                    recipient=student.user,
+                    title="New Assignment Created",
+                    message=f"New assignment '{assignment.title}' has been created for {assignment.subject.name}. Due date: {assignment.due_date.strftime('%b %d, %Y')}",
+                    notification_type="ASSIGNMENT",
+                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                )
+            
+            print(f"DEBUG: Sent assignment notifications to {students.count()} students")
+            
+        except Exception as e:
+            print(f"ERROR: Failed to send assignment notifications: {str(e)}")
+            # Don't raise the exception to avoid breaking the assignment creation
     
     def form_invalid(self, form):
-        # Log form errors for debugging
-        logger.error(f"Form errors: {form.errors}")
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f"{field}: {error}")
+        print(f"DEBUG VIEW: form_invalid called")
+        print(f"DEBUG VIEW: Form errors: {form.errors}")
+        print(f"DEBUG VIEW: Form non-field errors: {form.non_field_errors()}")
         return super().form_invalid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('assignment_detail', kwargs={'pk': self.object.pk})
+
 
 
 class AssignmentDetailView(LoginRequiredMixin, DetailView):
@@ -330,7 +342,6 @@ class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
     template_name = 'core/academics/assignments/assignment_form.html'
     
     def test_func(self):
-        # Use the functions from base_views
         user = self.request.user
         if is_admin(user):
             return True
@@ -347,8 +358,40 @@ class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
         return kwargs
     
     def form_valid(self, form):
+        # Check if due date was changed (important change)
+        old_assignment = Assignment.objects.get(pk=self.object.pk)
+        new_due_date = form.cleaned_data.get('due_date')
+        
         messages.success(self.request, 'Assignment updated successfully!')
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        
+        # Send notification if due date was changed
+        if old_assignment.due_date != new_due_date:
+            self.send_due_date_update_notifications(old_assignment.due_date)
+            
+        return response
+    
+    def send_due_date_update_notifications(self, old_due_date):
+        """Send notifications if due date was changed"""
+        assignment = self.object
+        
+        try:
+            from core.models import Student
+            students = Student.objects.filter(class_level=assignment.class_assignment.class_level)
+            
+            for student in students:
+                create_notification(
+                    recipient=student.user,
+                    title="Assignment Due Date Updated",
+                    message=f"Due date for '{assignment.title}' has been changed from {old_due_date.strftime('%b %d, %Y')} to {assignment.due_date.strftime('%b %d, %Y')}",
+                    notification_type="ASSIGNMENT",
+                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                )
+            
+            print(f"DEBUG: Sent due date update notifications to {students.count()} students")
+            
+        except Exception as e:
+            print(f"ERROR: Failed to send due date update notifications: {str(e)}")
     
     def get_success_url(self):
         return reverse_lazy('assignment_detail', kwargs={'pk': self.object.pk})
@@ -377,13 +420,33 @@ class AssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
 # GradeAssignmentView
 
 class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
-    """AJAX view to grade a student's assignment submission."""
+    """View to grade a student's assignment submission - supports both HTML and AJAX."""
     
+    def get_student_assignment(self):
+        """Get student assignment object from any possible parameter"""
+        # Try all possible parameter names
+        student_assignment_id = (
+            self.kwargs.get('student_assignment_id') or 
+            self.kwargs.get('pk') or 
+            self.kwargs.get('id')
+        )
+        
+        if not student_assignment_id:
+            logger.error(f"No student assignment ID found in kwargs: {self.kwargs}")
+            raise Http404("Student assignment ID not provided")
+        
+        try:
+            return get_object_or_404(StudentAssignment, id=student_assignment_id)
+        except StudentAssignment.DoesNotExist:
+            logger.error(f"StudentAssignment with ID {student_assignment_id} does not exist")
+            raise Http404("Student assignment not found")
+        except ValueError:
+            logger.error(f"Invalid student assignment ID: {student_assignment_id}")
+            raise Http404("Invalid student assignment ID")
+
     def test_func(self):
         try:
-            # Ensure the user is a teacher and owns the assignment
-            student_assignment_id = self.kwargs.get('pk')
-            self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
+            self.student_assignment = self.get_student_assignment()
             
             # Allow admins to grade any assignment
             if is_admin(self.request.user):
@@ -395,49 +458,69 @@ class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
             
             return False
             
+        except Http404:
+            raise
         except Exception as e:
             logger.error(f"Error in test_func for GradeAssignmentView: {str(e)}")
             return False
 
     def get(self, request, *args, **kwargs):
-        """Return current grade information for the assignment"""
+        """Return HTML form for grading or JSON data for AJAX requests"""
         try:
-            # Ensure test_func has set self.student_assignment
             if not hasattr(self, 'student_assignment'):
-                student_assignment_id = self.kwargs.get('pk')
-                self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
-            
-            # Since there's no graded_date field, we'll use current time for newly graded assignments
-            # or submitted_date for already graded ones
-            graded_date = None
-            if self.student_assignment.status == 'GRADED':
-                if self.student_assignment.submitted_date:
-                    graded_date = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
-                else:
-                    graded_date = "Recently graded"
-            
-            return JsonResponse({
-                'success': True,
-                'score': float(self.student_assignment.score) if self.student_assignment.score else None,
-                'feedback': self.student_assignment.feedback,
-                'max_score': self.student_assignment.assignment.max_score,
-                'status': self.student_assignment.status,
-                'graded_date': graded_date,
-                'submitted_date': self.student_assignment.submitted_date.strftime("%b. %d, %Y") if self.student_assignment.submitted_date else None,
-                'is_late': self.student_assignment.is_late()
-            })
+                self.student_assignment = self.get_student_assignment()
+
+            # Check if this is an AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # Return JSON for AJAX requests
+                graded_date = None
+                if self.student_assignment.status == 'GRADED':
+                    if self.student_assignment.submitted_date:
+                        graded_date = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+                    else:
+                        graded_date = "Recently graded"
+                
+                return JsonResponse({
+                    'success': True,
+                    'score': float(self.student_assignment.score) if self.student_assignment.score else None,
+                    'feedback': self.student_assignment.feedback,
+                    'max_score': self.student_assignment.assignment.max_score,
+                    'status': self.student_assignment.status,
+                    'graded_date': graded_date,
+                    'submitted_date': self.student_assignment.submitted_date.strftime("%b. %d, %Y") if self.student_assignment.submitted_date else None,
+                    'is_late': self.student_assignment.is_late(),
+                    'debug': {
+                        'student_assignment_id': self.student_assignment.id,
+                        'assignment_id': self.student_assignment.assignment.id
+                    }
+                })
+            else:
+                # Return HTML template for regular browser requests
+                context = {
+                    'student_assignment': self.student_assignment,
+                    'assignment': self.student_assignment.assignment,
+                    'student': self.student_assignment.student,
+                    'max_score': self.student_assignment.assignment.max_score,
+                    'is_late': self.student_assignment.is_late(),
+                    'submitted_date': self.student_assignment.submitted_date,
+                }
+                return render(request, 'core/academics/assignments/grade_assignment.html', context)
+                
         except Exception as e:
             logger.error(f"Error in GradeAssignmentView GET: {str(e)}")
-            return JsonResponse({'success': False, 'error': str(e)})
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            else:
+                messages.error(request, f"Error loading grading form: {str(e)}")
+                return redirect('assignment_detail', pk=self.student_assignment.assignment.pk)
 
     def post(self, request, *args, **kwargs):
+        """Handle form submission for both AJAX and regular requests"""
         try:
-            # Ensure test_func has set self.student_assignment
             if not hasattr(self, 'student_assignment'):
-                student_assignment_id = self.kwargs.get('pk')
-                self.student_assignment = get_object_or_404(StudentAssignment, id=student_assignment_id)
+                self.student_assignment = self.get_student_assignment()
             
-            grade = request.POST.get('grade')
+            grade = request.POST.get('grade') or request.POST.get('score')
             feedback = request.POST.get('feedback', '')
             
             # Validate grade
@@ -445,19 +528,37 @@ class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
                 try:
                     grade_value = float(grade)
                     if grade_value < 0 or grade_value > self.student_assignment.assignment.max_score:
-                        return JsonResponse({
-                            'success': False, 
-                            'error': f'Score must be between 0 and {self.student_assignment.assignment.max_score}'
-                        })
+                        error_msg = f'Score must be between 0 and {self.student_assignment.assignment.max_score}'
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'error': error_msg})
+                        else:
+                            messages.error(request, error_msg)
+                            return self.render_form_with_errors(request, grade, feedback)
                 except ValueError:
-                    return JsonResponse({'success': False, 'error': 'Invalid score format'})
+                    error_msg = 'Invalid score format'
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({'success': False, 'error': error_msg})
+                    else:
+                        messages.error(request, error_msg)
+                        return self.render_form_with_errors(request, grade, feedback)
             else:
-                return JsonResponse({'success': False, 'error': 'Score is required'})
+                error_msg = 'Score is required'
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error_msg})
+                else:
+                    messages.error(request, error_msg)
+                    return self.render_form_with_errors(request, grade, feedback)
+            
+            # Store old status for notification logic
+            old_status = self.student_assignment.status
             
             # Update the student assignment
             self.student_assignment.score = grade_value
             self.student_assignment.feedback = feedback
             self.student_assignment.status = 'GRADED'
+            
+            # Set graded date
+            self.student_assignment.graded_date = timezone.now()
             
             # Ensure submitted_date is set (if not already set)
             if not self.student_assignment.submitted_date:
@@ -471,26 +572,103 @@ class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
             except Exception as e:
                 logger.error(f"Error updating analytics after grading: {str(e)}")
 
-            # Prepare response data
-            response_data = {
-                'success': True, 
-                'grade': grade_value, 
-                'feedback': feedback,
-                'status': 'GRADED'
-            }
-            
-            # Add dates to response
-            if self.student_assignment.submitted_date:
-                response_data['submitted_date'] = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
-                response_data['graded_date'] = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+            # Send grading notification to student
+            self.send_grading_notification(old_status)
+
+            # Handle response based on request type
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # AJAX response
+                response_data = {
+                    'success': True, 
+                    'grade': grade_value, 
+                    'feedback': feedback,
+                    'status': 'GRADED',
+                    'graded_date': self.student_assignment.graded_date.strftime("%b. %d, %Y at %I:%M %p")
+                }
+                
+                # Add dates to response
+                if self.student_assignment.submitted_date:
+                    response_data['submitted_date'] = self.student_assignment.submitted_date.strftime("%b. %d, %Y")
+                else:
+                    response_data['graded_date'] = 'Just now'
+                
+                return JsonResponse(response_data)
             else:
-                response_data['graded_date'] = 'Just now'
-            
-            return JsonResponse(response_data)
+                # Regular form submission - redirect with success message
+                messages.success(request, f'Assignment graded successfully for {self.student_assignment.student.get_full_name()}')
+                return redirect('assignment_detail', pk=self.student_assignment.assignment.pk)
             
         except Exception as e:
             logger.error(f"Error in GradeAssignmentView POST: {str(e)}")
-            return JsonResponse({'success': False, 'error': str(e)})
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            else:
+                messages.error(request, f"Error grading assignment: {str(e)}")
+                return redirect('assignment_detail', pk=self.student_assignment.assignment.pk)
+
+    def render_form_with_errors(self, request, grade, feedback):
+        """Render the form again with the submitted data and error messages"""
+        context = {
+            'student_assignment': self.student_assignment,
+            'assignment': self.student_assignment.assignment,
+            'student': self.student_assignment.student,
+            'max_score': self.student_assignment.assignment.max_score,
+            'is_late': self.student_assignment.is_late(),
+            'submitted_date': self.student_assignment.submitted_date,
+            'submitted_grade': grade,
+            'submitted_feedback': feedback,
+        }
+        return render(request, 'core/academics/assignments/grade_assignment.html', context)
+
+    def send_grading_notification(self, old_status):
+        """
+        Send notification to student when their assignment is graded
+        """
+        try:
+            from core.views.notifications_views import create_notification
+            from django.urls import reverse
+            
+            assignment = self.student_assignment.assignment
+            student = self.student_assignment.student
+            
+            # Only send notification if the assignment was just graded (status changed to GRADED)
+            if old_status != 'GRADED':
+                # Calculate percentage score
+                percentage = (self.student_assignment.score / assignment.max_score) * 100
+                
+                # Determine performance message based on score
+                if percentage >= 80:
+                    performance_msg = "Excellent work!"
+                elif percentage >= 70:
+                    performance_msg = "Good job!"
+                elif percentage >= 50:
+                    performance_msg = "Satisfactory performance."
+                else:
+                    performance_msg = "Needs improvement."
+                
+                # Create the notification
+                create_notification(
+                    recipient=student.user,
+                    title="Assignment Graded",
+                    message=(
+                        f"Your assignment '{assignment.title}' has been graded. "
+                        f"Score: {self.student_assignment.score}/{assignment.max_score} ({percentage:.1f}%). "
+                        f"{performance_msg}"
+                    ),
+                    notification_type="GRADE",
+                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                )
+                
+                logger.info(
+                    f"Grading notification sent to {student.user.username} "
+                    f"for assignment '{assignment.title}' - Score: {self.student_assignment.score}/{assignment.max_score}"
+                )
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send grading notification: {str(e)}")
+            return False
 
 
 class SubmitAssignmentView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):

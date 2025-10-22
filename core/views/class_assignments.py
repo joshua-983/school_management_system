@@ -4,23 +4,17 @@ from .base_views import *
 from ..models import ClassAssignment
 from ..forms import ClassAssignmentForm
 from django.contrib import messages
-from django.urls import reverse_lazy  # Make sure this import is at the top
+from django.urls import reverse_lazy
 
 
 # Class Assignment Views
 class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = ClassAssignment
-    template_name = 'core/academics/classes/class_assignment_list.html'  # Make sure this path is correct
+    template_name = 'core/academics/classes/class_assignment_list.html'
     context_object_name = 'class_assignments'
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
-    
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related('teacher', 'subject')
-        if is_teacher(self.request.user):
-            queryset = queryset.filter(teacher=self.request.user.teacher)
-        return queryset
     
     def get_queryset(self):
         print(f"User: {self.request.user}, Is teacher: {is_teacher(self.request.user)}")
@@ -31,8 +25,6 @@ class ClassAssignmentListView(LoginRequiredMixin, UserPassesTestMixin, ListView)
         print(f"QuerySet count: {queryset.count()}")
         return queryset
     
-    
-    # Add this method to provide context data
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Add any additional context you might need
@@ -42,7 +34,7 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
     model = ClassAssignment
     form_class = ClassAssignmentForm
     template_name = 'core/academics/classes/class_assignment_form.html'
-    success_url = reverse_lazy('class_assignment_list')  # ADD THIS LINE
+    success_url = reverse_lazy('class_assignment_list')
     
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
@@ -69,12 +61,12 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
         return super().form_invalid(form)
-    
 
 class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = ClassAssignment
     form_class = ClassAssignmentForm
     template_name = 'core/academics/classes/class_assignment_form.html'
+    success_url = reverse_lazy('class_assignment_list')  # ADD THIS
     
     def test_func(self):
         if is_admin(self.request.user):
@@ -83,12 +75,14 @@ class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateV
             return self.get_object().teacher == self.request.user.teacher
         return False
     
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request
+        return kwargs
+    
     def form_valid(self, form):
         messages.success(self.request, 'Class assignment updated successfully!')
         return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('class_assignment_list')
 
 class ClassAssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = ClassAssignment

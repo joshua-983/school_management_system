@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Announcement - School Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    .announcement-form-container {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .form-header {
+        background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        color: white;
+        padding: 2rem;
+    }
+    
+    .priority-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    
+    .priority-LOW { background-color: #6c757d; }
+    .priority-NORMAL { background-color: #17a2b8; }
+    .priority-HIGH { background-color: #fd7e14; }
+    .priority-URGENT { background-color: #dc3545; }
+    
+    .character-count {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .character-count.warning {
+        color: #fd7e14;
+    }
+    
+    .character-count.danger {
+        color: #dc3545;
+    }
+    
+    .preview-card {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .preview-card.has-content {
+        border-color: #17a2b8;
+        border-style: solid;
+    }
+    
+    .target-audience-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    
+    .audience-tag {
+        background: #e9ecef;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .audience-tag .remove-tag {
+        cursor: pointer;
+        opacity: 0.7;
+    }
+    
+    .audience-tag .remove-tag:hover {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="announcement-form-container">
+                <!-- Header -->
+                <div class="form-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1"><i class="bi bi-megaphone me-2"></i>Create New Announcement</h2>
+                            <p class="mb-0">Broadcast important messages to students, parents, and staff</p>
+                        </div>
+                        <a href="{% url 'announcement_list' %}" class="btn btn-light btn-sm">
+                            <i class="bi bi-arrow-left me-1"></i>Back to List
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Form Content -->
+                <div class="p-4">
+                    <form method="post" id="announcementForm">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <!-- Left Column - Form Fields -->
+                            <div class="col-lg-8">
+                                <!-- Title -->
+                                <div class="mb-4">
+                                    <label for="title" class="form-label fw-semibold">Announcement Title *</label>
+                                    <input type="text" class="form-control form-control-lg" id="title" name="title" 
+                                           placeholder="Enter a clear and concise title..." required
+                                           maxlength="200">
+                                    <div class="character-count mt-1">
+                                        <span id="titleCount">0</span>/200 characters
+                                    </div>
+                                </div>
+                                
+                                <!-- Message -->
+                                <div class="mb-4">
+                                    <label for="message" class="form-label fw-semibold">Message Content *</label>
+                                    <textarea class="form-control" id="message" name="message" rows="8" 
+                                              placeholder="Write your announcement message here..." required></textarea>
+                                    <div class="character-count mt-1">
+                                        <span id="messageCount">0</span> characters
+                                    </div>
+                                </div>
+                                
+                                <!-- Priority & Audience -->
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-4">
+                                            <label for="priority" class="form-label fw-semibold">Priority Level</label>
+                                            <select class="form-select" id="priority" name="priority">
+                                                <option value="LOW">
+                                                    <span class="priority-indicator priority-LOW"></span>Low Priority
+                                                </option>
+                                                <option value="NORMAL" selected>
+                                                    <span class="priority-indicator priority-NORMAL"></span>Normal Priority
+                                                </option>
+                                                <option value="HIGH">
+                                                    <span class="priority-indicator priority-HIGH"></span>High Priority
+                                                </option>
+                                                <option value="URGENT">
+                                                    <span class="priority-indicator priority-URGENT"></span>Urgent Priority
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-4">
+                                            <label for="target_audience" class="form-label fw-semibold">Target Audience</label>
+                                            <select class="form-select" id="target_audience" name="target_audience" multiple>
+                                                <option value="">All Users (School-wide)</option>
+                                                {% for class_level in class_levels %}
+                                                <option value="{{ class_level.id }}">{{ class_level.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <div class="form-text">Hold Ctrl/Cmd to select multiple classes</div>
+                                            <div class="target-audience-tags" id="audienceTags"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- End Date -->
+                                <div class="mb-4">
+                                    <label for="end_date" class="form-label fw-semibold">Expiry Date</label>
+                                    <input type="datetime-local" class="form-control" id="end_date" name="end_date">
+                                    <div class="form-text">Leave empty if the announcement should not expire automatically</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column - Preview -->
+                            <div class="col-lg-4">
+                                <div class="sticky-top" style="top: 100px;">
+                                    <!-- Preview Card -->
+                                    <div class="card preview-card" id="previewCard">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Live Preview</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="previewContent" class="text-muted">
+                                                <p class="mb-2"><small>Start typing to see preview...</small></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Action Buttons -->
+                                    <div class="card mt-3">
+                                        <div class="card-body">
+                                            <div class="d-grid gap-2">
+                                                <button type="submit" class="btn btn-primary btn-lg">
+                                                    <i class="bi bi-send me-2"></i>Publish Announcement
+                                                </button>
+                                                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
+                                                    <i class="bi bi-x-circle me-2"></i>Cancel
+                                                </a>
+                                            </div>
+                                            
+                                            <!-- Quick Tips -->
+                                            <div class="mt-4">
+                                                <h6 class="text-muted mb-2">Quick Tips:</h6>
+                                                <ul class="list-unstyled small text-muted">
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Keep titles under 50 characters</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Use URGENT for time-sensitive info</li>
+                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Target specific classes when needed</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const titleInput = document.getElementById('title');
+        const messageInput = document.getElementById('message');
+        const titleCount = document.getElementById('titleCount');
+        const messageCount = document.getElementById('messageCount');
+        const previewContent = document.getElementById('previewContent');
+        const previewCard = document.getElementById('previewCard');
+        const prioritySelect = document.getElementById('priority');
+        const audienceSelect = document.getElementById('target_audience');
+        const audienceTags = document.getElementById('audienceTags');
+        
+        // Character counting
+        function updateCharacterCount(input, countElement, maxLength = null) {
+            const length = input.value.length;
+            countElement.textContent = length;
+            
+            if (maxLength) {
+                const percentage = (length / maxLength) * 100;
+                if (percentage > 90) {
+                    countElement.classList.add('danger');
+                    countElement.classList.remove('warning');
+                } else if (percentage > 75) {
+                    countElement.classList.add('warning');
+                    countElement.classList.remove('danger');
+                } else {
+                    countElement.classList.remove('warning', 'danger');
+                }
+            }
+        }
+        
+        // Update preview
+        function updatePreview() {
+            const title = titleInput.value.trim();
+            const message = messageInput.value.trim();
+            const priority = prioritySelect.value;
+            
+            if (!title && !message) {
+                previewContent.innerHTML = '<p class="mb-2"><small>Start typing to see preview...</small></p>';
+                previewCard.classList.remove('has-content');
+                return;
+            }
+            
+            let previewHTML = '';
+            
+            if (title) {
+                previewHTML += `<h6 class="text-${getPriorityColor(priority)} mb-2">${escapeHtml(title)}</h6>`;
+            }
+            
+            if (message) {
+                // Convert line breaks to <br> tags
+                const formattedMessage = escapeHtml(message).replace(/\n/g, '<br>');
+                previewHTML += `<div class="small">${formattedMessage}</div>`;
+            }
+            
+            previewContent.innerHTML = previewHTML;
+            previewCard.classList.add('has-content');
+        }
+        
+        function getPriorityColor(priority) {
+            const colors = {
+                'LOW': 'secondary',
+                'NORMAL': 'info',
+                'HIGH': 'warning',
+                'URGENT': 'danger'
+            };
+            return colors[priority] || 'info';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Audience tag management
+        function updateAudienceTags() {
+            audienceTags.innerHTML = '';
+            const selectedOptions = Array.from(audienceSelect.selectedOptions);
+            
+            selectedOptions.forEach(option => {
+                if (option.value) {
+                    const tag = document.createElement('div');
+                    tag.className = 'audience-tag';
+                    tag.innerHTML = `
+                        ${option.textContent}
+                        <span class="remove-tag" data-value="${option.value}">
+                            <i class="bi bi-x"></i>
+                        </span>
+                    `;
+                    audienceTags.appendChild(tag);
+                }
+            });
+            
+            // Add remove functionality
+            document.querySelectorAll('.remove-tag').forEach(removeBtn => {
+                removeBtn.addEventListener('click', function() {
+                    const value = this.getAttribute('data-value');
+                    const option = audienceSelect.querySelector(`option[value="${value}"]`);
+                    if (option) {
+                        option.selected = false;
+                        updateAudienceTags();
+                    }
+                });
+            });
+        }
+        
+        // Event listeners
+        titleInput.addEventListener('input', function() {
+            updateCharacterCount(this, titleCount, 200);
+            updatePreview();
+        });
+        
+        messageInput.addEventListener('input', function() {
+            updateCharacterCount(this, messageCount);
+            updatePreview();
+        });
+        
+        prioritySelect.addEventListener('change', updatePreview);
+        audienceSelect.addEventListener('change', updateAudienceTags);
+        
+        // Form validation
+        document.getElementById('announcementForm').addEventListener('submit', function(e) {
+            const title = titleInput.value.trim();
+            const message = messageInput.value.trim();
+            
+            if (!title) {
+                e.preventDefault();
+                showAlert('Please enter an announcement title.', 'danger');
+                titleInput.focus();
+                return;
+            }
+            
+            if (!message) {
+                e.preventDefault();
+                showAlert('Please enter announcement content.', 'danger');
+                messageInput.focus();
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Publishing...';
+            submitBtn.disabled = true;
+        });
+        
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.form-header').after(alertDiv);
+        }
+        
+        // Initialize
+        updateCharacterCount(titleInput, titleCount, 200);
+        updateCharacterCount(messageInput, messageCount);
+        updateAudienceTags();
+    });
+</script>
+{% endblock %}

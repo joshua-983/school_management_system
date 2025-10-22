@@ -23,6 +23,10 @@
         background-color: #f8d7da;
         color: #721c24;
     }
+    .status-partial {
+        background-color: #ffeaa7;
+        color: #856404;
+    }
     .filter-card {
         margin-bottom: 20px;
     }
@@ -123,6 +127,32 @@
         font-size: 1.5rem;
         margin-bottom: 5px;
     }
+    /* Table row highlighting */
+    .table-row-paid {
+        background-color: #f8fff9 !important;
+    }
+    .table-row-unpaid {
+        background-color: #fff9f9 !important;
+    }
+    .table-row-partial {
+        background-color: #fffbf0 !important;
+    }
+    .table-row-overdue {
+        background-color: #f8f9fa !important;
+    }
+    /* Responsive table */
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+        .action-buttons {
+            flex-direction: column;
+        }
+        .action-buttons .btn {
+            margin-bottom: 5px;
+            width: 100%;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -183,7 +213,7 @@
                 </a>
                 <a href="{% url 'bill_generate' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
                     <div class="quick-action-icon">
-                        <i class="bi bi-arrow-repeat"></i>
+                        <i class="bi bi-receipt"></i>
                     </div>
                     <div>Generate Bills</div>
                 </a>
@@ -296,7 +326,7 @@
                     <!-- Fee Records Table -->
                     {% if object_list %}
                     <div class="table-responsive">
-                        <table class="table table-hover table-striped">
+                        <table class="table table-hover">
                             <thead class="table-dark">
                                 <tr>
                                     {% if is_admin or is_teacher %}
@@ -316,7 +346,7 @@
                             </thead>
                             <tbody>
                                 {% for fee in object_list %}
-                                <tr class="{% if fee.payment_status == 'OVERDUE' %}table-danger{% elif fee.payment_status == 'PARTIAL' %}table-warning{% elif fee.payment_status == 'PAID' %}table-success{% endif %}">
+                                <tr class="table-row-{{ fee.payment_status }}">
                                     {% if is_admin or is_teacher %}
                                     <td>
                                         <div class="d-flex align-items-center">
@@ -356,15 +386,15 @@
                                         GH₵{{ fee.balance|floatformat:2 }}
                                     </td>
                                     <td>
-                                        {% if fee.payment_status == 'PAID' %}
+                                        {% if fee.payment_status == 'paid' %}
                                         <span class="status-badge status-paid">
                                             <i class="bi bi-check-circle me-1"></i>Paid
                                         </span>
-                                        {% elif fee.payment_status == 'PARTIAL' %}
-                                        <span class="status-badge status-unpaid">
+                                        {% elif fee.payment_status == 'partial' %}
+                                        <span class="status-badge status-partial">
                                             <i class="bi bi-clock me-1"></i>Partial
                                         </span>
-                                        {% elif fee.payment_status == 'OVERDUE' %}
+                                        {% elif fee.payment_status == 'overdue' %}
                                         <span class="status-badge status-overdue">
                                             <i class="bi bi-exclamation-triangle me-1"></i>Overdue
                                         </span>
@@ -615,13 +645,6 @@ document.addEventListener('DOMContentLoaded', function() {
         studentSearch.focus();
     });
 
-    // Add smooth scrolling to table
-    const table = document.querySelector('.table-responsive');
-    if (table) {
-        table.style.maxHeight = '600px';
-        table.style.overflowY = 'auto';
-    }
-
     // Export functionality
     document.querySelectorAll('.btn-export').forEach(btn => {
         btn.addEventListener('click', function(e) {
@@ -633,6 +656,28 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Redirect to export URL
             window.location.href = window.location.pathname + '?' + params.toString();
+        });
+    });
+
+    // Auto-submit form when filter changes for better UX
+    const filterSelects = document.querySelectorAll('#filter-form select');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            this.form.submit();
+        });
+    });
+
+    // Add loading state for export button
+    document.querySelectorAll('.btn-export').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Exporting...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }, 3000);
         });
     });
 });

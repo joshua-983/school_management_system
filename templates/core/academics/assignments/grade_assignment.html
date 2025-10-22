@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Grade Assignment - {{ student_assignment.assignment.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="bi bi-journal-check"></i>
+                        Grade Assignment
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Assignment Details</h5>
+                            <p><strong>Title:</strong> {{ assignment.title }}</p>
+                            <p><strong>Student:</strong> {{ student.get_full_name }}</p>
+                            <p><strong>Max Score:</strong> {{ max_score }}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="badge bg-{% if student_assignment.status == 'GRADED' %}success{% elif student_assignment.status == 'SUBMITTED' %}warning{% else %}secondary{% endif %}">
+                                    {{ student_assignment.get_status_display }}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Submission Details</h5>
+                            <p><strong>Submitted:</strong> 
+                                {% if student_assignment.submitted_date %}
+                                    {{ student_assignment.submitted_date|date:"M. d, Y" }}
+                                {% else %}
+                                    <span class="text-muted">Not submitted</span>
+                                {% endif %}
+                            </p>
+                            <p><strong>Late Submission:</strong> 
+                                {% if is_late %}
+                                    <span class="text-danger">Yes</span>
+                                {% else %}
+                                    <span class="text-success">No</span>
+                                {% endif %}
+                            </p>
+                            {% if student_assignment.file %}
+                            <p><strong>Submitted File:</strong> 
+                                <a href="{{ student_assignment.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <form method="post" id="gradeForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="score" class="form-label">Score (out of {{ max_score }})</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="score" 
+                                           name="score" 
+                                           value="{% firstof submitted_grade student_assignment.score %}"
+                                           min="0" 
+                                           max="{{ max_score }}" 
+                                           step="0.1"
+                                           required>
+                                    <div class="form-text">Enter score between 0 and {{ max_score }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="percentage" class="form-label">Percentage</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="percentage" 
+                                           readonly
+                                           placeholder="Auto-calculated">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="feedback" class="form-label">Feedback</label>
+                            <textarea class="form-control" 
+                                      id="feedback" 
+                                      name="feedback" 
+                                      rows="4"
+                                      placeholder="Provide feedback to the student...">{% firstof submitted_feedback student_assignment.feedback %}</textarea>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Save Grade
+                            </button>
+                            <a href="{% url 'assignment_detail' pk=assignment.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Assignment
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Grading Guidelines</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle"></i> Grading Scale</h6>
+                        <ul class="mb-0">
+                            <li>90-100%: Excellent</li>
+                            <li>80-89%: Very Good</li>
+                            <li>70-79%: Good</li>
+                            <li>60-69%: Satisfactory</li>
+                            <li>50-59%: Needs Improvement</li>
+                            <li>Below 50%: Fail</li>
+                        </ul>
+                    </div>
+                    
+                    {% if student_assignment.file %}
+                    <div class="mt-3">
+                        <h6>Submitted Work Preview</h6>
+                        <div class="border rounded p-3 bg-light">
+                            <p class="text-muted mb-1">File: {{ student_assignment.file.name }}</p>
+                            <small class="text-muted">Click download button to view full submission</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scoreInput = document.getElementById('score');
+    const percentageInput = document.getElementById('percentage');
+    const maxScore = {{ max_score }};
+    
+    function calculatePercentage() {
+        const score = parseFloat(scoreInput.value);
+        if (!isNaN(score) && maxScore > 0) {
+            const percentage = (score / maxScore) * 100;
+            percentageInput.value = percentage.toFixed(1) + '%';
+        } else {
+            percentageInput.value = '';
+        }
+    }
+    
+    scoreInput.addEventListener('input', calculatePercentage);
+    
+    // Calculate initial percentage if score exists
+    calculatePercentage();
+});
+</script>
+{% endblock %}

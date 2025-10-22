@@ -90,6 +90,24 @@
     .highlight {
         animation: highlight 1s ease;
     }
+    /* Form field styling */
+    .form-select:disabled {
+        background-color: #e9ecef;
+        opacity: 1;
+    }
+    .form-control:disabled {
+        background-color: #e9ecef;
+        opacity: 1;
+    }
+    .field-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .student-info {
@@ -101,10 +119,54 @@
             margin-bottom: 10px;
         }
     }
+    .error-container {
+        border-left: 4px solid #dc3545;
+    }
+    /* Message styling */
+    .alert-container {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 1050;
+        min-width: 350px;
+    }
+    .recorder-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Messages Display -->
+{% if messages %}
+<div class="alert-container">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="bi 
+                {% if message.tags == 'success' %}bi-check-circle-fill text-success
+                {% elif message.tags == 'error' or message.tags == 'danger' %}bi-exclamation-triangle-fill text-danger
+                {% else %}bi-info-circle-fill text-info{% endif %} me-2 fs-5">
+            </i>
+            <div class="flex-grow-1">
+                <strong>
+                    {% if message.tags == 'success' %}Success!
+                    {% elif message.tags == 'error' or message.tags == 'danger' %}Error!
+                    {% else %}Info{% endif %}
+                </strong>
+                <div class="mt-1">{{ message }}</div>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col-12">
@@ -113,9 +175,13 @@
                     <i class="bi bi-cash-coin me-2"></i>
                     Record Payment - {% firstof fee.student.get_full_name "Student" %}
                 </h2>
-                {% if fee.pk %}
+                {% if fee and fee.pk %}
                 <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left me-1"></i> Back to Fee
+                </a>
+                {% else %}
+                <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Fees
                 </a>
                 {% endif %}
             </div>
@@ -123,7 +189,7 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
-                    {% if fee.pk %}
+                    {% if fee and fee.pk %}
                     <li class="breadcrumb-item"><a href="{% url 'fee_detail' pk=fee.pk %}">Details</a></li>
                     {% endif %}
                     <li class="breadcrumb-item active" aria-current="page">Record Payment</li>
@@ -133,11 +199,40 @@
     </div>
 
     {% if not fee or not fee.pk %}
-    <div class="alert alert-danger">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-        The requested fee record could not be found or is invalid.
+    <div class="alert alert-danger error-container">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+            <div>
+                <h5 class="mb-1">Fee Record Not Found</h5>
+                <p class="mb-0">The requested fee record could not be found or is invalid. Please check the fee ID and try again.</p>
+            </div>
+        </div>
+        <div class="mt-3">
+            <a href="{% url 'fee_list' %}" class="btn btn-primary">
+                <i class="bi bi-arrow-left me-1"></i> Return to Fee List
+            </a>
+        </div>
     </div>
     {% else %}
+    <!-- Recorder Information Banner -->
+    <div class="recorder-info">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h5 class="mb-1"><i class="bi bi-person-check me-2"></i>Recording Payment As</h5>
+                <p class="mb-0">
+                    <strong>{{ request.user.get_full_name }}</strong> 
+                    <span class="opacity-75">({{ request.user.username }})</span>
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <small class="opacity-75">
+                    <i class="bi bi-calendar me-1"></i>
+                    {% now "F j, Y" %}
+                </small>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
@@ -162,6 +257,13 @@
                                 {% elif fee.payment_status == 'overdue' %}bg-dark{% endif %}">
                                 {{ fee.get_payment_status_display }}
                             </span>
+                            <!-- Recorder info in student section -->
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-person-check me-1"></i>
+                                    Recorded by: <strong>{{ request.user.get_full_name }}</strong>
+                                </small>
+                            </div>
                         </div>
                     </div>
 
@@ -215,10 +317,16 @@
                     <form method="post" novalidate id="payment-form">
                         {% csrf_token %}
                         
+                        <!-- Hidden fields -->
+                        {{ form.fee }}
+                        {{ form.recorded_by }}
+                        {% if form.bill %}{{ form.bill }}{% endif %}
+                        
                         {% if form.non_field_errors %}
                         <div class="alert alert-danger">
+                            <h6 class="alert-heading">Please fix the following errors:</h6>
                             {% for error in form.non_field_errors %}
-                            <p class="mb-0">{{ error }}</p>
+                            <p class="mb-1">• {{ error }}</p>
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -227,11 +335,11 @@
                         
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label for="{{ form.amount.id_for_label }}" class="form-label">
-                                    Payment Amount <span class="text-danger">*</span>
+                                <label for="{{ form.amount.id_for_label }}" class="form-label required-field">
+                                    Payment Amount
                                 </label>
                                 <div class="input-group amount-input-group">
-                                    <span class="input-group-text">$</span>
+                                    <span class="input-group-text">GH₵</span>
                                     {{ form.amount }}
                                     <button type="button" class="btn btn-outline-primary full-amount-btn" id="pay-full-amount">
                                         Full Amount
@@ -239,10 +347,14 @@
                                 </div>
                                 {% if form.amount.errors %}
                                 <div class="invalid-feedback d-block">
-                                    {{ form.amount.errors.0 }}
+                                    {% for error in form.amount.errors %}
+                                    <p class="mb-0">• {{ error }}</p>
+                                    {% endfor %}
                                 </div>
                                 {% endif %}
-                                <small class="text-muted">Maximum: GH₵{{ fee.balance|floatformat:2 }}</small>
+                                <div class="field-help">
+                                    Maximum: GH₵{{ fee.balance|floatformat:2 }}
+                                </div>
                                 <div class="mt-2">
                                     <small class="text-muted" id="balance-after-payment">
                                         Balance after payment: GH₵{{ fee.balance|floatformat:2 }}
@@ -251,22 +363,27 @@
                             </div>
                             
                             <div class="col-md-6">
-                                <label for="{{ form.payment_method.id_for_label }}" class="form-label">
-                                    Payment Method <span class="text-danger">*</span>
+                                <label for="{{ form.payment_mode.id_for_label }}" class="form-label required-field">
+                                    Payment Method
                                 </label>
-                                {{ form.payment_method }}
-                                {% if form.payment_method.errors %}
+                                {{ form.payment_mode }}
+                                {% if form.payment_mode.errors %}
                                 <div class="invalid-feedback d-block">
-                                    {{ form.payment_method.errors.0 }}
+                                    {% for error in form.payment_mode.errors %}
+                                    <p class="mb-0">• {{ error }}</p>
+                                    {% endfor %}
                                 </div>
                                 {% endif %}
+                                <div class="field-help">
+                                    Select how the payment was made
+                                </div>
                             </div>
                         </div>
                         
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label for="{{ form.payment_date.id_for_label }}" class="form-label">
-                                    Payment Date <span class="text-danger">*</span>
+                                <label for="{{ form.payment_date.id_for_label }}" class="form-label required-field">
+                                    Payment Date
                                 </label>
                                 <div class="input-group">
                                     {{ form.payment_date }}
@@ -279,9 +396,14 @@
                                 </div>
                                 {% if form.payment_date.errors %}
                                 <div class="invalid-feedback d-block">
-                                    {{ form.payment_date.errors.0 }}
+                                    {% for error in form.payment_date.errors %}
+                                    <p class="mb-0">• {{ error }}</p>
+                                    {% endfor %}
                                 </div>
                                 {% endif %}
+                                <div class="field-help">
+                                    Date when payment was received
+                                </div>
                             </div>
                             
                             <div class="col-md-6">
@@ -291,10 +413,14 @@
                                 {{ form.receipt_number }}
                                 {% if form.receipt_number.errors %}
                                 <div class="invalid-feedback d-block">
-                                    {{ form.receipt_number.errors.0 }}
+                                    {% for error in form.receipt_number.errors %}
+                                    <p class="mb-0">• {{ error }}</p>
+                                    {% endfor %}
                                 </div>
                                 {% endif %}
-                                <small class="text-muted">Optional reference number</small>
+                                <div class="field-help">
+                                    Optional reference number for tracking
+                                </div>
                             </div>
                         </div>
                         
@@ -305,19 +431,44 @@
                             {{ form.notes }}
                             {% if form.notes.errors %}
                             <div class="invalid-feedback d-block">
-                                {{ form.notes.errors.0 }}
+                                {% for error in form.notes.errors %}
+                                <p class="mb-0">• {{ error }}</p>
+                                {% endfor %}
                             </div>
                             {% endif %}
-                            <small class="text-muted">Optional notes about this payment</small>
+                            <div class="field-help">
+                                Optional notes about this payment (e.g., transaction ID, purpose)
+                            </div>
+                        </div>
+
+                        <!-- Confirmation Section -->
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-person-check fs-4 me-3 text-info"></i>
+                                <div>
+                                    <h6 class="mb-1">Payment Recording Confirmation</h6>
+                                    <p class="mb-0">
+                                        This payment will be recorded by: <strong>{{ request.user.get_full_name }}</strong>
+                                        <br>
+                                        <small class="text-muted">Date: {% now "F j, Y \a\t g:i A" %}</small>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-3">
-                            <button type="submit" class="btn btn-success px-4">
-                                <i class="bi bi-check-circle me-1"></i> Record Payment
+                            <button type="submit" class="btn btn-success px-4" id="submit-btn">
+                                <i class="bi bi-check-circle me-1"></i> Record Payment as {{ request.user.get_full_name }}
                             </button>
+                            {% if fee.pk %}
                             <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-outline-secondary px-4">
                                 <i class="bi bi-x-circle me-1"></i> Cancel
                             </a>
+                            {% else %}
+                            <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary px-4">
+                                <i class="bi bi-x-circle me-1"></i> Cancel
+                            </a>
+                            {% endif %}
                         </div>
                     </form>
                 </div>
@@ -360,6 +511,11 @@
                                 {% if fee.is_overdue %}<span class="badge bg-danger ms-1">Overdue</span>{% endif %}
                             </span>
                         </li>
+                        <!-- Recorder info in summary -->
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-person-check me-2 text-primary"></i>Recording As:</span>
+                            <span class="fw-bold text-info">{{ request.user.get_full_name }}</span>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -379,12 +535,17 @@
                             </div>
                             <p class="mb-1 text-muted">
                                 <i class="bi bi-credit-card me-1"></i>
-                                {{ payment.get_payment_method_display }}
+                                {{ payment.get_payment_mode_display }}
                                 {% if payment.receipt_number %}({{ payment.receipt_number }}){% endif %}
                             </p>
                             {% if payment.notes %}
                             <small class="d-block text-truncate">{{ payment.notes }}</small>
                             {% endif %}
+                            <!-- Show who recorded previous payments -->
+                            <small class="text-muted">
+                                <i class="bi bi-person me-1"></i>
+                                Recorded by: {{ payment.recorded_by.get_full_name }}
+                            </small>
                         </div>
                         {% endfor %}
                     </div>
@@ -408,8 +569,35 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize if fee exists
+    {% if fee and fee.pk %}
+    
+    // Auto-hide messages after 5 seconds
+    setTimeout(function() {
+        const alerts = document.querySelectorAll('.alert-dismissible');
+        alerts.forEach(alert => {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 5000);
+
+    // Fix payment mode field if it's disabled
+    function fixPaymentModeField() {
+        const paymentModeField = document.getElementById('{{ form.payment_mode.id_for_label }}');
+        if (paymentModeField && paymentModeField.disabled) {
+            console.log('Payment mode field is disabled, enabling it...');
+            paymentModeField.disabled = false;
+            paymentModeField.classList.remove('is-invalid');
+        }
+        
+        // Ensure the field has proper styling
+        if (paymentModeField) {
+            paymentModeField.classList.add('form-select');
+        }
+    }
+
     // Initialize datepicker
-    $('#id_payment_date').datepicker({
+    $('#{{ form.payment_date.id_for_label }}').datepicker({
         format: 'yyyy-mm-dd',
         autoclose: true,
         todayHighlight: true,
@@ -419,43 +607,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Calendar button
     $('#calendar-btn').click(function() {
-        $('#id_payment_date').datepicker('show');
+        $('#{{ form.payment_date.id_for_label }}').datepicker('show');
     });
 
     // Set today date
     $('#today-btn').click(function() {
         const today = new Date();
         const dateStr = today.toISOString().split('T')[0];
-        $('#id_payment_date').val(dateStr);
-        $('#id_payment_date').datepicker('update');
+        $('#{{ form.payment_date.id_for_label }}').val(dateStr);
+        $('#{{ form.payment_date.id_for_label }}').datepicker('update');
     });
 
     // Set default to today if empty
-    if (!$('#id_payment_date').val()) {
+    if (!$('#{{ form.payment_date.id_for_label }}').val()) {
         const today = new Date();
         const dateStr = today.toISOString().split('T')[0];
-        $('#id_payment_date').val(dateStr);
+        $('#{{ form.payment_date.id_for_label }}').val(dateStr);
     }
 
-    // Make date field readonly to prevent manual entry
-    $('#id_payment_date').attr('readonly', true);
+    // Make date field readonly to prevent manual entry errors
+    $('#{{ form.payment_date.id_for_label }}').attr('readonly', true);
 
     // Set full amount button
     $('#pay-full-amount').click(function() {
         const balance = parseFloat('{{ fee.balance|default:0 }}');
-        $('#id_amount').val(balance.toFixed(2));
-        updateBalanceAfterPayment();
-        $('#id_amount').addClass('highlight');
-        setTimeout(() => $('#id_amount').removeClass('highlight'), 1000);
+        if (balance > 0) {
+            $('#{{ form.amount.id_for_label }}').val(balance.toFixed(2));
+            updateBalanceAfterPayment();
+            $('#{{ form.amount.id_for_label }}').addClass('highlight');
+            setTimeout(() => $('#{{ form.amount.id_for_label }}').removeClass('highlight'), 1000);
+        }
     });
 
     // Update balance after payment in real-time
     function updateBalanceAfterPayment() {
-        const amount = parseFloat($('#id_amount').val()) || 0;
+        const amount = parseFloat($('#{{ form.amount.id_for_label }}').val()) || 0;
         const currentBalance = parseFloat('{{ fee.balance|default:0 }}');
         const newBalance = currentBalance - amount;
         
-        $('#balance-after-payment').text(`Balance after payment: $${newBalance.toFixed(2)}`);
+        $('#balance-after-payment').text(`Balance after payment: GH₵${newBalance.toFixed(2)}`);
         
         if (newBalance <= 0) {
             $('#balance-after-payment').removeClass('text-danger').addClass('text-success');
@@ -465,56 +655,101 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Update balance as user types
-    $('#id_amount').on('input', function() {
+    $('#{{ form.amount.id_for_label }}').on('input', function() {
         updateBalanceAfterPayment();
     });
 
     // Initialize balance display
     updateBalanceAfterPayment();
 
-    // Form validation
+    // Fix payment mode field on load
+    setTimeout(fixPaymentModeField, 100);
+
+    // Enhanced form validation
     $('#payment-form').submit(function(e) {
-        const amount = parseFloat($('#id_amount').val()) || 0;
+        const submitBtn = $('#submit-btn');
+        const originalText = submitBtn.html();
+        
+        // Show loading state
+        submitBtn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i> Processing...');
+        
+        let isValid = true;
+        const errorMessages = [];
+
+        // Validate amount
+        const amount = parseFloat($('#{{ form.amount.id_for_label }}').val()) || 0;
         const balance = parseFloat('{{ fee.balance|default:0 }}');
         
         if (amount <= 0) {
-            e.preventDefault();
-            alert('Please enter a valid payment amount (greater than 0)');
-            $('#id_amount').focus();
-            return false;
+            isValid = false;
+            errorMessages.push('Please enter a valid payment amount (greater than 0)');
+            $('#{{ form.amount.id_for_label }}').addClass('is-invalid');
+        } else if (amount > balance) {
+            isValid = false;
+            errorMessages.push(`Payment amount cannot exceed the remaining balance of GH₵${balance.toFixed(2)}`);
+            $('#{{ form.amount.id_for_label }}').addClass('is-invalid');
+        } else {
+            $('#{{ form.amount.id_for_label }}').removeClass('is-invalid');
         }
         
-        if (amount > balance) {
-            e.preventDefault();
-            alert('Payment amount cannot exceed the remaining balance of GH₵' + balance.toFixed(2));
-            $('#id_amount').focus();
-            return false;
-        }
-        
-        const paymentDate = $('#id_payment_date').val();
+        // Validate payment date
+        const paymentDate = $('#{{ form.payment_date.id_for_label }}').val();
         if (!paymentDate) {
-            e.preventDefault();
-            alert('Please select a payment date');
-            return false;
+            isValid = false;
+            errorMessages.push('Please select a payment date');
+            $('#{{ form.payment_date.id_for_label }}').addClass('is-invalid');
+        } else {
+            $('#{{ form.payment_date.id_for_label }}').removeClass('is-invalid');
         }
         
-        const paymentMethod = $('#id_payment_method').val();
-        if (!paymentMethod) {
+        // Validate payment mode
+        const paymentMode = $('#{{ form.payment_mode.id_for_label }}').val();
+        if (!paymentMode) {
+            isValid = false;
+            errorMessages.push('Please select a payment method');
+            $('#{{ form.payment_mode.id_for_label }}').addClass('is-invalid');
+        } else {
+            $('#{{ form.payment_mode.id_for_label }}').removeClass('is-invalid');
+        }
+
+        if (!isValid) {
             e.preventDefault();
-            alert('Please select a payment method');
+            const errorHtml = errorMessages.map(msg => `<p class="mb-1">• ${msg}</p>`).join('');
+            showAlert('Please fix the following errors:', errorHtml, 'danger');
+            submitBtn.prop('disabled', false).html(originalText);
             return false;
         }
         
         return true;
     });
 
-    // Add error classes to form fields with errors
+    // Show custom alert function
+    function showAlert(title, message, type = 'danger') {
+        // Remove existing alerts
+        $('.alert-dismissible').remove();
+        
+        const alertHtml = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                <h6 class="alert-heading">${title}</h6>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        $('#payment-form').prepend(alertHtml);
+    }
+
+    // Add error classes to form fields with errors on page load
     {% if form.errors %}
     {% for field in form %}
         {% if field.errors %}
         $('#{{ field.id_for_label }}').addClass('is-invalid');
         {% endif %}
     {% endfor %}
+    {% endif %}
+
+    // Auto-focus on amount field for better UX
+    $('#{{ form.amount.id_for_label }}').focus();
+
     {% endif %}
 });
 </script>

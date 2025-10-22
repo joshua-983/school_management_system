@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Parent Directory - School Management System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Parent Directory</h2>
+    <a href="{% url 'bulk_parent_message' %}" class="btn btn-primary">
+        <i class="bi bi-envelope-plus"></i> Send Bulk Message
+    </a>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">{{ total_parents }}</h5>
+                <p class="card-text">Total Parents</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">{{ active_parents }}</h5>
+                <p class="card-text">Active Parents</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">{{ parents_with_multiple_children }}</h5>
+                <p class="card-text">Multiple Children</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search and Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-6">
+                <input type="text" name="search" class="form-control" placeholder="Search parents..." value="{{ search_term }}">
+            </div>
+            <div class="col-md-3">
+                <select name="relationship" class="form-select">
+                    <option value="">All Relationships</option>
+                    <option value="F" {% if relationship_filter == 'F' %}selected{% endif %}>Father</option>
+                    <option value="M" {% if relationship_filter == 'M' %}selected{% endif %}>Mother</option>
+                    <option value="G" {% if relationship_filter == 'G' %}selected{% endif %}>Guardian</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-outline-primary w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Parents Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Parent Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Relationship</th>
+                        <th>Children</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for parent in parents %}
+                    <tr>
+                        <td>{{ parent.get_user_full_name }}</td>
+                        <td>{{ parent.email|default:"-" }}</td>
+                        <td>{{ parent.phone_number }}</td>
+                        <td>{{ parent.get_relationship_display }}</td>
+                        <td>
+                            {% for student in parent.students.all %}
+                            <span class="badge bg-secondary">{{ student.get_full_name }} ({{ student.get_class_level_display }})</span>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% if parent.user and parent.user.last_login %}
+                            {{ parent.user.last_login|timesince }} ago
+                            {% else %}
+                            <span class="text-muted">Never</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="mailto:{{ parent.email }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-envelope"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No parents found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if relationship_filter %}&relationship={{ relationship_filter }}{% endif %}">Previous</a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                    <a class="page-link" href="?page={{ num }}{% if search_term %}&search={{ search_term }}{% endif %}{% if relationship_filter %}&relationship={{ relationship_filter }}{% endif %}">{{ num }}</a>
+                </li>
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_term %}&search={{ search_term }}{% endif %}{% if relationship_filter %}&relationship={{ relationship_filter }}{% endif %}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

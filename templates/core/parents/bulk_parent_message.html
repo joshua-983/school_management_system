@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Parent Messaging - School Management System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">Send Bulk Message to Parents</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Target Selection -->
+                    <div class="mb-3">
+                        <label class="form-label">Send To:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="target_type" value="ALL" id="target_all" checked>
+                            <label class="form-check-label" for="target_all">
+                                All Parents
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="target_type" value="CLASS" id="target_class">
+                            <label class="form-check-label" for="target_class">
+                                Specific Class
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Class Selection (shown when CLASS is selected) -->
+                    <div class="mb-3" id="class_selection" style="display: none;">
+                        <label class="form-label">Select Class:</label>
+                        <select name="target_class" class="form-select">
+                            <option value="">Select a class...</option>
+                            {% for class_level, class_name in CLASS_LEVEL_CHOICES %}
+                            <option value="{{ class_level }}">{{ class_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Message Details -->
+                    <div class="mb-3">
+                        <label for="subject" class="form-label">Subject *</label>
+                        <input type="text" class="form-control" id="subject" name="subject" required 
+                               placeholder="Enter message subject">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="message" class="form-label">Message *</label>
+                        <textarea class="form-control" id="message" name="message" rows="8" required 
+                                  placeholder="Type your message to parents..."></textarea>
+                    </div>
+
+                    <!-- Preview and Send -->
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-secondary" id="previewBtn">
+                            <i class="bi bi-eye"></i> Preview
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Send Message
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <!-- Quick Stats -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">Parent Statistics</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <small class="text-muted">Total Parents</small>
+                    <h5>{{ total_parents }}</h5>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Parents with Email</small>
+                    <h5>{{ parents_with_email }}</h5>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Active This Month</small>
+                    <h5>{{ active_parents }}</h5>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Templates -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">Quick Templates</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="meeting">
+                        Parent-Teacher Meeting
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="fee">
+                        Fee Payment Reminder
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="event">
+                        School Event Announcement
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="attendance">
+                        Attendance Concern
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Message Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 id="previewSubject" class="card-title"></h6>
+                        <p id="previewMessage" class="card-text"></p>
+                        <small class="text-muted">This message will be sent to approximately <span id="previewCount">0</span> parents.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="confirmSend">Send Message</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show/hide class selection based on target type
+    const targetRadios = document.querySelectorAll('input[name="target_type"]');
+    const classSelection = document.getElementById('class_selection');
+    
+    targetRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            classSelection.style.display = this.value === 'CLASS' ? 'block' : 'none';
+        });
+    });
+
+    // Template buttons
+    const templates = {
+        meeting: {
+            subject: 'Parent-Teacher Meeting Scheduled',
+            message: 'Dear Parent,\n\nWe would like to inform you that a parent-teacher meeting has been scheduled. Please check the school calendar for details and make arrangements to attend.\n\nThank you for your cooperation.\n\nBest regards,\nSchool Administration'
+        },
+        fee: {
+            subject: 'Fee Payment Reminder',
+            message: 'Dear Parent,\n\nThis is a friendly reminder that the fee payment for the current term is due. Please ensure timely payment to avoid any inconvenience.\n\nYou can view the fee details and make payments through the parent portal.\n\nThank you.\n\nBest regards,\nAccounts Department'
+        },
+        event: {
+            subject: 'Upcoming School Event',
+            message: 'Dear Parent,\n\nWe are excited to announce an upcoming school event. Details will be shared shortly. Please mark your calendar and encourage your child to participate.\n\nMore information will follow.\n\nBest regards,\nEvent Committee'
+        },
+        attendance: {
+            subject: 'Attendance Concern',
+            message: 'Dear Parent,\n\nWe have noticed some attendance concerns regarding your child. Regular attendance is crucial for academic success. Please ensure your child attends school regularly.\n\nIf there are any issues, please contact us.\n\nBest regards,\nAttendance Office'
+        }
+    };
+
+    document.querySelectorAll('.template-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const template = templates[this.dataset.template];
+            document.getElementById('subject').value = template.subject;
+            document.getElementById('message').value = template.message;
+        });
+    });
+
+    // Preview functionality
+    document.getElementById('previewBtn').addEventListener('click', function() {
+        const subject = document.getElementById('subject').value;
+        const message = document.getElementById('message').value;
+        
+        if (!subject || !message) {
+            alert('Please enter both subject and message before previewing.');
+            return;
+        }
+        
+        document.getElementById('previewSubject').textContent = subject;
+        document.getElementById('previewMessage').textContent = message;
+        
+        // Estimate recipient count (simplified)
+        const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        let count = {{ total_parents }};
+        if (targetType === 'CLASS') {
+            count = Math.floor({{ total_parents }} / {{ CLASS_LEVEL_CHOICES|length }});
+        }
+        document.getElementById('previewCount').textContent = count;
+        
+        new bootstrap.Modal(document.getElementById('previewModal')).show();
+    });
+
+    // Confirm send
+    document.getElementById('confirmSend').addEventListener('click', function() {
+        document.querySelector('form').submit();
+    });
+});
+</script>
+{% endblock %}

@@ -196,6 +196,17 @@
             padding: 1rem;
         }
     }
+
+    /* Debug styles */
+    .debug-info {
+        background: #f8f9fa;
+        border-left: 4px solid #17a2b8;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
 </style>
 {% endblock %}
 
@@ -237,6 +248,22 @@
             </div>
         </div>
     </div>
+
+    <!-- Temporary Debug Info -->
+    {% if is_teacher or is_admin %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="debug-info">
+                <strong>Debug Information:</strong><br>
+                Assignment ID: {{ assignment.id }}<br>
+                Student Assignment Count: {{ student_assignments|length }}<br>
+                {% for sa in student_assignments %}
+                Student Assignment ID: {{ sa.id }} - Student: {{ sa.student.get_full_name }}<br>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row">
         <!-- Main Content -->
@@ -310,7 +337,7 @@
                 </div>
             </div>
 
-            <!-- Student Submission Section - FIXED -->
+            <!-- Student Submission Section -->
             {% if is_student %}
             <div class="card info-card mb-4 fade-in" style="animation-delay: 0.3s;">
                 <div class="card-header bg-white">
@@ -486,7 +513,7 @@
             </div>
             {% endif %}
 
-            <!-- Student Submission Card - FIXED -->
+            <!-- Student Submission Card -->
             {% if is_student and student_assignment and student_assignment.status == 'PENDING' and not assignment.is_overdue %}
             <div class="card info-card fade-in student-submission" style="animation-delay: 0.6s;">
                 <div class="card-header bg-transparent border-0">
@@ -715,164 +742,153 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Auto-expand the academics menu in sidebar
-        const academicsMenu = document.getElementById('academicsMenu');
-        if (academicsMenu) {
-            academicsMenu.classList.add('show');
-        }
-        
-        // Add active class to assignments nav item
-        const assignmentsNavItem = document.querySelector('a[href="{% url 'assignment_list' %}"]');
-        if (assignmentsNavItem) {
-            assignmentsNavItem.classList.add('active');
-        }
-        
-        // Add active class to academics nav item
-        const academicsNavItem = document.querySelector('a[data-bs-target="#academicsMenu"]');
-        if (academicsNavItem) {
-            academicsNavItem.classList.add('active');
-        }
-
-        // Countdown timer
-        {% if not assignment.is_overdue %}
-        updateCountdown();
-        setInterval(updateCountdown, 1000);
+        console.log('=== ASSIGNMENT DETAIL DEBUG INFO ===');
+        console.log('Assignment ID:', {{ assignment.id }});
+        console.log('Student Assignments:');
+        {% for sa in student_assignments %}
+        console.log('  - Student Assignment ID: {{ sa.id }}, Student: {{ sa.student.get_full_name }}');
+        {% endfor %}
+        {% if student_assignment %}
+        console.log('Current Student Assignment ID:', {{ student_assignment.id }});
         {% endif %}
 
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+        // Test URLs on page load
+        {% if student_assignments %}
+        console.log('Testing available URLs...');
+        {% for sa in student_assignments|slice:":1" %}
+        testGradeUrl({{ sa.id }});
+        {% endfor %}
+        {% endif %}
     });
 
-    function updateCountdown() {
-        const dueDate = new Date('{{ assignment.due_date|date:"c" }}');
-        const now = new Date();
-        const distance = dueDate - now;
+    // URL management - REMOVED /core/ prefix
+    function getGradeUrls(studentAssignmentId) {
+        return [
+            `/assignments/grade/student-assignment/${studentAssignmentId}/`,
+            `/assignments/grade/${studentAssignmentId}/`
+        ];
+    }
 
-        if (distance < 0) {
-            document.getElementById('countdown-timer').textContent = 'Time expired';
-            document.getElementById('time-remaining').textContent = 'Time expired';
-            return;
+    function makeRequest(url, options = {}) {
+        return fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': '{{ csrf_token }}',
+                ...options.headers
+            },
+            ...options
+        });
+    }
+
+    function tryMultipleUrls(urls, options, currentIndex = 0) {
+        if (currentIndex >= urls.length) {
+            return Promise.reject(new Error('All URLs failed'));
         }
 
-        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        const url = urls[currentIndex];
+        console.log(`Trying URL ${currentIndex + 1}/${urls.length}:`, url);
 
-        let countdownText = '';
-        if (days > 0) {
-            countdownText = `${days}d ${hours}h ${minutes}m`;
-        } else if (hours > 0) {
-            countdownText = `${hours}h ${minutes}m ${seconds}s`;
-        } else {
-            countdownText = `${minutes}m ${seconds}s`;
-        }
-
-        document.getElementById('countdown-timer').textContent = countdownText;
-        document.getElementById('time-remaining').textContent = countdownText;
+        return makeRequest(url, options)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response;
+            })
+            .catch(error => {
+                console.log(`URL ${currentIndex + 1} failed:`, error.message);
+                if (currentIndex < urls.length - 1) {
+                    return tryMultipleUrls(urls, options, currentIndex + 1);
+                } else {
+                    throw new Error(`All URLs failed. Last error: ${error.message}`);
+                }
+            });
     }
 
     function gradeStudent(studentAssignmentId) {
-        // Set the student assignment ID in the form
-        document.getElementById('studentAssignmentId').value = studentAssignmentId;
+        console.log('Grading Student Assignment ID:', studentAssignmentId);
         
-        // Clear previous values
+        document.getElementById('studentAssignmentId').value = studentAssignmentId;
         document.getElementById('gradeScore').value = '';
         document.getElementById('gradeFeedback').value = '';
         
-        // Try to fetch existing grade data if available
-        fetch(`/core/assignments/grade/${studentAssignmentId}/`, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                if (data.score !== null && data.score !== undefined) {
-                    document.getElementById('gradeScore').value = data.score;
+        const urls = getGradeUrls(studentAssignmentId);
+        
+        tryMultipleUrls(urls, { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Grade data received:', data);
+                if (data.success) {
+                    if (data.score !== null && data.score !== undefined) {
+                        document.getElementById('gradeScore').value = data.score;
+                    }
+                    if (data.feedback) {
+                        document.getElementById('gradeFeedback').value = data.feedback;
+                    }
+                } else {
+                    console.error('API returned error:', data.error);
                 }
-                if (data.feedback) {
-                    document.getElementById('gradeFeedback').value = data.feedback;
-                }
-            }
-        })
-        .catch(error => {
-            console.log('No existing grade data found:', error.message);
-            // Continue to show modal even if no existing data
-        })
-        .finally(() => {
-            const modal = new bootstrap.Modal(document.getElementById('gradeModal'));
-            modal.show();
-        });
+            })
+            .catch(error => {
+                console.error('All URLs failed:', error);
+                showToast('Error', `Cannot load grade data: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                const modal = new bootstrap.Modal(document.getElementById('gradeModal'));
+                modal.show();
+            });
     }
 
     function viewFeedback(studentAssignmentId) {
-        fetch(`/core/assignments/grade/${studentAssignmentId}/`, {
-            method: 'GET',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                let feedbackContent = `
-                    <div class="feedback-content">
-                        <h6>Score: ${data.score !== null ? data.score : 'Not graded yet'}/{{ assignment.max_score }}</h6>
-                        <div class="feedback-text bg-light p-3 rounded mt-2">
-                            <strong>Teacher Feedback:</strong>
-                            <p class="mt-2">${data.feedback || 'No feedback provided yet.'}</p>
-                        </div>
+        console.log('Viewing feedback for Student Assignment ID:', studentAssignmentId);
+        
+        const urls = getGradeUrls(studentAssignmentId);
+        
+        tryMultipleUrls(urls, { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Feedback data received:', data);
+                if (data.success) {
+                    let feedbackContent = `
+                        <div class="feedback-content">
+                            <h6>Score: ${data.score !== null ? data.score : 'Not graded yet'}/{{ assignment.max_score }}</h6>
+                            <div class="feedback-text bg-light p-3 rounded mt-2">
+                                <strong>Teacher Feedback:</strong>
+                                <p class="mt-2">${data.feedback || 'No feedback provided yet.'}</p>
+                            </div>
+                    `;
+                    
+                    if (data.graded_date) {
+                        feedbackContent += `<small class="text-muted d-block mt-2">Graded on: ${data.graded_date}</small>`;
+                    }
+                    if (data.submitted_date) {
+                        feedbackContent += `<small class="text-muted d-block">Submitted on: ${data.submitted_date}</small>`;
+                    }
+                    if (data.is_late) {
+                        feedbackContent += `<span class="badge bg-warning mt-2">Submitted Late</span>`;
+                    }
+                    
+                    feedbackContent += `</div>`;
+                    document.getElementById('feedbackContent').innerHTML = feedbackContent;
+                } else {
+                    throw new Error(data.error || 'Failed to load feedback');
+                }
+            })
+            .catch(error => {
+                console.error('All URLs failed:', error);
+                document.getElementById('feedbackContent').innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle text-warning display-4 mb-3"></i>
+                        <h5>Feedback Not Available</h5>
+                        <p class="text-muted">${error.message}</p>
+                        <p class="text-muted small">Please check if the URL patterns are configured.</p>
+                    </div>
                 `;
-                
-                if (data.graded_date) {
-                    feedbackContent += `<small class="text-muted d-block mt-2">Graded on: ${data.graded_date}</small>`;
-                }
-                if (data.submitted_date) {
-                    feedbackContent += `<small class="text-muted d-block">Submitted on: ${data.submitted_date}</small>`;
-                }
-                if (data.is_late) {
-                    feedbackContent += `<span class="badge bg-warning mt-2">Submitted Late</span>`;
-                }
-                
-                feedbackContent += `</div>`;
-                document.getElementById('feedbackContent').innerHTML = feedbackContent;
-            } else {
-                throw new Error(data.error || 'Failed to load feedback');
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching feedback:', error);
-            document.getElementById('feedbackContent').innerHTML = `
-                <div class="text-center py-4">
-                    <i class="fas fa-exclamation-triangle text-warning display-4 mb-3"></i>
-                    <h5>Feedback Not Available</h5>
-                    <p class="text-muted">${error.message}</p>
-                    <p class="text-muted small">The assignment may not be graded yet.</p>
-                </div>
-            `;
-        })
-        .finally(() => {
-            const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
-            modal.show();
-        });
+            })
+            .finally(() => {
+                const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+                modal.show();
+            });
     }
 
     function submitGrade() {
@@ -880,69 +896,78 @@
         const score = document.getElementById('gradeScore').value;
         const feedback = document.getElementById('gradeFeedback').value;
         
+        console.log('Submitting grade for Student Assignment ID:', studentAssignmentId);
+        
         if (!score || score.trim() === '') {
             showToast('Error', 'Please enter a score', 'error');
             document.getElementById('gradeScore').focus();
             return;
         }
         
-        // Validate score is a number
         if (isNaN(score) || parseFloat(score) < 0) {
             showToast('Error', 'Please enter a valid score', 'error');
             document.getElementById('gradeScore').focus();
             return;
         }
         
-        const url = `/core/assignments/grade/${studentAssignmentId}/`;
-        
+        const urls = getGradeUrls(studentAssignmentId);
         const formData = new FormData();
         formData.append('grade', score);
         formData.append('feedback', feedback);
         
-        // Show loading state
         const submitBtn = document.querySelector('#gradeModal .btn-primary');
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
         submitBtn.disabled = true;
         
-        fetch(url, {
+        tryMultipleUrls(urls, {
             method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+            body: formData
         })
-        .then(response => {
-            if (!response.ok) {
-                if (response.status === 403) {
-                    throw new Error('Permission denied. You may not have access to grade this assignment.');
-                }
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
+            console.log('Grade submission response:', data);
             if (data.success) {
                 showToast('Success', 'Grade submitted successfully!', 'success');
                 bootstrap.Modal.getInstance(document.getElementById('gradeModal')).hide();
-                // Reload the page to show updated grades
                 setTimeout(() => location.reload(), 1500);
             } else {
                 throw new Error(data.error || 'Failed to submit grade');
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showToast('Error', error.message, 'error');
+            console.error('All URLs failed:', error);
+            showToast('Error', `Cannot submit grade: ${error.message}`, 'error');
         })
         .finally(() => {
-            // Restore button state
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
         });
     }
 
+    // Debug function to test URLs
+    function testGradeUrl(studentAssignmentId) {
+        const urls = getGradeUrls(studentAssignmentId);
+        console.log('Testing URLs for student assignment ID:', studentAssignmentId);
+        
+        urls.forEach((url, index) => {
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => {
+                console.log(`URL ${index + 1} (${url}): ${response.status} ${response.statusText}`);
+            })
+            .catch(error => {
+                console.log(`URL ${index + 1} (${url}): Error - ${error.message}`);
+            });
+        });
+    }
+
+    // Keep your existing helper functions
     function bulkGrade() {
         showToast('Info', 'Bulk grading feature will be available soon!', 'info');
     }

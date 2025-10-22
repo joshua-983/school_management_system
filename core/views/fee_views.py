@@ -69,9 +69,9 @@ class FeeCategoryDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
         # Get fee statistics
         fees = Fee.objects.filter(category=category)
         total_fees = fees.count()
-        paid_fees = fees.filter(payment_status='PAID').count()
-        pending_fees = fees.filter(payment_status__in=['UNPAID', 'PARTIAL']).count()
-        overdue_fees = fees.filter(payment_status='OVERDUE').count()
+        paid_fees = fees.filter(payment_status='paid').count()
+        pending_fees = fees.filter(payment_status__in=['unpaid', 'partial']).count()
+        overdue_fees = fees.filter(payment_status='overdue').count()
         
         # Calculate financial statistics
         total_revenue = fees.aggregate(
@@ -144,6 +144,7 @@ class FeeListView(LoginRequiredMixin, ListView):
             payment_status = form.cleaned_data.get('payment_status')
             category = form.cleaned_data.get('category')
             student = form.cleaned_data.get('student')
+            has_bill = form.cleaned_data.get('has_bill')
             
             if academic_year:
                 queryset = queryset.filter(academic_year=academic_year)
@@ -155,6 +156,10 @@ class FeeListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(category=category)
             if student:
                 queryset = queryset.filter(student=student)
+            if has_bill == 'yes':
+                queryset = queryset.filter(bill__isnull=False)
+            elif has_bill == 'no':
+                queryset = queryset.filter(bill__isnull=True)
         
         # Apply user-specific filters
         if is_student(self.request.user):
@@ -178,12 +183,18 @@ class FeeListView(LoginRequiredMixin, ListView):
         total_paid = queryset.aggregate(Sum('amount_paid'))['amount_paid__sum'] or Decimal('0.00')
         total_balance = total_payable - total_paid
         
+        # Fix: Use lowercase statuses for counting
+        paid_count = queryset.filter(payment_status='paid').count()
+        pending_count = queryset.filter(payment_status__in=['unpaid', 'partial', 'overdue']).count()
+        
         context.update({
             'total_payable': total_payable,
             'total_paid': total_paid,
             'total_balance': total_balance,
-            'paid_count': queryset.filter(payment_status='PAID').count(),
-            'pending_count': queryset.filter(payment_status__in=['UNPAID', 'PARTIAL']).count(),
+            'paid_count': paid_count,
+            'pending_count': pending_count,
+            'is_admin': is_admin(self.request.user),
+            'is_teacher': is_teacher(self.request.user),
         })
         
         # Add all students for the modal - FIXED
@@ -192,7 +203,8 @@ class FeeListView(LoginRequiredMixin, ListView):
         else:
             context['all_students'] = Student.objects.none()
         
-        return context    
+        return context
+    
     def get(self, request, *args, **kwargs):
         # Check if export is requested
         if 'export' in request.GET:
@@ -254,7 +266,7 @@ class FeeListView(LoginRequiredMixin, ListView):
 
 class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Fee
-    template_name = 'core/finance/fees/fee_dashboard.html'  # Your template
+    template_name = 'core/finance/fees/fee_dashboard.html'
     context_object_name = 'fee'
     
     def test_func(self):
@@ -417,33 +429,113 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['fee_id'] = self.kwargs.get('fee_id')
+        fee_id = self.kwargs.get('fee_id')
+        print(f"DEBUG: Fee ID from URL: {fee_id}")
+        
+        # Check if fee exists
+        try:
+            fee = Fee.objects.get(pk=fee_id)
+            print(f"DEBUG: Fee found: {fee}")
+        except Fee.DoesNotExist:
+            print(f"DEBUG: Fee with ID {fee_id} does not exist")
+        
+        kwargs['fee_id'] = fee_id
+        kwargs['request'] = self.request  # Pass request to form
         return kwargs
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        fee_id = self.kwargs.get('fee_id')
+        
+        try:
+            fee = Fee.objects.get(pk=fee_id)
+            context['fee'] = fee
+            print(f"DEBUG: Fee added to context: {fee}")
+        except Fee.DoesNotExist:
+            context['fee'] = None
+            print(f"DEBUG: Fee not found, setting to None")
+            messages.error(self.request, 'The requested fee record could not be found or is invalid.')
+        
+        return context
+    
     def form_valid(self, form):
-        with transaction.atomic():
+        print("DEBUG: form_valid method called")
+        fee_id = self.kwargs.get('fee_id')
+        try:
+            fee = Fee.objects.get(pk=fee_id)
+            print(f"DEBUG: Fee found in form_valid: {fee}")
+            form.instance.fee = fee
+        except Fee.DoesNotExist:
+            print(f"DEBUG: Fee not found in form_valid")
+            messages.error(self.request, 'The requested fee record could not be found.')
+            return self.form_invalid(form)
+        
+        # Ensure recorded_by is set (fallback)
+        if not form.cleaned_data.get('recorded_by'):
             form.instance.recorded_by = self.request.user
-            response = super().form_valid(form)
-            
-            # Update the parent fee record
-            fee = form.instance.fee
-            fee.amount_paid += form.instance.amount
-            fee.balance = fee.amount_payable - fee.amount_paid
-            
-            # Update payment status
-            if fee.balance <= 0:
-                fee.payment_status = 'PAID'
-                fee.payment_date = timezone.now().date()
-            elif fee.amount_paid > 0:
-                fee.payment_status = 'PARTIAL'
-            
-            fee.save()
-            
-            messages.success(self.request, 'Payment recorded successfully')
-            return response
+        
+        print(f"DEBUG: Recorded by: {form.instance.recorded_by}")
+        print(f"DEBUG: Payment amount: {form.instance.amount}")
+        print(f"DEBUG: Payment mode: {form.instance.payment_mode}")
+        print(f"DEBUG: Payment date: {form.instance.payment_date}")
+        
+        try:
+            with transaction.atomic():
+                # Save the payment first
+                response = super().form_valid(form)
+                print(f"DEBUG: Payment saved successfully, ID: {self.object.pk}")
+                
+                # Update the parent fee record - CALCULATE TOTAL FROM PAYMENTS
+                fee = form.instance.fee
+                print(f"DEBUG: Before update - Amount paid: {fee.amount_paid}, Balance: {fee.balance}")
+                
+                # Calculate total paid from all payments (including the new one)
+                total_paid = fee.payments.aggregate(total=Sum('amount'))['total'] or 0
+                fee.amount_paid = total_paid
+                fee.balance = fee.amount_payable - fee.amount_paid
+                
+                # Update payment status
+                if fee.balance <= 0:
+                    fee.payment_status = 'paid'
+                    fee.payment_date = timezone.now().date()
+                elif fee.amount_paid > 0:
+                    fee.payment_status = 'partial'
+                else:
+                    fee.payment_status = 'unpaid'
+                
+                # Check if overdue
+                if (fee.due_date and 
+                    fee.due_date < timezone.now().date() and 
+                    fee.payment_status != 'paid'):
+                    fee.payment_status = 'overdue'
+                
+                fee.save()
+                print(f"DEBUG: After update - Amount paid: {fee.amount_paid}, Balance: {fee.balance}, Status: {fee.payment_status}")
+                
+                messages.success(self.request, f'Payment of GH₵{form.instance.amount:.2f} recorded successfully for {fee.student.get_full_name()}')
+                print("DEBUG: Success message set")
+                
+                return response
+                
+        except Exception as e:
+            print(f"DEBUG: Error in form_valid: {str(e)}")
+            messages.error(self.request, f'Error recording payment: {str(e)}')
+            return self.form_invalid(form)
+    
+    def form_invalid(self, form):
+        print("DEBUG: form_invalid method called")
+        print(f"DEBUG: Form errors: {form.errors}")
+        messages.error(self.request, 'Please correct the errors below.')
+        return super().form_invalid(form)
     
     def get_success_url(self):
-        return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
+        print("DEBUG: get_success_url called")
+        if hasattr(self, 'object') and self.object.fee:
+            url = reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
+            print(f"DEBUG: Success URL: {url}")
+            return url
+        print("DEBUG: No object, returning to fee list")
+        return reverse_lazy('fee_list')
 
 class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = FeePayment
@@ -457,26 +549,36 @@ class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
             payment = self.get_object()
             fee = payment.fee
             
-            # Deduct payment amount from fee before deletion
-            fee.amount_paid -= payment.amount
+            # Delete the payment first
+            payment.delete()
+            
+            # Recalculate total paid from remaining payments
+            total_paid = fee.payments.aggregate(total=Sum('amount'))['total'] or 0
+            fee.amount_paid = total_paid
             fee.balance = fee.amount_payable - fee.amount_paid
             
             # Update payment status
             if fee.amount_paid <= 0:
-                fee.payment_status = 'UNPAID'
+                fee.payment_status = 'unpaid'
                 fee.payment_date = None
             elif fee.amount_paid < fee.amount_payable:
-                fee.payment_status = 'PARTIAL'
+                fee.payment_status = 'partial'
+            else:
+                fee.payment_status = 'paid'
+            
+            # Check if overdue
+            if (fee.due_date and 
+                fee.due_date < timezone.now().date() and 
+                fee.payment_status != 'paid'):
+                fee.payment_status = 'overdue'
             
             fee.save()
             
             messages.success(request, 'Payment record deleted successfully')
-            return super().delete(request, *args, **kwargs)
+            return HttpResponseRedirect(self.get_success_url())
     
     def get_success_url(self):
         return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
-
-# Reports
 # Reports
 class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
@@ -505,15 +607,15 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
             if student:
                 fees = fees.filter(student=student)
         
-        # Calculate summary statistics
+        # FIXED: Calculate summary statistics with lowercase statuses
         summary_data = fees.aggregate(
             total_payable=Sum('amount_payable'),
             total_paid=Sum('amount_paid'),
             count=Count('id'),
-            paid_count=Count('id', filter=Q(payment_status='PAID')),
-            partial_count=Count('id', filter=Q(payment_status='PARTIAL')),
-            unpaid_count=Count('id', filter=Q(payment_status='UNPAID')),
-            overdue_count=Count('id', filter=Q(payment_status='OVERDUE')),
+            paid_count=Count('id', filter=Q(payment_status='paid')),
+            partial_count=Count('id', filter=Q(payment_status='partial')),
+            unpaid_count=Count('id', filter=Q(payment_status='unpaid')),
+            overdue_count=Count('id', filter=Q(payment_status='overdue')),
         )
         
         # Calculate total balance
@@ -544,11 +646,6 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, 'core/finance/fees/fee_report.html', context)
 
     def export_to_excel(self, queryset):
-        from openpyxl import Workbook
-        from openpyxl.utils import get_column_letter
-        from openpyxl.styles import Font
-        from django.http import HttpResponse
-        
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         response['Content-Disposition'] = 'attachment; filename="fee_report.xlsx"'
         
@@ -559,8 +656,9 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         # Add headers
         headers = [
             'Student ID', 'Student Name', 'Class', 
-            'Fee Category', 'Amount Payable', 'Amount Paid', 
-            'Balance', 'Payment Status', 'Due Date', 'Bill Number'
+            'Fee Category', 'Academic Year', 'Term',
+            'Amount Payable', 'Amount Paid', 'Balance', 
+            'Payment Status', 'Due Date', 'Bill Number'
         ]
         
         for col_num, header in enumerate(headers, 1):
@@ -599,7 +697,7 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         wb.save(response)
         return response
 
-# fee status report
+# Fee Status Report
 class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
         """Check if user has permission to view fee status reports"""
@@ -614,30 +712,45 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         
         # Apply filters if form is valid
         if form.is_valid():
-            date_range = form.cleaned_data.get('date_range')
+            report_type = form.cleaned_data.get('report_type')
+            academic_year = form.cleaned_data.get('academic_year')
+            term = form.cleaned_data.get('term')
             class_level = form.cleaned_data.get('class_level')
-            category = form.cleaned_data.get('category')
+            payment_status = form.cleaned_data.get('payment_status')
+            bill_status = form.cleaned_data.get('bill_status')
+            start_date = form.cleaned_data.get('start_date')
+            end_date = form.cleaned_data.get('end_date')
             
-            if date_range:
-                start_date, end_date = date_range
-                fees = fees.filter(date_recorded__range=(start_date, end_date))
-            
+            if academic_year:
+                fees = fees.filter(academic_year=academic_year)
+            if term:
+                fees = fees.filter(term=term)
             if class_level:
                 fees = fees.filter(student__class_level=class_level)
-                
-            if category:
-                fees = fees.filter(category=category)
+            if payment_status:
+                fees = fees.filter(payment_status=payment_status)
+            if bill_status:
+                if bill_status == 'billed':
+                    fees = fees.filter(bill__isnull=False)
+                elif bill_status == 'unbilled':
+                    fees = fees.filter(bill__isnull=True)
+            if start_date:
+                fees = fees.filter(due_date__gte=start_date)
+            if end_date:
+                fees = fees.filter(due_date__lte=end_date)
         
         # Categorize fees by status
-        paid_fees = fees.filter(payment_status='PAID')
-        partial_fees = fees.filter(payment_status='PARTIAL')
-        unpaid_fees = fees.filter(payment_status='UNPAID')
-        overdue_fees = fees.filter(payment_status='OVERDUE')
+        paid_fees = fees.filter(payment_status='paid')
+        partial_fees = fees.filter(payment_status='partial')
+        unpaid_fees = fees.filter(payment_status='unpaid')
+        overdue_fees = fees.filter(payment_status='overdue')
         
         # Calculate summaries
         summary = {
             'total_payable': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
             'total_paid': fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0,
+            'total_balance': (fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0) - 
+                           (fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0),
             'counts': {
                 'paid': paid_fees.count(),
                 'partial': partial_fees.count(),
@@ -653,13 +766,14 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
             'partial_fees': partial_fees,
             'unpaid_fees': unpaid_fees,
             'overdue_fees': overdue_fees,
-            'summary': summary
+            'summary': summary,
+            'all_fees': fees  # For summary report
         }
         
         if request.GET.get('export'):
             return self.export_report(context)
             
-        return render(request, 'finance/fees/fee_status_report.html', context)
+        return render(request, 'core/finance/fees/fee_status_report.html', context)
     
     def export_report(self, context):
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -673,12 +787,14 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         self._create_sheet(wb, 'Unpaid Fees', context['unpaid_fees'])
         self._create_sheet(wb, 'Overdue Fees', context['overdue_fees'])
         
+        # Remove default sheet
+        if 'Sheet' in wb.sheetnames:
+            del wb['Sheet']
+        
         wb.save(response)
         return response
     
     def _create_sheet(self, wb, title, queryset):
-        from openpyxl.styles import Font
-        
         ws = wb.create_sheet(title=title)
         
         headers = [
@@ -705,117 +821,22 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
                 fee.get_payment_status_display(),
                 fee.bill.bill_number if fee.bill else 'Not billed'
             ])
-
-
-
-# fee status report
-class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
-    def get(self, request):
-        # Initialize form with GET parameters
-        form = FeeStatusReportForm(request.GET or None)
         
-        # Get base queryset
-        fees = Fee.objects.all().select_related('student', 'category')
-        
-        # Apply filters if form is valid
-        if form.is_valid():
-            date_range = form.cleaned_data.get('date_range')
-            class_level = form.cleaned_data.get('class_level')
-            category = form.cleaned_data.get('category')
-            
-            if date_range:
-                start_date, end_date = date_range
-                fees = fees.filter(date_recorded__range=(start_date, end_date))
-            
-            if class_level:
-                fees = fees.filter(student__class_level=class_level)
-                
-            if category:
-                fees = fees.filter(category=category)
-        
-        # Categorize fees by status
-        paid_fees = fees.filter(payment_status='PAID')
-        partial_fees = fees.filter(payment_status='PARTIAL')
-        unpaid_fees = fees.filter(payment_status='UNPAID')
-        overdue_fees = fees.filter(payment_status='OVERDUE')
-        
-        # Calculate summaries
-        summary = {
-            'total_payable': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
-            'total_paid': fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0,
-            'counts': {
-                'paid': paid_fees.count(),
-                'partial': partial_fees.count(),
-                'unpaid': unpaid_fees.count(),
-                'overdue': overdue_fees.count(),
-                'total': fees.count()
-            }
-        }
-        
-        context = {
-            'form': form,
-            'paid_fees': paid_fees,
-            'partial_fees': partial_fees,
-            'unpaid_fees': unpaid_fees,
-            'overdue_fees': overdue_fees,
-            'summary': summary
-        }
-        
-        if request.GET.get('export'):
-            return self.export_report(context)
-            
-        return render(request, 'finance/fees/fee_status_report.html', context)
-    
-    def export_report(self, context):
-        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = 'attachment; filename="fee_status_report.xlsx"'
-        
-        wb = Workbook()
-        
-        # Create sheets for each status
-        self._create_sheet(wb, 'Paid Fees', context['paid_fees'])
-        self._create_sheet(wb, 'Partial Payments', context['partial_fees'])
-        self._create_sheet(wb, 'Unpaid Fees', context['unpaid_fees'])
-        self._create_sheet(wb, 'Overdue Fees', context['overdue_fees'])
-        
-        wb.save(response)
-        return response
-    
-    def _create_sheet(self, wb, title, queryset):
-        from openpyxl.styles import Font
-        
-        ws = wb.create_sheet(title=title)
-        
-        headers = [
-            'Student ID', 'Student Name', 'Class', 
-            'Fee Category', 'Amount Payable', 'Amount Paid',
-            'Balance', 'Due Date', 'Status', 'Bill Number'
-        ]
-        
-        for col_num, header in enumerate(headers, 1):
-            col_letter = get_column_letter(col_num)
-            ws[f'{col_letter}1'] = header
-            ws[f'{col_letter}1'].font = Font(bold=True)
-        
-        for fee in queryset:
-            ws.append([
-                fee.student.student_id,
-                fee.student.get_full_name(),
-                fee.student.get_class_level_display(),
-                str(fee.category),
-                float(fee.amount_payable),
-                float(fee.amount_paid),
-                float(fee.balance),
-                fee.due_date.strftime('%Y-%m-%d'),
-                fee.get_payment_status_display(),
-                fee.bill.bill_number if fee.bill else 'Not billed'
-            ])
-    
-    def test_func(self):
-        return is_admin(self.request.user) or is_teacher(self.request.user)
+        # Auto-size columns
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min((max_length + 2) * 1.2, 30)
+            ws.column_dimensions[column].width = adjusted_width
 
 class FeeDashboardView(LoginRequiredMixin, TemplateView):
-    template_name = 'core/finance/fees/fee_dashboard.html'  # Fixed path
+    template_name = 'core/finance/fees/fee_dashboard.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -830,10 +851,16 @@ class FeeDashboardView(LoginRequiredMixin, TemplateView):
                 term=current_term.term
             )
             
+            # FIXED: Use lowercase statuses in aggregation
+            payment_status_distribution = fees.values('payment_status').annotate(
+                count=Count('id'),
+                amount=Sum('amount_payable')
+            ).order_by('payment_status')
+            
             context.update({
                 'total_payable': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
                 'total_paid': fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0,
-                'payment_status_distribution': self.get_payment_status_distribution(fees),
+                'payment_status_distribution': payment_status_distribution,
                 'class_level_stats': self.get_class_level_stats(fees),
                 'recent_payments': FeePayment.objects.select_related('fee__student').order_by('-payment_date')[:10],
                 'is_admin': is_admin(self.request.user),
@@ -854,7 +881,6 @@ class FeeDashboardView(LoginRequiredMixin, TemplateView):
             paid=Sum('amount_paid'),
             count=Count('id')
         ).order_by('student__class_level')
-
 
 # Fee generation automation
 def generate_term_fees(request_user=None):
@@ -879,7 +905,7 @@ def generate_term_fees(request_user=None):
             for category in categories:
                 # Check if category applies to student's class
                 if (category.class_levels and 
-                    student.class_level not in category.class_levels.split(',')):
+                    student.class_level not in [level.strip() for level in category.class_levels.split(',')]):
                     continue
                 
                 # Check if fee already exists
@@ -911,7 +937,8 @@ def generate_term_fees(request_user=None):
                     term=current_term.term,
                     amount_payable=category.default_amount,
                     due_date=due_date,
-                    recorded_by=recorded_by  # Use actual user instead of system user
+                    recorded_by=recorded_by,
+                    payment_status='unpaid'  # Set initial status
                 )
                 created_count += 1
                 

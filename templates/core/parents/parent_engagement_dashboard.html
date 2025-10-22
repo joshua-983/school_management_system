@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+
+{% block title %}Parent Engagement Dashboard - School Management System{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Parent Engagement Dashboard</h2>
+    <div>
+        <a href="{% url 'parent_directory' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-people"></i> Parent Directory
+        </a>
+        <a href="{% url 'bulk_parent_message' %}" class="btn btn-primary">
+            <i class="bi bi-megaphone"></i> Engage Parents
+        </a>
+    </div>
+</div>
+
+<!-- Overall Engagement Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h2>{{ total_parents }}</h2>
+                <p class="mb-0">Total Parents</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h2>{{ parents_with_accounts }}</h2>
+                <p class="mb-0">With Accounts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h2>{{ active_parents }}</h2>
+                <p class="mb-0">Active This Month</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h2>{{ engagement_rate }}%</h2>
+                <p class="mb-0">Engagement Rate</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Communication Statistics -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Communication Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h3 class="text-primary">{{ sent_messages }}</h3>
+                            <small class="text-muted">Messages Sent</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div>
+                            <h3 class="text-success">{{ received_messages }}</h3>
+                            <small class="text-muted">Responses Received</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">Response Rate:</small>
+                    <div class="progress mt-1">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {% widthratio received_messages sent_messages 100 %}%">
+                            {% widthratio received_messages sent_messages 100 %}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Parent Logins</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_logins %}
+                <div class="list-group list-group-flush">
+                    {% for user in recent_logins %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ user.get_full_name }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                {% with parent=user.parentguardian %}
+                                    {% if parent.students.exists %}
+                                        Parent of {{ parent.students.first.get_full_name }}
+                                    {% endif %}
+                                {% endwith %}
+                            </small>
+                        </div>
+                        <small class="text-muted">{{ user.last_login|timesince }} ago</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">No recent parent logins</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Class-wise Engagement -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Engagement by Class</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Class</th>
+                        <th>Total Parents</th>
+                        <th>Active Parents</th>
+                        <th>Engagement Rate</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for class in class_engagement %}
+                    <tr>
+                        <td>
+                            <strong>{{ class.class_level }}</strong>
+                        </td>
+                        <td>{{ class.total_parents }}</td>
+                        <td>{{ class.active_parents }}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                    <div class="progress-bar 
+                                        {% if class.engagement_rate >= 80 %}bg-success
+                                        {% elif class.engagement_rate >= 50 %}bg-warning
+                                        {% else %}bg-danger{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {{ class.engagement_rate }}%">
+                                    </div>
+                                </div>
+                                <span>{{ class.engagement_rate }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if class.engagement_rate >= 80 %}
+                            <span class="badge bg-success">Excellent</span>
+                            {% elif class.engagement_rate >= 50 %}
+                            <span class="badge bg-warning">Good</span>
+                            {% else %}
+                            <span class="badge bg-danger">Needs Attention</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No engagement data available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Action Recommendations -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Engagement Recommendations</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for class in class_engagement %}
+            {% if class.engagement_rate < 50 %}
+            <div class="col-md-6 mb-3">
+                <div class="alert alert-warning">
+                    <h6>{{ class.class_level }} - Low Engagement ({{ class.engagement_rate }}%)</h6>
+                    <small class="mb-2 d-block">Only {{ class.active_parents }} out of {{ class.total_parents }} parents are active</small>
+                    <div class="btn-group btn-group-sm">
+                        <a href="{% url 'bulk_parent_message' %}" class="btn btn-outline-warning btn-sm">
+                            Send Reminder
+                        </a>
+                        <a href="{% url 'parent_directory' %}?search=&relationship=" class="btn btn-outline-info btn-sm">
+                            View Parents
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            
+            {% if class_engagement|length == 0 or class_engagement.0.engagement_rate >= 50 %}
+            <div class="col-12">
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle me-2"></i>
+                    Great! Overall parent engagement is good. Consider sending appreciation messages to maintain engagement.
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

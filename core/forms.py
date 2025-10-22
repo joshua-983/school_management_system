@@ -1,3 +1,4 @@
+from django.forms.models import construct_instance
 from datetime import date, timedelta
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
@@ -255,12 +256,12 @@ class FeeForm(forms.ModelForm):
     
     payment_status = forms.ChoiceField(
         choices=[
-            ('PAID', 'Paid'),
-            ('UNPAID', 'Unpaid'),
-            ('PARTIAL', 'Part Payment'),
-            ('OVERDUE', 'Overdue')
+            ('paid', 'Paid'),
+            ('unpaid', 'Unpaid'),
+            ('partial', 'Part Payment'),
+            ('overdue', 'Overdue')
         ],
-        initial='UNPAID'
+        initial='unpaid'
     )
     
     class Meta:
@@ -363,19 +364,19 @@ class FeeForm(forms.ModelForm):
         cleaned_data['balance'] = amount_payable - amount_paid
         
         # Validate payment status consistency
-        if payment_status == 'PAID' and amount_paid != amount_payable:
+        if payment_status == 'paid' and amount_paid != amount_payable:
             raise forms.ValidationError(
                 "For 'Paid' status, amount paid must equal amount payable."
             )
-        elif payment_status == 'UNPAID' and amount_paid > 0:
+        elif payment_status == 'unpaid' and amount_paid > 0:
             raise forms.ValidationError(
                 "For 'Unpaid' status, amount paid must be zero."
             )
-        elif payment_status == 'PARTIAL' and (amount_paid <= 0 or amount_paid >= amount_payable):
+        elif payment_status == 'partial' and (amount_paid <= 0 or amount_paid >= amount_payable):
             raise forms.ValidationError(
                 "For 'Part Payment' status, amount paid must be between 0 and the payable amount."
             )
-        elif payment_status == 'OVERDUE' and amount_paid >= amount_payable:
+        elif payment_status == 'overdue' and amount_paid >= amount_payable:
             raise forms.ValidationError(
                 "For 'Overdue' status, amount paid must be less than amount payable."
             )
@@ -399,38 +400,91 @@ class FeeForm(forms.ModelForm):
 
 class FeePaymentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request', None)  # Get request object
         fee_id = kwargs.pop('fee_id', None)
         super().__init__(*args, **kwargs)
         
+        # Set up payment_mode field with proper choices and attributes
+        self.fields['payment_mode'].widget.attrs.update({
+            'class': 'form-select',
+        })
+        self.fields['payment_mode'].empty_label = 'Select Payment Method'
+        
+        # Set up other fields
+        self.fields['amount'].widget.attrs.update({
+            'class': 'form-control',
+            'step': '0.01',
+            'min': '0.01',
+            'placeholder': '0.00'
+        })
+        
+        self.fields['payment_date'].widget.attrs.update({
+            'class': 'form-control',
+        })
+        
+        self.fields['receipt_number'].widget.attrs.update({
+            'class': 'form-control',
+            'placeholder': 'Optional'
+        })
+        
+        self.fields['notes'].widget.attrs.update({
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional notes about this payment...'
+        })
+        
+        # Set initial value for recorded_by if request is available
+        if self.request and self.request.user.is_authenticated:
+            self.fields['recorded_by'].initial = self.request.user
+            self.fields['recorded_by'].widget = forms.HiddenInput()
+        
         if fee_id:
-            fee = get_object_or_404(Fee, pk=fee_id)
-            self.fields['fee'].initial = fee
-            self.fields['fee'].widget = forms.HiddenInput()
-            
-            # Set max payment amount as the remaining balance
-            self.fields['amount'].widget.attrs['max'] = fee.balance
-            
-            # If fee is linked to a bill, show bill information
-            if fee.bill:
-                self.fields['bill'] = forms.ModelChoiceField(
-                    queryset=Bill.objects.filter(pk=fee.bill.pk),
-                    initial=fee.bill,
-                    widget=forms.HiddenInput(),
-                    required=False
-                )
+            try:
+                fee = Fee.objects.get(pk=fee_id)
+                self.fields['fee'].initial = fee
+                self.fields['fee'].widget = forms.HiddenInput()
+                
+                # Set max payment amount as the remaining balance
+                max_amount = float(fee.balance)
+                self.fields['amount'].widget.attrs['max'] = max_amount
+                self.fields['amount'].help_text = f'Maximum payment: GH₵{fee.balance:.2f}'
+                
+                # If fee is linked to a bill, show bill information
+                if fee.bill:
+                    self.fields['bill'] = forms.ModelChoiceField(
+                        queryset=Bill.objects.filter(pk=fee.bill.pk),
+                        initial=fee.bill,
+                        widget=forms.HiddenInput(),
+                        required=False
+                    )
+            except Fee.DoesNotExist:
+                # If fee doesn't exist, don't set any initial values
+                self.fields['fee'].widget = forms.HiddenInput()
     
     class Meta:
         model = FeePayment
-        fields = ['fee', 'amount', 'payment_mode', 'payment_date', 'notes', 'recorded_by']
+        fields = ['fee', 'amount', 'payment_mode', 'payment_date', 'receipt_number', 'notes', 'recorded_by']
         widgets = {
             'payment_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 2}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
             'recorded_by': forms.HiddenInput(),
+        }
+        labels = {
+            'amount': 'Payment Amount (GH₵)',
+            'payment_mode': 'Payment Method',
+            'receipt_number': 'Receipt Number',
+        }
+        help_texts = {
+            'receipt_number': 'Optional reference number for tracking',
+            'notes': 'Optional notes about this payment',
         }
     
     def clean_amount(self):
         amount = self.cleaned_data.get('amount')
         fee = self.cleaned_data.get('fee')
+        
+        if not fee:
+            raise forms.ValidationError("Fee record is required.")
         
         if fee and amount:
             if amount <= 0:
@@ -443,10 +497,49 @@ class FeePaymentForm(forms.ModelForm):
         
         return amount
     
+    def clean_payment_mode(self):
+        payment_mode = self.cleaned_data.get('payment_mode')
+        if not payment_mode:
+            raise forms.ValidationError("Please select a payment method.")
+        return payment_mode
+    
+    def clean_payment_date(self):
+        payment_date = self.cleaned_data.get('payment_date')
+        if not payment_date:
+            raise forms.ValidationError("Please select a payment date.")
+        
+        # Ensure payment date is not in the future
+        from django.utils import timezone
+        
+        # Convert payment_date to date object if it's a datetime
+        if hasattr(payment_date, 'date'):
+            payment_date = payment_date.date()
+        
+        today = timezone.now().date()
+        
+        if payment_date > today:
+            raise forms.ValidationError("Payment date cannot be in the future.")
+        
+        return payment_date
+    
+    def clean_recorded_by(self):
+        recorded_by = self.cleaned_data.get('recorded_by')
+        if not recorded_by and self.request and self.request.user.is_authenticated:
+            # Fallback: use the current user if recorded_by is not provided
+            recorded_by = self.request.user
+        return recorded_by
+    
     def clean(self):
         cleaned_data = super().clean()
         fee = cleaned_data.get('fee')
         amount = cleaned_data.get('amount')
+        recorded_by = cleaned_data.get('recorded_by')
+        
+        if not fee:
+            raise forms.ValidationError("Invalid fee record.")
+        
+        if not recorded_by:
+            raise forms.ValidationError("Recorded by user is required.")
         
         if fee and amount:
             # Check if payment would make the fee overpaid
@@ -458,6 +551,7 @@ class FeePaymentForm(forms.ModelForm):
         
         return cleaned_data
 
+
 class FeeFilterForm(forms.Form):
     academic_year = forms.CharField(required=False)
     term = forms.ChoiceField(
@@ -465,7 +559,8 @@ class FeeFilterForm(forms.Form):
         required=False
     )
     payment_status = forms.ChoiceField(
-        choices=[('', 'All Statuses')] + Fee.PAYMENT_STATUS_CHOICES,
+        choices=[('', 'All Statuses'), ('paid', 'Paid'), ('unpaid', 'Unpaid'), 
+                ('partial', 'Partial Payment'), ('overdue', 'Overdue')],
         required=False
     )
     category = forms.ModelChoiceField(
@@ -490,6 +585,7 @@ class FeeFilterForm(forms.Form):
         if not self.data.get('academic_year'):
             current_year = timezone.now().year
             self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+
 
 class FeeStatusReportForm(forms.Form):
     REPORT_TYPE_CHOICES = [
@@ -696,289 +792,90 @@ class AssignmentForm(forms.ModelForm):
     class_level = forms.ChoiceField(
         choices=[('', 'Select Class Level')] + list(CLASS_LEVEL_CHOICES),
         required=True,
-        label="Class Level"
-    )
-    
-    # NEW: Bulk assignment creation for multiple classes
-    multiple_classes = forms.MultipleChoiceField(
-        choices=[],
-        required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={
-            'class': 'multiple-classes-checkboxes'
-        }),
-        label="Also create for these classes",
-        help_text="Select additional classes to create this same assignment for"
-    )
-    
-    # NEW: Assignment templates for quick creation
-    template = forms.ChoiceField(
-        choices=[
-            ('', 'No template - Custom assignment'),
-            ('HOMEWORK', 'Homework Template'),
-            ('CLASSWORK', 'Classwork Template'), 
-            ('TEST', 'Test Template'),
-            ('EXAM', 'Examination Template')
-        ],
-        required=False,
-        label="Use template",
-        help_text="Quickly fill assignment details using a template"
+        label="Class"
     )
 
     class Meta:
         model = Assignment
-        fields = ['title', 'description', 'assignment_type', 'subject',
+        fields = ['title', 'description', 'assignment_type', 'subject', 'class_level',
                  'due_date', 'max_score', 'weight', 'attachment']
         widgets = {
-            'due_date': forms.DateTimeInput(attrs={
-                'type': 'datetime-local',
-                'class': 'form-control'
-            }),
-            'description': forms.Textarea(attrs={
-                'rows': 3,
-                'class': 'form-control',
-                'placeholder': 'Describe the assignment requirements...'
-            }),
-            'attachment': forms.FileInput(attrs={'class': 'form-control'}),
-            'title': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter assignment title...'
-            }),
-            'max_score': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'max': '100'
-            }),
-            'weight': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'max': '100'
-            }),
-            'assignment_type': forms.Select(attrs={
-                'class': 'form-control',
-                'id': 'id_assignment_type_custom'
-            }),
+            'due_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'description': forms.Textarea(attrs={'rows': 3}),
         }
 
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         
-        # Set initial values
-        if self.request and hasattr(self.request.user, 'teacher'):
-            teacher = self.request.user.teacher
-            self.fields['subject'].queryset = Subject.objects.filter(teachers=teacher)
-            
-            # Get available class levels for this teacher
-            teacher_class_levels = ClassAssignment.objects.filter(
-                teacher=teacher
-            ).values_list('class_level', flat=True).distinct()
-            
-            # Filter class level choices to only those the teacher teaches
-            if teacher_class_levels:
-                available_choices = [
-                    (level, name) for level, name in CLASS_LEVEL_CHOICES 
-                    if level in teacher_class_levels
-                ]
-                self.fields['class_level'].choices = [('', 'Select Class Level')] + available_choices
-                
-                # NEW: Set up multiple classes field (exclude the primary class_level)
-                multiple_class_choices = [
-                    (level, name) for level, name in available_choices
-                ]
-                self.fields['multiple_classes'].choices = multiple_class_choices
-            else:
-                self.fields['class_level'].choices = [('', 'No classes assigned to you')]
-                for field_name in self.fields:
-                    self.fields[field_name].disabled = True
-
-        # NEW: Add template change listener via JavaScript data attribute
-        self.fields['template'].widget.attrs.update({
-            'onchange': 'applyAssignmentTemplate(this)'
-        })
+        # Remove class_assignment field if it exists
+        if 'class_assignment' in self.fields:
+            del self.fields['class_assignment']
+        
+        # Show all available options for admin users
+        self.fields['class_level'].choices = [('', 'Select Class')] + list(CLASS_LEVEL_CHOICES)
+        self.fields['subject'].queryset = Subject.objects.all()
 
     def clean(self):
         cleaned_data = super().clean()
-        
         class_level = cleaned_data.get('class_level')
         subject = cleaned_data.get('subject')
-        multiple_classes = cleaned_data.get('multiple_classes', [])
         
+        print(f"FORM DEBUG: class_level={class_level}, subject={subject}")
+        
+        # Basic validation
         if not class_level:
             self.add_error('class_level', "Class level is required.")
         
         if not subject:
             self.add_error('subject', "Subject is required.")
         
-        # NEW: Validate that multiple_classes doesn't include the primary class_level
-        if class_level and class_level in multiple_classes:
-            self.add_error('multiple_classes', 
-                f"Primary class {dict(CLASS_LEVEL_CHOICES).get(class_level)} is automatically included. "
-                f"Remove it from additional classes."
-            )
-            # Remove the duplicate from multiple_classes
-            cleaned_data['multiple_classes'] = [cls for cls in multiple_classes if cls != class_level]
+        # Find or create ClassAssignment
+        if class_level and subject:
+            # Get current academic year
+            current_year = timezone.now().year
+            academic_year = f"{current_year}/{current_year + 1}"
+            
+            print(f"FORM DEBUG: Looking for ClassAssignment - {class_level}, {subject.name}, {academic_year}")
+            
+            # Try to find existing ClassAssignment
+            class_assignment = ClassAssignment.objects.filter(
+                class_level=class_level,
+                subject=subject
+            ).first()
+            
+            if class_assignment:
+                print(f"FORM DEBUG: Found ClassAssignment: {class_assignment}")
+                self.instance.class_assignment = class_assignment
+            else:
+                print(f"FORM DEBUG: No ClassAssignment found, creating one...")
+                # If no ClassAssignment exists, create one with the first available teacher
+                teachers = Teacher.objects.filter(subjects=subject)
+                if teachers.exists():
+                    teacher = teachers.first()
+                    class_assignment = ClassAssignment.objects.create(
+                        class_level=class_level,
+                        subject=subject,
+                        teacher=teacher,
+                        academic_year=academic_year
+                    )
+                    print(f"FORM DEBUG: Created ClassAssignment: {class_assignment}")
+                    self.instance.class_assignment = class_assignment
+                else:
+                    self.add_error(None, f"No teacher available to teach {subject.name}. Please assign a teacher to this subject first.")
         
-        # Validate teacher can only assign to their classes
-        if self.request and hasattr(self.request.user, 'teacher'):
-            teacher = self.request.user.teacher
-            
-            # Validate primary class assignment
-            if class_level and subject:
-                if not ClassAssignment.objects.filter(
-                    teacher=teacher,
-                    class_level=class_level,
-                    subject=subject
-                ).exists():
-                    self.add_error(None, 
-                        f"You are not assigned to teach {subject.name} for {dict(CLASS_LEVEL_CHOICES).get(class_level)}"
-                    )
-            
-            # NEW: Validate multiple classes assignments
-            for additional_class in multiple_classes:
-                if not ClassAssignment.objects.filter(
-                    teacher=teacher,
-                    class_level=additional_class,
-                    subject=subject
-                ).exists():
-                    self.add_error('multiple_classes', 
-                        f"You are not assigned to teach {subject.name} for {dict(CLASS_LEVEL_CHOICES).get(additional_class)}"
-                    )
+        # Validate due date
+        due_date = cleaned_data.get('due_date')
+        if due_date and due_date <= timezone.now():
+            self.add_error('due_date', 'Due date must be in the future')
         
         return cleaned_data
 
-    def clean_due_date(self):
-        due_date = self.cleaned_data.get('due_date')
-        if due_date and due_date < timezone.now():
-            raise ValidationError("Due date cannot be in the past")
-        return due_date
-
-    def clean_weight(self):
-        weight = self.cleaned_data.get('weight')
-        if weight and (weight < 1 or weight > 100):
-            raise ValidationError("Weight must be between 1 and 100")
-        return weight
-
-    def clean_attachment(self):
-        attachment = self.cleaned_data.get('attachment')
-        if attachment:
-            max_size = 10 * 1024 * 1024  # 10MB
-            if attachment.size > max_size:
-                raise ValidationError("File size must be less than 10MB")
-            
-            allowed_types = ['pdf', 'doc', 'docx', 'txt', 'zip', 'rar', 'jpg', 'jpeg', 'png']
-            ext = attachment.name.split('.')[-1].lower()
-            if ext not in allowed_types:
-                raise ValidationError(f"File type not allowed. Allowed types: {', '.join(allowed_types)}")
-        
-        return attachment
-    
     def save(self, commit=True):
-        # NEW: Apply template if selected
-        template = self.cleaned_data.get('template')
-        if template:
-            self.apply_template(template)
-        
-        # Set the class_assignment before saving
-        class_level = self.cleaned_data.get('class_level')
-        subject = self.cleaned_data.get('subject')
-        
-        if class_level and subject:
-            # Get or create the class assignment
-            class_assignment, created = ClassAssignment.objects.get_or_create(
-                class_level=class_level,
-                subject=subject,
-                teacher=self.request.user.teacher if hasattr(self.request.user, 'teacher') else None,
-                defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
-            )
-            self.instance.class_assignment = class_assignment
-        
-        # Save the primary assignment first
-        assignment = super().save(commit=commit)
-        
-        # NEW: Create assignments for multiple classes
-        if commit:
-            multiple_classes = self.cleaned_data.get('multiple_classes', [])
-            if multiple_classes:
-                self.create_multiple_class_assignments(assignment, multiple_classes)
-        
-        return assignment
-    
-    def apply_template(self, template):
-        """Apply template settings to the form instance"""
-        template_configs = {
-            'HOMEWORK': {
-                'assignment_type': 'HOMEWORK',
-                'max_score': 100,
-                'weight': 10,
-                'description': 'Complete the following exercises. Show all your work and submit by the due date.'
-            },
-            'CLASSWORK': {
-                'assignment_type': 'CLASSWORK', 
-                'max_score': 50,
-                'weight': 5,
-                'description': 'In-class assignment to be completed during the lesson. Work independently and show your reasoning.'
-            },
-            'TEST': {
-                'assignment_type': 'TEST',
-                'max_score': 100, 
-                'weight': 30,
-                'description': 'Assessment covering recent topics. Read all questions carefully and manage your time effectively.'
-            },
-            'EXAM': {
-                'assignment_type': 'EXAM',
-                'max_score': 100,
-                'weight': 50,
-                'description': 'End of term examination. Comprehensive assessment of all topics covered this term.'
-            }
-        }
-        
-        if template in template_configs:
-            config = template_configs[template]
-            self.instance.assignment_type = config['assignment_type']
-            self.instance.max_score = config['max_score']
-            self.instance.weight = config['weight']
-            
-            # Only set description if it's empty or the default placeholder
-            current_desc = self.cleaned_data.get('description', '')
-            if not current_desc or current_desc == self.fields['description'].initial:
-                self.instance.description = config['description']
-    
-    def create_multiple_class_assignments(self, primary_assignment, class_levels):
-        """Create duplicate assignments for additional classes"""
-        created_count = 0
-        teacher = self.request.user.teacher if hasattr(self.request.user, 'teacher') else None
-        
-        for class_level in class_levels:
-            try:
-                # Get or create class assignment for this class level
-                class_assignment, created = ClassAssignment.objects.get_or_create(
-                    class_level=class_level,
-                    subject=primary_assignment.subject,
-                    teacher=teacher,
-                    defaults={'academic_year': f"{timezone.now().year}/{timezone.now().year + 1}"}
-                )
-                
-                # Create the duplicate assignment
-                Assignment.objects.create(
-                    title=primary_assignment.title,
-                    description=primary_assignment.description,
-                    assignment_type=primary_assignment.assignment_type,
-                    subject=primary_assignment.subject,
-                    class_assignment=class_assignment,
-                    due_date=primary_assignment.due_date,
-                    max_score=primary_assignment.max_score,
-                    weight=primary_assignment.weight,
-                    attachment=primary_assignment.attachment
-                )
-                created_count += 1
-                
-            except Exception as e:
-                logger.error(f"Error creating assignment for class {class_level}: {str(e)}")
-                # Continue with other classes even if one fails
-        
-        # Log the bulk creation
-        if created_count > 0:
-            logger.info(f"Created {created_count} additional assignments for classes: {class_levels}")
+        print(f"FORM DEBUG: Saving assignment, class_assignment = {getattr(self.instance, 'class_assignment', 'NOT SET')}")
+        result = super().save(commit=commit)
+        print(f"FORM DEBUG: Save completed, assignment ID = {result.id}")
+        return result
 
 
 class StudentAssignmentSubmissionForm(forms.ModelForm):
@@ -1380,14 +1277,6 @@ class BulkGradeUploadForm(forms.Form):
                 return Assignment.objects.none()
         return Assignment.objects.none()
 
-class AnnouncementForm(forms.ModelForm):
-    class Meta:
-        model = Announcement
-        fields = ['title', 'content', 'target_roles', 'attachment']
-        widgets = {
-            'content': forms.Textarea(attrs={'rows': 4}),
-            'target_roles': forms.CheckboxSelectMultiple(),
-        }
 
 class AuditLogFilterForm(forms.Form):
     ACTION_CHOICES = [
@@ -2067,3 +1956,71 @@ class ParentMessageForm(forms.ModelForm):
         self.fields['receiver'].queryset = User.objects.filter(
             Q(is_staff=True) | Q(teacher__isnull=False)
         ).distinct()
+
+
+
+class AnnouncementForm(forms.ModelForm):
+    class Meta:
+        model = Announcement
+        fields = ['title', 'message', 'priority', 'target_roles', 'target_class_levels', 'is_active', 'end_date']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter announcement title'
+            }),
+            'message': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter announcement message',
+                'rows': 4
+            }),
+            'priority': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'target_roles': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'target_class_levels': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., P1,P2,P3 (leave blank for all classes)'
+            }),
+            'end_date': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            })
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make end_date optional
+        self.fields['end_date'].required = False
+        
+        # Add help text
+        self.fields['priority'].help_text = 'Select the priority level for this announcement'
+        self.fields['target_roles'].help_text = 'Select which user roles should see this announcement'
+        self.fields['target_class_levels'].help_text = 'Enter specific class levels (comma-separated) or leave blank for all classes'
+        self.fields['end_date'].help_text = 'Optional: Set when this announcement should automatically expire'
+    
+    def clean_target_class_levels(self):
+        class_levels = self.cleaned_data.get('target_class_levels', '')
+        if class_levels:
+            # Validate class levels format
+            valid_levels = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
+            levels = [level.strip() for level in class_levels.split(',')]
+            invalid_levels = []
+            
+            for level in levels:
+                if level and level not in valid_levels:
+                    invalid_levels.append(level)
+            
+            if invalid_levels:
+                raise forms.ValidationError(
+                    f"Invalid class level(s): {', '.join(invalid_levels)}. "
+                    f"Valid levels are: {', '.join(valid_levels)}"
+                )
+            
+            # Remove duplicates and empty strings, then rejoin
+            unique_levels = list(set(levels))
+            unique_levels = [level for level in unique_levels if level]  # Remove empty strings
+            return ','.join(unique_levels)
+        
+        return class_levels

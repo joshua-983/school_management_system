@@ -1,0 +1,393 @@
+<div class="card">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Filters & Search</h6>
+    </div>
+    <div class="card-body">
+        <!-- Search -->
+        <div class="mb-3">
+            <label for="searchInput" class="form-label small fw-semibold">Search Announcements</label>
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="searchInput" 
+                       placeholder="Search titles and content..." 
+                       value="{{ request.GET.search|default:'' }}">
+                <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Priority Filter -->
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Priority Level</label>
+            <div class="priority-filters">
+                {% for priority in priority_choices %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" 
+                           id="priority{{ priority.value }}" 
+                           value="{{ priority.value }}"
+                           {% if priority.value in selected_priorities %}checked{% endif %}>
+                    <label class="form-check-label d-flex align-items-center" for="priority{{ priority.value }}">
+                        <span class="priority-indicator priority-{{ priority.value }} me-2"></span>
+                        {{ priority.label }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Status Filter -->
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Status</label>
+            <div class="status-filters">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="statusActive" value="active"
+                           {% if 'active' in selected_status %}checked{% endif %}>
+                    <label class="form-check-label" for="statusActive">
+                        <i class="bi bi-check-circle text-success me-1"></i>Active
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="statusInactive" value="inactive"
+                           {% if 'inactive' in selected_status %}checked{% endif %}>
+                    <label class="form-check-label" for="statusInactive">
+                        <i class="bi bi-pause-circle text-secondary me-1"></i>Inactive
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="statusExpired" value="expired"
+                           {% if 'expired' in selected_status %}checked{% endif %}>
+                    <label class="form-check-label" for="statusExpired">
+                        <i class="bi bi-clock text-warning me-1"></i>Expired
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Date Range -->
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Date Range</label>
+            <div class="date-filters">
+                <select class="form-select form-select-sm" id="dateRange">
+                    <option value="">All Time</option>
+                    <option value="today" {% if request.GET.date_range == 'today' %}selected{% endif %}>Today</option>
+                    <option value="yesterday" {% if request.GET.date_range == 'yesterday' %}selected{% endif %}>Yesterday</option>
+                    <option value="week" {% if request.GET.date_range == 'week' %}selected{% endif %}>This Week</option>
+                    <option value="month" {% if request.GET.date_range == 'month' %}selected{% endif %}>This Month</option>
+                    <option value="custom" {% if request.GET.date_range == 'custom' %}selected{% endif %}>Custom Range</option>
+                </select>
+                
+                <!-- Custom Date Range (Hidden by Default) -->
+                <div id="customDateRange" class="mt-2" style="display: none;">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input type="date" class="form-control form-control-sm" id="startDate" 
+                                   value="{{ request.GET.start_date|default:'' }}">
+                        </div>
+                        <div class="col-6">
+                            <input type="date" class="form-control form-control-sm" id="endDate" 
+                                   value="{{ request.GET.end_date|default:'' }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Audience Filter -->
+        {% if user.is_staff or user.is_teacher %}
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Target Audience</label>
+            <select class="form-select form-select-sm" id="audienceFilter" multiple size="4">
+                <option value="">All Audiences</option>
+                {% for class_level in class_levels %}
+                <option value="{{ class_level.id }}"
+                        {% if class_level.id|stringformat:"i" in selected_audiences %}selected{% endif %}>
+                    {{ class_level.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Hold Ctrl/Cmd for multiple selection</div>
+        </div>
+        {% endif %}
+        
+        <!-- Sort Options -->
+        <div class="mb-3">
+            <label class="form-label small fw-semibold">Sort By</label>
+            <select class="form-select form-select-sm" id="sortBy">
+                <option value="-created_at" {% if request.GET.sort == '-created_at' %}selected{% endif %}>Newest First</option>
+                <option value="created_at" {% if request.GET.sort == 'created_at' %}selected{% endif %}>Oldest First</option>
+                <option value="title" {% if request.GET.sort == 'title' %}selected{% endif %}>Title A-Z</option>
+                <option value="-title" {% if request.GET.sort == '-title' %}selected{% endif %}>Title Z-A</option>
+                <option value="priority" {% if request.GET.sort == 'priority' %}selected{% endif %}>Priority (Low to High)</option>
+                <option value="-priority" {% if request.GET.sort == '-priority' %}selected{% endif %}>Priority (High to Low)</option>
+            </select>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2">
+            <button type="button" class="btn btn-primary btn-sm" onclick="applyFilters()">
+                <i class="bi bi-funnel me-2"></i>Apply Filters
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFilters()">
+                <i class="bi bi-arrow-clockwise me-2"></i>Reset All
+            </button>
+        </div>
+        
+        <!-- Active Filters -->
+        <div id="activeFilters" class="mt-3">
+            {% if has_active_filters %}
+            <h6 class="small fw-semibold mb-2">Active Filters:</h6>
+            <div class="filter-tags">
+                {% if request.GET.search %}
+                <span class="badge bg-primary me-1 mb-1">
+                    Search: "{{ request.GET.search }}"
+                    <i class="bi bi-x ms-1" onclick="removeFilter('search')"></i>
+                </span>
+                {% endif %}
+                
+                {% for priority in selected_priorities %}
+                <span class="badge bg-{{ priority|lower }} me-1 mb-1">
+                    {{ priority }}
+                    <i class="bi bi-x ms-1" onclick="removePriorityFilter('{{ priority }}')"></i>
+                </span>
+                {% endfor %}
+                
+                {% for status in selected_status %}
+                <span class="badge bg-secondary me-1 mb-1">
+                    {{ status|title }}
+                    <i class="bi bi-x ms-1" onclick="removeStatusFilter('{{ status }}')"></i>
+                </span>
+                {% endfor %}
+                
+                {% if request.GET.date_range %}
+                <span class="badge bg-info me-1 mb-1">
+                    {{ request.GET.date_range|title }}
+                    <i class="bi bi-x ms-1" onclick="removeFilter('date_range')"></i>
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.priority-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.priority-URGENT { background-color: #dc3545; }
+.priority-HIGH { background-color: #fd7e14; }
+.priority-NORMAL { background-color: #17a2b8; }
+.priority-LOW { background-color: #6c757d; }
+
+.filter-tags .badge {
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+.filter-tags .badge .bi-x {
+    opacity: 0.7;
+}
+
+.filter-tags .badge .bi-x:hover {
+    opacity: 1;
+}
+
+.form-check-label {
+    font-size: 0.875rem;
+}
+
+/* Custom scrollbar for multi-select */
+select[multiple] {
+    scrollbar-width: thin;
+    scrollbar-color: #dee2e6 #f8f9fa;
+}
+
+select[multiple]::-webkit-scrollbar {
+    width: 6px;
+}
+
+select[multiple]::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 3px;
+}
+
+select[multiple]::-webkit-scrollbar-thumb {
+    background: #dee2e6;
+    border-radius: 3px;
+}
+
+select[multiple]::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show/hide custom date range
+    const dateRangeSelect = document.getElementById('dateRange');
+    const customDateRange = document.getElementById('customDateRange');
+    
+    dateRangeSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customDateRange.style.display = 'block';
+        } else {
+            customDateRange.style.display = 'none';
+        }
+    });
+    
+    // Initialize custom date range visibility
+    if (dateRangeSelect.value === 'custom') {
+        customDateRange.style.display = 'block';
+    }
+});
+
+function applyFilters() {
+    const params = new URLSearchParams();
+    
+    // Search
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput.value.trim()) {
+        params.set('search', searchInput.value.trim());
+    }
+    
+    // Priority filters
+    const priorityFilters = document.querySelectorAll('.priority-filters input:checked');
+    if (priorityFilters.length > 0) {
+        const priorities = Array.from(priorityFilters).map(input => input.value);
+        params.set('priority', priorities.join(','));
+    }
+    
+    // Status filters
+    const statusFilters = document.querySelectorAll('.status-filters input:checked');
+    if (statusFilters.length > 0) {
+        const statuses = Array.from(statusFilters).map(input => input.value);
+        params.set('status', statuses.join(','));
+    }
+    
+    // Date range
+    const dateRange = document.getElementById('dateRange').value;
+    if (dateRange) {
+        params.set('date_range', dateRange);
+        
+        if (dateRange === 'custom') {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate) params.set('start_date', startDate);
+            if (endDate) params.set('end_date', endDate);
+        }
+    }
+    
+    // Audience filter
+    const audienceFilter = document.getElementById('audienceFilter');
+    if (audienceFilter) {
+        const selectedAudiences = Array.from(audienceFilter.selectedOptions)
+            .map(option => option.value)
+            .filter(value => value !== '');
+        
+        if (selectedAudiences.length > 0) {
+            params.set('audience', selectedAudiences.join(','));
+        }
+    }
+    
+    // Sort
+    const sortBy = document.getElementById('sortBy').value;
+    if (sortBy && sortBy !== '-created_at') { // Default value
+        params.set('sort', sortBy);
+    }
+    
+    // Navigate to filtered URL
+    const baseUrl = window.location.pathname;
+    const queryString = params.toString();
+    const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+    
+    window.location.href = url;
+}
+
+function resetFilters() {
+    // Clear all inputs
+    document.getElementById('searchInput').value = '';
+    
+    document.querySelectorAll('.priority-filters input').forEach(input => {
+        input.checked = false;
+    });
+    
+    document.querySelectorAll('.status-filters input').forEach(input => {
+        input.checked = false;
+    });
+    
+    document.getElementById('dateRange').value = '';
+    document.getElementById('customDateRange').style.display = 'none';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    
+    if (document.getElementById('audienceFilter')) {
+        document.getElementById('audienceFilter').selectedIndex = -1;
+    }
+    
+    document.getElementById('sortBy').value = '-created_at';
+    
+    // Navigate to base URL
+    window.location.href = window.location.pathname;
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    removeFilter('search');
+}
+
+function removeFilter(filterName) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(filterName);
+    window.location.href = url.toString();
+}
+
+function removePriorityFilter(priority) {
+    const currentPriorities = new URLSearchParams(window.location.search).get('priority') || '';
+    const priorities = currentPriorities.split(',').filter(p => p !== priority);
+    
+    const url = new URL(window.location.href);
+    if (priorities.length > 0) {
+        url.searchParams.set('priority', priorities.join(','));
+    } else {
+        url.searchParams.delete('priority');
+    }
+    window.location.href = url.toString();
+}
+
+function removeStatusFilter(status) {
+    const currentStatuses = new URLSearchParams(window.location.search).get('status') || '';
+    const statuses = currentStatuses.split(',').filter(s => s !== status);
+    
+    const url = new URL(window.location.href);
+    if (statuses.length > 0) {
+        url.searchParams.set('status', statuses.join(','));
+    } else {
+        url.searchParams.delete('status');
+    }
+    window.location.href = url.toString();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + F to focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        document.getElementById('searchInput').focus();
+    }
+    
+    // Escape to clear search
+    if (e.key === 'Escape') {
+        const searchInput = document.getElementById('searchInput');
+        if (document.activeElement === searchInput && searchInput.value) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+    }
+});
+</script>

@@ -79,19 +79,39 @@
                         <li>Updating the schedule instead of removing it</li>
                     </ul>
                     <div class="d-grid gap-2 d-md-flex">
+                        <!-- FIXED: Using timetable_manage instead of timetable_update -->
                         <a href="{% url 'timetable_manage' object.pk %}" class="btn btn-outline-primary me-md-2">
-                            <i class="bi bi-pencil me-1"></i> Edit Instead
+                            <i class="bi bi-pencil me-1"></i> Edit Schedule
                         </a>
-                        <form method="post" action="{% url 'timetable_update' object.pk %}" class="d-inline">
-                            {% csrf_token %}
-                            <input type="hidden" name="is_active" value="false">
-                            <button type="submit" class="btn btn-outline-warning">
-                                <i class="bi bi-eye-slash me-1"></i> Deactivate
-                            </button>
-                        </form>
+                        <!-- Simple deactivate button that redirects to manage page -->
+                        <a href="{% url 'timetable_manage' object.pk %}" class="btn btn-outline-warning">
+                            <i class="bi bi-eye-slash me-1"></i> Manage Status
+                        </a>
                     </div>
                 </div>
             </div>
+
+            <!-- Additional warning for active timetables -->
+            {% if object.is_active %}
+            <div class="card border-warning shadow-sm mt-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-circle me-2"></i>
+                        Active Timetable Warning
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">
+                        <strong>This timetable is currently active.</strong> Deleting it may affect:
+                    </p>
+                    <ul class="mt-2 mb-0">
+                        <li>Current class schedules</li>
+                        <li>Teacher assignments</li>
+                        <li>Student and parent access to timetable information</li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -101,12 +121,33 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Add extra confirmation for delete
-    const deleteForm = document.querySelector('form');
-    deleteForm.addEventListener('submit', function(e) {
-        if (!confirm('⚠️ FINAL WARNING: This will permanently delete ALL scheduled classes for this timetable. Are you absolutely sure?')) {
-            e.preventDefault();
-        }
-    });
+    const deleteForm = document.querySelector('form[method="post"]');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            const isActive = {{ object.is_active|yesno:"true,false" }};
+            let message = '⚠️ FINAL WARNING: This will permanently delete ALL scheduled classes for this timetable.';
+            
+            if (isActive) {
+                message += '\n\nThis timetable is currently ACTIVE. Deleting it may disrupt current schedules.';
+            }
+            
+            message += '\n\nAre you absolutely sure?';
+            
+            if (!confirm(message)) {
+                e.preventDefault();
+            }
+        });
+    }
+
+    // Add confirmation for deactivate button
+    const deactivateBtn = document.querySelector('.btn-outline-warning');
+    if (deactivateBtn) {
+        deactivateBtn.addEventListener('click', function(e) {
+            if (!confirm('You will be redirected to the timetable management page where you can deactivate this timetable. Continue?')) {
+                e.preventDefault();
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

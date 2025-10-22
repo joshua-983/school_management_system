@@ -1,0 +1,316 @@
+{% load humanize %}
+
+<div class="row g-3 mb-4">
+    <!-- Total Announcements -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title mb-1">{{ total_count|default:0|intcomma }}</h4>
+                        <p class="card-text mb-0">Total Announcements</p>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-megaphone fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="stat-trend mt-2">
+                    <small>
+                        <i class="bi bi-arrow-up-short"></i>
+                        {{ active_count|default:0 }} active
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Active Announcements -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title mb-1">{{ active_count|default:0|intcomma }}</h4>
+                        <p class="card-text mb-0">Active Now</p>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-eye fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="stat-trend mt-2">
+                    <small>
+                        <i class="bi bi-clock"></i>
+                        {{ today_count|default:0 }} today
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Urgent Announcements -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title mb-1">{{ urgent_count|default:0|intcomma }}</h4>
+                        <p class="card-text mb-0">Urgent Priority</p>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-exclamation-triangle fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="stat-trend mt-2">
+                    <small>
+                        {% with high_count=high_count|default:0 %}
+                        {{ high_count }} high priority
+                        {% endwith %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Today's Announcements -->
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="card-title mb-1">{{ today_count|default:0|intcomma }}</h4>
+                        <p class="card-text mb-0">Today</p>
+                    </div>
+                    <div class="stat-icon">
+                        <i class="bi bi-calendar-day fs-1 opacity-50"></i>
+                    </div>
+                </div>
+                <div class="stat-trend mt-2">
+                    <small>
+                        <i class="bi bi-calendar3"></i>
+                        {{ today|date:"M d, Y" }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Statistics Row -->
+<div class="row g-3">
+    <!-- Priority Distribution -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Priority Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div class="priority-distribution-chart">
+                    {% for priority in priority_stats %}
+                    <div class="priority-item d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <div class="d-flex align-items-center">
+                            <span class="priority-indicator priority-{{ priority.name }} me-3"></span>
+                            <span class="fw-semibold">{{ priority.name }}</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold text-dark">{{ priority.count }}</span>
+                            <small class="text-muted ms-1">
+                                ({{ priority.percentage }}%)
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Recent Activity</h6>
+            </div>
+            <div class="card-body">
+                <div class="recent-activity">
+                    {% for activity in recent_activity %}
+                    <div class="activity-item d-flex align-items-start py-2 border-bottom">
+                        <div class="activity-icon me-3">
+                            <i class="bi bi-{{ activity.icon }} text-{{ activity.color }}"></i>
+                        </div>
+                        <div class="activity-content flex-grow-1">
+                            <div class="fw-semibold">{{ activity.title }}</div>
+                            <small class="text-muted">{{ activity.description }}</small>
+                            <div class="text-muted extra-small">{{ activity.time|naturaltime }}</div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p class="mb-0">No recent activity</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">Quick Actions</h6>
+                        <p class="text-muted mb-0 small">Manage your announcements efficiently</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'create_announcement' %}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-plus-circle me-2"></i>New Announcement
+                        </a>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="refreshStats()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-card {
+    border: none;
+    border-radius: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.stat-icon {
+    opacity: 0.8;
+}
+
+.stat-trend {
+    opacity: 0.9;
+}
+
+.priority-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.priority-URGENT { background-color: #dc3545; }
+.priority-HIGH { background-color: #fd7e14; }
+.priority-NORMAL { background-color: #17a2b8; }
+.priority-LOW { background-color: #6c757d; }
+
+.priority-item:last-child {
+    border-bottom: none !important;
+}
+
+.activity-icon {
+    width: 32px;
+    height: 32px;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.extra-small {
+    font-size: 0.75rem;
+}
+
+/* Animation for stats refresh */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.refreshing {
+    animation: pulse 0.5s ease-in-out;
+}
+</style>
+
+<script>
+function refreshStats() {
+    const statCards = document.querySelectorAll('.stat-card');
+    const refreshBtn = event.target;
+    
+    // Add refreshing animation
+    statCards.forEach(card => {
+        card.classList.add('refreshing');
+    });
+    
+    // Update button state
+    const originalHTML = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Refreshing...';
+    refreshBtn.disabled = true;
+    
+    // Simulate API call - replace with actual API call
+    setTimeout(() => {
+        // Remove animation
+        statCards.forEach(card => {
+            card.classList.remove('refreshing');
+        });
+        
+        // Restore button
+        refreshBtn.innerHTML = originalHTML;
+        refreshBtn.disabled = false;
+        
+        // Show success message
+        showToast('Statistics updated successfully!', 'success');
+    }, 1000);
+}
+
+function showToast(message, type) {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0`;
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    // Add to toast container
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.appendChild(toast);
+    
+    // Initialize and show toast
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Remove toast after hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+
+// Auto-refresh stats every 5 minutes
+document.addEventListener('DOMContentLoaded', function() {
+    setInterval(refreshStats, 300000); // 5 minutes
+});
+</script>

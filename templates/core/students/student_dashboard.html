@@ -217,6 +217,62 @@
         opacity: 0.5;
     }
 
+    /* NEW: Fee status styles */
+    .fee-status-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+    }
+
+    .fee-status-card.paid {
+        border-left-color: #28a745;
+        background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+    }
+
+    .fee-status-card.partial {
+        border-left-color: #ffc107;
+        background: linear-gradient(135deg, #fffbf0 0%, #fff3cd 100%);
+    }
+
+    .fee-status-card.unpaid {
+        border-left-color: #dc3545;
+        background: linear-gradient(135deg, #fff5f5 0%, #ffe6e6 100%);
+    }
+
+    .fee-breakdown-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .fee-breakdown-item:last-child {
+        border-bottom: none;
+    }
+
+    .fee-amount {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+
+    .fee-status-badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    .payment-progress {
+        height: 8px;
+        border-radius: 10px;
+        background: #e9ecef;
+        overflow: hidden;
+    }
+
+    .payment-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 1s ease-in-out;
+    }
+
     /* Animation classes */
     .fade-in {
         animation: fadeIn 0.6s ease-in;
@@ -423,22 +479,27 @@
                 </div>
             </div>
             
+            <!-- IMPROVED FEE STATUS CARD -->
             <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
                 <div class="stats-card" style="background: var(--info-gradient);">
                     <div class="card-body">
                         <i class="fas fa-money-bill-wave stats-icon"></i>
                         <h5 class="card-title">Fee Status</h5>
                         <p class="stats-number">
-                            {% if fee_status == 'PAID' %}
+                            {% if fee_summary.status == 'PAID' %}
                                 <span class="badge bg-success">Paid</span>
-                            {% elif fee_status == 'PARTIAL' %}
+                            {% elif fee_summary.status == 'PARTIAL' %}
                                 <span class="badge bg-warning">Partial</span>
                             {% else %}
                                 <span class="badge bg-danger">Unpaid</span>
                             {% endif %}
                         </p>
                         <small class="opacity-80">
-                            {% if overdue_fees %}Overdue fees{% else %}Up to date{% endif %}
+                            {% if fee_summary.overdue_count > 0 %}
+                                {{ fee_summary.overdue_count }} overdue
+                            {% else %}
+                                {{ fee_summary.message }}
+                            {% endif %}
                         </small>
                     </div>
                 </div>
@@ -450,7 +511,7 @@
                         <i class="fas fa-calendar-check stats-icon"></i>
                         <h5 class="card-title">Attendance</h5>
                         <p class="stats-number">
-                            {% widthratio attendance_summary.present attendance_summary.total 100 %}%
+                            {{ attendance_percentage }}%
                         </p>
                         <small class="opacity-80">
                             {{ attendance_summary.present }}/{{ attendance_summary.total }} days
@@ -460,8 +521,164 @@
             </div>
         </div>
 
+        <!-- NEW: Detailed Fee Information Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card content-card fee-status-card {{ fee_summary.status|lower }} fade-in" style="animation-delay: 0.5s;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-money-bill-wave me-2"></i>
+                            Fee Summary
+                        </h5>
+                        <div>
+                            <span class="badge bg-{{ fee_summary.status_class }} me-2">
+                                <i class="fas {{ fee_summary.status_icon }} me-1"></i>
+                                {{ fee_summary.status }}
+                            </span>
+                            <a href="{% url 'student_fees' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-list me-1"></i>View Details
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        {% if fee_summary.has_fees %}
+                        <div class="row">
+                            <!-- Financial Summary -->
+                            <div class="col-md-4">
+                                <div class="text-center p-3">
+                                    <h3 class="text-primary mb-2">GH₵{{ fee_summary.total_payable|floatformat:2 }}</h3>
+                                    <p class="text-muted mb-0">Total Payable</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3">
+                                    <h3 class="text-success mb-2">GH₵{{ fee_summary.total_paid|floatformat:2 }}</h3>
+                                    <p class="text-muted mb-0">Total Paid</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-3">
+                                    <h3 class="text-{{ fee_summary.status_class }} mb-2">GH₵{{ fee_summary.total_balance|floatformat:2 }}</h3>
+                                    <p class="text-muted mb-0">Balance</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Payment Progress -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Payment Progress</span>
+                                <span>
+                                    {% if fee_summary.total_payable > 0 %}
+                                        {% widthratio fee_summary.total_paid fee_summary.total_payable 100 %}%
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="payment-progress">
+                                <div class="payment-progress-bar bg-{{ fee_summary.status_class }}" 
+                                     style="width: {% if fee_summary.total_payable > 0 %}{% widthratio fee_summary.total_paid fee_summary.total_payable 100 %}%{% else %}0%{% endif %}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Fee Status Breakdown -->
+                        <div class="row text-center">
+                            <div class="col-3">
+                                <div class="text-success">
+                                    <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                    <h5>{{ fee_status_counts.paid }}</h5>
+                                    <small>Paid</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="text-warning">
+                                    <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                                    <h5>{{ fee_status_counts.partial }}</h5>
+                                    <small>Partial</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="text-danger">
+                                    <i class="fas fa-times-circle fa-2x mb-2"></i>
+                                    <h5>{{ fee_status_counts.unpaid }}</h5>
+                                    <small>Unpaid</small>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="text-info">
+                                    <i class="fas fa-file-invoice-dollar fa-2x mb-2"></i>
+                                    <h5>{{ fee_status_counts.total }}</h5>
+                                    <small>Total</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Term Summary -->
+                        {% if current_term_summary.count > 0 %}
+                        <div class="mt-4 p-3 bg-light rounded">
+                            <h6 class="mb-3">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                Current Term Summary ({{ current_academic_year }} - Term {{ current_term.term }})
+                            </h6>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <strong>GH₵{{ current_term_summary.payable|floatformat:2 }}</strong>
+                                    <div class="small text-muted">Payable</div>
+                                </div>
+                                <div class="col-4">
+                                    <strong>GH₵{{ current_term_summary.paid|floatformat:2 }}</strong>
+                                    <div class="small text-muted">Paid</div>
+                                </div>
+                                <div class="col-4">
+                                    <strong class="text-{{ fee_summary.status_class }}">GH₵{{ current_term_summary.balance|floatformat:2 }}</strong>
+                                    <div class="small text-muted">Balance</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Recent Payments -->
+                        {% if recent_payments %}
+                        <div class="mt-4">
+                            <h6 class="mb-3">
+                                <i class="fas fa-history me-2"></i>
+                                Recent Payments
+                            </h6>
+                            <div class="list-group">
+                                {% for payment in recent_payments %}
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ payment.fee.category.name }}</strong>
+                                            <small class="d-block text-muted">{{ payment.payment_date|date:"M d, Y" }}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="text-success">+GH₵{{ payment.amount|floatformat:2 }}</span>
+                                            <div class="small text-muted">{{ payment.get_payment_method_display }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-money-bill-wave display-4 text-muted mb-3"></i>
+                            <h5 class="text-muted">No Fee Records</h5>
+                            <p class="text-muted">Your fee information will appear here once available.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Current Assignments - ENHANCED WITH CATEGORIES -->
-        <div class="card content-card fade-in" style="animation-delay: 0.5s;">
+        <div class="card content-card fade-in" style="animation-delay: 0.6s;">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-book-open me-2"></i>
@@ -854,7 +1071,7 @@
         <div class="row">
             <!-- Recent Grades -->
             <div class="col-lg-8">
-                <div class="card content-card fade-in" style="animation-delay: 0.6s;">
+                <div class="card content-card fade-in" style="animation-delay: 0.7s;">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-graduation-cap me-2"></i>
@@ -878,7 +1095,7 @@
                                 </thead>
                                 <tbody>
                                     {% for grade in recent_grades %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:7 }}0.1s">
+                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:8 }}0.1s">
                                         <td>
                                             <strong>{{ grade.subject.name }}</strong>
                                         </td>
@@ -938,7 +1155,7 @@
 
             <!-- Quick Actions -->
             <div class="col-lg-4">
-                <div class="card content-card fade-in" style="animation-delay: 0.7s;">
+                <div class="card content-card fade-in" style="animation-delay: 0.8s;">
                     <div class="card-header">
                         <h5 class="mb-0">
                             <i class="fas fa-bolt me-2"></i>
@@ -986,7 +1203,7 @@
 
                 <!-- Today's Timetable -->
                 {% if today_timetable %}
-                <div class="card content-card fade-in mt-4" style="animation-delay: 0.8s;">
+                <div class="card content-card fade-in mt-4" style="animation-delay: 0.9s;">
                     <div class="card-header">
                         <h5 class="mb-0">
                             <i class="fas fa-clock me-2"></i>
@@ -1085,7 +1302,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateCountdowns, 30000); // Update every 30 seconds
 
     // Animate progress bars
-    const progressBars = document.querySelectorAll('.progress-bar, .grade-progress-bar');
+    const progressBars = document.querySelectorAll('.progress-bar, .grade-progress-bar, .payment-progress-bar');
     progressBars.forEach(bar => {
         const width = bar.style.width;
         bar.style.width = '0';
@@ -1139,6 +1356,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.altKey && e.key === 'g') {
             e.preventDefault();
             window.location.href = "{% url 'student_grades' %}";
+        }
+        // Alt+F for fees
+        if (e.altKey && e.key === 'f') {
+            e.preventDefault();
+            window.location.href = "{% url 'student_fees' %}";
         }
         // Alt+S for first submit button
         if (e.altKey && e.key === 's') {

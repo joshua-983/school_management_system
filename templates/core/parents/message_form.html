@@ -3,59 +3,584 @@
 
 {% block title %}New Message - Parent Portal{% endblock %}
 
+{% block extra_css %}
+<style>
+.message-compose {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+}
+
+.message-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.message-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px 15px 0 0 !important;
+    color: white;
+}
+
+.form-control, .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 25px;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.recipient-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.character-count {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.character-count.warning {
+    color: #ffc107;
+}
+
+.character-count.danger {
+    color: #dc3545;
+}
+
+.attachment-preview {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 10px;
+    display: none;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    justify-content: between;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+.attachment-item:last-child {
+    margin-bottom: 0;
+}
+
+.recipient-info-card {
+    border-left: 4px solid #667eea;
+    background: #f8f9fa;
+}
+
+.empty-teachers {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+}
+
+.empty-teachers i {
+    font-size: 2rem;
+    color: #fdcb6e;
+    margin-bottom: 10px;
+}
+
+.priority-badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 20px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card">
-                <div class="card-header bg-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Compose Message</h5>
-                        <a href="{% url 'parent_message_list' %}" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-arrow-left me-1"></i>Back to Inbox
-                        </a>
+<div class="message-compose py-4">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10 col-xl-8">
+                <div class="card message-card">
+                    <div class="card-header message-header py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0">
+                                    <i class="bi bi-pencil-square me-2"></i>
+                                    {% if reply_to %}Reply to Message{% else %}Compose Message{% endif %}
+                                </h5>
+                                <small class="opacity-75">
+                                    {% if reply_to %}
+                                    Continue your conversation
+                                    {% else %}
+                                    Send a message to teachers or staff
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <a href="{% url 'parent_messages' %}" class="btn btn-light btn-sm">
+                                <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+                            </a>
+                        </div>
                     </div>
-                </div>
-                <div class="card-body">
-                    <form method="post">
-                        {% csrf_token %}
-                        
-                        <div class="mb-3">
-                            <label for="receiver" class="form-label">To:</label>
-                            <select class="form-select" id="receiver" name="receiver" required>
-                                <option value="">Select recipient...</option>
-                                {% for teacher in teachers %}
-                                <option value="{{ teacher.user.id }}">
-                                    {{ teacher.user.get_full_name }} - {{ teacher.get_full_name }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                    
+                    <div class="card-body p-4">
+                        <!-- Alert for empty teachers -->
+                        {% if not teachers %}
+                        <div class="empty-teachers mb-4">
+                            <i class="bi bi-person-x"></i>
+                            <h6 class="mb-2">No Teachers Available</h6>
+                            <p class="mb-0 text-muted">
+                                There are no teachers assigned to your children's classes. 
+                                Please contact the school administration if you need to send a message.
+                            </p>
                         </div>
+                        {% endif %}
 
-                        <div class="mb-3">
-                            <label for="subject" class="form-label">Subject:</label>
-                            <input type="text" class="form-control" id="subject" name="subject" required
-                                   placeholder="Enter message subject">
-                        </div>
+                        <form method="post" id="messageForm" enctype="multipart/form-data" {% if not teachers %}class="opacity-50"{% endif %}>
+                            {% csrf_token %}
+                            
+                            <!-- Recipient Selection -->
+                            <div class="mb-4">
+                                <label for="receiver" class="form-label fw-semibold">
+                                    <i class="bi bi-person me-1"></i>Recipient
+                                    {% if reply_to %}<span class="badge bg-info ms-1">Reply</span>{% endif %}
+                                </label>
+                                <select class="form-select form-select-lg" id="receiver" name="receiver" required {% if not teachers %}disabled{% endif %}>
+                                    <option value="">Select a teacher or staff member...</option>
+                                    {% for teacher in teachers %}
+                                    <option value="{{ teacher.user.id }}" 
+                                            data-email="{{ teacher.user.email }}"
+                                            data-subjects="{{ teacher.subjects.all|join:', ' }}"
+                                            {% if reply_to and reply_to.id == teacher.user.id %}selected{% endif %}>
+                                        {{ teacher.user.get_full_name }} 
+                                        {% if teacher.get_full_name and teacher.get_full_name != teacher.user.get_full_name %}
+                                        - {{ teacher.get_full_name }}
+                                        {% endif %}
+                                        {% if teacher.subjects.all %}
+                                        ({{ teacher.subjects.all|join:', ' }})
+                                        {% endif %}
+                                    </option>
+                                    {% empty %}
+                                    <option value="" disabled>No teachers available for your children's classes</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    {% if teachers %}
+                                    Select the teacher you want to message
+                                    {% else %}
+                                    No teachers available for selection
+                                    {% endif %}
+                                </div>
+                            </div>
 
-                        <div class="mb-3">
-                            <label for="message" class="form-label">Message:</label>
-                            <textarea class="form-control" id="message" name="message" rows="6" required
-                                      placeholder="Type your message here..."></textarea>
-                        </div>
+                            <!-- Recipient Info Card (Dynamic) -->
+                            <div class="card mb-4 recipient-info-card d-none" id="recipientInfo">
+                                <div class="card-body py-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="recipient-avatar" id="recipientAvatar">T</div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1" id="recipientName">Teacher Name</h6>
+                                            <p class="text-muted mb-0" id="recipientDetails">Subject details</p>
+                                            <small class="text-muted" id="recipientEmail"></small>
+                                        </div>
+                                        <div class="ms-3">
+                                            <span class="badge bg-primary" id="recipientType">Teacher</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                        <div class="d-flex justify-content-between">
-                            <button type="reset" class="btn btn-outline-secondary">
-                                <i class="bi bi-x-circle me-2"></i>Clear
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-send me-2"></i>Send Message
-                            </button>
+                            <!-- Subject -->
+                            <div class="mb-4">
+                                <label for="subject" class="form-label fw-semibold">
+                                    <i class="bi bi-chat-text me-1"></i>Subject
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="subject" name="subject" 
+                                       required placeholder="Enter message subject..." 
+                                       value="{% if form.subject.value %}{{ form.subject.value }}{% elif reply_to and request.GET.subject %}{{ request.GET.subject }}{% endif %}"
+                                       {% if not teachers %}disabled{% endif %}>
+                            </div>
+
+                            <!-- Message Body -->
+                            <div class="mb-4">
+                                <label for="message" class="form-label fw-semibold">
+                                    <i class="bi bi-chat-left-text me-1"></i>Message
+                                </label>
+                                <textarea class="form-control" id="message" name="message" rows="8" required
+                                          placeholder="Type your message here..." {% if not teachers %}disabled{% endif %}></textarea>
+                                <div class="character-count mt-2">
+                                    <span id="charCount">0</span> characters
+                                    <span class="ms-2 text-muted">•</span>
+                                    <span id="wordCount">0</span> words
+                                </div>
+                            </div>
+
+                            <!-- Priority Selection -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">
+                                    <i class="bi bi-flag me-1"></i>Priority
+                                </label>
+                                <div class="btn-group w-100" role="group" {% if not teachers %}style="pointer-events: none; opacity: 0.6;"{% endif %}>
+                                    <input type="radio" class="btn-check" name="priority" id="priorityLow" value="low" checked>
+                                    <label class="btn btn-outline-success" for="priorityLow">
+                                        <i class="bi bi-arrow-down-circle me-1"></i>Low
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="priority" id="priorityNormal" value="normal">
+                                    <label class="btn btn-outline-primary" for="priorityNormal">
+                                        <i class="bi bi-dash-circle me-1"></i>Normal
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="priority" id="priorityHigh" value="high">
+                                    <label class="btn btn-outline-warning" for="priorityHigh">
+                                        <i class="bi bi-exclamation-circle me-1"></i>High
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="priority" id="priorityUrgent" value="urgent">
+                                    <label class="btn btn-outline-danger" for="priorityUrgent">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Urgent
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Select message priority level
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                                <div>
+                                    <button type="reset" class="btn btn-outline-secondary me-2" id="resetBtn" {% if not teachers %}disabled{% endif %}>
+                                        <i class="bi bi-x-circle me-2"></i>Clear Form
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" id="saveDraftBtn" {% if not teachers %}disabled{% endif %}>
+                                        <i class="bi bi-file-earmark me-2"></i>Save Draft
+                                    </button>
+                                </div>
+                                <div>
+                                    <button type="submit" class="btn btn-primary px-4" id="submitBtn" {% if not teachers %}disabled{% endif %}>
+                                        <i class="bi bi-send me-2"></i>
+                                        {% if reply_to %}Send Reply{% else %}Send Message{% endif %}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Help Section -->
+                        {% if not teachers %}
+                        <div class="mt-4 p-3 bg-light rounded">
+                            <h6><i class="bi bi-question-circle me-2"></i>Need Help?</h6>
+                            <p class="mb-2">If you need to contact the school, please:</p>
+                            <ul class="mb-0">
+                                <li>Visit the school office in person</li>
+                                <li>Call the school administration</li>
+                                <li>Check if your children are properly enrolled in classes</li>
+                            </ul>
                         </div>
-                    </form>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messageForm = document.getElementById('messageForm');
+    const receiverSelect = document.getElementById('receiver');
+    const recipientInfo = document.getElementById('recipientInfo');
+    const recipientAvatar = document.getElementById('recipientAvatar');
+    const recipientName = document.getElementById('recipientName');
+    const recipientDetails = document.getElementById('recipientDetails');
+    const recipientEmail = document.getElementById('recipientEmail');
+    const recipientType = document.getElementById('recipientType');
+    const messageTextarea = document.getElementById('message');
+    const charCount = document.getElementById('charCount');
+    const wordCount = document.getElementById('wordCount');
+    const resetBtn = document.getElementById('resetBtn');
+    const saveDraftBtn = document.getElementById('saveDraftBtn');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Check if form is disabled (no teachers)
+    const isFormDisabled = messageForm.classList.contains('opacity-50');
+
+    // Character and word count for message
+    function updateCounts() {
+        const text = messageTextarea.value;
+        const charCountValue = text.length;
+        const wordCountValue = text.trim() ? text.trim().split(/\s+/).length : 0;
+        
+        charCount.textContent = charCountValue;
+        wordCount.textContent = wordCountValue;
+        
+        // Update character count color
+        charCount.className = 'character-count';
+        if (charCountValue > 1000) {
+            charCount.classList.add('warning');
+        }
+        if (charCountValue > 2000) {
+            charCount.classList.add('danger');
+        }
+    }
+
+    messageTextarea.addEventListener('input', updateCounts);
+
+    // Recipient selection handler
+    receiverSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        
+        if (this.value && this.value !== '') {
+            // Show recipient info card
+            recipientInfo.classList.remove('d-none');
+            
+            // Update recipient info
+            const fullName = selectedOption.text.split(' - ')[0];
+            const email = selectedOption.getAttribute('data-email') || 'No email available';
+            const subjects = selectedOption.getAttribute('data-subjects');
+            const isStaff = selectedOption.text.toLowerCase().includes('staff') || selectedOption.text.toLowerCase().includes('admin');
+            
+            recipientAvatar.textContent = fullName.charAt(0).toUpperCase();
+            recipientName.textContent = fullName;
+            recipientDetails.textContent = subjects || (isStaff ? 'School Staff' : 'General Teacher');
+            recipientEmail.textContent = email;
+            recipientType.textContent = isStaff ? 'Staff' : 'Teacher';
+            recipientType.className = `badge bg-${isStaff ? 'info' : 'success'}`;
+            
+        } else {
+            recipientInfo.classList.add('d-none');
+        }
+    });
+
+    // Form reset handler
+    resetBtn.addEventListener('click', function() {
+        if (confirm('Are you sure you want to clear the form? All entered data will be lost.')) {
+            recipientInfo.classList.add('d-none');
+            updateCounts();
+            // Reset character count display
+            charCount.className = 'character-count';
+        }
+    });
+
+    // Save draft functionality
+    saveDraftBtn.addEventListener('click', function() {
+        const formData = {
+            receiver: receiverSelect.value,
+            subject: document.getElementById('subject').value,
+            message: messageTextarea.value,
+            priority: document.querySelector('input[name="priority"]:checked').value,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem('messageDraft', JSON.stringify(formData));
+        
+        // Show success feedback
+        showAlert('Draft saved successfully!', 'success');
+        this.innerHTML = '<i class="bi bi-check-circle me-2"></i>Draft Saved';
+        setTimeout(() => {
+            this.innerHTML = '<i class="bi bi-file-earmark me-2"></i>Save Draft';
+        }, 2000);
+    });
+
+    // Load draft if exists
+    const savedDraft = localStorage.getItem('messageDraft');
+    if (savedDraft && !isFormDisabled) {
+        const draft = JSON.parse(savedDraft);
+        if (confirm('You have a saved draft. Would you like to load it?')) {
+            receiverSelect.value = draft.receiver;
+            document.getElementById('subject').value = draft.subject;
+            messageTextarea.value = draft.message;
+            
+            // Trigger change event to update recipient info
+            if (draft.receiver) {
+                receiverSelect.dispatchEvent(new Event('change'));
+            }
+            
+            // Update counts
+            updateCounts();
+            
+            // Set priority
+            const priorityRadio = document.querySelector(`input[name="priority"][value="${draft.priority}"]`);
+            if (priorityRadio) priorityRadio.checked = true;
+        }
+    }
+
+    // Form submission handler
+    messageForm.addEventListener('submit', function(e) {
+        if (isFormDisabled) {
+            e.preventDefault();
+            showAlert('Cannot send message: No teachers available for your children\'s classes.', 'danger');
+            return;
+        }
+
+        e.preventDefault();
+        
+        // Validate form
+        if (!receiverSelect.value) {
+            showAlert('Please select a recipient', 'warning');
+            receiverSelect.focus();
+            return;
+        }
+        
+        const subject = document.getElementById('subject').value.trim();
+        if (!subject) {
+            showAlert('Please enter a subject', 'warning');
+            document.getElementById('subject').focus();
+            return;
+        }
+        
+        const message = messageTextarea.value.trim();
+        if (!message) {
+            showAlert('Please enter a message', 'warning');
+            messageTextarea.focus();
+            return;
+        }
+
+        if (message.length < 10) {
+            showAlert('Please write a more detailed message (at least 10 characters)', 'warning');
+            messageTextarea.focus();
+            return;
+        }
+
+        // Show loading state
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="loading-spinner me-2"></span>Sending...';
+        submitBtn.disabled = true;
+
+        // Clear draft on successful send
+        localStorage.removeItem('messageDraft');
+
+        // Submit the form after a brief delay to show loading state
+        setTimeout(() => {
+            this.submit();
+        }, 500);
+    });
+
+    // Auto-save draft every 30 seconds
+    if (!isFormDisabled) {
+        setInterval(() => {
+            if (messageTextarea.value.trim() || document.getElementById('subject').value.trim()) {
+                const btnText = saveDraftBtn.innerHTML;
+                saveDraftBtn.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Saving...';
+                setTimeout(() => {
+                    saveDraftBtn.innerHTML = btnText;
+                }, 1000);
+                // Actually save the draft
+                saveDraftBtn.click();
+            }
+        }, 30000);
+    }
+
+    // Helper function to show alerts
+    function showAlert(message, type) {
+        // Remove existing alerts
+        document.querySelectorAll('.alert-dismissible').forEach(alert => {
+            alert.remove();
+        });
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+        
+        // Auto-remove after 5 seconds for success, 8 seconds for warnings/errors
+        const removeTime = type === 'success' ? 5000 : 8000;
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, removeTime);
+    }
+
+    // Initialize from URL parameters for replies
+    const urlParams = new URLSearchParams(window.location.search);
+    const replyTo = urlParams.get('reply_to');
+    if (replyTo && !isFormDisabled) {
+        // The view should have pre-selected the receiver, but we trigger the change event
+        setTimeout(() => {
+            if (receiverSelect.value === replyTo) {
+                receiverSelect.dispatchEvent(new Event('change'));
+            }
+        }, 100);
+    }
+
+    // Initialize counts on page load
+    updateCounts();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (isFormDisabled) return;
+
+        // Ctrl + S to save draft
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            saveDraftBtn.click();
+        }
+        // Ctrl + Enter to submit
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            submitBtn.click();
+        }
+    });
+
+    // Show keyboard shortcuts help on first visit
+    if (!localStorage.getItem('messageShortcutsShown')) {
+        setTimeout(() => {
+            if (!isFormDisabled) {
+                showAlert('Tip: Use Ctrl+S to save draft, Ctrl+Enter to send message', 'info');
+                localStorage.setItem('messageShortcutsShown', 'true');
+            }
+        }, 2000);
+    }
+});
+</script>
 {% endblock %}

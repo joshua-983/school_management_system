@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Security Events{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Security Events</h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'home' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Security Event Log</h6>
+        </div>
+        <div class="card-body">
+            {% if security_events %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="securityEventsTable">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event Type</th>
+                                <th>User</th>
+                                <th>IP Address</th>
+                                <th>Description</th>
+                                <th>Severity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in security_events %}
+                            <tr class="{% if event.severity == 'high' %}table-danger{% elif event.severity == 'medium' %}table-warning{% elif event.severity == 'low' %}table-info{% endif %}">
+                                <td>{{ event.timestamp|date:"M d, Y H:i:s" }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if event.event_type == 'login_success' %}bg-success
+                                        {% elif event.event_type == 'login_failed' %}bg-danger
+                                        {% elif event.event_type == 'password_change' %}bg-info
+                                        {% elif event.event_type == 'user_created' %}bg-success
+                                        {% elif event.event_type == 'user_deleted' %}bg-danger
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ event.get_event_type_display|default:event.event_type }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if event.user %}
+                                        {{ event.user.get_full_name|default:event.user.username }}
+                                    {% else %}
+                                        <em>System</em>
+                                    {% endif %}
+                                </td>
+                                <td>{{ event.ip_address|default:"-" }}</td>
+                                <td>{{ event.description }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if event.severity == 'high' %}bg-danger
+                                        {% elif event.severity == 'medium' %}bg-warning
+                                        {% elif event.severity == 'low' %}bg-info
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ event.get_severity_display|default:event.severity }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <div class="text-muted">
+                        Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                    </div>
+                    <nav>
+                        <ul class="pagination mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                            </li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                                {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-shield-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No security events found</h5>
+                    <p class="text-muted">No security events have been logged yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Add search functionality
+    $('#securityEventsTable').DataTable({
+        pageLength: 25,
+        order: [[0, 'desc']], // Sort by timestamp descending
+        dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+    });
+});
+</script>
+{% endblock %}
