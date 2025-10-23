@@ -837,58 +837,9 @@
             // If href is '#' or empty, just let the dropdown close (default behavior)
         }
 
-        // Announcement Banner Functions
-        function loadActiveAnnouncements() {
-            fetch('/announcements/active/')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.announcements && data.announcements.length > 0) {
-                        // Show the first announcement
-                        showAnnouncement(data.announcements[0]);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading announcements:', error);
-                });
-        }
-
-        function showAnnouncement(announcement) {
-            const banner = document.querySelector('.announcement-alert');
-            banner.style.display = 'flex';
-            banner.setAttribute('data-priority', announcement.priority);
-            banner.setAttribute('data-announcement-id', announcement.id);
-            
-            banner.querySelector('.alert-title').textContent = announcement.title + ':';
-            banner.querySelector('.alert-message').textContent = announcement.message;
-        }
-
-        function dismissAnnouncement(button) {
-            const announcementEl = button.closest('.announcement-alert');
-            const announcementId = announcementEl.getAttribute('data-announcement-id');
-            
-            // Hide immediately
-            announcementEl.style.display = 'none';
-            
-            // Send dismiss request to server
-            fetch(`/announcements/${announcementId}/dismiss/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    console.error('Failed to dismiss announcement');
-                }
-            })
-            .catch(error => {
-                console.error('Error dismissing announcement:', error);
-            });
-        }
-
-        function getCookie(name) {
+        // Get CSRF Token properly
+        function getCSRFToken() {
+            const name = 'csrftoken';
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');
@@ -903,9 +854,128 @@
             return cookieValue;
         }
 
-        // WebSocket handling for real-time announcements
-        // This would connect to your WebSocket endpoint
-        function connectToAnnouncementWebSocket() {
+        // Announcement Banner Functions
+        function loadActiveAnnouncements() {
+            fetch('/announcements/active/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.announcements && data.announcements.length > 0) {
+                        // Show the first announcement
+                        showAnnouncement(data.announcements[0]);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading announcements:', error);
+                });
+        }
+
+        function showAnnouncement(announcement) {
+            const banner = document.querySelector('.announcement-alert');
+            if (!banner) return;
+            
+            banner.style.display = 'flex';
+            banner.setAttribute('data-priority', announcement.priority);
+            banner.setAttribute('data-announcement-id', announcement.id);
+            
+            const alertTitle = banner.querySelector('.alert-title');
+            const alertMessage = banner.querySelector('.alert-message');
+            
+            if (alertTitle) alertTitle.textContent = announcement.title + ':';
+            if (alertMessage) alertMessage.textContent = announcement.message;
+        }
+
+        function dismissAnnouncement(button) {
+            const announcementEl = button.closest('.announcement-alert');
+            if (!announcementEl) return;
+            
+            const announcementId = announcementEl.getAttribute('data-announcement-id');
+            if (!announcementId) return;
+            
+            // Hide immediately
+            announcementEl.style.display = 'none';
+            
+            // Get CSRF token
+            const csrfToken = getCSRFToken();
+            if (!csrfToken) {
+                console.error('CSRF token not found');
+                return;
+            }
+            
+            // Send dismiss request to server
+            fetch(`/announcements/${announcementId}/dismiss/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Failed to dismiss announcement');
+                    // Show the announcement again if dismissal failed
+                    announcementEl.style.display = 'flex';
+                }
+            })
+            .catch(error => {
+                console.error('Error dismissing announcement:', error);
+                // Show the announcement again if dismissal failed
+                announcementEl.style.display = 'flex';
+            });
+        }
+
+        // Mark notification as read when clicked
+        function markNotificationAsRead(notificationId) {
+            const csrfToken = getCSRFToken();
+            if (!csrfToken) return;
+            
+            fetch(`/notifications/${notificationId}/mark-read/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update notification count in UI
+                    updateNotificationCount();
+                }
+            })
+            .catch(error => {
+                console.error('Error marking notification as read:', error);
+            });
+        }
+
+        // Update notification count in the UI
+        function updateNotificationCount() {
+            // This would typically be handled by WebSocket updates
+            // For now, we'll reload the page to get updated counts
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+
+        // WebSocket handling for real-time announcements and notifications
+        function connectToWebSocket() {
             // Replace with your actual WebSocket URL
             const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
             const wsUrl = `${wsScheme}://${window.location.host}/ws/notifications/`;
@@ -913,35 +983,115 @@
             try {
                 const ws = new WebSocket(wsUrl);
                 
+                ws.onopen = function() {
+                    console.log('WebSocket connection established');
+                };
+                
                 ws.onmessage = function(event) {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'announcement') {
-                        showAnnouncement(data.announcement);
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'announcement') {
+                            showAnnouncement(data.announcement);
+                        } else if (data.type === 'notification_update') {
+                            handleNotificationUpdate(data);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
                     }
                 };
                 
-                ws.onclose = function() {
+                ws.onclose = function(event) {
+                    console.log('WebSocket connection closed:', event.code, event.reason);
                     // Attempt to reconnect after 5 seconds
-                    setTimeout(connectToAnnouncementWebSocket, 5000);
+                    setTimeout(connectToWebSocket, 5000);
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
                 };
                 
                 return ws;
             } catch (error) {
                 console.error('WebSocket connection failed:', error);
                 // Retry connection after 10 seconds
-                setTimeout(connectToAnnouncementWebSocket, 10000);
+                setTimeout(connectToWebSocket, 10000);
             }
+        }
+
+        // Handle notification updates from WebSocket
+        function handleNotificationUpdate(data) {
+            // Update notification badge count
+            const badge = document.querySelector('.notification-badge');
+            if (badge) {
+                if (data.unread_count > 0) {
+                    badge.textContent = data.unread_count;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+            
+            // If it's a new notification, show a toast or update the dropdown
+            if (data.action === 'new_notification') {
+                showNewNotificationToast(data);
+            }
+        }
+
+        // Show toast for new notifications
+        function showNewNotificationToast(data) {
+            // Create a toast notification
+            const toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                // Create toast container if it doesn't exist
+                const container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'toast-container position-fixed top-0 end-0 p-3';
+                container.style.zIndex = '9999';
+                document.body.appendChild(container);
+            }
+            
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <i class="bi bi-bell-fill text-primary me-2"></i>
+                        <strong class="me-auto">New Notification</strong>
+                        <small class="text-muted">just now</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        <strong>${data.notification_title}</strong><br>
+                        ${data.notification_message}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
+            
+            // Show the toast
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            // Remove toast from DOM after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function () {
+                toastElement.remove();
+            });
         }
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Load announcements
+            console.log('Initializing school management system...');
+            
+            // Load active announcements
             loadActiveAnnouncements();
             
-            // Connect to WebSocket for real-time announcements
+            // Connect to WebSocket for real-time updates
             // Uncomment when WebSocket is set up
-            // connectToAnnouncementWebSocket();
+            // connectToWebSocket();
             
+            // Mobile sidebar handling
             if (window.innerWidth < 992) {
                 const navLinks = document.querySelectorAll('.nav-link');
                 navLinks.forEach(link => {
@@ -961,7 +1111,7 @@
             
             // Auto-dismiss alerts after 5 seconds
             setTimeout(function() {
-                var alerts = document.querySelectorAll('.alert');
+                var alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
                 alerts.forEach(function(alert) {
                     var bsAlert = new bootstrap.Alert(alert);
                     bsAlert.close();
@@ -972,7 +1122,7 @@
             const currentPath = window.location.pathname;
             const navLinks = document.querySelectorAll('.nav-link');
             navLinks.forEach(link => {
-                if (link.href.includes(currentPath) && currentPath !== '/') {
+                if (link.href && link.href.includes(currentPath) && currentPath !== '/') {
                     link.classList.add('active');
                     // Expand parent menu if exists
                     const parentMenu = link.closest('.sub-menu');
@@ -986,21 +1136,61 @@
                 }
             });
 
-            // Alternative notification click handler for better compatibility
+            // Enhanced notification click handler
             document.querySelectorAll('.dropdown-notifications .dropdown-item').forEach(link => {
                 link.addEventListener('click', function(e) {
                     const href = this.getAttribute('href');
+                    const notificationId = this.getAttribute('data-notification-id');
+                    
+                    if (notificationId) {
+                        markNotificationAsRead(notificationId);
+                    }
+                    
                     if (href && href !== '#') {
                         // Close dropdown for valid links
                         const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationsMenu'));
                         if (dropdown) {
                             dropdown.hide();
                         }
+                        
+                        // Navigate after a short delay
+                        setTimeout(() => {
+                            window.location.href = href;
+                        }, 100);
                     }
                 });
             });
+
+            // Add notification IDs to dropdown items for better handling
+            document.querySelectorAll('.dropdown-notifications .dropdown-item').forEach((item, index) => {
+                const notificationId = item.getAttribute('href')?.split('/').filter(Boolean).pop();
+                if (notificationId && !isNaN(notificationId)) {
+                    item.setAttribute('data-notification-id', notificationId);
+                }
+            });
+
+            // Debug: Log notification data
+            console.log('Unread notifications:', {{ unread_notifications_count }});
+            console.log('Recent notifications:', {{ recent_notifications|length }});
+        });
+
+        // Global error handler
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+        });
+
+        // Handle page visibility changes (for real-time updates)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // Page became visible, refresh notifications
+                loadActiveAnnouncements();
+            }
         });
     </script>
+
+    <!-- Toast container for notifications -->
+    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

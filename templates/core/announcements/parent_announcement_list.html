@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Announcements - Parent Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Announcements</h1>
+                <div class="text-muted">
+                    <small>For your children's classes</small>
+                </div>
+            </div>
+
+            {% if children %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Showing announcements for: 
+                {% for child in children %}
+                    <span class="badge bg-primary ms-2">{{ child.get_full_name }} - {{ child.get_class_level_display }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if announcements %}
+            <div class="row">
+                {% for announcement in announcements %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card announcement-card h-100 {% if announcement.priority == 'URGENT' %}border-danger{% elif announcement.priority == 'HIGH' %}border-warning{% endif %}">
+                        <div class="card-header {% if announcement.priority == 'URGENT' %}bg-danger text-white{% elif announcement.priority == 'HIGH' %}bg-warning{% else %}bg-primary text-white{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">{{ announcement.title }}</h6>
+                                <span class="badge {% if announcement.priority == 'URGENT' %}bg-light text-dark{% else %}bg-dark{% endif %}">
+                                    {{ announcement.get_priority_display }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">{{ announcement.message|truncatewords:30 }}</p>
+                            <div class="mt-auto">
+                                <small class="text-muted">
+                                    By {{ announcement.created_by.get_full_name }}<br>
+                                    {{ announcement.created_at|date:"M d, Y" }}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-megaphone display-1 text-muted"></i>
+                <h3 class="text-muted mt-3">No Announcements</h3>
+                <p class="text-muted">There are no announcements for your children's classes at this time.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

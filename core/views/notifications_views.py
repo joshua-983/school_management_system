@@ -11,7 +11,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import logging
 
-from core.models import Notification
+from core.models import Notification, Announcement, UserAnnouncementView
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,6 @@ class NotificationListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Add active announcements to context
-        from core.models import Announcement, UserAnnouncementView
         announcements = Announcement.objects.filter(
             is_active=True,
             start_date__lte=timezone.now(),
@@ -114,7 +113,7 @@ def mark_notification_read(request, pk):
                 {
                     'type': 'notification_update',
                     'action': 'single_read',
-                    'unread_count': get_unread_count(request.user)
+                    'unread_count': Notification.get_unread_count_for_user(request.user)
                 }
             )
         except Exception as e:
@@ -125,22 +124,20 @@ def mark_notification_read(request, pk):
         return JsonResponse({'status': 'error'}, status=404)
 
 # Notification creation functions
-def create_notification(recipient, title, message, notification_type="INFO", link=None):
+def create_notification(recipient, title, message, notification_type="INFO", link=None, related_object=None):
     """
     Create a notification and send it via WebSocket
     """
     try:
-        # Create the notification in database
-        notification = Notification.objects.create(
+        # Use the Notification class method to create notification
+        notification = Notification.create_notification(
             recipient=recipient,
             title=title,
             message=message,
             notification_type=notification_type,
-            link=link
+            link=link,
+            related_object=related_object
         )
-        
-        # Send WebSocket update
-        send_ws_notification_update(recipient)
         
         logger.info(f"Notification created for {recipient.username}: {title}")
         return notification
@@ -160,7 +157,7 @@ def send_ws_notification_update(user):
             {
                 'type': 'notification_update',
                 'action': 'new_notification',
-                'unread_count': get_unread_count(user)
+                'unread_count': Notification.get_unread_count_for_user(user)
             }
         )
     except Exception as e:
@@ -168,7 +165,7 @@ def send_ws_notification_update(user):
 
 def get_unread_count(user):
     """Get unread notification count for a user"""
-    return Notification.objects.filter(recipient=user, is_read=False).count()
+    return Notification.get_unread_count_for_user(user)
 
 def send_assignment_notification(assignment):
     """
@@ -182,15 +179,17 @@ def send_assignment_notification(assignment):
         
         notification_count = 0
         for student in students:
-            # Create notification for each student
-            create_notification(
+            # Create notification for each student using the class method
+            notification = Notification.create_notification(
                 recipient=student.user,
                 title="New Assignment Created",
                 message=f"New assignment '{assignment.title}' has been created for {assignment.subject.name}. Due date: {assignment.due_date.strftime('%b %d, %Y at %I:%M %p')}",
                 notification_type="ASSIGNMENT",
-                link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+                related_object=assignment
             )
-            notification_count += 1
+            if notification:
+                notification_count += 1
         
         logger.info(f"Assignment notifications sent to {notification_count} students for assignment '{assignment.title}'")
         return notification_count
@@ -212,23 +211,27 @@ def send_assignment_update_notification(assignment, old_due_date=None):
         for student in students:
             if old_due_date:
                 # Due date change notification
-                create_notification(
+                notification = Notification.create_notification(
                     recipient=student.user,
                     title="Assignment Due Date Updated",
                     message=f"Due date for '{assignment.title}' has been changed from {old_due_date.strftime('%b %d, %Y')} to {assignment.due_date.strftime('%b %d, %Y at %I:%M %p')}",
                     notification_type="ASSIGNMENT",
-                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+                    related_object=assignment
                 )
             else:
                 # General assignment update notification
-                create_notification(
+                notification = Notification.create_notification(
                     recipient=student.user,
                     title="Assignment Updated",
                     message=f"Assignment '{assignment.title}' has been updated. Please check for changes.",
                     notification_type="ASSIGNMENT",
-                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+                    link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+                    related_object=assignment
                 )
-            notification_count += 1
+            
+            if notification:
+                notification_count += 1
         
         logger.info(f"Assignment update notifications sent to {notification_count} students for assignment '{assignment.title}'")
         return notification_count
@@ -245,17 +248,96 @@ def send_grading_notification(student_assignment):
         assignment = student_assignment.assignment
         student = student_assignment.student
         
-        create_notification(
+        # Calculate percentage
+        percentage = (student_assignment.score / assignment.max_score) * 100
+        
+        # Performance message
+        if percentage >= 80:
+            performance_msg = "Excellent work!"
+        elif percentage >= 70:
+            performance_msg = "Good job!"
+        elif percentage >= 50:
+            performance_msg = "Satisfactory performance."
+        else:
+            performance_msg = "Needs improvement."
+        
+        notification = Notification.create_notification(
             recipient=student.user,
             title="Assignment Graded",
-            message=f"Your assignment '{assignment.title}' has been graded. Score: {student_assignment.score}/{assignment.max_score}",
+            message=(
+                f"Your assignment '{assignment.title}' has been graded. "
+                f"Score: {student_assignment.score}/{assignment.max_score} ({percentage:.1f}%). "
+                f"{performance_msg}"
+            ),
             notification_type="GRADE",
-            link=reverse('assignment_detail', kwargs={'pk': assignment.pk})
+            link=reverse('assignment_detail', kwargs={'pk': assignment.pk}),
+            related_object=student_assignment
         )
         
         logger.info(f"Grading notification sent to {student.user.username} for assignment '{assignment.title}'")
-        return True
+        return notification is not None
         
     except Exception as e:
         logger.error(f"Failed to send grading notification: {str(e)}")
         return False
+
+def create_announcement_notification(announcement):
+    """
+    Create notifications for all relevant users about a new announcement
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Get target users based on announcement settings
+        target_class_levels = announcement.get_target_class_levels()
+        
+        if target_class_levels:
+            # Specific classes - get students in those classes
+            student_users = User.objects.filter(
+                student__class_level__in=target_class_levels,
+                is_active=True
+            )
+            
+            # Get parents of students in those classes
+            parent_users = User.objects.filter(
+                parentguardian__students__class_level__in=target_class_levels,
+                is_active=True
+            ).distinct()
+            
+            # Include teachers/staff
+            teacher_users = User.objects.filter(
+                teacher__isnull=False,
+                is_active=True
+            )
+            
+            staff_users = User.objects.filter(
+                is_staff=True,
+                is_active=True
+            )
+            
+            # Combine all users
+            target_users = student_users.union(parent_users).union(teacher_users).union(staff_users)
+        else:
+            # School-wide announcement - send to all active users
+            target_users = User.objects.filter(is_active=True)
+        
+        notification_count = 0
+        for user in target_users:
+            notification = Notification.create_notification(
+                recipient=user,
+                title=f"New Announcement: {announcement.title}",
+                message=announcement.message[:100] + "..." if len(announcement.message) > 100 else announcement.message,
+                notification_type="GENERAL",
+                link=reverse('announcement_list'),
+                related_object=announcement
+            )
+            if notification:
+                notification_count += 1
+        
+        logger.info(f"Announcement notifications sent to {notification_count} users: {announcement.title}")
+        return notification_count
+        
+    except Exception as e:
+        logger.error(f"Failed to send announcement notifications: {str(e)}")
+        return 0

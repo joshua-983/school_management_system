@@ -210,7 +210,7 @@
                     <h1 class="h3 mb-2">Announcements</h1>
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb">
-                            <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="/">Home</a></li>
                             <li class="breadcrumb-item active">Announcements</li>
                         </ol>
                     </nav>
@@ -228,7 +228,7 @@
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="stats-card">
-                <h3 class="stats-number">{{ announcements.count }}</h3>
+                <h3 class="stats-number">{{ total_count }}</h3>
                 <p class="stats-label">Total Announcements</p>
             </div>
         </div>
@@ -340,13 +340,13 @@
                                 {{ announcement.message }}
                             </div>
 
-                            {% if announcement.target_audience.exists %}
+                            {% if announcement.target_class_levels %}
                             <div class="mt-3">
                                 <small class="text-muted">
                                     <i class="fas fa-users me-1"></i>
-                                    Target: 
-                                    {% for class in announcement.target_audience.all %}
-                                        <span class="badge bg-light text-dark me-1">{{ class.name }}</span>
+                                    Target Classes: 
+                                    {% for class_level in announcement.get_target_class_levels %}
+                                        <span class="badge bg-light text-dark me-1">{{ class_level }}</span>
                                     {% endfor %}
                                 </small>
                             </div>
@@ -358,7 +358,7 @@
                                     {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
                                 </span>
                                 <span class="badge bg-info">
-                                    Views: {{ announcement.usernouncementview_set.count }}
+                                    Views: {{ announcement.userannouncementview_set.count }}
                                 </span>
                             </div>
                             {% endif %}
@@ -397,7 +397,7 @@
                     <ul class="pagination justify-content-center">
                         {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
                         </li>
                         {% endif %}
 
@@ -406,16 +406,16 @@
                             <li class="page-item active">
                                 <span class="page-link">{{ num }}</span>
                             </li>
-                            {% else %}
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
                             </li>
                             {% endif %}
                         {% endfor %}
 
                         {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
                         </li>
                         {% endif %}
                     </ul>
@@ -471,6 +471,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function filterAnnouncements(filter, searchTerm = '') {
+        let hasVisibleCards = false;
+        
         announcements.forEach(card => {
             const priority = card.getAttribute('data-priority');
             const status = card.getAttribute('data-status');
@@ -499,8 +501,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show/hide card
             if (show) {
                 card.style.display = 'block';
-                // Add fade-in animation
                 card.classList.add('fade-in');
+                hasVisibleCards = true;
             } else {
                 card.style.display = 'none';
                 card.classList.remove('fade-in');
@@ -508,12 +510,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Show empty state if no cards visible
-        const visibleCards = document.querySelectorAll('.announcement-card[style="display: block"]');
-        const emptyState = document.querySelector('.empty-state');
         const announcementsContainer = document.getElementById('announcementsContainer');
+        const existingEmptyState = document.querySelector('.empty-state');
         
-        if (visibleCards.length === 0 && announcementsContainer) {
-            if (!emptyState) {
+        if (!hasVisibleCards && announcementsContainer) {
+            if (!existingEmptyState || !existingEmptyState.querySelector('h3').textContent.includes('Found')) {
+                // Remove any existing empty state
+                if (existingEmptyState) {
+                    existingEmptyState.remove();
+                }
+                
+                // Create no results empty state
                 const noResultsHtml = `
                     <div class="empty-state">
                         <i class="fas fa-search"></i>
@@ -526,84 +533,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
                 announcementsContainer.innerHTML = noResultsHtml;
             }
-        } else if (emptyState && visibleCards.length > 0) {
-            emptyState.remove();
+        } else if (existingEmptyState && existingEmptyState.querySelector('h3').textContent.includes('Found')) {
+            // Remove no results empty state if we have visible cards
+            existingEmptyState.remove();
         }
     }
     
     // Auto-dismiss new announcements after 5 seconds (for banner)
     setTimeout(() => {
-        const newBadges = document.querySelectorAll('.badge.bg-success:contains("New")');
+        const newBadges = document.querySelectorAll('.badge.bg-success');
         newBadges.forEach(badge => {
-            badge.style.opacity = '0.6';
+            if (badge.textContent.trim() === 'New') {
+                badge.style.opacity = '0.6';
+            }
         });
     }, 5000);
-    
-    // Real-time updates via WebSocket
-    function connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/notifications/`;
-        
-        try {
-            const socket = new WebSocket(wsUrl);
-            
-            socket.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'new_announcement') {
-                    showNewAnnouncementToast(data.announcement);
-                }
-            };
-            
-            socket.onclose = function() {
-                // Attempt to reconnect after 5 seconds
-                setTimeout(connectWebSocket, 5000);
-            };
-            
-        } catch (error) {
-            console.error('WebSocket connection failed:', error);
-        }
-    }
-    
-    function showNewAnnouncementToast(announcement) {
-        // Create toast notification
-        const toastHtml = `
-            <div class="toast align-items-center text-white bg-${announcement.priority === 'URGENT' ? 'danger' : 'primary'} border-0" role="alert">
-                <div class="d-flex">
-                    <div class="toast-body">
-                        <strong>${announcement.title}</strong><br>
-                        ${announcement.message.substring(0, 100)}...
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                </div>
-            </div>
-        `;
-        
-        const toastContainer = document.querySelector('.toast-container');
-        if (!toastContainer) {
-            const container = document.createElement('div');
-            container.className = 'toast-container position-fixed top-0 end-0 p-3';
-            container.style.zIndex = '9999';
-            document.body.appendChild(container);
-        }
-        
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = toastHtml;
-        const toastElement = tempDiv.firstElementChild;
-        
-        document.querySelector('.toast-container').appendChild(toastElement);
-        
-        const toast = new bootstrap.Toast(toastElement);
-        toast.show();
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            toast.hide();
-        }, 5000);
-    }
-    
-    // Initialize WebSocket connection
-    connectWebSocket();
     
     // Add pulse animation to urgent announcements
     document.querySelectorAll('.announcement-card.urgent').forEach(card => {
@@ -620,6 +564,8 @@ function resetFilters() {
         }
     });
     document.getElementById('searchInput').value = '';
+    
+    // Show all announcements
     document.querySelectorAll('.announcement-card').forEach(card => {
         card.style.display = 'block';
         card.classList.add('fade-in');
@@ -627,27 +573,12 @@ function resetFilters() {
     
     // Remove any custom empty state
     const emptyState = document.querySelector('.empty-state');
-    if (emptyState && emptyState.querySelector('h3').textContent === 'No Announcements Found') {
+    if (emptyState && emptyState.querySelector('h3').textContent.includes('Found')) {
         emptyState.remove();
     }
-}
-
-// Helper function for contains selector
-// This extends the :contains pseudo-selector which isn't native
-document.querySelectorAll && (function (ElementPrototype) {
-    ElementPrototype.matches = ElementPrototype.matches || 
-        ElementPrototype.matchesSelector ||
-        ElementPrototype.webkitMatchesSelector ||
-        ElementPrototype.msMatchesSelector;
     
-    ElementPrototype.closest = ElementPrototype.closest || function (selector) {
-        let elem = this;
-        while (elem && elem.nodeType === 1) {
-            if (elem.matches(selector)) return elem;
-            elem = elem.parentNode;
-        }
-        return null;
-    };
-})(Element.prototype);
+    // Reload the page to reset to original state
+    window.location.href = window.location.pathname;
+}
 </script>
 {% endblock %}
