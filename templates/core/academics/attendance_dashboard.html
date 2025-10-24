@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Attendance Dashboard{% endblock %}
+{% block title %}Attendance Dashboard - Ghana Education System{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -46,10 +46,32 @@
         color: #856404;
     }
     
+    .status-excused {
+        background-color: #cce7ff;
+        color: #004085;
+    }
+    
     .student-avatar {
         width: 40px;
         height: 40px;
         object-fit: cover;
+    }
+    
+    .ges-compliance {
+        border-left: 4px solid #28a745;
+    }
+    
+    .ges-warning {
+        border-left: 4px solid #ffc107;
+    }
+    
+    .ges-critical {
+        border-left: 4px solid #dc3545;
+    }
+    
+    .term-progress {
+        height: 8px;
+        border-radius: 4px;
     }
     
     @media (max-width: 768px) {
@@ -63,8 +85,49 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Ghana Education System Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="bi bi-clipboard-check text-primary me-2"></i>
+                        Attendance Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">Ghana Education Service - Academic Monitoring</p>
+                </div>
+                <div class="text-end">
+                    {% if active_term %}
+                    <span class="badge bg-primary fs-6">{{ active_term }}</span>
+                    <div class="text-muted small">
+                        Term Progress: {{ term_progress }}%
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ghana Education System Alerts -->
+    {% if no_active_term_warning %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <strong>GES Alert:</strong> No active academic term is set. Attendance records might not display correctly.
+        <a href="{% url 'admin:core_academicterm_changelist' %}" class="alert-link">Set an active term in admin</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if not is_school_day %}
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        <strong>Note:</strong> Today is not a regular school day in the Ghana academic calendar.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Action Buttons -->
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Attendance Dashboard</h1>
         <div class="mobile-stack">
             <a href="{% url 'attendance_record' %}" class="btn btn-outline-primary mb-2 mb-md-0">
                 <i class="bi bi-list-check me-1"></i> View Records
@@ -72,18 +135,62 @@
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
                 <i class="bi bi-plus-circle me-1"></i> Take Attendance
             </button>
+            {% if low_attendance_students %}
+            <button class="btn btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#lowAttendanceModal">
+                <i class="bi bi-exclamation-triangle me-1"></i> Low Attendance Alerts
+            </button>
+            {% endif %}
         </div>
     </div>
+
+    <!-- GES Compliance Stats -->
+    {% if ges_attendance_rate %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card {% if ges_attendance_rate >= 80 %}ges-compliance{% elif ges_attendance_rate >= 70 %}ges-warning{% else %}ges-critical{% endif %}">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title mb-1">
+                                <i class="bi bi-clipboard-data me-2"></i>
+                                GES Attendance Compliance
+                            </h5>
+                            <p class="card-text mb-0">
+                                Overall School Attendance Rate: <strong>{{ ges_attendance_rate }}%</strong>
+                                {% if ges_attendance_rate >= 80 %}
+                                <span class="badge bg-success ms-2">Compliant</span>
+                                {% elif ges_attendance_rate >= 70 %}
+                                <span class="badge bg-warning ms-2">Needs Improvement</span>
+                                {% else %}
+                                <span class="badge bg-danger ms-2">Critical</span>
+                                {% endif %}
+                            </p>
+                            <small class="text-muted">GES Requirement: Minimum 80% attendance rate</small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="progress term-progress mb-2">
+                                <div class="progress-bar {% if ges_attendance_rate >= 80 %}bg-success{% elif ges_attendance_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" style="width: {{ ges_attendance_rate }}%">
+                                </div>
+                            </div>
+                            <small>{{ ges_attendance_rate }}% of GES Target</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Stats Cards -->
     <div class="row mb-4">
         {% for stat in stats %}
-        <div class="col-md-3 mb-3">
-            <div class="card h-100 attendance-card">
-                <div class="card-body text-center">
-                    <i class="bi bi-{{ stat.icon }} text-{{ stat.color }} fs-1 mb-2"></i>
-                    <h5 class="text-muted">{{ stat.label }}</h5>
-                    <h2 class="mb-0">{{ stat.value }}</h2>
+        <div class="col-xl-2 col-md-4 mb-3">
+            <div class="card h-100 attendance-card border-{{ stat.color }}">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-{{ stat.icon }} text-{{ stat.color }} fs-2 mb-2"></i>
+                    <h6 class="text-muted mb-1">{{ stat.label }}</h6>
+                    <h3 class="mb-0 text-{{ stat.color }}">{{ stat.value }}</h3>
                 </div>
             </div>
         </div>
@@ -93,18 +200,27 @@
     <!-- Today's Attendance -->
     <div class="card shadow mb-4 attendance-card">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Today's Attendance</h6>
-            <span class="badge bg-primary">{{ today|date:"F j, Y" }}</span>
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-calendar-check me-2"></i>
+                Today's Attendance - {{ today|date:"l, F j, Y" }}
+            </h6>
+            <div>
+                <span class="badge bg-primary">{{ today_attendance.count }} Records</span>
+                {% if active_term %}
+                <span class="badge bg-secondary ms-2">{{ active_term }}</span>
+                {% endif %}
+            </div>
         </div>
         <div class="card-body">
             {% if today_attendance %}
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover table-sm">
                     <thead class="table-light">
                         <tr>
                             <th>Student</th>
                             <th>Class</th>
                             <th>Status</th>
+                            <th>Term Attendance</th>
                             <th>Time</th>
                             <th>Actions</th>
                         </tr>
@@ -114,8 +230,8 @@
                         <tr>
                             <td>
                                 <div class="d-flex align-items-center">
-                                    {% if record.student.user.profile_picture %}
-                                    <img src="{{ record.student.user.profile_picture.url }}" 
+                                    {% if record.student.profile_picture %}
+                                    <img src="{{ record.student.profile_picture.url }}" 
                                          class="rounded-circle student-avatar me-3" alt="Profile">
                                     {% else %}
                                     <div class="rounded-circle student-avatar bg-secondary d-flex align-items-center justify-content-center me-3">
@@ -128,13 +244,30 @@
                                     </div>
                                 </div>
                             </td>
-                            <td>{{ record.student.get_class_level_display }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ record.student.get_class_level_display }}</span>
+                            </td>
                             <td>
                                 <span class="status-badge status-{{ record.status|lower }}">
+                                    <i class="bi bi-{% if record.status == 'present' %}check-circle{% elif record.status == 'absent' %}x-circle{% elif record.status == 'late' %}clock{% else %}clipboard-check{% endif %} me-1"></i>
                                     {{ record.get_status_display }}
                                 </span>
                             </td>
-                            <td>{{ record.created_at|time }}</td>
+                            <td>
+                                {% if record.student.ges_attendance_rate %}
+                                <div class="progress" style="height: 6px; width: 80px;">
+                                    <div class="progress-bar {% if record.student.ges_attendance_rate >= 80 %}bg-success{% elif record.student.ges_attendance_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                         style="width: {{ record.student.ges_attendance_rate }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ record.student.ges_attendance_rate }}%</small>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ record.timestamp|time }}</small>
+                            </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary" 
                                         data-bs-toggle="modal" 
@@ -151,6 +284,7 @@
             <div class="text-center py-5">
                 <i class="bi bi-calendar-x fs-1 text-muted"></i>
                 <h5 class="mt-3">No attendance recorded today</h5>
+                <p class="text-muted">Take attendance to start tracking for the Ghana Education Service records.</p>
                 <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
                     <i class="bi bi-plus-circle me-1"></i> Take Attendance
                 </button>
@@ -164,26 +298,71 @@
         {% for class_level, stats in class_stats.items %}
         <div class="col-md-4 mb-4">
             <div class="card h-100 attendance-card">
-                <div class="card-header">
-                    <h5 class="mb-0">Class {{ class_level }}</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-people-fill me-2"></i>
+                        Class {{ class_level }}
+                    </h6>
+                    <span class="badge bg-primary">{{ stats.total }} Students</span>
                 </div>
                 <div class="card-body">
+                    <!-- Progress Bar -->
                     <div class="progress mb-3" style="height: 20px;">
-                        <div class="progress-bar bg-success" style="width: {{ stats.present_percentage }}%">
-                            {{ stats.present_percentage }}%
+                        <div class="progress-bar bg-success" style="width: {{ stats.present_percentage }}%" 
+                             data-bs-toggle="tooltip" title="{{ stats.present }} Present ({{ stats.present_percentage }}%)">
                         </div>
-                        <div class="progress-bar bg-warning" style="width: {{ stats.late_percentage }}%">
-                            {{ stats.late_percentage }}%
+                        <div class="progress-bar bg-warning" style="width: {{ stats.late_percentage }}%"
+                             data-bs-toggle="tooltip" title="{{ stats.late }} Late ({{ stats.late_percentage }}%)">
                         </div>
-                        <div class="progress-bar bg-danger" style="width: {{ stats.absent_percentage }}%">
-                            {{ stats.absent_percentage }}%
+                        <div class="progress-bar bg-info" style="width: {{ stats.excused_percentage }}%"
+                             data-bs-toggle="tooltip" title="{{ stats.excused }} Excused ({{ stats.excused_percentage }}%)">
+                        </div>
+                        <div class="progress-bar bg-danger" style="width: {{ stats.absent_percentage }}%"
+                             data-bs-toggle="tooltip" title="{{ stats.absent }} Absent ({{ stats.absent_percentage }}%)">
                         </div>
                     </div>
-                    <a href="{% url 'attendance_record' %}?class_level={{ class_level }}" 
-                       class="btn btn-outline-primary btn-sm w-100">
-                        View Class Details
+                    
+                    <!-- Detailed Stats -->
+                    <div class="row text-center small">
+                        <div class="col-3">
+                            <div class="text-success">
+                                <strong>{{ stats.present }}</strong>
+                                <div>Present</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="text-warning">
+                                <strong>{{ stats.late }}</strong>
+                                <div>Late</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="text-info">
+                                <strong>{{ stats.excused }}</strong>
+                                <div>Excused</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="text-danger">
+                                <strong>{{ stats.absent }}</strong>
+                                <div>Absent</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <a href="{% url 'attendance_record' %}?class_level={{ class_level }}&date={{ today|date:'Y-m-d' }}&term={{ active_term.id }}" 
+                       class="btn btn-outline-primary btn-sm w-100 mt-3">
+                        <i class="bi bi-eye me-1"></i> View Class Details
                     </a>
                 </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-4">
+                <i class="bi bi-people fs-1 text-muted"></i>
+                <h5 class="mt-3">No class data available</h5>
+                <p class="text-muted">Take attendance to see class breakdowns.</p>
             </div>
         </div>
         {% endfor %}
@@ -195,23 +374,33 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="newAttendanceModalLabel">Take Attendance</h5>
+                <h5 class="modal-title" id="newAttendanceModalLabel">
+                    <i class="bi bi-clipboard-plus me-2"></i>
+                    Take Attendance - Ghana Education Service
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="get" action="{% url 'attendance_record' %}">
                 <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Record daily attendance following Ghana Education Service guidelines.
+                    </div>
+                    
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="date" class="form-label">Date</label>
+                            <label for="date" class="form-label">Date *</label>
                             <input type="date" class="form-control" id="date" name="date" 
                                    value="{{ today|date:'Y-m-d' }}" required>
+                            <div class="form-text">Select the attendance date</div>
                         </div>
                         <div class="col-md-6">
-                            <label for="term" class="form-label">Term</label>
+                            <label for="term" class="form-label">Academic Term *</label>
                             <select class="form-select" id="term" name="term" required>
+                                <option value="">-- Select Term --</option>
                                 {% for term in terms %}
                                 <option value="{{ term.id }}" {% if term.is_active %}selected{% endif %}>
-                                    {{ term }}
+                                    {{ term }} {% if term.is_active %}(Active){% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -226,9 +415,10 @@
                                 <option value="{{ period.id }}">{{ period }}</option>
                                 {% endfor %}
                             </select>
+                            <div class="form-text">For specific attendance periods</div>
                         </div>
                         <div class="col-md-6">
-                            <label for="class_level" class="form-label">Class</label>
+                            <label for="class_level" class="form-label">Class *</label>
                             <select class="form-select" id="class_level" name="class_level" required>
                                 <option value="">-- Select Class --</option>
                                 {% for level in class_levels %}
@@ -240,12 +430,81 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Continue</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-arrow-right me-1"></i> Continue to Record
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- Low Attendance Alert Modal -->
+{% if low_attendance_students %}
+<div class="modal fade" id="lowAttendanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Low Attendance Alerts - GES Compliance
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <strong>GES Requirement:</strong> Students must maintain at least 80% attendance rate.
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Class</th>
+                                <th>Attendance Rate</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student_data in low_attendance_students %}
+                            <tr>
+                                <td>
+                                    <strong>{{ student_data.student.get_full_name }}</strong>
+                                    <br><small class="text-muted">{{ student_data.student.student_id }}</small>
+                                </td>
+                                <td>{{ student_data.class_level }}</td>
+                                <td>
+                                    <div class="progress" style="height: 8px; width: 100px;">
+                                        <div class="progress-bar {% if student_data.attendance_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             style="width: {{ student_data.attendance_rate }}%">
+                                        </div>
+                                    </div>
+                                    <small>{{ student_data.attendance_rate }}%</small>
+                                </td>
+                                <td>
+                                    {% if student_data.attendance_rate >= 70 %}
+                                    <span class="badge bg-warning">Needs Improvement</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Critical</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{% url 'attendance_record' %}" class="btn btn-warning">
+                    <i class="bi bi-clipboard-check me-1"></i> Review Attendance
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Edit Attendance Modals -->
 {% for record in today_attendance %}
@@ -265,10 +524,10 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Student</label>
-                        <p class="form-control-static">{{ record.student.get_full_name }}</p>
+                        <p class="form-control-static fw-bold">{{ record.student.get_full_name }}</p>
                     </div>
                     <div class="mb-3">
-                        <label for="status{{ record.id }}" class="form-label">Status</label>
+                        <label for="status{{ record.id }}" class="form-label">Status *</label>
                         <select class="form-select" id="status{{ record.id }}" name="status" required>
                             {% for status in status_choices %}
                             <option value="{{ status.0 }}" {% if status.0 == record.status %}selected{% endif %}>
@@ -279,7 +538,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="notes{{ record.id }}" class="form-label">Notes</label>
-                        <textarea class="form-control" id="notes{{ record.id }}" name="notes" rows="3">{{ record.notes }}</textarea>
+                        <textarea class="form-control" id="notes{{ record.id }}" name="notes" rows="3" 
+                                  placeholder="Add any notes or comments...">{{ record.notes }}</textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -296,6 +556,12 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+    
     // Load periods when term changes
     document.getElementById('term').addEventListener('change', function() {
         const termId = this.value;
@@ -306,6 +572,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.text())
                 .then(html => {
                     periodSelect.innerHTML = '<option value="">-- Select Period --</option>' + html;
+                })
+                .catch(error => {
+                    console.error('Error loading periods:', error);
+                    periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
                 });
         } else {
             periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
@@ -313,7 +583,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Initialize date picker to today
-    document.getElementById('date').value = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date').value = today;
+    
+    // Auto-refresh dashboard every 5 minutes
+    setTimeout(function() {
+        window.location.reload();
+    }, 300000); // 5 minutes
 });
 </script>
 {% endblock %}

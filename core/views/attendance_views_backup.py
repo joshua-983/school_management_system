@@ -2,7 +2,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import JsonResponse
 from django.db.models import Count, Q
-from datetime import datetime, date
+from datetime import datetime
 from urllib.parse import urlencode
 
 from .base_views import *
@@ -14,7 +14,6 @@ from django.shortcuts import render, redirect
 from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
-from django.utils import timezone
 
 
 class AttendanceBaseView(LoginRequiredMixin, UserPassesTestMixin):
@@ -23,94 +22,8 @@ class AttendanceBaseView(LoginRequiredMixin, UserPassesTestMixin):
         return is_admin(self.request.user) or is_teacher(self.request.user)
 
 
-class GhanaEducationAttendanceMixin:
-    """Mixin for Ghana Education Service specific attendance functionality"""
-    
-    def get_ghana_academic_calendar(self):
-        """Get current Ghana academic calendar structure"""
-        current_year = datetime.now().year
-        next_year = current_year + 1
-        
-        # Ghana Education Service Standard Calendar (adjust as needed)
-        ghana_calendar = {
-            'academic_year': f"{current_year}/{next_year}",
-            'terms': {
-                1: {
-                    'name': 'Term 1',
-                    'start_date': date(current_year, 9, 2),  # Early September
-                    'end_date': date(current_year, 12, 18),  # Mid-December
-                    'mid_term_break': date(current_year, 10, 16),  # Approximate
-                },
-                2: {
-                    'name': 'Term 2', 
-                    'start_date': date(next_year, 1, 8),     # Early January
-                    'end_date': date(next_year, 4, 1),       # Early April
-                    'mid_term_break': date(next_year, 2, 15),  # Approximate
-                },
-                3: {
-                    'name': 'Term 3',
-                    'start_date': date(next_year, 4, 21),    # Late April
-                    'end_date': date(next_year, 7, 23),      # Late July
-                    'mid_term_break': date(next_year, 6, 1),   # Approximate
-                }
-            }
-        }
-        return ghana_calendar
-    
-    def is_ghana_school_day(self, check_date):
-        """
-        Check if date is a valid school day in Ghana
-        - Monday to Friday are school days
-        - Exclude public holidays (basic implementation)
-        """
-        # Monday = 0, Friday = 4, Saturday = 5, Sunday = 6
-        if check_date.weekday() >= 5:  # Weekend
-            return False
-        
-        # Basic Ghana public holidays (you can expand this)
-        ghana_holidays = [
-            date(check_date.year, 1, 1),   # New Year
-            date(check_date.year, 3, 6),   # Independence Day
-            date(check_date.year, 5, 1),   # Workers Day
-            date(check_date.year, 7, 1),   # Republic Day
-            date(check_date.year, 12, 25), # Christmas
-            date(check_date.year, 12, 26), # Boxing Day
-        ]
-        
-        return check_date not in ghana_holidays
-    
-    def calculate_ges_attendance_rate(self, student, term):
-        """Calculate attendance rate following GES requirements (80% minimum)"""
-        total_school_days = self._get_total_school_days(term)
-        if total_school_days == 0:
-            return 0
-        
-        present_days = StudentAttendance.objects.filter(
-            student=student,
-            term=term,
-            status__in=['present', 'late', 'excused']  # GES counts late and excused as present
-        ).count()
-        
-        attendance_rate = (present_days / total_school_days) * 100
-        return round(attendance_rate, 1)
-    
-    def _get_total_school_days(self, term):
-        """Calculate total school days in a term (basic implementation)"""
-        from datetime import timedelta
-        
-        current_date = term.start_date
-        school_days = 0
-        
-        while current_date <= term.end_date:
-            if self.is_ghana_school_day(current_date):
-                school_days += 1
-            current_date += timedelta(days=1)
-        
-        return school_days
-
-
-class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin, TemplateView):
-    """Dashboard view showing attendance overview and statistics - Ghana Education System"""
+class AttendanceDashboardView(AttendanceBaseView, TemplateView):
+    """Dashboard view showing attendance overview and statistics"""
     template_name = 'core/academics/attendance_dashboard.html'
 
     def get_context_data(self, **kwargs):
@@ -125,12 +38,9 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         # Get filtered attendance data
         today_attendance = self._get_filtered_attendance(today, active_term)
         
-        # Prepare statistics with Ghana education context
-        stats = self._calculate_attendance_stats(today_attendance, active_term)
+        # Prepare statistics
+        stats = self._calculate_attendance_stats(today_attendance)
         class_stats = self._calculate_class_stats(today_attendance)
-        
-        # Ghana Education specific data
-        ghana_context = self._get_ghana_education_context(active_term)
         
         context.update({
             'today': today,
@@ -142,65 +52,8 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             'stats': stats,
             'class_stats': class_stats,
             'active_term': active_term,
-            **ghana_context,  # Add Ghana education context
         })
         return context
-
-    def _get_ghana_education_context(self, active_term):
-        """Get Ghana Education Service specific context data"""
-        context = {}
-        
-        if active_term:
-            # Calculate GES compliance statistics
-            context['ges_attendance_rate'] = self._calculate_school_ges_attendance_rate(active_term)
-            context['low_attendance_students'] = self._get_low_attendance_students(active_term)
-            context['term_progress'] = self._calculate_term_progress(active_term)
-        
-        context['ghana_calendar'] = self.get_ghana_academic_calendar()
-        context['is_school_day'] = self.is_ghana_school_day(timezone.now().date())
-        
-        return context
-
-    def _calculate_school_ges_attendance_rate(self, term):
-        """Calculate overall school attendance rate for GES reporting"""
-        total_students = Student.objects.filter(is_active=True).count()
-        if total_students == 0:
-            return 0
-        
-        total_attendance_rate = 0
-        students = Student.objects.filter(is_active=True)
-        
-        for student in students:
-            total_attendance_rate += self.calculate_ges_attendance_rate(student, term)
-        
-        return round(total_attendance_rate / total_students, 1) if total_students > 0 else 0
-
-    def _get_low_attendance_students(self, term, threshold=80):
-        """Identify students with attendance below GES requirement (80%)"""
-        low_attendance = []
-        students = Student.objects.filter(is_active=True)
-        
-        for student in students:
-            attendance_rate = self.calculate_ges_attendance_rate(student, term)
-            if attendance_rate < threshold:
-                low_attendance.append({
-                    'student': student,
-                    'attendance_rate': attendance_rate,
-                    'class_level': student.get_class_level_display()
-                })
-        
-        return low_attendance[:10]  # Return top 10 for dashboard
-
-    def _calculate_term_progress(self, term):
-        """Calculate how far we are into the current term"""
-        today = timezone.now().date()
-        total_days = (term.end_date - term.start_date).days
-        days_passed = (today - term.start_date).days
-        
-        if total_days > 0 and days_passed >= 0:
-            progress = min(100, max(0, (days_passed / total_days) * 100))
-            return round(progress, 1)
-        return 0
 
     def _get_filtered_attendance(self, date, active_term):
         """Filter attendance records based on user role with proper ordering"""
@@ -224,8 +77,8 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             
         return queryset
 
-    def _calculate_attendance_stats(self, attendance, active_term):
-        """Calculate and return attendance statistics with Ghana context"""
+    def _calculate_attendance_stats(self, attendance):
+        """Calculate and return attendance statistics"""
         # Get total students based on user role
         if is_teacher(self.request.user):
             teacher_classes = ClassAssignment.objects.filter(
@@ -243,27 +96,13 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         late_today = attendance.filter(status='late').count()
         excused_today = attendance.filter(status='excused').count()
         
-        # Add Ghana education context to stats
-        stats = [
+        return [
             {'label': 'Total Students', 'value': total_students, 'color': 'primary', 'icon': 'people-fill'},
             {'label': 'Present Today', 'value': present_today, 'color': 'success', 'icon': 'check-circle-fill'},
             {'label': 'Absent Today', 'value': absent_today, 'color': 'danger', 'icon': 'x-circle-fill'},
             {'label': 'Late Today', 'value': late_today, 'color': 'warning', 'icon': 'clock-fill'},
             {'label': 'Excused Today', 'value': excused_today, 'color': 'info', 'icon': 'clipboard-check-fill'}
         ]
-        
-        # Add GES compliance stat if active term exists
-        if active_term:
-            ges_rate = self._calculate_school_ges_attendance_rate(active_term)
-            ges_color = 'success' if ges_rate >= 80 else 'warning' if ges_rate >= 70 else 'danger'
-            stats.append({
-                'label': 'GES Attendance Rate', 
-                'value': f'{ges_rate}%', 
-                'color': ges_color, 
-                'icon': 'clipboard-data-fill'
-            })
-        
-        return stats
 
     def _calculate_class_stats(self, attendance):
         """Calculate statistics by class level"""
@@ -304,8 +143,8 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         }
 
 
-class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, View):
-    """View for recording and viewing attendance records - Ghana Education System"""
+class AttendanceRecordView(AttendanceBaseView, View):
+    """View for recording and viewing attendance records"""
     template_name = 'core/academics/attendance_record.html'
 
     def get(self, request):
@@ -316,14 +155,10 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
             # Get attendance data based on filters
             attendance_data = self._get_attendance_data(filters)
             
-            # Add Ghana education context
-            ghana_context = self._get_ghana_attendance_context(filters)
-            
             # Prepare context
             context = {
                 **filters,
                 **attendance_data,
-                **ghana_context,
                 'status_choices': StudentAttendance.STATUS_CHOICES,
             }
             return render(request, self.template_name, context)
@@ -331,40 +166,6 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
         except Exception as e:
             messages.error(request, f"Error loading attendance: {str(e)}")
             return redirect(reverse('attendance_dashboard'))
-
-    def _get_ghana_attendance_context(self, filters):
-        """Get Ghana-specific attendance context"""
-        context = {}
-        
-        if filters['selected_date']:
-            context['is_school_day'] = self.is_ghana_school_day(filters['selected_date'])
-            context['day_type'] = 'School Day' if context['is_school_day'] else 'Non-School Day'
-        
-        if filters['selected_term']:
-            context['term_progress'] = self._calculate_term_progress(filters['selected_term'])
-        
-        return context
-
-    def _calculate_term_progress(self, term):
-        """Calculate how far we are into the current term"""
-        if not term:
-            return 0
-        
-        today = timezone.now().date()
-        
-        if today < term.start_date:
-            return 0
-        elif today > term.end_date:
-            return 100
-        
-        total_days = (term.end_date - term.start_date).days
-        days_passed = (today - term.start_date).days
-        
-        if total_days > 0:
-            progress = (days_passed / total_days) * 100
-            return min(100, round(progress, 1))
-        
-        return 0
 
     def _extract_filters(self, request):
         """Extract and validate filter parameters from GET request"""
@@ -474,10 +275,6 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
                 status='absent'
             ).count()
             
-            # Get GES attendance rate
-            if filters['selected_term']:
-                student.ges_attendance_rate = self.calculate_ges_attendance_rate(student, filters['selected_term'])
-            
             # Get today's attendance if exists
             existing_attendance = StudentAttendance.objects.filter(
                 student=student,
@@ -520,15 +317,12 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
             form_data = self._extract_form_data(request)
             self._validate_attendance_data(form_data)
             
-            # Ghana-specific validation
-            self._validate_ghana_attendance_rules(form_data)
-            
             with transaction.atomic():
                 self._process_attendance_records(form_data)
             
             # Build success redirect URL with all parameters
             redirect_url = self._build_success_redirect_url(form_data)
-            messages.success(request, '✅ Attendance recorded successfully for GES records!')
+            messages.success(request, 'Attendance recorded successfully!')
             return redirect(redirect_url)
             
         except PermissionDenied as e:
@@ -537,25 +331,6 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
         except Exception as e:
             messages.error(request, f"Error recording attendance: {str(e)}")
             return self._handle_error_redirect(request)
-
-    def _validate_ghana_attendance_rules(self, form_data):
-        """Validate Ghana Education Service specific rules"""
-        date = form_data['date']
-        term = form_data['term']
-        
-        # Check if it's a school day
-        if not self.is_ghana_school_day(date):
-            messages.warning(
-                form_data['request'], 
-                f"Note: {date.strftime('%A, %B %d, %Y')} is not a regular school day."
-            )
-        
-        # Check if date is within term boundaries
-        if not (term.start_date <= date <= term.end_date):
-            raise ValueError(
-                f"Attendance date must be within {term} term dates: "
-                f"{term.start_date} to {term.end_date}"
-            )
 
     def _extract_form_data(self, request):
         """Extract and validate form data from POST request"""
@@ -683,7 +458,6 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
             return redirect(reverse('attendance_dashboard'))
 
 
-# Keep your existing views below (they remain the same)
 class AttendancePeriodListView(AttendanceBaseView, ListView):
     """View for listing attendance periods"""
     model = AttendancePeriod

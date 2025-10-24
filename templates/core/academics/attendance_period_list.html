@@ -1,0 +1,183 @@
+{% extends 'base.html' %}
+
+{% block title %}Attendance Periods - Ghana Education System{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-1">
+                                <i class="bi bi-calendar-range me-2"></i>
+                                Attendance Periods
+                            </h2>
+                            <p class="mb-0">Ghana Education Service - Academic Period Management</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            {% if active_term %}
+                            <span class="badge bg-light text-primary fs-6">{{ active_term }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="term_id" class="form-label">Academic Term</label>
+                    <select name="term_id" id="term_id" class="form-select">
+                        <option value="">All Terms</option>
+                        {% for term in terms %}
+                        <option value="{{ term.id }}" {% if request.GET.term_id == term.id|stringformat:"s" %}selected{% endif %}>
+                            {{ term }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="period_type" class="form-label">Period Type</label>
+                    <select name="period_type" id="period_type" class="form-select">
+                        <option value="">All Types</option>
+                        {% for period_type in period_types %}
+                        <option value="{{ period_type.0 }}" {% if request.GET.period_type == period_type.0 %}selected{% endif %}>
+                            {{ period_type.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-funnel me-1"></i> Filter
+                    </button>
+                    <a href="{% url 'attendance_period_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Reset
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Periods List -->
+    <div class="card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-list-check me-2"></i>
+                Attendance Periods ({{ periods.count }})
+            </h5>
+            <div>
+                <a href="{% url 'admin:core_attendanceperiod_add' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i> Add Period
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if periods %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Period Type</th>
+                            <th>Academic Term</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for period in periods %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-info">{{ period.get_period_type_display }}</span>
+                            </td>
+                            <td>
+                                <strong>{{ period.term }}</strong>
+                            </td>
+                            <td>{{ period.start_date|date:"M j, Y" }}</td>
+                            <td>{{ period.end_date|date:"M j, Y" }}</td>
+                            <td>
+                                <span class="text-muted">{{ period.start_date|timesince:period.end_date }}</span>
+                            </td>
+                            <td>
+                                {% if period.is_locked %}
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-lock-fill me-1"></i> Locked
+                                </span>
+                                {% else %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-unlock-fill me-1"></i> Active
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'admin:core_attendanceperiod_change' period.id %}" 
+                                       class="btn btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                    <a href="{% url 'admin:core_attendanceperiod_delete' period.id %}" 
+                                       class="btn btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-calendar-x fs-1 text-muted"></i>
+                <h5 class="mt-3">No Attendance Periods Found</h5>
+                <p class="text-muted">
+                    {% if request.GET.term_id or request.GET.period_type %}
+                    No periods match your filter criteria. Try adjusting your filters.
+                    {% else %}
+                    No attendance periods have been created yet.
+                    {% endif %}
+                </p>
+                <a href="{% url 'admin:core_attendanceperiod_add' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> Create First Period
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Information Card -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                About Attendance Periods
+            </h6>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">
+                <strong>Ghana Education Service Period Types:</strong>
+            </p>
+            <ul class="mb-3">
+                <li><strong>Daily:</strong> Single day attendance recording</li>
+                <li><strong>Weekly:</strong> Weekly attendance summaries</li>
+                <li><strong>Monthly:</strong> Monthly attendance reports</li>
+            </ul>
+            <p class="mb-0 text-muted">
+                <small>
+                    Locked periods prevent further attendance modifications to maintain data integrity 
+                    for Ghana Education Service reporting.
+                </small>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
