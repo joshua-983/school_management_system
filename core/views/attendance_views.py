@@ -15,7 +15,7 @@ from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.utils import timezone
-
+from .base_views import is_admin, is_teacher
 
 class AttendanceBaseView(LoginRequiredMixin, UserPassesTestMixin):
     """Base view for attendance-related views with common permissions"""
@@ -146,6 +146,87 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         })
         return context
 
+    def _get_filtered_attendance(self, date, active_term):
+        """Filter attendance records with optimized queries - FIXED VERSION"""
+        queryset = StudentAttendance.objects.filter(
+            date=date
+        ).select_related('student', 'term', 'period').order_by(
+            'student__class_level',
+            'student__last_name',
+            'student__first_name'
+        )
+        
+        # Filter by active term if available
+        if active_term:
+            queryset = queryset.filter(term=active_term)
+        
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            queryset = queryset.filter(student__class_level__in=teacher_classes)
+        
+        # FIXED: Pre-calculate attendance rates for all students in one query
+        if active_term and queryset.exists():
+            # Get all student IDs from today's attendance
+            student_ids = list(queryset.values_list('student_id', flat=True))
+            
+            if student_ids:
+                # Calculate attendance rates for these students in bulk using Django ORM
+                from django.db.models import Count, Case, When, IntegerField, FloatField
+                from django.db.models.functions import Cast
+                
+                # Get all attendance records for these students in the active term
+                term_attendance = StudentAttendance.objects.filter(
+                    student_id__in=student_ids,
+                    term=active_term
+                )
+                
+                # Calculate statistics for each student
+                attendance_stats = term_attendance.values('student_id').annotate(
+                    total_days=Count('id'),
+                    present_days=Count(
+                        Case(
+                            When(status__in=['present', 'late', 'excused'], then=1),
+                            output_field=IntegerField()
+                        )
+                    )
+                ).annotate(
+                    attendance_rate=Case(
+                        When(total_days=0, then=0.0),
+                        default=Cast('present_days', FloatField()) / Cast('total_days', FloatField()) * 100.0,
+                        output_field=FloatField()
+                    )
+                )
+                
+                # Create a dictionary for quick lookup
+                attendance_dict = {}
+                for stat in attendance_stats:
+                    student_id = stat['student_id']
+                    attendance_rate = round(stat['attendance_rate'], 1)
+                    attendance_dict[student_id] = attendance_rate
+                
+                # Add attendance rates to each record
+                for record in queryset:
+                    record.term_attendance_rate = attendance_dict.get(record.student.id, 0.0)
+                    # Also add absence count
+                    record.absence_count = term_attendance.filter(
+                        student=record.student,
+                        status='absent'
+                    ).count()
+            else:
+                # If no student IDs, set default values
+                for record in queryset:
+                    record.term_attendance_rate = 0.0
+                    record.absence_count = 0
+        else:
+            # Set default values if no active term
+            for record in queryset:
+                record.term_attendance_rate = 0.0
+                record.absence_count = 0
+        
+        return queryset
+
     def _get_ghana_education_context(self, active_term):
         """Get Ghana Education Service specific context data"""
         context = {}
@@ -201,28 +282,6 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             progress = min(100, max(0, (days_passed / total_days) * 100))
             return round(progress, 1)
         return 0
-
-    def _get_filtered_attendance(self, date, active_term):
-        """Filter attendance records based on user role with proper ordering"""
-        queryset = StudentAttendance.objects.filter(
-            date=date
-        ).select_related('student', 'term', 'period').order_by(
-            'student__class_level',
-            'student__last_name',
-            'student__first_name'
-        )
-        
-        # Filter by active term if available
-        if active_term:
-            queryset = queryset.filter(term=active_term)
-        
-        if is_teacher(self.request.user):
-            teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher
-            ).values_list('class_level', flat=True)
-            queryset = queryset.filter(student__class_level__in=teacher_classes)
-            
-        return queryset
 
     def _calculate_attendance_stats(self, attendance, active_term):
         """Calculate and return attendance statistics with Ghana context"""
@@ -303,15 +362,41 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             'excused_percentage': excused_percentage,
         }
 
-
 class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, View):
     """View for recording and viewing attendance records - Ghana Education System"""
     template_name = 'core/academics/attendance_record.html'
+
+    def _get_filtered_attendance(self, date, active_term):
+        """Filter attendance records for record view - OPTIMIZED VERSION"""
+        queryset = StudentAttendance.objects.filter(
+            date=date
+        ).select_related('student', 'term', 'period').order_by(
+            'student__class_level',
+            'student__last_name',
+            'student__first_name'
+        )
+        
+        # Filter by active term if available
+        if active_term:
+            queryset = queryset.filter(term=active_term)
+        
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher
+            ).values_list('class_level', flat=True)
+            queryset = queryset.filter(student__class_level__in=teacher_classes)
+        
+        return queryset
 
     def get(self, request):
         try:
             # Extract and validate filter parameters
             filters = self._extract_filters(request)
+            
+            # Enhanced parameter validation
+            validation_result = self._validate_required_parameters(filters)
+            if not validation_result['is_valid']:
+                messages.info(request, validation_result['message'])
             
             # Get attendance data based on filters
             attendance_data = self._get_attendance_data(filters)
@@ -325,6 +410,13 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
                 **attendance_data,
                 **ghana_context,
                 'status_choices': StudentAttendance.STATUS_CHOICES,
+                'terms': AcademicTerm.objects.all().order_by('-start_date'),
+                'periods': AttendancePeriod.objects.all().order_by('-start_date'),
+                'class_levels': CLASS_LEVEL_CHOICES,
+                'today': timezone.now().date(),
+                # Add flags for parameter validation
+                'has_required_params': validation_result['is_valid'],
+                'validation_message': validation_result['message'],
             }
             return render(request, self.template_name, context)
             
@@ -332,48 +424,31 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
             messages.error(request, f"Error loading attendance: {str(e)}")
             return redirect(reverse('attendance_dashboard'))
 
-    def _get_ghana_attendance_context(self, filters):
-        """Get Ghana-specific attendance context"""
-        context = {}
+    def _validate_required_parameters(self, filters):
+        """Validate that all required parameters are present"""
+        missing_params = []
         
-        if filters['selected_date']:
-            context['is_school_day'] = self.is_ghana_school_day(filters['selected_date'])
-            context['day_type'] = 'School Day' if context['is_school_day'] else 'Non-School Day'
+        if not filters['selected_date']:
+            missing_params.append('Date')
+        if not filters['selected_term']:
+            missing_params.append('Academic Term')
+        if not filters['selected_class']:
+            missing_params.append('Class Level')
         
-        if filters['selected_term']:
-            context['term_progress'] = self._calculate_term_progress(filters['selected_term'])
+        if missing_params:
+            message = f"Please select {', '.join(missing_params)} to record attendance."
+            return {'is_valid': False, 'message': message}
         
-        return context
-
-    def _calculate_term_progress(self, term):
-        """Calculate how far we are into the current term"""
-        if not term:
-            return 0
-        
-        today = timezone.now().date()
-        
-        if today < term.start_date:
-            return 0
-        elif today > term.end_date:
-            return 100
-        
-        total_days = (term.end_date - term.start_date).days
-        days_passed = (today - term.start_date).days
-        
-        if total_days > 0:
-            progress = (days_passed / total_days) * 100
-            return min(100, round(progress, 1))
-        
-        return 0
+        return {'is_valid': True, 'message': 'All required parameters are selected.'}
 
     def _extract_filters(self, request):
-        """Extract and validate filter parameters from GET request"""
+        """Extract and validate filter parameters from GET request - ENHANCED VERSION"""
         term_id = request.GET.get('term')
         period_id = request.GET.get('period')
         date_str = request.GET.get('date', timezone.now().date().strftime('%Y-%m-%d'))
         class_level = request.GET.get('class_level')
         
-        # Initialize variables
+        # Initialize variables with proper defaults
         filters = {
             'selected_term': None,
             'selected_period': None,
@@ -386,37 +461,53 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
         
         # Parse and validate date
         try:
-            filters['selected_date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if date_str:
+                filters['selected_date'] = datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                filters['date_error'] = "Date is required"
         except (ValueError, TypeError):
             filters['date_error'] = "Invalid date format"
-            return filters
         
-        # Validate term and period
+        # Validate term
         if term_id:
             try:
                 filters['selected_term'] = AcademicTerm.objects.get(id=term_id)
+            except AcademicTerm.DoesNotExist:
+                filters['date_error'] = "Invalid term selected"
+        else:
+            # Try to get active term as default
+            active_term = AcademicTerm.objects.filter(is_active=True).first()
+            if active_term:
+                filters['selected_term'] = active_term
+        
+        # Validate period if provided
+        if period_id and filters['selected_term']:
+            try:
+                filters['selected_period'] = AttendancePeriod.objects.get(
+                    id=period_id, 
+                    term=filters['selected_term']
+                )
+            except AttendancePeriod.DoesNotExist:
+                pass  # Period is optional, so we don't set an error
+        
+        # Validate date ranges if we have term and date
+        if filters['selected_date'] and filters['selected_term']:
+            self._validate_date_range(
+                filters['selected_date'],
+                filters['selected_term'].start_date,
+                filters['selected_term'].end_date,
+                'date_error',
+                filters
+            )
+            
+            if filters['selected_period']:
                 self._validate_date_range(
                     filters['selected_date'],
-                    filters['selected_term'].start_date,
-                    filters['selected_term'].end_date,
+                    filters['selected_period'].start_date,
+                    filters['selected_period'].end_date,
                     'date_error',
                     filters
                 )
-                
-                if period_id:
-                    try:
-                        filters['selected_period'] = AttendancePeriod.objects.get(id=period_id)
-                        self._validate_date_range(
-                            filters['selected_date'],
-                            filters['selected_period'].start_date,
-                            filters['selected_period'].end_date,
-                            'date_error',
-                            filters
-                        )
-                    except AttendancePeriod.DoesNotExist:
-                        pass
-            except AcademicTerm.DoesNotExist:
-                pass
         
         # Validate class assignment for teachers
         if (class_level and not filters['class_error'] 
@@ -514,6 +605,40 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
                     counts['excused_count'] += 1
                     
         return counts
+
+    def _get_ghana_attendance_context(self, filters):
+        """Get Ghana-specific attendance context"""
+        context = {}
+        
+        if filters['selected_date']:
+            context['is_school_day'] = self.is_ghana_school_day(filters['selected_date'])
+            context['day_type'] = 'School Day' if context['is_school_day'] else 'Non-School Day'
+        
+        if filters['selected_term']:
+            context['term_progress'] = self._calculate_term_progress(filters['selected_term'])
+        
+        return context
+
+    def _calculate_term_progress(self, term):
+        """Calculate how far we are into the current term"""
+        if not term:
+            return 0
+        
+        today = timezone.now().date()
+        
+        if today < term.start_date:
+            return 0
+        elif today > term.end_date:
+            return 100
+        
+        total_days = (term.end_date - term.start_date).days
+        days_passed = (today - term.start_date).days
+        
+        if total_days > 0:
+            progress = (days_passed / total_days) * 100
+            return min(100, round(progress, 1))
+        
+        return 0
 
     def post(self, request):
         try:
@@ -681,7 +806,6 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
             return redirect(reverse('attendance_record') + '?' + urlencode(params))
         except:
             return redirect(reverse('attendance_dashboard'))
-
 
 # Keep your existing views below (they remain the same)
 class AttendancePeriodListView(AttendanceBaseView, ListView):

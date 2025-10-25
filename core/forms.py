@@ -13,7 +13,7 @@ from .models import (
     Student, Teacher, ParentGuardian, Subject, ClassAssignment,
     AcademicTerm, AttendancePeriod, StudentAttendance, AttendanceSummary,
     Grade, Assignment, AssignmentTemplate, StudentAssignment, FeeCategory, Fee, Bill, FeePayment,
-    ReportCard, Announcement, TimeSlot, Timetable, TimetableEntry,
+    ReportCard, Announcement, TimeSlot, Timetable, TimetableEntry, SchoolConfiguration,
     CLASS_LEVEL_CHOICES, TERM_CHOICES
 )
 
@@ -35,13 +35,30 @@ class StudentRegistrationForm(forms.ModelForm):
         required=True,
         widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'student@example.com'})
     )
+    phone_number = forms.CharField(
+        max_length=10,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '0245478847',
+            'pattern': r'0\d{9}',
+            'title': '10-digit number starting with 0'
+        }),
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)",
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ]
+    )
     
     class Meta:
         model = Student
         fields = [
             'first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender', 
             'nationality', 'ethnicity', 'religion', 'place_of_birth', 
-            'residential_address', 'profile_picture', 'class_level', 'email'
+            'residential_address', 'profile_picture', 'class_level', 'email', 'phone_number'
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -68,6 +85,15 @@ class StudentRegistrationForm(forms.ModelForm):
             raise ValidationError("Student age seems too high. Please verify the date of birth.")
         return dob
     
+    def clean_phone_number(self):
+        phone_number = self.cleaned_data.get('phone_number')
+        if phone_number:
+            # Remove any spaces or dashes
+            phone_number = phone_number.replace(' ', '').replace('-', '')
+            if len(phone_number) != 10 or not phone_number.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
+        return phone_number
+    
     def clean(self):
         cleaned_data = super().clean()
         password1 = cleaned_data.get('password1')
@@ -84,6 +110,10 @@ class StudentRegistrationForm(forms.ModelForm):
     
     def save(self, commit=True):
         student = super().save(commit=False)
+        
+        # Clean phone number
+        if student.phone_number:
+            student.phone_number = student.phone_number.replace(' ', '').replace('-', '')
         
         # Create user account
         email = self.cleaned_data['email']
@@ -115,15 +145,11 @@ class StudentRegistrationForm(forms.ModelForm):
 class SubjectForm(forms.ModelForm):
     class Meta:
         model = Subject
-        fields = ['name', 'code', 'description', 'is_active']
+        fields = ['name', 'description', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Enter subject name'
-            }),
-            'code': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter subject code'
             }),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
@@ -136,29 +162,13 @@ class SubjectForm(forms.ModelForm):
         }
         labels = {
             'name': 'Subject Name',
-            'code': 'Subject Code',
             'description': 'Description',
             'is_active': 'Is Active'
         }
         help_texts = {
-            'code': 'Unique code for the subject (e.g., MATH, ENG, SCI)',
+            'name': 'Enter the full name of the subject. The subject code will be automatically generated.',
             'is_active': 'Uncheck to hide this subject from selection'
         }
-    
-    def clean_code(self):
-        code = self.cleaned_data.get('code')
-        if code:
-            code = code.upper().strip()
-            
-            # Check for duplicate code
-            existing = Subject.objects.filter(code=code)
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError("A subject with this code already exists.")
-        
-        return code
     
     def clean_name(self):
         name = self.cleaned_data.get('name')
@@ -166,7 +176,7 @@ class SubjectForm(forms.ModelForm):
             name = name.strip()
             
             # Check for duplicate name
-            existing = Subject.objects.filter(name=name)
+            existing = Subject.objects.filter(name__iexact=name)
             if self.instance.pk:
                 existing = existing.exclude(pk=self.instance.pk)
             
@@ -174,15 +184,38 @@ class SubjectForm(forms.ModelForm):
                 raise ValidationError("A subject with this name already exists.")
         
         return name
-
+    
+    def save(self, commit=True):
+        # Ensure code is generated for new subjects
+        if not self.instance.pk and not self.instance.code:
+            self.instance.code = self.instance.generate_subject_code()
+        return super().save(commit=commit)
 
 class StudentProfileForm(forms.ModelForm):
+    phone_number = forms.CharField(
+        max_length=10,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '0245478847',
+            'pattern': r'0\d{9}',
+            'title': '10-digit number starting with 0'
+        }),
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)",
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ]
+    )
+    
     class Meta:
         model = Student
         fields = [
             'first_name', 'middle_name', 'last_name', 'date_of_birth', 
             'gender', 'profile_picture', 'residential_address', 'nationality',
-            'ethnicity', 'religion', 'place_of_birth'
+            'ethnicity', 'religion', 'place_of_birth', 'phone_number'
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -197,6 +230,16 @@ class StudentProfileForm(forms.ModelForm):
             'place_of_birth': forms.TextInput(attrs={'class': 'form-control'}),
             'profile_picture': forms.FileInput(attrs={'class': 'form-control'}),
         }
+    
+    def clean_phone_number(self):
+        phone_number = self.cleaned_data.get('phone_number')
+        if phone_number:
+            # Remove any spaces or dashes
+            phone_number = phone_number.replace(' ', '').replace('-', '')
+            if len(phone_number) != 10 or not phone_number.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
+        return phone_number
+
 
 # ===== TEACHER FORMS =====
 
@@ -224,6 +267,23 @@ class TeacherRegistrationForm(forms.ModelForm):
         required=True,
         widget=forms.EmailInput(attrs={'class': 'form-control'})
     )
+    phone_number = forms.CharField(
+        max_length=10,
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': '0241234567',
+            'pattern': r'0\d{9}',
+            'title': '10-digit number starting with 0'
+        }),
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)",
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ]
+    )
 
     class Meta:
         model = Teacher
@@ -235,7 +295,6 @@ class TeacherRegistrationForm(forms.ModelForm):
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'date_of_joining': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'gender': forms.Select(attrs={'class': 'form-control'}),
-            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '0241234567'}),
             'address': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
             'subjects': forms.SelectMultiple(attrs={'class': 'form-control'}),
             'class_levels': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'P1,P2,P3'}),
@@ -256,11 +315,10 @@ class TeacherRegistrationForm(forms.ModelForm):
     def clean_phone_number(self):
         phone_number = self.cleaned_data.get('phone_number')
         if phone_number:
-            phone_number = ''.join(filter(str.isdigit, phone_number))
-            if len(phone_number) != 10:
-                raise ValidationError("Phone number must be exactly 10 digits.")
-            if not phone_number.startswith(('02', '05')):
-                raise ValidationError("Phone number must start with 02 or 05 for Ghana numbers.")
+            # Remove any spaces or dashes
+            phone_number = phone_number.replace(' ', '').replace('-', '')
+            if len(phone_number) != 10 or not phone_number.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
         return phone_number
 
     def clean_email(self):
@@ -309,6 +367,10 @@ class TeacherRegistrationForm(forms.ModelForm):
             teacher.user = user
         else:
             teacher = super().save(commit=False)
+        
+        # Clean phone number before saving
+        if teacher.phone_number:
+            teacher.phone_number = teacher.phone_number.replace(' ', '').replace('-', '')
         
         if commit:
             teacher.save()
@@ -412,6 +474,23 @@ class ParentGuardianAddForm(forms.ModelForm):
         label="Full Name",
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., John Doe'})
     )
+    phone_number = forms.CharField(
+        max_length=10,
+        required=True,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': '0241234567',
+            'pattern': r'0\d{9}',
+            'title': '10-digit number starting with 0'
+        }),
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)",
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ]
+    )
     
     class Meta:
         model = ParentGuardian
@@ -422,7 +501,6 @@ class ParentGuardianAddForm(forms.ModelForm):
         widgets = {
             'occupation': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Teacher, Engineer'}),
             'relationship': forms.Select(attrs={'class': 'form-control'}),
-            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., 0241234567'}),
             'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'e.g., parent@example.com'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Full residential address'}),
             'emergency_contact_priority': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '5'}),
@@ -434,16 +512,14 @@ class ParentGuardianAddForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         
         self.fields['relationship'].required = True
-        self.fields['phone_number'].required = True
 
     def clean_phone_number(self):
         phone_number = self.cleaned_data.get('phone_number')
         if phone_number:
-            phone_number = ''.join(filter(str.isdigit, phone_number))
-            if len(phone_number) != 10:
-                raise ValidationError("Phone number must be exactly 10 digits.")
-            if not phone_number.startswith(('02', '05')):
-                raise ValidationError("Phone number must start with 02 or 05 for Ghana numbers.")
+            # Remove any spaces or dashes
+            phone_number = phone_number.replace(' ', '').replace('-', '')
+            if len(phone_number) != 10 or not phone_number.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
         return phone_number
 
     def clean_email(self):
@@ -456,6 +532,10 @@ class ParentGuardianAddForm(forms.ModelForm):
 
     def save(self, commit=True):
         parent = super().save(commit=False)
+        
+        # Clean phone number
+        if parent.phone_number:
+            parent.phone_number = parent.phone_number.replace(' ', '').replace('-', '')
         
         full_name = self.cleaned_data['full_name'].strip()
         name_parts = full_name.split()
@@ -505,6 +585,7 @@ class ParentGuardianAddForm(forms.ModelForm):
             counter += 1
         
         return username
+
 
 # ===== ATTENDANCE FORMS =====
 
@@ -2629,5 +2710,69 @@ class TimetableFilterForm(forms.Form):
                     raise ValidationError("The second year should be exactly one year after the first year")
             except (ValueError, IndexError):
                 raise ValidationError("Invalid academic year format")
+        
+        return academic_year
+
+# ===== SCHOOL CONFIGURATION FORMS =====
+
+class SchoolConfigurationForm(forms.ModelForm):
+    school_phone = forms.CharField(
+        max_length=10,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '0245478847',
+            'pattern': r'0\d{9}',
+            'title': '10-digit number starting with 0'
+        }),
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)",
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ]
+    )
+    
+    class Meta:
+        model = SchoolConfiguration
+        fields = [
+            'grading_system', 'is_locked', 'academic_year', 'current_term',
+            'school_name', 'school_address', 'school_phone', 'school_email', 'principal_name'
+        ]
+        widgets = {
+            'grading_system': forms.Select(attrs={'class': 'form-control'}),
+            'is_locked': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'academic_year': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'YYYY/YYYY'}),
+            'current_term': forms.Select(attrs={'class': 'form-control'}),
+            'school_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'school_address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'school_email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'principal_name': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+    
+    def clean_school_phone(self):
+        phone_number = self.cleaned_data.get('school_phone')
+        if phone_number:
+            # Remove any spaces or dashes
+            phone_number = phone_number.replace(' ', '').replace('-', '')
+            if len(phone_number) != 10 or not phone_number.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
+        return phone_number
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if academic_year:
+            # Validate format
+            if not re.match(r'^\d{4}/\d{4}$', academic_year):
+                raise forms.ValidationError("Academic year must be in format YYYY/YYYY")
+            
+            # Validate consecutive years
+            try:
+                year1, year2 = map(int, academic_year.split('/'))
+                if year2 != year1 + 1:
+                    raise forms.ValidationError("The second year should be exactly one year after the first year")
+            except (ValueError, IndexError):
+                raise forms.ValidationError("Invalid academic year format")
         
         return academic_year

@@ -9,8 +9,8 @@ from django.contrib import messages
 import logging
 from datetime import datetime, timedelta
 
-
-from ..models import (
+# Import models directly to avoid circular imports
+from core.models import (
     Student, Teacher, Subject, AuditLog, ClassAssignment, 
     Assignment, StudentAssignment, Grade, Fee, ParentGuardian, 
     ParentAnnouncement, ParentMessage, Bill, BillPayment,
@@ -148,6 +148,16 @@ def admin_dashboard(request):
             start_date__lte=timezone.now() + timedelta(days=30)
         ).order_by('start_date')[:5]
         
+        # Attendance statistics
+        today_attendance = StudentAttendance.objects.filter(
+            date=timezone.now().date()
+        ).aggregate(
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late')),
+            total=Count('id')
+        )
+        
         context = {
             'total_students': total_students,
             'total_teachers': total_teachers,
@@ -162,6 +172,7 @@ def admin_dashboard(request):
             'pending_grading': pending_grading,
             'recent_bills': recent_bills,
             'upcoming_events': upcoming_events,
+            'today_attendance': today_attendance,
             'current_academic_year': get_current_academic_year(),
         }
         
@@ -242,6 +253,17 @@ def teacher_dashboard(request):
         # Get current term
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         
+        # Today's attendance for teacher's classes
+        today_attendance = StudentAttendance.objects.filter(
+            student__class_level__in=class_levels,
+            date=timezone.now().date()
+        ).aggregate(
+            present=Count('id', filter=Q(status='present')),
+            absent=Count('id', filter=Q(status='absent')),
+            late=Count('id', filter=Q(status='late')),
+            total=Count('id')
+        )
+        
         context = {
             'teacher': teacher,
             'current_classes': current_classes,
@@ -253,6 +275,7 @@ def teacher_dashboard(request):
             'total_assignments': total_assignments,
             'upcoming_deadlines': upcoming_deadlines,
             'grade_stats': grade_stats,
+            'today_attendance': today_attendance,
             'current_term': current_term,
             'now': timezone.now(),
             'current_academic_year': get_current_academic_year(),

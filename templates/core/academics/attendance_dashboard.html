@@ -5,12 +5,19 @@
 
 {% block extra_css %}
 <style>
+    /* Dashboard Specific Styles */
+    .dashboard-container {
+        position: relative;
+        overflow-x: hidden;
+    }
+    
     .attendance-card {
         transition: all 0.3s ease;
         border-radius: 10px;
         overflow: hidden;
         border: none;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
     }
     
     .attendance-card:hover {
@@ -22,56 +29,144 @@
         background: linear-gradient(135deg, #3a7bd5, #00d2ff);
         color: white;
         font-weight: 600;
+        padding: 1rem 1.5rem;
+    }
+    
+    .stats-card {
+        height: 100%;
+        border-radius: 10px;
+        transition: transform 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: scale(1.05);
     }
     
     .status-badge {
-        padding: 5px 10px;
+        padding: 6px 12px;
         border-radius: 20px;
         font-size: 0.8rem;
         font-weight: 500;
+        display: inline-block;
+        margin: 2px;
     }
     
     .status-present {
         background-color: #d4edda;
         color: #155724;
+        border: 1px solid #c3e6cb;
     }
     
     .status-absent {
         background-color: #f8d7da;
         color: #721c24;
+        border: 1px solid #f1b0b7;
     }
     
     .status-late {
         background-color: #fff3cd;
         color: #856404;
+        border: 1px solid #ffeaa7;
     }
     
     .status-excused {
         background-color: #cce7ff;
         color: #004085;
+        border: 1px solid #b3d7ff;
     }
     
     .student-avatar {
         width: 40px;
         height: 40px;
         object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid #e9ecef;
     }
     
     .ges-compliance {
         border-left: 4px solid #28a745;
+        background: linear-gradient(135deg, #f8fff9, #ffffff);
     }
     
     .ges-warning {
         border-left: 4px solid #ffc107;
+        background: linear-gradient(135deg, #fffef0, #ffffff);
     }
     
     .ges-critical {
         border-left: 4px solid #dc3545;
+        background: linear-gradient(135deg, #fff8f8, #ffffff);
     }
     
     .term-progress {
         height: 8px;
         border-radius: 4px;
+        background-color: #e9ecef;
+    }
+    
+    .class-progress {
+        height: 20px;
+        border-radius: 10px;
+    }
+    
+    .class-progress .progress-bar {
+        border-radius: 10px;
+    }
+    
+    .ghana-flag {
+        background: linear-gradient(135deg, #CE1126 0%, #FCD116 50%, #006B3F 100%);
+        color: white;
+        border-radius: 5px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .quick-action-btn {
+        border-radius: 25px;
+        padding: 8px 20px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .attendance-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        border-top: none;
+    }
+    
+    .term-attendance-progress {
+        height: 6px;
+        width: 80px;
+        background-color: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    
+    .term-attendance-bar {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.3s ease;
+    }
+    
+    .attendance-rate-text {
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-left: 5px;
+    }
+    
+    .no-data-cell {
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    /* Fix for progress bar alignment */
+    .progress-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     
     @media (max-width: 768px) {
@@ -79,12 +174,57 @@
             flex-direction: column;
             gap: 10px;
         }
+        
+        .stats-card {
+            margin-bottom: 1rem;
+        }
+        
+        .attendance-card .card-header {
+            padding: 0.75rem 1rem;
+        }
+        
+        .progress-container {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        
+        .term-attendance-progress {
+            width: 60px;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .container-fluid {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+        
+        .student-avatar {
+            width: 35px;
+            height: 35px;
+        }
+    }
+
+    /* Loading animation for progress bars */
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    
+    .loading-progress {
+        animation: pulse 1.5s ease-in-out infinite;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid dashboard-container">
     <!-- Ghana Education System Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -129,14 +269,14 @@
     <!-- Action Buttons -->
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <div class="mobile-stack">
-            <a href="{% url 'attendance_record' %}" class="btn btn-outline-primary mb-2 mb-md-0">
+            <a href="{% url 'attendance_record' %}" class="btn btn-outline-primary mb-2 mb-md-0 quick-action-btn">
                 <i class="bi bi-list-check me-1"></i> View Records
             </a>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
+            <button class="btn btn-primary quick-action-btn" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
                 <i class="bi bi-plus-circle me-1"></i> Take Attendance
             </button>
             {% if low_attendance_students %}
-            <button class="btn btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#lowAttendanceModal">
+            <button class="btn btn-warning ms-2 quick-action-btn" data-bs-toggle="modal" data-bs-target="#lowAttendanceModal">
                 <i class="bi bi-exclamation-triangle me-1"></i> Low Attendance Alerts
             </button>
             {% endif %}
@@ -186,7 +326,7 @@
     <div class="row mb-4">
         {% for stat in stats %}
         <div class="col-xl-2 col-md-4 mb-3">
-            <div class="card h-100 attendance-card border-{{ stat.color }}">
+            <div class="card h-100 stats-card border-{{ stat.color }}">
                 <div class="card-body text-center py-3">
                     <i class="bi bi-{{ stat.icon }} text-{{ stat.color }} fs-2 mb-2"></i>
                     <h6 class="text-muted mb-1">{{ stat.label }}</h6>
@@ -214,7 +354,7 @@
         <div class="card-body">
             {% if today_attendance %}
             <div class="table-responsive">
-                <table class="table table-hover table-sm">
+                <table class="table table-hover table-sm attendance-table">
                     <thead class="table-light">
                         <tr>
                             <th>Student</th>
@@ -254,24 +394,53 @@
                                 </span>
                             </td>
                             <td>
-                                {% if record.student.ges_attendance_rate %}
-                                <div class="progress" style="height: 6px; width: 80px;">
-                                    <div class="progress-bar {% if record.student.ges_attendance_rate >= 80 %}bg-success{% elif record.student.ges_attendance_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}" 
-                                         style="width: {{ record.student.ges_attendance_rate }}%">
-                                    </div>
-                                </div>
-                                <small class="text-muted">{{ record.student.ges_attendance_rate }}%</small>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
+    <div class="progress-container">
+                                    {% with attendance_data=record.student.get_term_attendance_data %}
+                                        {% if attendance_data.attendance_rate > 0 and attendance_data.total_days > 0 %}
+                                        <div class="term-attendance-progress">
+                                            <div class="term-attendance-bar 
+                                                {% if attendance_data.attendance_rate >= 80 %}bg-success
+                                                {% elif attendance_data.attendance_rate >= 70 %}bg-warning
+                                                {% else %}bg-danger{% endif %}" 
+                                                style="width: {{ attendance_data.attendance_rate }}%"
+                                                data-bs-toggle="tooltip" 
+                                                title="Attendance Rate: {{ attendance_data.attendance_rate }}% ({{ attendance_data.present_days }}/{{ attendance_data.total_days }} days)">
+                                            </div>
+                                        </div>
+                                        <span class="attendance-rate-text 
+                                            {% if attendance_data.attendance_rate >= 80 %}text-success
+                                            {% elif attendance_data.attendance_rate >= 70 %}text-warning
+                                            {% elif attendance_data.attendance_rate >= 60 %}text-danger
+                                            {% else %}text-muted{% endif %}" 
+                                            style="width: {{ attendance_data.attendance_rate }}%"
+                                            data-bs-toggle="tooltip" 
+                                            title="Attendance Rate: {{ attendance_data.attendance_rate }}% ({{ attendance_data.present_days }}/{{ attendance_data.total_days }} days)">
+                                        </div>
+                                    </div> 
+                                    <span class="attendance-rate-text 
+                                        {% if attendance_data.attendance_rate >= 80 %}text-success
+                                        {% elif attendance_data.attendance_rate >= 70 %}text-warning
+                                        {% elif attendance_data.attendance_rate >= 60 %}text-danger
+                                        {% else %}text-muted{% endif %}">
+                                        {{ attendance_data.attendance_rate }}%
+                                    </span>
+                             {% else %}
+                             <span class="no-data-cell" data-bs-toggle="tooltip" title="No attendance data available for current term">
+                            No data
+                            </span>
+                         {% endif %}
+                        {% endwith %}
+                        </div>
+                        </td> 
                             <td>
                                 <small class="text-muted">{{ record.timestamp|time }}</small>
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary" 
                                         data-bs-toggle="modal" 
-                                        data-bs-target="#editAttendanceModal{{ record.id }}">
+                                        data-bs-target="#editAttendanceModal{{ record.id }}"
+                                        data-bs-toggle="tooltip"
+                                        title="Edit attendance record">
                                     <i class="bi bi-pencil"></i> Edit
                                 </button>
                             </td>
@@ -285,7 +454,7 @@
                 <i class="bi bi-calendar-x fs-1 text-muted"></i>
                 <h5 class="mt-3">No attendance recorded today</h5>
                 <p class="text-muted">Take attendance to start tracking for the Ghana Education Service records.</p>
-                <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
+                <button class="btn btn-primary mt-2 quick-action-btn" data-bs-toggle="modal" data-bs-target="#newAttendanceModal">
                     <i class="bi bi-plus-circle me-1"></i> Take Attendance
                 </button>
             </div>
@@ -307,7 +476,7 @@
                 </div>
                 <div class="card-body">
                     <!-- Progress Bar -->
-                    <div class="progress mb-3" style="height: 20px;">
+                    <div class="progress mb-3 class-progress">
                         <div class="progress-bar bg-success" style="width: {{ stats.present_percentage }}%" 
                              data-bs-toggle="tooltip" title="{{ stats.present }} Present ({{ stats.present_percentage }}%)">
                         </div>
@@ -555,41 +724,305 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl)
-    });
+// Dashboard Specific JavaScript
+class DashboardManager {
+    constructor() {
+        this.init();
+    }
     
-    // Load periods when term changes
-    document.getElementById('term').addEventListener('change', function() {
-        const termId = this.value;
-        const periodSelect = document.getElementById('period');
+    init() {
+        this.initTooltips();
+        this.initModals();
+        this.setupAutoRefresh();
+        this.setupPeriodLoading();
+        this.setupRealTimeUpdates();
+    }
+    
+    initTooltips() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+    
+    initModals() {
+        // Modal initialization
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            modal.addEventListener('show.bs.modal', function () {
+                console.log('Modal opening:', this.id);
+            });
+        });
+    }
+    
+    setupAutoRefresh() {
+        // Auto-refresh dashboard every 5 minutes
+        setInterval(() => {
+            this.showRefreshNotification();
+        }, 300000); // 5 minutes
+    }
+    
+    showRefreshNotification() {
+        const toast = this.createToast('Dashboard Update', 'Refreshing attendance data...', 'info');
+        document.body.appendChild(toast);
         
-        if (termId) {
-            fetch(`{% url 'load_periods' %}?term_id=${termId}`)
-                .then(response => response.text())
-                .then(html => {
-                    periodSelect.innerHTML = '<option value="">-- Select Period --</option>' + html;
-                })
-                .catch(error => {
-                    console.error('Error loading periods:', error);
-                    periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
-                });
-        } else {
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
+    }
+    
+    setupPeriodLoading() {
+        const termSelect = document.getElementById('term');
+        if (termSelect) {
+            termSelect.addEventListener('change', () => {
+                this.loadPeriods(termSelect.value);
+            });
+        }
+    }
+    
+    loadPeriods(termId) {
+        const periodSelect = document.getElementById('period');
+        if (!termId) {
             periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
+            return;
+        }
+        
+        // Show loading state
+        periodSelect.innerHTML = '<option value="">Loading periods...</option>';
+        
+        fetch(`{% url 'load_periods' %}?term_id=${termId}`)
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.text();
+            })
+            .then(html => {
+                periodSelect.innerHTML = '<option value="">-- Select Period --</option>' + html;
+            })
+            .catch(error => {
+                console.error('Error loading periods:', error);
+                periodSelect.innerHTML = '<option value="">-- Select Period --</option>';
+                this.showToast('Error loading periods. Please try again.', 'error');
+            });
+    }
+    
+    setupRealTimeUpdates() {
+        // Update current time every minute
+        this.updateCurrentTime();
+        setInterval(() => this.updateCurrentTime(), 60000);
+        
+        // Add visual feedback for progress bars
+        this.enhanceProgressBars();
+    }
+    
+    updateCurrentTime() {
+        const timeElements = document.querySelectorAll('.current-time');
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-GH', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        
+        timeElements.forEach(element => {
+            element.textContent = timeString;
+        });
+    }
+    
+    enhanceProgressBars() {
+        // Add hover effects to progress bars
+        document.querySelectorAll('.term-attendance-bar').forEach(bar => {
+            bar.addEventListener('mouseenter', function() {
+                this.style.transform = 'scaleX(1.1)';
+                this.style.transition = 'all 0.3s ease';
+            });
+            
+            bar.addEventListener('mouseleave', function() {
+                this.style.transform = 'scaleX(1)';
+            });
+        });
+    }
+    
+    createToast(title, message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = 'position-fixed top-0 end-0 p-3';
+        toast.style.zIndex = '9999';
+        
+        const icons = {
+            success: 'check-circle-fill text-success',
+            error: 'exclamation-triangle-fill text-danger',
+            warning: 'exclamation-triangle-fill text-warning',
+            info: 'info-circle-fill text-info'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast show" role="alert">
+                <div class="toast-header">
+                    <i class="bi ${icons[type]} me-2"></i>
+                    <strong class="me-auto">${title}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            </div>
+        `;
+        
+        return toast;
+    }
+    
+    showToast(message, type = 'info') {
+        const toast = this.createToast('Attendance Dashboard', message, type);
+        document.body.appendChild(toast);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    window.dashboardManager = new DashboardManager();
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + N for new attendance
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            const newAttendanceModal = new bootstrap.Modal(document.getElementById('newAttendanceModal'));
+            newAttendanceModal.show();
+        }
+        
+        // Ctrl + R for refresh
+        if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+            e.preventDefault();
+            window.location.reload();
+        }
+        
+        // Escape key to close modals
+        if (e.key === 'Escape') {
+            const openModals = document.querySelectorAll('.modal.show');
+            openModals.forEach(modal => {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            });
         }
     });
     
-    // Initialize date picker to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('date').value = today;
+    // Add search functionality to today's attendance table
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-control form-control-sm';
+    searchInput.placeholder = 'Search students...';
+    searchInput.style.maxWidth = '200px';
+    searchInput.style.marginLeft = '10px';
     
-    // Auto-refresh dashboard every 5 minutes
-    setTimeout(function() {
-        window.location.reload();
-    }, 300000); // 5 minutes
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const rows = document.querySelectorAll('.attendance-table tbody tr');
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+    
+    const tableHeader = document.querySelector('.attendance-card .card-header');
+    if (tableHeader) {
+        tableHeader.querySelector('div').appendChild(searchInput);
+    }
+    
+    // Add export functionality
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn btn-outline-success btn-sm ms-2';
+    exportBtn.innerHTML = '<i class="bi bi-download me-1"></i> Export';
+    exportBtn.addEventListener('click', () => {
+        window.dashboardManager.exportTodayAttendance();
+    });
+    
+    if (tableHeader) {
+        tableHeader.querySelector('div').appendChild(exportBtn);
+    }
 });
+
+// Add export functionality to DashboardManager
+DashboardManager.prototype.exportTodayAttendance = function() {
+    const table = document.querySelector('.attendance-table');
+    let csv = [];
+    
+    // Headers
+    const headers = [];
+    table.querySelectorAll('thead th').forEach(th => {
+        let text = th.textContent.trim();
+        // Remove action column
+        if (!text.toLowerCase().includes('action')) {
+            headers.push(text);
+        }
+    });
+    csv.push(headers.join(','));
+    
+    // Rows
+    table.querySelectorAll('tbody tr').forEach(tr => {
+        if (tr.style.display !== 'none') {
+            const row = [];
+            tr.querySelectorAll('td').forEach((td, index) => {
+                // Skip actions column (last column)
+                if (index < tr.cells.length - 1) {
+                    let text = td.textContent.trim();
+                    
+                    // Handle progress bars - extract percentage
+                    const progressContainer = td.querySelector('.progress-container');
+                    if (progressContainer) {
+                        const rateText = progressContainer.querySelector('.attendance-rate-text');
+                        if (rateText) {
+                            text = rateText.textContent.trim();
+                        }
+                    }
+                    
+                    // Handle commas in content
+                    if (text.includes(',')) {
+                        text = `"${text}"`;
+                    }
+                    
+                    row.push(text);
+                }
+            });
+            csv.push(row.join(','));
+        }
+    });
+    
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `today-attendance-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    this.showToast('Today\'s attendance exported successfully!', 'success');
+};
+
+// Utility function for debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 </script>
 {% endblock %}

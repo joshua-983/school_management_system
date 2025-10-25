@@ -1,14 +1,338 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Attendance Summary - {{ student.get_full_name }} - Ghana Education System{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Attendance Summary Specific Styles */
+    .summary-container {
+        position: relative;
+        overflow-x: hidden;
+    }
+    
+    .student-header-card {
+        background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        color: white;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    
+    .filters-card {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    
+    .summary-table {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .summary-table th {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        font-weight: 600;
+        border: none;
+        padding: 1rem 0.75rem;
+        position: sticky;
+        top: 0;
+    }
+    
+    .summary-table td {
+        padding: 0.75rem;
+        vertical-align: middle;
+        border-color: #e9ecef;
+    }
+    
+    .summary-table tbody tr {
+        transition: all 0.2s ease;
+    }
+    
+    .summary-table tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        transform: translateX(5px);
+    }
+    
+    .stats-highlight {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .present-stat { color: #28a745; }
+    .absent-stat { color: #dc3545; }
+    .late-stat { color: #ffc107; }
+    .excused-stat { color: #17a2b8; }
+    .total-stat { color: #6c757d; }
+    
+    .term-badge {
+        background: linear-gradient(135deg, #6a11cb, #2575fc);
+        color: white;
+        font-weight: 500;
+    }
+    
+    .period-badge {
+        background: linear-gradient(135deg, #ff6b6b, #ffa726);
+        color: white;
+        font-size: 0.8rem;
+    }
+    
+    .progress-cell {
+        min-width: 120px;
+    }
+    
+    .attendance-progress {
+        height: 8px;
+        border-radius: 4px;
+        background-color: #e9ecef;
+        overflow: hidden;
+    }
+    
+    .attendance-progress .progress-bar {
+        border-radius: 4px;
+    }
+    
+    .ghana-flag {
+        background: linear-gradient(135deg, #CE1126 0%, #FCD116 50%, #006B3F 100%);
+        color: white;
+        border-radius: 5px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .compliance-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 10px;
+    }
+    
+    .export-btn {
+        border-radius: 20px;
+        padding: 8px 20px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .summary-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        margin-bottom: 1.5rem;
+    }
+    
+    .summary-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(5px);
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .summary-table {
+            font-size: 0.875rem;
+        }
+        
+        .summary-table th,
+        .summary-table td {
+            padding: 0.5rem 0.25rem;
+        }
+        
+        .stats-highlight {
+            font-size: 1rem;
+        }
+        
+        .export-btn {
+            padding: 6px 15px;
+            font-size: 0.875rem;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .container {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .filters-card .row {
+            margin-bottom: 10px;
+        }
+        
+        .filters-card .col-md-4 {
+            margin-bottom: 15px;
+        }
+        
+        .table-responsive {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+        }
+    }
+    
+    /* Print Styles */
+    @media print {
+        .btn, .filters-card, .alert, .loading-overlay {
+            display: none !important;
+        }
+        
+        .student-header-card {
+            background: white !important;
+            color: black !important;
+            border: 2px solid #000;
+        }
+        
+        .summary-table {
+            box-shadow: none;
+            border: 1px solid #000;
+        }
+        
+        .summary-table th {
+            background: #f8f9fa !important;
+            color: black !important;
+            border: 1px solid #000;
+        }
+    }
+    
+    /* Animation for table rows */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .summary-table tbody tr {
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    /* Highlight important rows */
+    .term-total-row {
+        background-color: rgba(0, 123, 255, 0.1) !important;
+        font-weight: 600;
+        border-top: 2px solid #007bff;
+    }
+    
+    .term-total-row:hover {
+        background-color: rgba(0, 123, 255, 0.2) !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2>Attendance Summary for {{ student.get_full_name }}</h2>
-    
-    <div class="card mb-4">
+<div class="container summary-container mt-4">
+    <!-- Student Header -->
+    <div class="card student-header-card">
         <div class="card-body">
-            <form method="get" class="row g-3">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="h3 mb-2">
+                        <i class="bi bi-clipboard-data me-2"></i>
+                        Attendance Summary
+                    </h1>
+                    <h2 class="h4 mb-1">{{ student.get_full_name }}</h2>
+                    <p class="mb-0">
+                        <span class="ghana-flag me-2">GHA</span>
+                        Student ID: {{ student.student_id }} | Class: {{ student.get_class_level_display }}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group">
+                        <button class="btn btn-light export-btn" id="exportBtn">
+                            <i class="bi bi-download me-1"></i> Export
+                        </button>
+                        <button class="btn btn-light export-btn" onclick="window.print()">
+                            <i class="bi bi-printer me-1"></i> Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Summary -->
+    <div class="row mb-4">
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-success">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-check-circle-fill text-success fs-2 mb-2"></i>
+                    <div class="stats-highlight present-stat" id="total-present">0</div>
+                    <small class="text-muted">Total Present</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-danger">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-x-circle-fill text-danger fs-2 mb-2"></i>
+                    <div class="stats-highlight absent-stat" id="total-absent">0</div>
+                    <small class="text-muted">Total Absent</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-warning">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-clock-fill text-warning fs-2 mb-2"></i>
+                    <div class="stats-highlight late-stat" id="total-late">0</div>
+                    <small class="text-muted">Total Late</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-info">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-clipboard-check-fill text-info fs-2 mb-2"></i>
+                    <div class="stats-highlight excused-stat" id="total-excused">0</div>
+                    <small class="text-muted">Total Excused</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-secondary">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-calendar-check-fill text-secondary fs-2 mb-2"></i>
+                    <div class="stats-highlight total-stat" id="total-days">0</div>
+                    <small class="text-muted">Total Days</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 col-6 mb-3">
+            <div class="card summary-card border-primary">
+                <div class="card-body text-center py-3">
+                    <i class="bi bi-graph-up-arrow text-primary fs-2 mb-2"></i>
+                    <div class="stats-highlight" id="attendance-rate">0%</div>
+                    <small class="text-muted">Attendance Rate</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card filters-card">
+        <div class="card-body">
+            <form method="get" class="row g-3" id="filterForm">
                 <div class="col-md-4">
-                    <label for="term_id" class="form-label">Term</label>
+                    <label for="term_id" class="form-label">
+                        <i class="bi bi-journal me-1"></i>Academic Term
+                    </label>
                     <select name="term_id" id="term_id" class="form-select">
                         <option value="">All Terms</option>
                         {% for term in terms %}
@@ -19,7 +343,9 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="period_type" class="form-label">Period Type</label>
+                    <label for="period_type" class="form-label">
+                        <i class="bi bi-calendar-range me-1"></i>Period Type
+                    </label>
                     <select name="period_type" id="period_type" class="form-select">
                         <option value="">All Periods</option>
                         {% for period_type in period_types %}
@@ -30,43 +356,525 @@
                     </select>
                 </div>
                 <div class="col-md-4 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-funnel me-1"></i> Apply Filters
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="resetFilters">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Reset
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Term</th>
-                    <th>Period</th>
-                    <th>Present</th>
-                    <th>Absent</th>
-                    <th>Late</th>
-                    <th>Excused</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for summary in summaries %}
-                <tr>
-                    <td>{{ summary.term.name }}</td>
-                    <td>{{ summary.period.name if summary.period else "Term Total" }}</td>
-                    <td>{{ summary.days_present }}</td>
-                    <td>{{ summary.days_absent }}</td>
-                    <td>{{ summary.days_late }}</td>
-                    <td>{{ summary.days_excused }}</td>
-                    <td>{{ summary.total_days }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center">No attendance records found</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Summary Table -->
+    <div class="card summary-card">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>
+                Detailed Attendance Summary
+            </h5>
+            <span class="badge bg-primary" id="records-count">{{ summaries|length }} Records</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover summary-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Term</th>
+                            <th>Period</th>
+                            <th>Present</th>
+                            <th>Absent</th>
+                            <th>Late</th>
+                            <th>Excused</th>
+                            <th>Total Days</th>
+                            <th>Attendance Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-table-body">
+                        {% for summary in summaries %}
+                        <tr class="{% if not summary.period %}term-total-row{% endif %}">
+                            <td>
+                                <span class="term-badge badge">{{ summary.term.name }}</span>
+                            </td>
+                            <td>
+                                {% if summary.period %}
+                                <span class="period-badge badge">{{ summary.period.name }}</span>
+                                {% else %}
+                                <strong>Term Total</strong>
+                                {% endif %}
+                            </td>
+                            <td class="present-stat stats-highlight">{{ summary.days_present }}</td>
+                            <td class="absent-stat stats-highlight">{{ summary.days_absent }}</td>
+                            <td class="late-stat stats-highlight">{{ summary.days_late }}</td>
+                            <td class="excused-stat stats-highlight">{{ summary.days_excused }}</td>
+                            <td class="total-stat stats-highlight">{{ summary.total_days }}</td>
+                            <td class="progress-cell">
+                                {% if summary.total_days > 0 %}
+                                {% widthratio summary.days_present summary.total_days 100 as attendance_rate %}
+                                <div class="d-flex align-items-center">
+                                    <div class="attendance-progress flex-grow-1 me-2">
+                                        <div class="progress-bar 
+                                            {% if attendance_rate >= 90 %}bg-success
+                                            {% elif attendance_rate >= 80 %}bg-info
+                                            {% elif attendance_rate >= 70 %}bg-warning
+                                            {% else %}bg-danger{% endif %}" 
+                                            style="width: {{ attendance_rate }}%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ attendance_rate }}%</small>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="bi bi-inbox fs-1 text-muted"></i>
+                                <h5 class="mt-3">No attendance records found</h5>
+                                <p class="text-muted">No attendance data available for the selected filters.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- GES Compliance Notice -->
+    <div class="alert alert-info mt-4">
+        <h6><i class="bi bi-info-circle me-2"></i>Ghana Education Service Compliance</h6>
+        <p class="mb-2">
+            According to GES guidelines, students must maintain a minimum of <strong>80% attendance rate</strong> 
+            to be eligible for promotion. Regular attendance monitoring is essential for academic success 
+            and compliance with national education standards.
+        </p>
+        <div class="progress mb-2" style="height: 10px;">
+            <div class="progress-bar bg-success" style="width: 80%"></div>
+        </div>
+        <small class="text-muted">Minimum Required Attendance: 80% | Target: 90%+</small>
     </div>
 </div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay">
+    <div class="text-center text-white">
+        <div class="spinner-border" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4 class="mt-3">Processing Request...</h4>
+        <p>Generating attendance summary report</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Attendance Summary Specific JavaScript
+class AttendanceSummaryManager {
+    constructor() {
+        this.summaries = {{ summaries|length }};
+        this.init();
+    }
+    
+    init() {
+        this.calculateTotals();
+        this.initEventListeners();
+        this.initFilters();
+        this.initTableInteractions();
+        this.updateRecordsCount();
+    }
+    
+    calculateTotals() {
+        let totalPresent = 0;
+        let totalAbsent = 0;
+        let totalLate = 0;
+        let totalExcused = 0;
+        let totalDays = 0;
+        
+        // Calculate totals from table data
+        document.querySelectorAll('#summary-table-body tr:not(.term-total-row)').forEach(row => {
+            const cells = row.cells;
+            totalPresent += parseInt(cells[2].textContent) || 0;
+            totalAbsent += parseInt(cells[3].textContent) || 0;
+            totalLate += parseInt(cells[4].textContent) || 0;
+            totalExcused += parseInt(cells[5].textContent) || 0;
+            totalDays += parseInt(cells[6].textContent) || 0;
+        });
+        
+        // Update summary cards
+        this.updateSummaryCards(totalPresent, totalAbsent, totalLate, totalExcused, totalDays);
+    }
+    
+    updateSummaryCards(present, absent, late, excused, total) {
+        document.getElementById('total-present').textContent = present;
+        document.getElementById('total-absent').textContent = absent;
+        document.getElementById('total-late').textContent = late;
+        document.getElementById('total-excused').textContent = excused;
+        document.getElementById('total-days').textContent = total;
+        
+        // Calculate attendance rate
+        const attendanceRate = total > 0 ? Math.round((present / total) * 100) : 0;
+        document.getElementById('attendance-rate').textContent = attendanceRate + '%';
+        
+        // Color code based on attendance rate
+        const rateElement = document.getElementById('attendance-rate');
+        rateElement.className = 'stats-highlight ';
+        if (attendanceRate >= 90) {
+            rateElement.classList.add('present-stat');
+        } else if (attendanceRate >= 80) {
+            rateElement.classList.add('excused-stat');
+        } else if (attendanceRate >= 70) {
+            rateElement.classList.add('late-stat');
+        } else {
+            rateElement.classList.add('absent-stat');
+        }
+    }
+    
+    initEventListeners() {
+        // Export button
+        document.getElementById('exportBtn')?.addEventListener('click', () => this.exportToCSV());
+        
+        // Reset filters
+        document.getElementById('resetFilters')?.addEventListener('click', () => this.resetFilters());
+        
+        // Form submission with loading
+        document.getElementById('filterForm')?.addEventListener('submit', (e) => this.handleFormSubmit(e));
+        
+        // Auto-submit on filter change for better UX
+        document.getElementById('term_id')?.addEventListener('change', () => {
+            if (window.innerWidth > 768) {
+                document.getElementById('filterForm').submit();
+            }
+        });
+        
+        document.getElementById('period_type')?.addEventListener('change', () => {
+            if (window.innerWidth > 768) {
+                document.getElementById('filterForm').submit();
+            }
+        });
+    }
+    
+    initFilters() {
+        // Restore filter state from localStorage
+        this.restoreFilterState();
+        
+        // Save filter state on change
+        document.getElementById('term_id')?.addEventListener('change', () => this.saveFilterState());
+        document.getElementById('period_type')?.addEventListener('change', () => this.saveFilterState());
+    }
+    
+    saveFilterState() {
+        const filters = {
+            term_id: document.getElementById('term_id')?.value || '',
+            period_type: document.getElementById('period_type')?.value || ''
+        };
+        localStorage.setItem('attendance_summary_filters', JSON.stringify(filters));
+    }
+    
+    restoreFilterState() {
+        try {
+            const savedFilters = localStorage.getItem('attendance_summary_filters');
+            if (savedFilters) {
+                const filters = JSON.parse(savedFilters);
+                const termSelect = document.getElementById('term_id');
+                const periodSelect = document.getElementById('period_type');
+                
+                if (termSelect && filters.term_id) {
+                    termSelect.value = filters.term_id;
+                }
+                if (periodSelect && filters.period_type) {
+                    periodSelect.value = filters.period_type;
+                }
+            }
+        } catch (e) {
+            console.error('Error restoring filters:', e);
+        }
+    }
+    
+    resetFilters() {
+        document.getElementById('term_id').value = '';
+        document.getElementById('period_type').value = '';
+        this.saveFilterState();
+        document.getElementById('filterForm').submit();
+    }
+    
+    initTableInteractions() {
+        const tableRows = document.querySelectorAll('#summary-table-body tr');
+        
+        tableRows.forEach(row => {
+            // Add click handler for row selection
+            row.addEventListener('click', function() {
+                this.classList.toggle('table-active');
+            });
+            
+            // Add double-click handler for detailed view
+            row.addEventListener('dblclick', function() {
+                const termName = this.cells[0].textContent.trim();
+                const periodName = this.cells[1].textContent.trim();
+                alert(`Detailed view for: ${termName} - ${periodName}\n\nThis would show detailed daily attendance records.`);
+            });
+        });
+        
+        // Add hover effects for progress bars
+        this.enhanceProgressBars();
+    }
+    
+    enhanceProgressBars() {
+        document.querySelectorAll('.attendance-progress .progress-bar').forEach(bar => {
+            const originalWidth = bar.style.width;
+            bar.addEventListener('mouseenter', function() {
+                this.style.transform = 'scaleY(1.5)';
+                this.style.transition = 'all 0.3s ease';
+            });
+            bar.addEventListener('mouseleave', function() {
+                this.style.transform = 'scaleY(1)';
+            });
+        });
+    }
+    
+    updateRecordsCount() {
+        const visibleRows = document.querySelectorAll('#summary-table-body tr:not([style*="display: none"])').length;
+        const emptyRow = document.querySelector('#summary-table-body tr td[colspan]');
+        const actualCount = emptyRow ? 0 : visibleRows;
+        
+        document.getElementById('records-count').textContent = actualCount + ' Records';
+    }
+    
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const loadingOverlay = document.querySelector('.loading-overlay');
+        
+        // Show loading state
+        this.showLoadingState(submitBtn, loadingOverlay);
+        
+        try {
+            // Submit form after a short delay to show loading state
+            setTimeout(() => {
+                e.target.submit();
+            }, 1000);
+            
+        } catch (error) {
+            this.hideLoadingState(submitBtn, loadingOverlay);
+            this.showToast('Error applying filters. Please try again.', 'error');
+            console.error('Form submission error:', error);
+        }
+    }
+    
+    showLoadingState(submitBtn, loadingOverlay) {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Applying...';
+        }
+        
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'flex';
+        }
+    }
+    
+    hideLoadingState(submitBtn, loadingOverlay) {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-funnel me-1"></i> Apply Filters';
+        }
+        
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'none';
+        }
+    }
+    
+    exportToCSV() {
+        const table = document.querySelector('.summary-table');
+        let csv = [];
+        
+        // Headers
+        const headers = [];
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+        csv.push(headers.join(','));
+        
+        // Rows
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const row = [];
+            tr.querySelectorAll('td').forEach(td => {
+                let text = td.textContent.trim();
+                
+                // Handle badges and progress bars
+                text = text.replace(/●/g, '').trim(); // Remove bullet points
+                
+                // Handle progress bars - extract percentage
+                const progressBar = td.querySelector('.progress-bar');
+                if (progressBar) {
+                    const percentage = progressBar.style.width;
+                    text = percentage;
+                }
+                
+                // Handle commas in content
+                if (text.includes(',')) {
+                    text = `"${text}"`;
+                }
+                
+                row.push(text);
+            });
+            csv.push(row.join(','));
+        });
+        
+        const csvContent = csv.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-summary-${this.getCurrentDate()}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        this.showToast('Attendance summary exported successfully!', 'success');
+    }
+    
+    getCurrentDate() {
+        const now = new Date();
+        return now.toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
+    
+    showToast(message, type = 'info') {
+        // Remove existing toasts
+        document.querySelectorAll('.custom-toast').forEach(toast => toast.remove());
+        
+        const toast = document.createElement('div');
+        toast.className = `custom-toast alert alert-${type} alert-dismissible fade show`;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            min-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
+        
+        const icons = {
+            success: 'check-circle-fill',
+            error: 'exclamation-triangle-fill',
+            warning: 'exclamation-triangle-fill',
+            info: 'info-circle-fill'
+        };
+        
+        toast.innerHTML = `
+            <i class="bi bi-${icons[type]} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    window.attendanceSummaryManager = new AttendanceSummaryManager();
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + E for export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            window.attendanceSummaryManager.exportToCSV();
+        }
+        
+        // Ctrl + R for reset filters
+        if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+            e.preventDefault();
+            document.getElementById('resetFilters')?.click();
+        }
+        
+        // Ctrl + P for print
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            window.print();
+        }
+    });
+    
+    // Add search functionality
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-control form-control-sm';
+    searchInput.placeholder = 'Search in table...';
+    searchInput.style.maxWidth = '200px';
+    searchInput.style.marginLeft = '10px';
+    
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#summary-table-body tr');
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            if (text.includes(searchTerm)) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        document.getElementById('records-count').textContent = visibleCount + ' Records';
+    });
+    
+    const cardHeader = document.querySelector('.card-header');
+    if (cardHeader) {
+        cardHeader.querySelector('div').appendChild(searchInput);
+    }
+    
+    // Add scroll to top button
+    const scrollToTopBtn = document.createElement('button');
+    scrollToTopBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
+    scrollToTopBtn.className = 'btn btn-primary btn-sm position-fixed';
+    scrollToTopBtn.style.cssText = `
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: none;
+    `;
+    scrollToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    document.body.appendChild(scrollToTopBtn);
+    
+    // Show/hide scroll to top button
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 300) {
+            scrollToTopBtn.style.display = 'block';
+        } else {
+            scrollToTopBtn.style.display = 'none';
+        }
+    });
+});
+
+// Utility function for debouncing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+</script>
 {% endblock %}

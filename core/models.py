@@ -120,9 +120,10 @@ class GhanaEducationMixin:
 
 # ===== ACADEMIC MODELS =====
 
+
 class Subject(models.Model):
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=10, unique=True, editable=False)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -135,6 +136,43 @@ class Subject(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+    
+    def generate_subject_code(self):
+        """Generate a 3-letter subject code from the name"""
+        # Remove common words and get first letters
+        common_words = ['and', 'the', 'of', 'for', 'in', 'with', 'to', 'on', 'at', 'from', 'by', 'about', 'as', 'into', 'like', 'through', 'after', 'over', 'between', 'out', 'against', 'during', 'without', 'before', 'under', 'around', 'among']
+        
+        words = self.name.upper().split()
+        meaningful_words = [word for word in words if word.lower() not in common_words]
+        
+        if meaningful_words:
+            # If single word, take first 3 letters
+            if len(meaningful_words) == 1:
+                code = meaningful_words[0][:3]
+            else:
+                # If multiple words, take first letter of each (max 3)
+                code = ''.join(word[0] for word in meaningful_words[:3])
+        else:
+            # Fallback: take first 3 letters of first word
+            code = words[0][:3] if words else 'SUB'
+        
+        # Ensure code is exactly 3 characters
+        code = code.ljust(3, 'X')[:3]
+        
+        # Make unique if code already exists
+        base_code = code
+        counter = 1
+        while Subject.objects.filter(code=code).exclude(pk=self.pk).exists():
+            code = f"{base_code}{counter}"
+            counter += 1
+        
+        return code
+    
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = self.generate_subject_code()
+        super().save(*args, **kwargs)
+
 
 class AcademicTerm(models.Model):
     TERM_CHOICES = [
@@ -221,6 +259,17 @@ class Student(models.Model):
     religion = models.CharField(max_length=100, blank=True)
     place_of_birth = models.CharField(max_length=100)
     residential_address = models.TextField()
+    phone_number = models.CharField(
+        max_length=10,
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ],
+        blank=True,
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)"
+    )
     profile_picture = models.ImageField(upload_to=student_image_path, blank=True, null=True)
     class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
     admission_date = models.DateField(default=timezone.now)
@@ -276,6 +325,49 @@ class Student(models.Model):
         except AttendanceSummary.DoesNotExist:
             return 0
     
+    def get_term_attendance_data(self, term=None):
+        """
+        Calculate attendance data for a specific term - FIXED VERSION
+        """
+        try:
+            if not term:
+                term = AcademicTerm.objects.filter(is_active=True).first()
+            
+            if not term:
+                return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+            
+            # Calculate attendance records for this term using the database
+            attendance_records = StudentAttendance.objects.filter(
+                student=self,
+                term=term
+            )
+            
+            total_days = attendance_records.count()
+            if total_days == 0:
+                return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+            
+            # Use database aggregation for better performance
+            from django.db.models import Count, Q
+            
+            present_days = attendance_records.filter(
+                Q(status='present') | Q(status='late') | Q(status='excused')
+            ).count()
+            
+            absence_count = attendance_records.filter(status='absent').count()
+            
+            attendance_rate = round((present_days / total_days) * 100, 1) if total_days > 0 else 0
+            
+            return {
+                'attendance_rate': attendance_rate,
+                'total_days': total_days,
+                'present_days': present_days,
+                'absence_count': absence_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating attendance data for student {self.id}: {e}")
+            return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+    
     def get_average_grade(self, term=None):
         """Get average grade for this student"""
         if not term:
@@ -289,6 +381,18 @@ class Student(models.Model):
             total_score = sum(float(grade.total_score) for grade in grades if grade.total_score)
             return round(total_score / grades.count(), 2)
         return None
+
+    def clean(self):
+        """Additional validation for phone number"""
+        if self.phone_number:
+            # Remove any spaces or dashes that might have been entered
+            cleaned_phone = self.phone_number.replace(' ', '').replace('-', '')
+            if len(cleaned_phone) != 10 or not cleaned_phone.startswith('0'):
+                raise ValidationError({
+                    'phone_number': 'Phone number must be exactly 10 digits starting with 0'
+                })
+            # Update the field with cleaned value
+            self.phone_number = cleaned_phone
 
     def save(self, *args, **kwargs):
         # Generate student ID if this is a new student
@@ -310,6 +414,10 @@ class Student(models.Model):
                 new_sequence = 1
                 
             self.student_id = f'STUD{current_year}{class_level}{new_sequence:03d}'
+        
+        # Clean phone number before saving
+        if self.phone_number:
+            self.phone_number = self.phone_number.replace(' ', '').replace('-', '')
             
         super().save(*args, **kwargs)
 
@@ -321,10 +429,20 @@ class Teacher(models.Model):
         on_delete=models.CASCADE, 
         related_name='teacher'
     )
-    employee_id = models.CharField(max_length=20, unique=True, null=True, blank=True)  # Allow null temporarily for migration
+    employee_id = models.CharField(
+        max_length=20, 
+        unique=True, 
+        null=True, 
+        blank=True,
+        editable=False  # Prevent manual editing
+    )
     date_of_birth = models.DateField()
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
-    phone_number = models.CharField(max_length=20, validators=[RegexValidator(r'^\+?1?\d{9,15}$')])
+    phone_number = models.CharField(
+        max_length=10, 
+        validators=[RegexValidator(r'^0[235][0-9]{8}$')],
+        help_text="10-digit Ghana number (e.g., 0245846641)"
+    )
     address = models.TextField()
     subjects = models.ManyToManyField(Subject, related_name='teachers')
     class_levels = models.CharField(max_length=50, help_text="Comma-separated list of class levels")
@@ -346,29 +464,46 @@ class Teacher(models.Model):
     def get_full_name(self):
         return f"{self.user.first_name} {self.user.last_name}"
     
+    def save(self, *args, **kwargs):
+        # Generate employee_id only when creating a new teacher (not updating)
+        if not self.employee_id:
+            current_year = str(timezone.now().year)
+            
+            # Find the last teacher ID for the current year
+            last_teacher = Teacher.objects.filter(
+                employee_id__startswith=f'TCH{current_year}'
+            ).order_by('-employee_id').first()
+            
+            if last_teacher and last_teacher.employee_id:
+                try:
+                    # Extract sequence from format TCH2025001, TCH2025002, etc.
+                    last_sequence = int(last_teacher.employee_id[7:])  # TCH2025[001]
+                    new_sequence = last_sequence + 1
+                except (ValueError, IndexError):
+                    new_sequence = 1
+            else:
+                new_sequence = 1
+            
+            # Format: TCH + Year + 3-digit sequence (TCH2025001, TCH2025002)
+            self.employee_id = f'TCH{current_year}{new_sequence:03d}'
+            
+            # Ensure uniqueness
+            while Teacher.objects.filter(employee_id=self.employee_id).exists():
+                new_sequence += 1
+                self.employee_id = f'TCH{current_year}{new_sequence:03d}'
+        
+        super().save(*args, **kwargs)
+    
     def get_assigned_classes(self):
         """Get classes assigned to this teacher"""
         return ClassAssignment.objects.filter(teacher=self)
     
     def get_students_count(self):
         """Get count of students taught by this teacher"""
-        class_levels = [level.strip() for level in self.class_levels.split(',')]
-        return Student.objects.filter(class_level__in=class_levels, is_active=True).count()
-    
-    def save(self, *args, **kwargs):
-        if not self.employee_id:
-            last_teacher = Teacher.objects.order_by('-id').first()
-            if last_teacher and last_teacher.employee_id:
-                try:
-                    last_number = int(last_teacher.employee_id[1:])
-                    new_number = last_number + 1
-                except ValueError:
-                    new_number = 1
-            else:
-                new_number = 1
-            self.employee_id = f"T{new_number:04d}"
-        
-        super().save(*args, **kwargs)
+        if self.class_levels:
+            class_levels = [level.strip() for level in self.class_levels.split(',')]
+            return Student.objects.filter(class_level__in=class_levels, is_active=True).count()
+        return 0
 
 # ===== PARENT/GUARDIAN MANAGEMENT =====
 
@@ -386,11 +521,23 @@ class ParentGuardian(models.Model):
     students = models.ManyToManyField(Student, related_name='parents')
     occupation = models.CharField(max_length=100, blank=True)
     relationship = models.CharField(max_length=1, choices=RELATIONSHIP_CHOICES)
-    phone_number = models.CharField(max_length=20, validators=[RegexValidator(r'^\+?1?\d{9,15}$')])
+    phone_number = models.CharField(
+        max_length=10, 
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ],
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)"
+    )
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
     is_emergency_contact = models.BooleanField(default=False)
-    emergency_contact_priority = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    emergency_contact_priority = models.PositiveSmallIntegerField(
+        default=1, 
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -411,12 +558,24 @@ class ParentGuardian(models.Model):
         return "No User Account"
     
     def clean(self):
+        # Validate email uniqueness
         if self.email:
             existing = ParentGuardian.objects.filter(
                 email=self.email
             ).exclude(pk=self.pk)
             if existing.exists():
                 raise ValidationError({'email': 'This email is already registered'})
+        
+        # Additional phone number validation
+        if self.phone_number:
+            # Remove any spaces or dashes that might have been entered
+            cleaned_phone = self.phone_number.replace(' ', '').replace('-', '')
+            if len(cleaned_phone) != 10 or not cleaned_phone.startswith('0'):
+                raise ValidationError({
+                    'phone_number': 'Phone number must be exactly 10 digits starting with 0'
+                })
+            # Update the field with cleaned value
+            self.phone_number = cleaned_phone
 
 @receiver(post_save, sender=ParentGuardian)
 def create_parent_user(sender, instance, created, **kwargs):
@@ -443,7 +602,6 @@ def create_parent_user(sender, instance, created, **kwargs):
             instance.save(update_fields=['user'])
         except Exception as e:
             logger.error(f"Error creating user for parent {instance.email}: {e}")
-
 
 # ===== PARENT COMMUNICATION MODELS =====
 
@@ -959,7 +1117,17 @@ class SchoolConfiguration(models.Model):
     current_term = models.PositiveSmallIntegerField(choices=TERM_CHOICES, default=1)
     school_name = models.CharField(max_length=200, default="Ghana Education Service School")
     school_address = models.TextField(default="")
-    school_phone = models.CharField(max_length=20, blank=True)
+    school_phone = models.CharField(
+        max_length=10,
+        blank=True,
+        validators=[
+            RegexValidator(
+                r'^0\d{9}$',
+                message="Phone number must be 10 digits starting with 0 (e.g., 0245478847)"
+            )
+        ],
+        help_text="10-digit phone number starting with 0 (e.g., 0245478847)"
+    )
     school_email = models.EmailField(blank=True)
     principal_name = models.CharField(max_length=100, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
@@ -972,17 +1140,33 @@ class SchoolConfiguration(models.Model):
     def save(self, *args, **kwargs):
         if SchoolConfiguration.objects.exists() and not self.pk:
             raise ValidationError("Only one school configuration can exist")
+        
+        # Clean phone number before saving
+        if self.school_phone:
+            self.school_phone = self.school_phone.replace(' ', '').replace('-', '')
+        
         super().save(*args, **kwargs)
     
     def __str__(self):
         return f"School Configuration - {self.school_name}"
+    
+    def clean(self):
+        """Additional validation for phone number"""
+        if self.school_phone:
+            # Remove any spaces or dashes that might have been entered
+            cleaned_phone = self.school_phone.replace(' ', '').replace('-', '')
+            if len(cleaned_phone) != 10 or not cleaned_phone.startswith('0'):
+                raise ValidationError({
+                    'school_phone': 'Phone number must be exactly 10 digits starting with 0'
+                })
+            # Update the field with cleaned value
+            self.school_phone = cleaned_phone
     
     @classmethod
     def get_config(cls):
         """Get or create the single configuration instance"""
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
-
 # ===== ASSIGNMENT MANAGEMENT =====
 
 class Assignment(models.Model):

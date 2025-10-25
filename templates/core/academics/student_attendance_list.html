@@ -5,40 +5,149 @@
 
 {% block extra_css %}
 <style>
+    /* Student Attendance List Specific Styles */
+    .student-attendance-container {
+        position: relative;
+        overflow-x: hidden;
+    }
+    
     .attendance-card {
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
     }
     
     .status-badge {
-        padding: 4px 8px;
+        padding: 6px 12px;
         border-radius: 15px;
         font-size: 0.75rem;
         font-weight: 500;
+        display: inline-block;
+        margin: 2px;
     }
     
-    .status-present { background-color: #d4edda; color: #155724; }
-    .status-absent { background-color: #f8d7da; color: #721c24; }
-    .status-late { background-color: #fff3cd; color: #856404; }
-    .status-excused { background-color: #cce7ff; color: #004085; }
+    .status-present { 
+        background-color: #d4edda; 
+        color: #155724; 
+        border: 1px solid #c3e6cb;
+    }
+    
+    .status-absent { 
+        background-color: #f8d7da; 
+        color: #721c24; 
+        border: 1px solid #f1b0b7;
+    }
+    
+    .status-late { 
+        background-color: #fff3cd; 
+        color: #856404; 
+        border: 1px solid #ffeaa7;
+    }
+    
+    .status-excused { 
+        background-color: #cce7ff; 
+        color: #004085; 
+        border: 1px solid #b3d7ff;
+    }
     
     .attendance-summary-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
+        border-radius: 10px;
+    }
+    
+    .stats-card {
+        height: 100%;
+        border-radius: 10px;
+        transition: transform 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
     }
     
     .ges-compliance {
         border-left: 4px solid #28a745;
+        background: linear-gradient(135deg, #f8fff9, #ffffff);
+    }
+    
+    .attendance-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        border-top: none;
+        position: sticky;
+        top: 0;
+    }
+    
+    .pagination {
+        margin-bottom: 0;
+    }
+    
+    .page-item.active .page-link {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    
+    .student-header-card {
+        background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        color: white;
+    }
+    
+    @media (max-width: 768px) {
+        .stats-card {
+            margin-bottom: 1rem;
+        }
+        
+        .attendance-table {
+            font-size: 0.875rem;
+        }
+        
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .container {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .card-body {
+            padding: 1rem;
+        }
+        
+        .table-responsive {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+        }
+    }
+    
+    /* Print Styles */
+    @media print {
+        .btn, .alert, .pagination, .student-header-card {
+            display: none !important;
+        }
+        
+        .attendance-card {
+            box-shadow: none;
+            border: 1px solid #000;
+        }
+        
+        .stats-card {
+            border: 1px solid #000;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container student-attendance-container mt-4">
     <!-- Ghana Education System Header -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card bg-primary text-white">
+            <div class="card student-header-card">
                 <div class="card-body">
                     <div class="row align-items-center">
                         <div class="col-md-8">
@@ -60,7 +169,7 @@
     <!-- Attendance Summary -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <div class="card border-success">
+            <div class="card border-success stats-card">
                 <div class="card-body text-center">
                     <i class="bi bi-check-circle-fill text-success fs-1 mb-2"></i>
                     <h5 class="text-muted">Present Days</h5>
@@ -69,7 +178,7 @@
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border-danger">
+            <div class="card border-danger stats-card">
                 <div class="card-body text-center">
                     <i class="bi bi-x-circle-fill text-danger fs-1 mb-2"></i>
                     <h5 class="text-muted">Absent Days</h5>
@@ -78,7 +187,7 @@
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border-warning">
+            <div class="card border-warning stats-card">
                 <div class="card-body text-center">
                     <i class="bi bi-clock-fill text-warning fs-1 mb-2"></i>
                     <h5 class="text-muted">Late Days</h5>
@@ -87,7 +196,7 @@
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card border-info">
+            <div class="card border-info stats-card">
                 <div class="card-body text-center">
                     <i class="bi bi-clipboard-check-fill text-info fs-1 mb-2"></i>
                     <h5 class="text-muted">Excused Days</h5>
@@ -135,18 +244,23 @@
     </div>
 
     <!-- Attendance Records -->
-    <div class="card shadow">
+    <div class="card shadow attendance-card">
         <div class="card-header bg-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
                 <i class="bi bi-list-ul me-2"></i>
                 Attendance History
             </h5>
-            <span class="badge bg-primary">{{ object_list.count }} Records</span>
+            <div>
+                <span class="badge bg-primary">{{ object_list.count }} Records</span>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i> Print
+                </button>
+            </div>
         </div>
         <div class="card-body">
             {% if object_list %}
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover attendance-table">
                     <thead class="table-light">
                         <tr>
                             <th>Date</th>
@@ -183,7 +297,9 @@
                             </td>
                             <td>
                                 {% if record.notes %}
-                                <small class="text-muted">{{ record.notes|truncatewords:5 }}</small>
+                                <small class="text-muted" data-bs-toggle="tooltip" title="{{ record.notes }}">
+                                    {{ record.notes|truncatewords:5 }}
+                                </small>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -203,28 +319,45 @@
                 <ul class="pagination justify-content-center mt-4">
                     {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page=1">First</a>
+                        <a class="page-link" href="?page=1" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
                     </li>
                     {% endif %}
 
-                    <li class="page-item active">
-                        <span class="page-link">
-                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-                        </span>
-                    </li>
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
 
                     {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a>
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
                     </li>
                     {% endif %}
                 </ul>
+                <div class="text-center text-muted small">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </div>
             </nav>
             {% endif %}
 
@@ -251,9 +384,163 @@
 
 {% block extra_js %}
 <script>
+// Student Attendance List Specific JavaScript
+class StudentAttendanceManager {
+    constructor() {
+        this.init();
+    }
+    
+    init() {
+        this.initTooltips();
+        this.initPagination();
+        this.setupFilters();
+        this.setupPrintFunctionality();
+    }
+    
+    initTooltips() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+    
+    initPagination() {
+        // Add smooth scrolling to pagination links
+        document.querySelectorAll('.pagination a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetUrl = this.href;
+                
+                // Add loading state
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+                
+                setTimeout(() => {
+                    window.location.href = targetUrl;
+                }, 500);
+            });
+        });
+    }
+    
+    setupFilters() {
+        // Add filter functionality if needed
+        const filterInput = document.createElement('input');
+        filterInput.type = 'text';
+        filterInput.className = 'form-control form-control-sm';
+        filterInput.placeholder = 'Search records...';
+        filterInput.style.maxWidth = '200px';
+        
+        // You can add filter functionality here
+        console.log('Filter setup complete');
+    }
+    
+    setupPrintFunctionality() {
+        // Enhance print functionality
+        const printBtn = document.querySelector('button[onclick="window.print()"]');
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                // Add print-specific classes before printing
+                document.body.classList.add('printing');
+                
+                setTimeout(() => {
+                    document.body.classList.remove('printing');
+                }, 1000);
+            });
+        }
+    }
+    
+    exportToCSV() {
+        // CSV export functionality
+        const table = document.querySelector('.attendance-table');
+        let csv = [];
+        
+        // Headers
+        const headers = [];
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+        csv.push(headers.join(','));
+        
+        // Rows
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const row = [];
+            tr.querySelectorAll('td').forEach(td => {
+                let text = td.textContent.trim();
+                // Remove status icons for CSV
+                text = text.replace(/[✓✗⏰📋]/g, '').trim();
+                // Handle commas in content
+                if (text.includes(',')) {
+                    text = `"${text}"`;
+                }
+                row.push(text);
+            });
+            csv.push(row.join(','));
+        });
+        
+        const csvContent = csv.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'attendance-record.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+}
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Add any interactive functionality here
-    console.log('Student attendance page loaded');
+    window.studentAttendanceManager = new StudentAttendanceManager();
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + P for print
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            window.print();
+        }
+        
+        // Ctrl + E for export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            window.studentAttendanceManager.exportToCSV();
+        }
+    });
+    
+    // Add scroll to top functionality
+    const scrollToTopBtn = document.createElement('button');
+    scrollToTopBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
+    scrollToTopBtn.className = 'btn btn-primary btn-sm position-fixed';
+    scrollToTopBtn.style.cssText = `
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: none;
+    `;
+    scrollToTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    document.body.appendChild(scrollToTopBtn);
+    
+    // Show/hide scroll to top button
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 300) {
+            scrollToTopBtn.style.display = 'block';
+        } else {
+            scrollToTopBtn.style.display = 'none';
+        }
+    });
+    
+    // Add loading state for table rows
+    const tableRows = document.querySelectorAll('.attendance-table tbody tr');
+    tableRows.forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function() {
+            this.classList.toggle('table-active');
+        });
+    });
 });
 </script>
 {% endblock %}
