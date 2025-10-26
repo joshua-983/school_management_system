@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ==================== SECURITY SETTINGS ====================
 # Use decouple config for ALL environment variables
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-development-key-only')
+SECRET_KEY = config('SECRET_KEY', default='ng6ftfs0($!ar!qr*0_st6aep_85ww975h3xpal&tx11hzdm1x')
 DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1').split(',')
 
@@ -152,33 +152,34 @@ DEFAULT_FROM_EMAIL = 'admin2@gmail.com'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 
 # ==================== SECURITY SETTINGS ====================
-# Production security settings (only applied when DEBUG=False)
+# Security settings - HSTS must be explicitly set to avoid warnings
+SECURE_HSTS_SECONDS = 0  # Disabled in development
+
+# Common security settings
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+CSRF_COOKIE_HTTPONLY = True
+
+# Development security settings (applied when DEBUG=True)
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
+# Production security settings (override when DEBUG=False)
 if not DEBUG:
-    # HTTPS/SSL settings
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    
-    # Security headers
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_SECONDS = 31536000  # 1 year in production
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_REFERRER_POLICY = 'same-origin'
-    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
     
     # Generate a proper secret key if still using the insecure one
     if SECRET_KEY.startswith('django-insecure-'):
         SECRET_KEY = get_random_secret_key()
         print(f"⚠️  WARNING: Auto-generated new secret key for production. Please set SECRET_KEY environment variable.")
-else:
-    # Development settings
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    SECURE_SSL_REDIRECT = False
-
-CSRF_COOKIE_HTTPONLY = True
 
 # ==================== AUTHENTICATION BACKENDS ====================
 AUTHENTICATION_BACKENDS = (
