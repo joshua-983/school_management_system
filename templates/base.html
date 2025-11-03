@@ -336,18 +336,23 @@
         
         <ul class="sidebar-nav">
             {% if user.is_authenticated %}
-            <!-- Dashboard -->
+            <!-- Dashboard - FIXED -->
             <li class="nav-item">
-                <a class="nav-link" href="
-                {% if user.is_superuser %}{% url 'admin_dashboard' %}
-                {% elif user.teacher %}{% url 'teacher_dashboard' %}
-                {% elif user.student %}{% url 'student_dashboard' %}
-                {% elif user.parentguardian %}{% url 'parent_dashboard' %}
-                {% else %}{% url 'home' %}{% endif %}">
-                    <i class="bi bi-speedometer2 me-2"></i>
-                    <span>Dashboard</span>
-                </a>
-            </li>
+                {% if user.is_superuser %}
+                    <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                {% elif user.teacher %}
+                    <a class="nav-link" href="{% url 'teacher_dashboard' %}">
+                {% elif user.student %}
+                    <a class="nav-link" href="{% url 'student_dashboard' %}">
+                {% elif user.parentguardian %}
+                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
+                {% else %}
+                    <a class="nav-link" href="{% url 'home' %}">
+                {% endif %}
+            <i class="bi bi-speedometer2 me-2"></i>
+            <span>Dashboard</span>
+        </a>
+    </li>
             
             <!-- Parent Portal - ONLY for Parents -->
             {% if user.parentguardian %}
@@ -374,10 +379,12 @@
                         <i class="bi bi-credit-card"></i>
                         <span>Fee Payments</span>
                     </a>
+                    {% if user.parentguardian %}
                     <a class="nav-link" href="{% url 'parent_report_card_list' %}">
                         <i class="bi bi-card-checklist"></i>
                         <span>Report Cards</span>
                     </a>
+                    {% endif %}
                     <a class="nav-link" href="{% url 'parent_messages' %}">
                         <i class="bi bi-chat-dots"></i>
                         <span>Messages</span>
@@ -439,24 +446,25 @@
                     </a>
                     {% endif %}
                     
-                    <!-- Report Cards - Show to students, parents, teachers and admin -->
-                    {% if user.student %}
-                    <a class="nav-link" href="{% url 'report_card' student_id=user.student.pk %}">
-                        <i class="bi bi-card-checklist"></i>
-                        <span>Report Card</span>
-                    </a>
-                    {% elif user.parentguardian %}
-                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
-                        <i class="bi bi-card-checklist"></i>
-                        <span>Report Cards</span>
-                    </a>
-                    {% elif user.is_superuser or user.teacher %}
-                    <a class="nav-link" href="{% url 'report_card_dashboard' %}">
-                        <i class="bi bi-card-checklist"></i>
-                        <span>Report Cards</span>
-                    </a>
+                <!-- Report Cards - FIXED -->
+                    {% if user.is_authenticated %}
+                        {% if user.student %}
+                            <a class="nav-link" href="{% url 'report_card' student_id=user.student.pk %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>My Report Card</span>
+                            </a>
+                        {% elif user.is_superuser or user.teacher %}
+                            <a class="nav-link" href="{% url 'report_card_dashboard' %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>Report Cards</span>
+                            </a>
+                        {% elif user.parentguardian %}
+                            <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>Report Cards</span>
+                            </a>
+                        {% endif %}
                     {% endif %}
-                    
                     <!-- Subjects - Show to admin and teachers -->
                     {% if user.is_superuser or user.teacher %}
                     <a class="nav-link" href="{% url 'subject_list' %}">

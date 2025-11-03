@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Grade - {{ object.student.get_full_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--danger) 0%, #c82333 100%);
+    border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
+    padding: 1.5rem;
+}
+
+.warning-card {
+    border-left: 4px solid var(--warning);
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+}
+
+.info-card {
+    border-left: 4px solid var(--info);
+    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+}
+
+.grade-badge {
+    font-size: 1.1rem;
+    padding: 0.5em 1em;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+}
+
+.grade-1 { background-color: var(--success); }
+.grade-2 { background-color: #20c997; }
+.grade-3 { background-color: var(--info); }
+.grade-4 { background-color: var(--primary); }
+.grade-5 { background-color: var(--warning); color: #000; }
+.grade-6 { background-color: #fd7e14; }
+.grade-7 { background-color: #ff6b6b; }
+.grade-8 { background-color: var(--danger); }
+.grade-9 { background-color: var(--secondary); }
+
+.readonly-field {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #495057;
+    font-weight: 500;
+}
+
+.danger-zone {
+    border: 2px solid var(--danger);
+    border-radius: var(--border-radius);
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--danger) 0%, #c82333 100%);
+    border: none;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.student-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+    margin: 0 auto 1rem;
+}
+
+@media (max-width: 768px) {
+    .student-avatar {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+    
+    .btn-danger {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+            <div class="card shadow">
+                <div class="card-header text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Delete Grade Record
+                        </h4>
+                        <span class="badge bg-light text-dark">
+                            <i class="bi bi-shield-exclamation me-1"></i>Admin Action
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Warning Alert -->
+                    <div class="alert alert-danger border-0 mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-exclamation-octagon-fill me-3 fs-4"></i>
+                            <div>
+                                <h5 class="alert-heading mb-2">Critical Action Required</h5>
+                                <p class="mb-0">You are about to permanently delete a grade record. This action cannot be undone and will be logged for audit purposes.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student Information -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">
+                                <i class="bi bi-person-vcard me-2"></i>
+                                Grade Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center mb-4">
+                                <div class="col-md-3 text-center">
+                                    <div class="student-avatar">
+                                        <i class="bi bi-person-fill"></i>
+                                    </div>
+                                    <h6 class="fw-bold mt-2">{{ object.student.get_full_name }}</h6>
+                                    <small class="text-muted">{{ object.student.student_id }}</small>
+                                </div>
+                                <div class="col-md-9">
+                                    <div class="row g-3">
+                                        <div class="col-sm-6">
+                                            <label class="form-label fw-bold text-muted">Subject</label>
+                                            <div class="readonly-field">
+                                                <i class="bi bi-book me-2"></i>
+                                                {{ object.subject.name }}
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label fw-bold text-muted">Class Level</label>
+                                            <div class="readonly-field">
+                                                <i class="bi bi-people-fill me-2"></i>
+                                                {{ object.student.get_class_level_display }}
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label fw-bold text-muted">Academic Period</label>
+                                            <div class="readonly-field">
+                                                <i class="bi bi-calendar me-2"></i>
+                                                {{ object.academic_year }} - Term {{ object.term }}
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label fw-bold text-muted">Current Grade</label>
+                                            <div class="readonly-field text-center">
+                                                <div class="fw-bold fs-5 text-primary">{{ object.total_score|default:"0" }}/100</div>
+                                                {% if object.ges_grade and object.ges_grade != 'N/A' %}
+                                                <span class="grade-badge grade-{{ object.ges_grade }} mt-1">
+                                                    {{ object.get_ges_grade_display }}
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Impact Assessment -->
+                    <div class="card warning-card mb-4">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-graph-down me-2"></i>
+                                What will be affected:
+                            </h6>
+                            <ul class="mb-0">
+                                <li>This grade record will be permanently removed from the system</li>
+                                <li>Student's academic history for this subject will be updated</li>
+                                <li>Class averages and statistics will be recalculated</li>
+                                <li>Any reports containing this grade will be affected</li>
+                                <li>An audit log entry will be created for tracking</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Restrictions Check -->
+                    {% if not can_delete %}
+                    <div class="card info-card mb-4">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-lock-fill me-2"></i>
+                                Deletion Restricted
+                            </h6>
+                            <p class="mb-0">
+                                This grade cannot be deleted because:
+                                {% if is_term_locked %}
+                                <strong>The academic term is locked for editing.</strong>
+                                {% elif is_grade_published %}
+                                <strong>This grade is part of a published report card.</strong>
+                                {% endif %}
+                                Please contact a system administrator if you need to make changes.
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Confirmation Form -->
+                    <div class="card danger-zone">
+                        <div class="card-body">
+                            <h5 class="card-title text-danger mb-4">
+                                <i class="bi bi-shield-exclamation me-2"></i>
+                                Confirm Deletion
+                            </h5>
+                            
+                            <form method="post" id="deleteForm">
+                                {% csrf_token %}
+                                
+                                <div class="mb-4">
+                                    <label for="deletion_reason" class="form-label fw-bold">
+                                        Reason for Deletion <span class="text-danger">*</span>
+                                    </label>
+                                    <textarea 
+                                        class="form-control" 
+                                        id="deletion_reason" 
+                                        name="deletion_reason" 
+                                        rows="3" 
+                                        placeholder="Please provide a reason for deleting this grade record..."
+                                        required
+                                    ></textarea>
+                                    <div class="form-text">
+                                        This reason will be recorded in the audit log for accountability.
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-warning border-0 mb-4">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-check-circle-fill me-2"></i>
+                                        <span class="fw-bold">Please confirm:</span>
+                                    </div>
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" id="confirm_delete" required>
+                                        <label class="form-check-label fw-bold" for="confirm_delete">
+                                            I understand that this action cannot be undone and I take full responsibility for this deletion.
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                                    <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                                        <i class="bi bi-arrow-left me-2"></i> Cancel & Return
+                                    </a>
+                                    
+                                    {% if can_delete %}
+                                    <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
+                                        <i class="bi bi-trash-fill me-2"></i> Permanently Delete Grade
+                                    </button>
+                                    {% else %}
+                                    <button type="button" class="btn btn-danger" disabled>
+                                        <i class="bi bi-lock-fill me-2"></i> Deletion Restricted
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Additional Information -->
+                    <div class="text-center mt-4">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Need help? Contact your system administrator for assistance with grade management.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteForm = document.getElementById('deleteForm');
+    const confirmCheckbox = document.getElementById('confirm_delete');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const reasonTextarea = document.getElementById('deletion_reason');
+
+    // Enable/disable delete button based on confirmation
+    function updateDeleteButton() {
+        const isConfirmed = confirmCheckbox.checked;
+        const hasReason = reasonTextarea.value.trim().length > 0;
+        
+        if (deleteBtn) {
+            deleteBtn.disabled = !(isConfirmed && hasReason);
+        }
+    }
+
+    // Add event listeners
+    if (confirmCheckbox) {
+        confirmCheckbox.addEventListener('change', updateDeleteButton);
+    }
+    
+    if (reasonTextarea) {
+        reasonTextarea.addEventListener('input', updateDeleteButton);
+    }
+
+    // Form submission handler
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            if (!confirmCheckbox.checked || !reasonTextarea.value.trim()) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Show loading state
+            if (deleteBtn) {
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = `
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Deleting...
+                `;
+            }
+
+            // Final confirmation
+            const confirmed = confirm('⚠️ FINAL WARNING: This will permanently delete the grade record. This action cannot be undone. Click OK to proceed.');
+            if (!confirmed) {
+                e.preventDefault();
+                if (deleteBtn) {
+                    deleteBtn.disabled = false;
+                    deleteBtn.innerHTML = `
+                        <i class="bi bi-trash-fill me-2"></i> Permanently Delete Grade
+                    `;
+                }
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    // Initialize button state
+    updateDeleteButton();
+});
+</script>
+{% endblock %}

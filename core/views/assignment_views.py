@@ -282,43 +282,48 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
         context['is_student'] = is_student(self.request.user)
         context['is_admin'] = is_admin(self.request.user)
         
-        # Handle student assignments with privacy protection
+        # Handle student assignments with enhanced functionality
         if is_student(self.request.user):
-            # FIX: Get or create StudentAssignment for the student
             student_assignment, created = StudentAssignment.objects.get_or_create(
                 assignment=assignment,
                 student=self.request.user.student,
                 defaults={'status': 'PENDING'}
             )
             
-            # Log when new StudentAssignment records are created
             if created:
                 logger.info(
                     f"Created new StudentAssignment for student {self.request.user.student.student_id} "
-                    f"({self.request.user.student.get_full_name()}) and assignment '{assignment.title}' (ID: {assignment.id})"
+                    f"({self.request.user.student.get_full_name()}) and assignment '{assignment.title}'"
                 )
             
             context['student_assignment'] = student_assignment
             context['student_assignment_id'] = student_assignment.id
-                
+            context['can_download_assignment'] = student_assignment.can_student_download_assignment()
+            context['assignment_document_url'] = student_assignment.get_assignment_document_url()
+            context['can_submit'] = student_assignment.can_student_submit_work()[0]
+            
             # Students don't see other students' submissions
             context['student_assignments'] = StudentAssignment.objects.none()
             context['submitted_count'] = 0
             context['submission_rate'] = 0
         else:
-            # Teachers/admins see all submissions
-            student_assignments = assignment.student_assignments.all()
+            # Teachers/admins see all submissions with enhanced info
+            student_assignments = assignment.student_assignments.all().select_related('student')
             context['student_assignments'] = student_assignments
             
-            # Calculate submission statistics
+            # Enhanced submission statistics
             total_students = student_assignments.count()
             submitted_count = student_assignments.exclude(status='PENDING').count()
-            context['submitted_count'] = submitted_count
-            context['submission_rate'] = (submitted_count / total_students * 100) if total_students > 0 else 0
-        
-        # Add counts for the detail page
-        student_assignments_all = assignment.student_assignments.all()
-        context['graded_count'] = student_assignments_all.filter(status='GRADED').count()
+            graded_count = student_assignments.filter(status='GRADED').count()
+            late_count = student_assignments.filter(status='LATE').count()
+            
+            context.update({
+                'submitted_count': submitted_count,
+                'graded_count': graded_count,
+                'late_count': late_count,
+                'submission_rate': (submitted_count / total_students * 100) if total_students > 0 else 0,
+                'grading_rate': (graded_count / total_students * 100) if total_students > 0 else 0,
+            })
         
         # Get analytics data
         try:
@@ -328,13 +333,14 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
             logger.error(f"Error getting analytics for assignment {assignment.id}: {str(e)}")
             context['analytics'] = None
         
-        # Permission check for editing
+        # Permission check for editing and downloads
         if is_teacher(self.request.user):
             context['can_edit'] = (assignment.class_assignment.teacher == self.request.user.teacher)
         else:
             context['can_edit'] = is_admin(self.request.user)
             
         return context
+
 
 class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwnershipRequiredMixin, UpdateView):
     model = Assignment

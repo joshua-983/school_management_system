@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@creativebulma/bulma-tooltip@1.2.0/dist/bulma-tooltip.min.css">
 <style>
 :root {
     --primary: #4361ee;
@@ -23,10 +24,31 @@
     --transition: all 0.3s ease;
 }
 
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
 .grade-table {
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow);
+    background: white;
 }
 
 .grade-table th {
@@ -35,24 +57,35 @@
     font-weight: 600;
     padding: 1rem;
     border: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .grade-table td {
     padding: 1rem;
     vertical-align: middle;
-    border-color: #dee2e6;
+    border-color: #e9ecef;
+    transition: var(--transition);
+}
+
+.grade-table tr:hover td {
+    background-color: #f8f9fa;
+    transform: scale(1.01);
 }
 
 .grade-badge {
     font-size: 0.75rem;
     padding: 0.5em 0.8em;
     border-radius: 20px;
+    font-weight: 600;
 }
 
 .filter-card {
-    background-color: var(--light);
+    background: white;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
+    border: none;
 }
 
 .stats-card {
@@ -60,60 +93,99 @@
     border: none;
     border-radius: var(--border-radius);
     overflow: hidden;
+    position: relative;
+    background: white;
+}
+
+.stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--info));
 }
 
 .stats-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
 }
 
 .stats-card .card-body {
     padding: 1.5rem;
+    position: relative;
+    z-index: 1;
 }
 
 .quick-actions {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .quick-action-btn {
-    border-radius: 20px;
-    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    padding: 0.6rem 1.2rem;
     font-size: 0.875rem;
     transition: var(--transition);
+    border: 2px solid transparent;
+    font-weight: 500;
+}
+
+.quick-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .export-buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     justify-content: center;
     flex-wrap: wrap;
 }
 
 .export-btn {
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
     transition: var(--transition);
+    min-width: 150px;
+    font-weight: 600;
+    border: 2px solid transparent;
 }
 
 .export-btn:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .score-progress {
-    height: 8px;
-    border-radius: 4px;
-    margin-top: 0.25rem;
+    height: 6px;
+    border-radius: 3px;
+    margin-top: 0.5rem;
+    background-color: #e9ecef;
+    overflow: hidden;
 }
 
-.grade-A { background-color: #198754; }
-.grade-B { background-color: #20c997; }
-.grade-C { background-color: #fd7e14; }
-.grade-D { background-color: #ffc107; }
-.grade-E { background-color: #dc3545; }
-.grade-F { background-color: #6c757d; }
+.progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* Grade-specific colors */
+.grade-1 { background-color: #198754; color: white; }
+.grade-2 { background-color: #20c997; color: white; }
+.grade-3 { background-color: #35a2eb; color: white; }
+.grade-4 { background-color: #6f42c1; color: white; }
+.grade-5 { background-color: #fd7e14; color: white; }
+.grade-6 { background-color: #e83e8c; color: white; }
+.grade-7 { background-color: #ffc107; color: #212529; }
+.grade-8 { background-color: #dc3545; color: white; }
+.grade-9 { background-color: #6c757d; color: white; }
+
+.score-high { color: #198754; font-weight: 700; }
+.score-medium { color: #fd7e14; font-weight: 700; }
+.score-low { color: #dc3545; font-weight: 700; }
 
 @media (max-width: 768px) {
     .grade-table {
@@ -126,6 +198,12 @@
     
     .quick-actions {
         flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .quick-action-btn {
+        width: 100%;
+        text-align: center;
     }
     
     .export-buttons {
@@ -134,17 +212,29 @@
     
     .export-btn {
         width: 100%;
+        min-width: auto;
+    }
+    
+    .page-header {
+        padding: 1.5rem;
+        text-align: center;
     }
 }
 
 /* Animation for new records */
 @keyframes highlightRow {
-    0% { background-color: rgba(25, 135, 84, 0.2); }
-    100% { background-color: transparent; }
+    0% { 
+        background-color: rgba(25, 135, 84, 0.3);
+        transform: scale(1.02);
+    }
+    100% { 
+        background-color: transparent;
+        transform: scale(1);
+    }
 }
 
 .highlight-new {
-    animation: highlightRow 2s ease;
+    animation: highlightRow 1.5s ease;
 }
 
 /* Loading animation */
@@ -154,18 +244,255 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 9999;
     display: none;
+    backdrop-filter: blur(5px);
 }
 
 .spinner-large {
     width: 3rem;
     height: 3rem;
 }
+
+/* Advanced filter section */
+.advanced-filters {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-section-title {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Empty state styling */
+.empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: white;
+    border-radius: var(--border-radius);
+}
+
+.empty-state-icon {
+    font-size: 5rem;
+    opacity: 0.3;
+    margin-bottom: 1.5rem;
+    color: var(--secondary);
+}
+
+/* Statistics improvements */
+.stats-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+/* Export section enhancements */
+.export-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    border: none;
+    color: white;
+    overflow: hidden;
+    position: relative;
+}
+
+.export-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.export-section .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+.export-features {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.export-feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.export-feature-item:last-child {
+    margin-bottom: 0;
+}
+
+.export-feature-item i {
+    color: #20c997;
+    margin-right: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.export-format-badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    margin-left: 0.5rem;
+    border-radius: 15px;
+}
+
+/* Action buttons enhancement */
+.action-buttons .btn {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.action-buttons .btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Search box enhancement */
+.search-box {
+    position: relative;
+}
+
+.search-box .form-control {
+    padding-left: 2.5rem;
+    border-radius: 25px;
+    border: 2px solid #e9ecef;
+    transition: var(--transition);
+}
+
+.search-box .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+.search-box i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    z-index: 5;
+}
+
+/* Responsive improvements */
+@media (max-width: 576px) {
+    .table-responsive {
+        font-size: 0.8rem;
+        border: 1px solid #dee2e6;
+        border-radius: var(--border-radius);
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.75rem;
+    }
+    
+    .stats-value {
+        font-size: 2rem;
+    }
+}
+
+/* Custom scrollbar for table */
+.table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* Badge enhancements */
+.badge {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Card hover effects */
+.card {
+    transition: var(--transition);
+}
+
+.card:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Form control enhancements */
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: var(--transition);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+/* Select2 customization */
+.select2-container--bootstrap-5 .select2-selection {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: var(--transition);
+}
+
+.select2-container--bootstrap-5 .select2-selection:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+/* Performance indicators */
+.performance-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.performance-excellent { background-color: #198754; }
+.performance-good { background-color: #20c997; }
+.performance-average { background-color: #fd7e14; }
+.performance-poor { background-color: #dc3545; }
 </style>
 {% endblock %}
 
@@ -173,337 +500,649 @@
 <div class="container-fluid py-4">
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner-border spinner-large text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+        <div class="text-center">
+            <div class="spinner-border spinner-large text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">Processing your request...</p>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-                            <li class="breadcrumb-item"><a href="{% url 'grade_list' %}">Grades</a></li>
-                            <li class="breadcrumb-item active" aria-current="page">Grade List</li>
-                        </ol>
-                    </nav>
-                    <h1 class="h3 mb-0">
-                        <i class="bi bi-clipboard-data text-primary me-2"></i>
-                        Grade Management
-                    </h1>
-                    <p class="text-muted mb-0">View and manage student grades</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <a href="{% url 'grade_add' %}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle me-2"></i>Add New Grade
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb" class="text-white-50 mb-2">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-white-50">Home</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page">Grade Management</li>
+                    </ol>
+                </nav>
+                <h1 class="h2 mb-2 text-white">
+                    <i class="bi bi-clipboard-data me-3"></i>
+                    Grade Management System
+                </h1>
+                <p class="lead mb-0 text-white-50">Comprehensive grade tracking, analysis, and reporting</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="btn-group action-buttons">
+                    <a href="{% url 'grade_add' %}" class="btn btn-light btn-lg">
+                        <i class="bi bi-plus-circle me-2"></i>Add Grade
                     </a>
-                    <a href="{% url 'grade_bulk_upload' %}" class="btn btn-outline-primary">
+                    <a href="{% url 'grade_bulk_upload' %}" class="btn btn-outline-light btn-lg">
                         <i class="bi bi-upload me-2"></i>Bulk Upload
                     </a>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Messages -->
-            {% if messages %}
-            <div class="mb-4">
-                {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'warning' %}bi-exclamation-triangle{% elif message.tags == 'error' %}bi-x-circle{% else %}bi-info-circle{% endif %} me-2"></i>
+    <!-- Messages -->
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% elif message.tags == 'error' %}bi-x-circle-fill{% else %}bi-info-circle-fill{% endif %} me-2 fs-5"></i>
+                <div class="flex-grow-1">
                     {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                {% endfor %}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
-            <!-- Quick Actions -->
-            <div class="quick-actions mb-4">
+    <!-- Quick Actions -->
+    <div class="card filter-card mb-4">
+        <div class="card-body">
+            <h6 class="filter-section-title">
+                <i class="bi bi-lightning-charge-fill"></i>
+                Quick Filters
+            </h6>
+            <div class="quick-actions">
                 {% for level_code, level_name in class_levels %}
                 <button class="btn btn-outline-primary quick-action-btn" data-filter="class_level" data-value="{{ level_code }}">
-                    <i class="bi bi-people-fill me-1"></i>{{ level_name }}
+                    <i class="bi bi-people-fill me-2"></i>{{ level_name }}
                 </button>
                 {% endfor %}
                 <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="1">
-                    <i class="bi bi-calendar me-1"></i>Term 1
+                    <i class="bi bi-calendar-week me-2"></i>Term 1
                 </button>
                 <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="2">
-                    <i class="bi bi-calendar me-1"></i>Term 2
+                    <i class="bi bi-calendar-week me-2"></i>Term 2
                 </button>
                 <button class="btn btn-outline-success quick-action-btn" data-filter="term" data-value="3">
-                    <i class="bi bi-calendar me-1"></i>Term 3
+                    <i class="bi bi-calendar-week me-2"></i>Term 3
                 </button>
+                {% if current_filters.student or current_filters.subject or current_filters.class_level or current_filters.academic_year or current_filters.term %}
+                <a href="{% url 'grade_list' %}" class="btn btn-outline-danger quick-action-btn">
+                    <i class="bi bi-x-circle me-2"></i>Clear All Filters
+                </a>
+                {% endif %}
             </div>
+        </div>
+    </div>
 
-            <!-- Statistics Cards -->
-            <div class="row mb-4">
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-people-fill text-primary display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ total_students }}</h3>
-                            <p class="text-muted mb-0">Total Students</p>
+    <!-- Statistics Dashboard -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <div class="stats-icon mb-3">
+                        <i class="bi bi-people-fill display-6 text-primary"></i>
+                    </div>
+                    <div class="stats-value">{{ total_students|default:0 }}</div>
+                    <p class="stats-label">Total Students</p>
+                    {% if current_filters.class_level %}
+                    <small class="text-muted filter-status">
+                        <i class="bi bi-funnel me-1"></i>Filtered by Class
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <div class="stats-icon mb-3">
+                        <i class="bi bi-clipboard-check display-6 text-success"></i>
+                    </div>
+                    <div class="stats-value">{{ total_grades|default:0 }}</div>
+                    <p class="stats-label">Grades Recorded</p>
+                    {% if current_filters.student or current_filters.subject %}
+                    <small class="text-muted filter-status">
+                        <i class="bi bi-funnel me-1"></i>Filtered Results
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <div class="stats-icon mb-3">
+                        <i class="bi bi-book display-6 text-warning"></i>
+                    </div>
+                    <div class="stats-value">{{ total_subjects|default:0 }}</div>
+                    <p class="stats-label">Active Subjects</p>
+                    {% if current_filters.subject %}
+                    <small class="text-muted filter-status">
+                        <i class="bi bi-funnel me-1"></i>Filtered by Subject
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <div class="stats-icon mb-3">
+                        <i class="bi bi-graph-up display-6 text-info"></i>
+                    </div>
+                    <div class="stats-value">{{ average_grade|default:0|floatformat:1 }}%</div>
+                    <p class="stats-label">Average Score</p>
+                    <div class="progress score-progress mt-2">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ average_grade|default:0 }}%;" 
+                             aria-valuenow="{{ average_grade|default:0 }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-clipboard-check text-success display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ total_grades }}</h3>
-                            <p class="text-muted mb-0">Grades Recorded</p>
-                        </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="card filter-card mb-4">
+        <div class="card-header bg-light py-3">
+            <h6 class="mb-0">
+                <i class="bi bi-funnel-fill me-2 text-primary"></i>
+                Advanced Grade Filters
+                {% if has_active_filters %}
+                <span class="badge bg-primary ms-2">
+                    <i class="bi bi-funnel me-1"></i>Active Filters
+                </span>
+                {% endif %}
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3" id="filterForm">
+                <!-- Basic Filters Row -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="student" class="form-label fw-semibold">Student</label>
+                        <select name="student" id="student" class="form-select">
+                            <option value="">All Students</option>
+                            {% for student in students %}
+                            <option value="{{ student.id }}" 
+                                {% if current_filters.student == student.id|stringformat:"s" %}selected{% endif %}>
+                                {{ student.get_full_name|default:student.user.username }} 
+                                {% if student.student_id %}({{ student.student_id }}){% endif %}
+                            </option>
+                            {% empty %}
+                            <option value="">No students available</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="subject" class="form-label fw-semibold">Subject</label>
+                        <select name="subject" id="subject" class="form-select">
+                            <option value="">All Subjects</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}" 
+                                {% if current_filters.subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                                {{ subject.name }}
+                                {% if subject.code %}({{ subject.code }}){% endif %}
+                            </option>
+                            {% empty %}
+                            <option value="">No subjects available</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="class_level" class="form-label fw-semibold">Class Level</label>
+                        <select name="class_level" id="class_level" class="form-select">
+                            <option value="">All Classes</option>
+                            {% for level_code, level_name in class_levels %}
+                            <option value="{{ level_code }}" 
+                                {% if current_filters.class_level == level_code %}selected{% endif %}>
+                                {{ level_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="academic_year" class="form-label fw-semibold">Academic Year</label>
+                        <input type="text" name="academic_year" id="academic_year" class="form-control" 
+                               value="{{ current_filters.academic_year }}" placeholder="2023/2024"
+                               pattern="\d{4}/\d{4}" title="Please use format: YYYY/YYYY">
+                        <div class="form-text">Format: YYYY/YYYY</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="term" class="form-label fw-semibold">Term</label>
+                        <select name="term" id="term" class="form-select">
+                            <option value="">All Terms</option>
+                            <option value="1" {% if current_filters.term == "1" %}selected{% endif %}>Term 1</option>
+                            <option value="2" {% if current_filters.term == "2" %}selected{% endif %}>Term 2</option>
+                            <option value="3" {% if current_filters.term == "3" %}selected{% endif %}>Term 3</option>
+                        </select>
                     </div>
                 </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-book text-warning display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ total_subjects }}</h3>
-                            <p class="text-muted mb-0">Subjects</p>
+
+                <!-- Advanced Filters Row -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="ges_grade" class="form-label fw-semibold">Grade Level</label>
+                        <select name="ges_grade" id="ges_grade" class="form-select">
+                            <option value="">All Grades</option>
+                            <option value="1" {% if current_filters.ges_grade == "1" %}selected{% endif %}>1 - Excellent</option>
+                            <option value="2" {% if current_filters.ges_grade == "2" %}selected{% endif %}>2 - Very Good</option>
+                            <option value="3" {% if current_filters.ges_grade == "3" %}selected{% endif %}>3 - Good</option>
+                            <option value="4" {% if current_filters.ges_grade == "4" %}selected{% endif %}>4 - Credit</option>
+                            <option value="5" {% if current_filters.ges_grade == "5" %}selected{% endif %}>5 - Credit</option>
+                            <option value="6" {% if current_filters.ges_grade == "6" %}selected{% endif %}>6 - Credit</option>
+                            <option value="7" {% if current_filters.ges_grade == "7" %}selected{% endif %}>7 - Pass</option>
+                            <option value="8" {% if current_filters.ges_grade == "8" %}selected{% endif %}>8 - Pass</option>
+                            <option value="9" {% if current_filters.ges_grade == "9" %}selected{% endif %}>9 - Fail</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="min_score" class="form-label fw-semibold">Min Score</label>
+                        <input type="number" name="min_score" id="min_score" class="form-control" 
+                               value="{{ current_filters.min_score }}" min="0" max="100" step="0.1"
+                               placeholder="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="max_score" class="form-label fw-semibold">Max Score</label>
+                        <input type="number" name="max_score" id="max_score" class="form-control" 
+                               value="{{ current_filters.max_score }}" min="0" max="100" step="0.1"
+                               placeholder="100">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="search" class="form-label fw-semibold">Search</label>
+                        <div class="search-box">
+                            <i class="bi bi-search"></i>
+                            <input type="text" name="search" id="search" class="form-control" 
+                                   value="{{ current_filters.search }}" placeholder="Search students, subjects...">
                         </div>
                     </div>
+                    <div class="col-md-2">
+                        <label for="order_by" class="form-label fw-semibold">Sort By</label>
+                        <select name="order_by" id="order_by" class="form-select">
+                            <option value="-created_at" {% if current_filters.order_by == "-created_at" %}selected{% endif %}>Newest First</option>
+                            <option value="created_at" {% if current_filters.order_by == "created_at" %}selected{% endif %}>Oldest First</option>
+                            <option value="total_score" {% if current_filters.order_by == "total_score" %}selected{% endif %}>Score: Low to High</option>
+                            <option value="-total_score" {% if current_filters.order_by == "-total_score" %}selected{% endif %}>Score: High to Low</option>
+                            <option value="student__last_name" {% if current_filters.order_by == "student__last_name" %}selected{% endif %}>Student Name A-Z</option>
+                            <option value="-student__last_name" {% if current_filters.order_by == "-student__last_name" %}selected{% endif %}>Student Name Z-A</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-graph-up text-info display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ average_grade|floatformat:1 }}%</h3>
-                            <p class="text-muted mb-0">Average Score</p>
-                            <div class="progress score-progress">
-                                <div class="progress-bar" role="progressbar" 
-                                     style="width: {{ average_grade }}%;" 
-                                     aria-valuenow="{{ average_grade }}" 
-                                     aria-valuemin="0" 
-                                     aria-valuemax="100"></div>
+
+                <!-- Form Actions -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                {% if has_active_filters %}
+                                <small class="text-muted">
+                                    <i class="bi bi-funnel me-1"></i>
+                                    Active filters: 
+                                    {% if current_filters.student %}Student, {% endif %}
+                                    {% if current_filters.subject %}Subject, {% endif %}
+                                    {% if current_filters.class_level %}Class, {% endif %}
+                                    {% if current_filters.academic_year %}Year, {% endif %}
+                                    {% if current_filters.term %}Term, {% endif %}
+                                    {% if current_filters.ges_grade %}Grade Level, {% endif %}
+                                    {% if current_filters.min_score or current_filters.max_score %}Score Range{% endif %}
+                                </small>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary px-4">
+                                    <i class="bi bi-filter me-2"></i>Apply Filters
+                                </button>
+                                <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary" title="Reset all filters">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </a>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </form>
+        </div>
+    </div>
 
-            <!-- Filters -->
-            <div class="card filter-card mb-4">
-                <div class="card-header bg-light py-3">
-                    <h6 class="mb-0">
-                        <i class="bi bi-funnel me-2"></i>
-                        Filter Grades
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <form method="get" class="row g-3" id="filterForm">
-                        <div class="col-md-3">
-                            <label for="student" class="form-label">Student</label>
-                            <select name="student" id="student" class="form-select">
-                                <option value="">All Students</option>
-                                {% for student in students %}
-                                <option value="{{ student.id }}" {% if current_filters.student == student.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ student.get_full_name|default:student.user.username }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="subject" class="form-label">Subject</label>
-                            <select name="subject" id="subject" class="form-select">
-                                <option value="">All Subjects</option>
-                                {% for subject in subjects %}
-                                <option value="{{ subject.id }}" {% if current_filters.subject == subject.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ subject.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="class_level" class="form-label">Class</label>
-                            <select name="class_level" id="class_level" class="form-select">
-                                <option value="">All Classes</option>
-                                {% for level_code, level_name in class_levels %}
-                                <option value="{{ level_code }}" {% if current_filters.class_level == level_code %}selected{% endif %}>
-                                    {{ level_name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="academic_year" class="form-label">Year</label>
-                            <input type="text" name="academic_year" id="academic_year" class="form-control" 
-                                   value="{{ current_filters.academic_year }}" placeholder="YYYY/YYYY"
-                                   pattern="\d{4}/\d{4}" title="Please use format: YYYY/YYYY">
-                        </div>
-                        <div class="col-md-2">
-                            <label for="term" class="form-label">Term</label>
-                            <select name="term" id="term" class="form-select">
-                                <option value="">All Terms</option>
-                                <option value="1" {% if current_filters.term == "1" %}selected{% endif %}>Term 1</option>
-                                <option value="2" {% if current_filters.term == "2" %}selected{% endif %}>Term 2</option>
-                                <option value="3" {% if current_filters.term == "3" %}selected{% endif %}>Term 3</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end gap-2">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-filter me-1"></i>Apply
-                            </button>
-                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary" title="Reset filters">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </a>
-                        </div>
-                    </form>
+    <!-- Grades Table -->
+    <div class="card grade-table">
+        <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="bi bi-list-check me-2 text-primary"></i>
+                Grade Records
+                {% if has_active_filters %}
+                <small class="text-muted">(Filtered View)</small>
+                {% endif %}
+            </h6>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-primary">
+                    <i class="bi bi-list-check me-1"></i>{{ grades.count }} record(s)
+                </span>
+                {% if is_paginated %}
+                <span class="badge bg-secondary">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                {% endif %}
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-gear me-1"></i>Options
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'grade_add' %}"><i class="bi bi-plus-circle me-2"></i>Add New Grade</a></li>
+                        <li><a class="dropdown-item" href="{% url 'grade_bulk_upload' %}"><i class="bi bi-upload me-2"></i>Bulk Upload</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="triggerExport('csv')"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Export CSV</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="triggerExport('excel')"><i class="bi bi-file-earmark-excel me-2"></i>Export Excel</a></li>
+                    </ul>
                 </div>
             </div>
-
-            <!-- Grades Table -->
-            <div class="card grade-table">
-                <div class="card-header bg-light py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="bi bi-list-check me-2"></i>
-                        Grade Records
-                    </h6>
-                    <span class="badge bg-primary">{{ grades.count }} record(s)</span>
-                </div>
-                <div class="card-body p-0">
-                    {% if grades %}
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Subject</th>
-                                    <th>Class</th>
-                                    <th>Academic Year</th>
-                                    <th>Term</th>
-                                    <th>Total Score</th>
-                                    <th>Grade</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for grade in grades %}
-                                <tr class="{% if forloop.first and request.GET.new %}highlight-new{% endif %}">
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="flex-shrink-0">
-                                                <i class="bi bi-person-circle text-muted"></i>
-                                            </div>
-                                            <div class="flex-grow-1 ms-2">
-                                                <strong>{{ grade.student.get_full_name|default:grade.student.user.username }}</strong>
-                                                <br>
-                                                <small class="text-muted">{{ grade.student.student_id }}</small>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>{{ grade.subject.name }}</td>
-                                    <td>
-                                        <span class="badge bg-primary">{{ grade.student.get_class_level_display }}</span>
-                                    </td>
-                                    <td>{{ grade.academic_year }}</td>
-                                    <td>
-                                        <span class="badge bg-info">Term {{ grade.term }}</span>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
-                                                {{ grade.total_score|default:"N/A" }}
-                                            </span>
-                                            <small class="text-muted ms-1">/100</small>
-                                        </div>
-                                        <div class="progress score-progress mt-1">
-                                            <div class="progress-bar grade-{{ grade.ges_grade|default:'F' }}" 
-                                                 role="progressbar" 
-                                                 style="width: {{ grade.total_score|default:0 }}%;" 
-                                                 aria-valuenow="{{ grade.total_score|default:0 }}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100"></div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="badge grade-badge grade-{{ grade.ges_grade|default:'F' }}">
-                                            {{ grade.get_ges_grade_display|default:"N/A" }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <a href="{% url 'grade_edit' grade.pk %}" class="btn btn-outline-primary" title="Edit" data-bs-toggle="tooltip">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-                                            <a href="{% url 'grade_delete' grade.pk %}" class="btn btn-outline-danger" title="Delete" data-bs-toggle="tooltip" onclick="return confirm('Are you sure you want to delete this grade record?')">
-                                                <i class="bi bi-trash"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Pagination -->
-                    {% if is_paginated %}
-                    <div class="card-footer">
-                        <nav aria-label="Grade pagination">
-                            <ul class="pagination justify-content-center mb-0">
-                                {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
-                                </li>
-                                {% endif %}
-
-                                <li class="page-item active">
-                                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                                </li>
-
-                                {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
-                                </li>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </nav>
-                    </div>
-                    {% endif %}
-
-                    {% else %}
-                    <div class="text-center py-5">
-                        <i class="bi bi-clipboard-x display-1 text-muted"></i>
-                        <h4 class="mt-3 text-muted">No grades found</h4>
-                        <p class="text-muted">No grade records match your current filters.</p>
-                        <a href="{% url 'grade_add' %}" class="btn btn-primary mt-2">
-                            <i class="bi bi-plus-circle me-2"></i>Record Your First Grade
-                        </a>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Export Options -->
+        </div>
+        <div class="card-body p-0">
             {% if grades %}
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-body text-center">
-                    <h6 class="mb-3">Export Grades</h6>
-                    <div class="export-buttons">
-                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success export-btn">
-                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
-                        </a>
-                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger export-btn">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-                        </a>
-                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary export-btn">
-                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
-                        </a>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th width="20%">Student Information</th>
+                            <th width="15%">Subject Details</th>
+                            <th width="8%">Class</th>
+                            <th width="10%">Academic Year</th>
+                            <th width="8%">Term</th>
+                            <th width="12%">Score Analysis</th>
+                            <th width="10%">Grade</th>
+                            <th width="17%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for grade in grades %}
+                        <tr class="{% if forloop.first and request.GET.new %}highlight-new{% endif %}">
+                            <!-- Student Information -->
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                            <i class="bi bi-person-fill"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <strong class="d-block">{{ grade.student.get_full_name|default:grade.student.user.username }}</strong>
+                                        <small class="text-muted">{{ grade.student.student_id }}</small>
+                                        {% if grade.student.class_level %}
+                                        <br>
+                                        <span class="badge bg-light text-dark border">{{ grade.student.get_class_level_display }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            <!-- Subject Details -->
+                            <td>
+                                <strong class="d-block">{{ grade.subject.name }}</strong>
+                                {% if grade.subject.code %}
+                                <small class="text-muted">Code: {{ grade.subject.code }}</small>
+                                {% endif %}
+                                {% if grade.class_assignment.teacher %}
+                                <br>
+                                <small class="text-muted">
+                                    <i class="bi bi-person-badge me-1"></i>
+                                    {{ grade.class_assignment.teacher.user.get_full_name }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Class -->
+                            <td>
+                                <span class="badge bg-primary">{{ grade.student.get_class_level_display }}</span>
+                            </td>
+                            
+                            <!-- Academic Year -->
+                            <td>
+                                <span class="fw-semibold">{{ grade.academic_year }}</span>
+                            </td>
+                            
+                            <!-- Term -->
+                            <td>
+                                <span class="badge bg-info">Term {{ grade.term }}</span>
+                            </td>
+                            
+                            <!-- Score Analysis -->
+                            <td>
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="fw-bold {% if grade.total_score >= 80 %}score-high{% elif grade.total_score >= 60 %}score-medium{% else %}score-low{% endif %}">
+                                        {{ grade.total_score|default:"N/A"|floatformat:1 }}
+                                    </span>
+                                    <small class="text-muted ms-1">/100</small>
+                                </div>
+                                <div class="progress score-progress">
+                                    <div class="progress-bar grade-{{ grade.ges_grade|default:'9' }}" 
+                                         role="progressbar" 
+                                         style="width: {{ grade.total_score|default:0 }}%;" 
+                                         aria-valuenow="{{ grade.total_score|default:0 }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    {% if grade.total_score >= 80 %}
+                                    <span class="performance-indicator performance-excellent"></span>Excellent
+                                    {% elif grade.total_score >= 70 %}
+                                    <span class="performance-indicator performance-good"></span>Very Good
+                                    {% elif grade.total_score >= 60 %}
+                                    <span class="performance-indicator performance-good"></span>Good
+                                    {% elif grade.total_score >= 50 %}
+                                    <span class="performance-indicator performance-average"></span>Satisfactory
+                                    {% elif grade.total_score >= 40 %}
+                                    <span class="performance-indicator performance-average"></span>Fair
+                                    {% else %}
+                                    <span class="performance-indicator performance-poor"></span>Needs Improvement
+                                    {% endif %}
+                                </small>
+                            </td>
+                            
+                            <!-- Grade -->
+                            <td>
+                                <span class="badge grade-badge grade-{{ grade.ges_grade|default:'9' }}">
+                                    {{ grade.get_ges_grade_display|default:"N/A" }}
+                                </span>
+                                {% if grade.letter_grade %}
+                                <br>
+                                <small class="text-muted">({{ grade.letter_grade }})</small>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Actions -->
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{% url 'grade_edit' grade.pk %}" class="btn btn-outline-primary" title="Edit Grade" data-bs-toggle="tooltip">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </a>
+                                    <a href="{% url 'grade_detail' grade.pk %}" class="btn btn-outline-info" title="View Details" data-bs-toggle="tooltip">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    {% if user.is_superuser or is_admin %}
+                                    <a href="{% url 'grade_delete' grade.pk %}" class="btn btn-outline-danger" title="Delete Grade" data-bs-toggle="tooltip" 
+                                       onclick="return confirm('Are you sure you want to delete this grade record for {{ grade.student.get_full_name }} in {{ grade.subject.name }}? This action cannot be undone.')">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
+                                        <span class="visually-hidden">More Actions</span>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="{% url 'grade_detail' grade.pk %}"><i class="bi bi-eye me-2"></i>View Full Details</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'grade_edit' grade.pk %}"><i class="bi bi-pencil me-2"></i>Edit Record</a></li>
+                                        {% if user.is_superuser or is_admin %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" href="{% url 'grade_delete' grade.pk %}" 
+                                               onclick="return confirm('Permanently delete this grade record?')">
+                                            <i class="bi bi-trash me-2"></i>Delete
+                                        </a></li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <div class="card-footer bg-light">
+                <nav aria-label="Grade pagination">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" title="First Page">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" title="Previous Page">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" title="Next Page">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" title="Last Page">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    <div class="text-center mt-2">
+                        <small class="text-muted">
+                            Showing {{ page_obj.start_index }} - {{ page_obj.end_index }} of {{ page_obj.paginator.count }} records
+                        </small>
                     </div>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="empty-state">
+                <i class="bi bi-clipboard-x empty-state-icon"></i>
+                <h3 class="mt-3 text-muted">No Grade Records Found</h3>
+                <p class="text-muted mb-4 lead">
+                    {% if has_active_filters %}
+                    No grade records match your current search criteria. Try adjusting your filters or search terms.
+                    {% else %}
+                    No grade records have been created yet. Start by adding your first grade record.
+                    {% endif %}
+                </p>
+                <div class="d-flex gap-3 justify-content-center flex-wrap">
+                    <a href="{% url 'grade_add' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-circle me-2"></i>Add First Grade
+                    </a>
+                    <a href="{% url 'grade_bulk_upload' %}" class="btn btn-outline-primary btn-lg">
+                        <i class="bi bi-upload me-2"></i>Bulk Upload Grades
+                    </a>
+                    {% if has_active_filters %}
+                    <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary btn-lg">
+                        <i class="bi bi-x-circle me-2"></i>Clear All Filters
+                    </a>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
         </div>
     </div>
+
+    <!-- Export Section -->
+    {% if grades %}
+    <div class="card export-section mt-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="mb-2 text-white">
+                        <i class="bi bi-download me-3"></i>
+                        Export Grade Data
+                    </h5>
+                    <p class="text-white-50 mb-3">Download the current grade records in your preferred format for analysis, reporting, or backup purposes.</p>
+                    
+                    <div class="export-buttons">
+                        <button type="button" class="btn btn-light export-btn" onclick="triggerExport('csv')">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV Format
+                            <span class="badge bg-success export-format-badge">.CSV</span>
+                        </button>
+                        <button type="button" class="btn btn-light export-btn" onclick="triggerExport('excel')">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Excel Format
+                            <span class="badge bg-primary export-format-badge">.XLSX</span>
+                        </button>
+                        <button type="button" class="btn btn-light export-btn" onclick="triggerExport('pdf')">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>PDF Report
+                            <span class="badge bg-danger export-format-badge">.PDF</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="export-features">
+                        <h6 class="text-white mb-3">Export Includes:</h6>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>All current filters and sorting</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Detailed score breakdowns</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Grade statistics and analysis</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Professional formatting</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="exportMessage" class="export-message mt-3"></div>
+            
+            {% if has_active_filters %}
+            <small class="text-white-50 mt-3 d-block">
+                <i class="bi bi-info-circle me-1"></i>
+                Export includes currently filtered results only ({{ grades.count }} records)
+            </small>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -511,12 +1150,13 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Select2 for filter dropdowns
-    $('#student, #subject, #class_level, #term').select2({
+    // Initialize Select2 for enhanced dropdowns
+    $('#student, #subject, #class_level, #term, #ges_grade, #order_by').select2({
         theme: 'bootstrap-5',
         width: '100%',
         placeholder: 'Select an option',
-        allowClear: true
+        allowClear: true,
+        dropdownParent: $('#filterForm')
     });
 
     // Initialize tooltips
@@ -525,52 +1165,566 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Quick filter actions
     document.querySelectorAll('.quick-action-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const filterType = this.dataset.filter;
-            const filterValue = this.dataset.value;
+        if (!button.getAttribute('href')) {
+            button.addEventListener('click', function() {
+                const filterType = this.dataset.filter;
+                const filterValue = this.dataset.value;
+                
+                const filterField = document.querySelector(`[name="${filterType}"]`);
+                if (filterField) {
+                    if (filterField.tagName === 'SELECT') {
+                        $(filterField).val(filterValue).trigger('change');
+                    } else {
+                        filterField.value = filterValue;
+                    }
+                    
+                    // Add visual feedback
+                    this.classList.add('btn-primary');
+                    this.classList.remove('btn-outline-primary', 'btn-outline-success');
+                    
+                    // Submit form after a brief delay
+                    setTimeout(() => {
+                        document.getElementById('filterForm').submit();
+                    }, 300);
+                }
+            });
+        }
+    });
+
+    // Enhanced export functionality with progress tracking
+    window.triggerExport = function(exportType) {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const exportMessage = document.getElementById('exportMessage');
+        const exportButtons = document.querySelectorAll('.export-btn');
+        
+        // Show loading overlay immediately
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'flex';
+        }
+        
+        // Disable all export buttons during processing
+        exportButtons.forEach(btn => {
+            btn.disabled = true;
+            const originalContent = btn.innerHTML;
+            btn.setAttribute('data-original-content', originalContent);
+            btn.innerHTML = `<div class="spinner-border spinner-border-sm me-2" role="status"></div>Preparing...`;
+        });
+        
+        // Show export message
+        if (exportMessage) {
+            exportMessage.className = 'alert alert-info show';
+            exportMessage.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>
+                        <strong>Preparing Export</strong><br>
+                        <small>Generating ${exportType.toUpperCase()} file with current data. This may take a moment...</small>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Get current filter parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('export', exportType);
+        
+        // Create download URL
+        const downloadUrl = `{% url 'export_grades' %}?${urlParams.toString()}`;
+        
+        // File type information
+        const fileInfo = {
+            'csv': { extension: 'csv', type: 'CSV', icon: 'file-earmark-spreadsheet', color: 'success' },
+            'excel': { extension: 'xlsx', type: 'Excel', icon: 'file-earmark-excel', color: 'primary' },
+            'pdf': { extension: 'pdf', type: 'PDF', icon: 'file-earmark-pdf', color: 'danger' }
+        }[exportType];
+        
+        // Create hidden iframe for download
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = downloadUrl;
+        document.body.appendChild(iframe);
+        
+        // Track download progress
+        let downloadStarted = false;
+        const startTime = Date.now();
+        const maxWaitTime = 120000; // 2 minutes maximum wait time
+        
+        // Check for download completion
+        const checkDownloadStatus = setInterval(() => {
+            const currentTime = Date.now();
+            const elapsedTime = currentTime - startTime;
             
-            // Update the corresponding filter field
-            const filterField = document.querySelector(`[name="${filterType}"]`);
-            if (filterField) {
-                if (filterField.tagName === 'SELECT') {
-                    $(filterField).val(filterValue).trigger('change');
+            // Update progress message
+            if (exportMessage && !downloadStarted) {
+                const seconds = Math.floor(elapsedTime / 1000);
+                exportMessage.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div>
+                            <strong>Processing Data</strong><br>
+                            <small>Exporting ${exportType.toUpperCase()} file... (${seconds}s)</small>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Timeout protection
+            if (elapsedTime > maxWaitTime) {
+                clearInterval(checkDownloadStatus);
+                handleExportCompletion(false, 'Export timed out. Please try again with fewer records or different filters.');
+            }
+        }, 1000);
+        
+        // Handle export completion
+        function handleExportCompletion(success, message = null) {
+            clearInterval(checkDownloadStatus);
+            
+            // Hide loading overlay
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+            
+            // Re-enable and reset export buttons
+            exportButtons.forEach(btn => {
+                btn.disabled = false;
+                const originalContent = btn.getAttribute('data-original-content');
+                if (originalContent) {
+                    btn.innerHTML = originalContent;
+                }
+            });
+            
+            // Show result message
+            if (exportMessage) {
+                if (success) {
+                    exportMessage.className = 'alert alert-success show';
+                    exportMessage.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+                            <div>
+                                <strong>Export Successful!</strong><br>
+                                <small>Your ${fileInfo.type} file has been generated. Check your downloads folder.</small>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    filterField.value = filterValue;
+                    exportMessage.className = 'alert alert-danger show';
+                    exportMessage.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                            <div>
+                                <strong>Export Failed</strong><br>
+                                <small>${message || 'There was an error generating the export file.'}</small>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Auto-hide success message after 8 seconds
+                if (success) {
+                    setTimeout(() => {
+                        exportMessage.className = 'export-message';
+                        exportMessage.innerHTML = '';
+                    }, 8000);
                 }
             }
             
-            // Submit the form
-            document.getElementById('filterForm').submit();
-        });
-    });
-
-    // Show loading state during exports
-    document.querySelectorAll('.export-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.getElementById('loadingOverlay').style.display = 'flex';
-        });
-    });
-
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
+            // Clean up iframe
+            setTimeout(() => {
+                if (iframe.parentNode) {
+                    document.body.removeChild(iframe);
+                }
+            }, 1000);
+        }
+        
+        // Assume success after a reasonable time (adjust based on typical export times)
         setTimeout(() => {
-            bootstrap.Alert.getOrCreateInstance(alert).close();
-        }, 5000);
-    });
+            if (!downloadStarted) {
+                downloadStarted = true;
+                handleExportCompletion(true);
+            }
+        }, 3000);
+        
+        // Error handling for iframe
+        iframe.onload = function() {
+            downloadStarted = true;
+            handleExportCompletion(true);
+        };
+        
+        iframe.onerror = function() {
+            handleExportCompletion(false, 'Failed to generate export file. Please try again.');
+        };
+    };
 
-    // Academic year format validation
-    const academicYearInput = document.getElementById('academic_year');
-    if (academicYearInput) {
-        academicYearInput.addEventListener('blur', function() {
-            const pattern = /^\d{4}\/\d{4}$/;
-            if (this.value && !pattern.test(this.value)) {
-                this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
-            } else {
-                this.setCustomValidity('');
+    // Enhanced form submission handling
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            // Clear previous validation states
+            clearValidationStates();
+            
+            // Validate academic year format
+            if (!validateAcademicYear()) {
+                e.preventDefault();
+                return;
+            }
+            
+            // Validate score ranges
+            if (!validateScoreRanges()) {
+                e.preventDefault();
+                return;
+            }
+            
+            // Show loading state
+            showFormLoadingState();
+        });
+    }
+
+    // Clear validation states
+    function clearValidationStates() {
+        const invalidElements = document.querySelectorAll('.is-invalid');
+        invalidElements.forEach(el => {
+            el.classList.remove('is-invalid');
+            const feedback = el.nextElementSibling;
+            if (feedback && feedback.classList.contains('invalid-feedback')) {
+                feedback.remove();
             }
         });
     }
+
+    // Academic year validation
+    function validateAcademicYear() {
+        const academicYearInput = document.getElementById('academic_year');
+        if (!academicYearInput || !academicYearInput.value) return true;
+        
+        const pattern = /^\d{4}\/\d{4}$/;
+        if (!pattern.test(academicYearInput.value)) {
+            academicYearInput.classList.add('is-invalid');
+            
+            // Create or update validation message
+            let feedback = academicYearInput.nextElementSibling;
+            if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+                feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback';
+                academicYearInput.parentNode.appendChild(feedback);
+            }
+            feedback.textContent = 'Please use format: YYYY/YYYY (e.g., 2023/2024)';
+            
+            academicYearInput.focus();
+            return false;
+        }
+        
+        return true;
+    }
+
+    // Score range validation
+    function validateScoreRanges() {
+        const minScore = document.getElementById('min_score');
+        const maxScore = document.getElementById('max_score');
+        
+        if (!minScore || !maxScore) return true;
+        
+        const minValue = parseFloat(minScore.value);
+        const maxValue = parseFloat(maxScore.value);
+        
+        if (minScore.value && maxScore.value && minValue > maxValue) {
+            minScore.classList.add('is-invalid');
+            maxScore.classList.add('is-invalid');
+            
+            // Create validation messages
+            [minScore, maxScore].forEach(input => {
+                let feedback = input.nextElementSibling;
+                if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+                    feedback = document.createElement('div');
+                    feedback.className = 'invalid-feedback';
+                    input.parentNode.appendChild(feedback);
+                }
+                feedback.textContent = 'Minimum score cannot be greater than maximum score';
+            });
+            
+            minScore.focus();
+            return false;
+        }
+        
+        // Validate individual score bounds
+        if (minScore.value && (minValue < 0 || minValue > 100)) {
+            minScore.classList.add('is-invalid');
+            let feedback = minScore.nextElementSibling;
+            if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+                feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback';
+                minScore.parentNode.appendChild(feedback);
+            }
+            feedback.textContent = 'Score must be between 0 and 100';
+            minScore.focus();
+            return false;
+        }
+        
+        if (maxScore.value && (maxValue < 0 || maxValue > 100)) {
+            maxScore.classList.add('is-invalid');
+            let feedback = maxScore.nextElementSibling;
+            if (!feedback || !feedback.classList.contains('invalid-feedback')) {
+                feedback = document.createElement('div');
+                feedback.className = 'invalid-feedback';
+                maxScore.parentNode.appendChild(feedback);
+            }
+            feedback.textContent = 'Score must be between 0 and 100';
+            maxScore.focus();
+            return false;
+        }
+        
+        return true;
+    }
+
+    // Show form loading state
+    function showFormLoadingState() {
+        const submitBtn = filterForm.querySelector('button[type="submit"]');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        if (submitBtn) {
+            const originalText = submitBtn.innerHTML;
+            submitBtn.setAttribute('data-original-text', originalText);
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Applying Filters...';
+        }
+        
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'flex';
+        }
+        
+        // Safety timeout to re-enable button
+        setTimeout(() => {
+            if (submitBtn) {
+                const originalText = submitBtn.getAttribute('data-original-text');
+                if (originalText) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            }
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none';
+            }
+        }, 10000);
+    }
+
+    // Real-time academic year validation
+    const academicYearInput = document.getElementById('academic_year');
+    if (academicYearInput) {
+        academicYearInput.addEventListener('input', function() {
+            const pattern = /^\d{4}\/\d{4}$/;
+            const isValid = !this.value || pattern.test(this.value);
+            
+            this.classList.remove('is-invalid', 'is-valid');
+            if (this.value) {
+                if (isValid) {
+                    this.classList.add('is-valid');
+                } else {
+                    this.classList.add('is-invalid');
+                }
+            }
+        });
+
+        academicYearInput.addEventListener('blur', function() {
+            const pattern = /^\d{4}\/\d{4}$/;
+            if (this.value && !pattern.test(this.value)) {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+
+    // Real-time score range validation
+    const minScoreInput = document.getElementById('min_score');
+    const maxScoreInput = document.getElementById('max_score');
+    
+    function validateScoreInputs() {
+        [minScoreInput, maxScoreInput].forEach(input => {
+            if (input && input.value) {
+                const value = parseFloat(input.value);
+                if (value < 0 || value > 100) {
+                    input.classList.add('is-invalid');
+                } else {
+                    input.classList.remove('is-invalid');
+                }
+            }
+        });
+        
+        if (minScoreInput.value && maxScoreInput.value) {
+            const min = parseFloat(minScoreInput.value);
+            const max = parseFloat(maxScoreInput.value);
+            
+            if (min > max) {
+                minScoreInput.classList.add('is-invalid');
+                maxScoreInput.classList.add('is-invalid');
+            } else {
+                minScoreInput.classList.remove('is-invalid');
+                maxScoreInput.classList.remove('is-invalid');
+            }
+        }
+    }
+    
+    if (minScoreInput) minScoreInput.addEventListener('input', validateScoreInputs);
+    if (maxScoreInput) maxScoreInput.addEventListener('input', validateScoreInputs);
+
+    // Auto-hide alerts
+    const autoHideAlerts = document.querySelectorAll('.alert-success, .alert-info');
+    autoHideAlerts.forEach(alert => {
+        setTimeout(() => {
+            if (alert.parentNode) {
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bsAlert.close();
+            }
+        }, 6000);
+    });
+
+    // Highlight new rows with animation
+    if (window.location.search.includes('new=true')) {
+        const firstRow = document.querySelector('tbody tr');
+        if (firstRow) {
+            firstRow.classList.add('highlight-new');
+            setTimeout(() => {
+                firstRow.classList.remove('highlight-new');
+            }, 2000);
+        }
+    }
+
+    // Enhanced search functionality with debouncing
+    const searchInput = document.getElementById('search');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            
+            // Show searching indicator for longer searches
+            if (this.value.length >= 3) {
+                const originalBorder = this.style.borderColor;
+                this.style.borderColor = '#ffc107';
+                
+                searchTimeout = setTimeout(() => {
+                    this.style.borderColor = originalBorder;
+                    filterForm.submit();
+                }, 1000);
+            } else if (this.value.length === 0) {
+                // Immediate submit when clearing search
+                searchTimeout = setTimeout(() => {
+                    filterForm.submit();
+                }, 300);
+            }
+        });
+    }
+
+    // Initialize performance indicators
+    function initializePerformanceIndicators() {
+        document.querySelectorAll('.score-high, .score-medium, .score-low').forEach(element => {
+            element.style.fontWeight = '700';
+        });
+    }
+    initializePerformanceIndicators();
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + F to focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('search');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+        
+        // Escape to clear filters
+        if (e.key === 'Escape') {
+            const activeFilters = document.querySelectorAll('.quick-action-btn.btn-primary');
+            if (activeFilters.length > 0) {
+                window.location.href = "{% url 'grade_list' %}";
+            }
+        }
+    });
+
+    // Add responsive table enhancements
+    function enhanceTableResponsiveness() {
+        const table = document.querySelector('.table-responsive');
+        if (table && window.innerWidth < 768) {
+            table.classList.add('table-sm');
+        }
+    }
+    
+    enhanceTableResponsiveness();
+    window.addEventListener('resize', enhanceTableResponsiveness);
+
+    // Add export confirmation for large datasets
+    function setupExportConfirmations() {
+        const exportButtons = document.querySelectorAll('.export-btn');
+        exportButtons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                const exportType = this.textContent.includes('CSV') ? 'csv' :
+                                 this.textContent.includes('Excel') ? 'excel' : 'pdf';
+                
+                // Check if we have a large dataset
+                const recordCount = {{ grades.count|default:0 }};
+                if (recordCount > 1000) {
+                    const confirmed = confirm(
+                        `You are about to export ${recordCount.toLocaleString()} records as ${exportType.toUpperCase()}.\n\n` +
+                        `For large datasets, this may take a moment. Continue?`
+                    );
+                    
+                    if (!confirmed) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                }
+            });
+        });
+    }
+    setupExportConfirmations();
+
+    // Add filter persistence
+    function persistFilters() {
+        const formInputs = filterForm.querySelectorAll('input, select, textarea');
+        formInputs.forEach(input => {
+            const inputName = input.name;
+            const savedValue = sessionStorage.getItem(`grade_filter_${inputName}`);
+            
+            if (savedValue !== null) {
+                if (input.type === 'checkbox') {
+                    input.checked = savedValue === 'true';
+                } else if (input.tagName === 'SELECT') {
+                    $(input).val(savedValue).trigger('change');
+                } else {
+                    input.value = savedValue;
+                }
+            }
+            
+            input.addEventListener('change', function() {
+                const value = this.type === 'checkbox' ? this.checked : this.value;
+                sessionStorage.setItem(`grade_filter_${this.name}`, value);
+            });
+        });
+    }
+    
+    // Only persist if we're not coming from a form submission
+    if (!window.performance.navigation.type === 1) { // Not a page reload
+        persistFilters();
+    }
+
+    console.log('Enhanced Grade Management interface initialized successfully');
+    
+    // Performance monitoring
+    const startTime = performance.now();
+    window.addEventListener('load', () => {
+        const loadTime = performance.now() - startTime;
+        console.log(`Grade Management page loaded in ${loadTime.toFixed(2)}ms`);
+        
+        if (loadTime > 3000) {
+            console.warn('Page load time is high. Consider optimizing queries or assets.');
+        }
+    });
 });
 </script>
 {% endblock %}

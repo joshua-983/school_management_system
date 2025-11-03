@@ -174,6 +174,7 @@ def admin_dashboard(request):
             'upcoming_events': upcoming_events,
             'today_attendance': today_attendance,
             'current_academic_year': get_current_academic_year(),
+            'current_date': timezone.now(),  # ADDED: current_date for the template
         }
         
         return render(request, 'core/admin/admin_dashboard.html', context)
@@ -181,7 +182,10 @@ def admin_dashboard(request):
     except Exception as e:
         logger.error(f"Error loading admin dashboard: {str(e)}", exc_info=True)
         messages.error(request, "Error loading dashboard data. Please try again.")
-        return render(request, 'core/admin/admin_dashboard.html', {})
+        # Also add current_date to error context
+        return render(request, 'core/admin/admin_dashboard.html', {
+            'current_date': timezone.now()
+        })
 
 @login_required
 def teacher_dashboard(request):

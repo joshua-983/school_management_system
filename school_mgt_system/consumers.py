@@ -1,8 +1,5 @@
-# core/consumers.py
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-from channels.db import database_sync_to_async
-from django.contrib.auth.models import User
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -42,8 +39,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         """Handle incoming WebSocket messages from client"""
         try:
             data = json.loads(text_data)
-            # You can handle client-side messages here if needed
-            # For example, client might send "mark_as_read" events
             if data.get('type') == 'mark_as_read':
                 await self.handle_mark_as_read(data)
         except json.JSONDecodeError:
@@ -51,12 +46,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     async def handle_mark_as_read(self, data):
         """Handle mark as read requests from client"""
-        # You can implement this if you want real-time mark as read
         pass
 
     # ===== NOTIFICATION HANDLERS =====
     async def notification_update(self, event):
-        """Handle notification updates (from your existing system)"""
+        """Handle notification updates"""
         await self.send(text_data=json.dumps({
             'type': 'notification_update',
             'action': event.get('action'),

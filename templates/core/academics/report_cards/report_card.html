@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
+{% load report_card_filters %}
 
 {% block title %}{{ student.get_full_name }} - Report Card{% endblock %}
 
@@ -82,6 +83,79 @@ body {
     font-style: italic;
     opacity: 0.9;
     font-size: 1.1rem;
+}
+
+/* NEW: Additional Info Section */
+.additional-info-section {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border-left: 5px solid var(--info);
+}
+
+.additional-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.additional-info-item {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border-left: 4px solid var(--success);
+}
+
+.additional-info-label {
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.additional-info-value {
+    color: var(--dark);
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+/* NEW: Attendance Section */
+.attendance-section {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border-left: 5px solid var(--warning);
+}
+
+.attendance-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    text-align: center;
+}
+
+.attendance-item {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.attendance-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.attendance-label {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .student-info-section {
@@ -396,6 +470,14 @@ body {
         grid-template-columns: 1fr;
     }
     
+    .additional-info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .attendance-stats {
+        grid-template-columns: 1fr;
+    }
+    
     .performance-stats {
         grid-template-columns: 1fr;
     }
@@ -458,12 +540,52 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, var(--primary-dark) 0%, #1a252f 100%);
 }
+
+/* Debug Info - Hidden by default */
+.debug-info {
+    display: none;
+    background: #e3f2fd;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #2196f3;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="report-card-container">
+        <!-- Debug Information (Hidden by default) -->
+        <div class="debug-info no-print">
+            <h5><i class="fas fa-bug me-2"></i>Debug Info:</h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Grades Count:</strong> {{ grades|length }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Average Score:</strong> {{ average_score }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Overall Grade:</strong> {{ overall_grade }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Academic Year:</strong> {{ academic_year }}
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-4">
+                    <strong>Term:</strong> {{ term }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Attendance Present:</strong> {{ attendance.present_days|default:"0" }}
+                </div>
+                <div class="col-md-4">
+                    <strong>Attendance Total:</strong> {{ attendance.total_days|default:"0" }}
+                </div>
+            </div>
+        </div>
+
         <!-- Professional Header -->
         <div class="report-header">
             <div class="row align-items-center">
@@ -490,6 +612,25 @@ body {
 
         <!-- Student Information -->
         <div class="container-fluid p-4">
+            <!-- NEW: Additional Information Section -->
+            <div class="additional-info-section animate-element">
+                <h4 class="mb-3"><i class="fas fa-calendar-alt me-2"></i>Academic Calendar Information</h4>
+                <div class="additional-info-grid">
+                    <div class="additional-info-item">
+                        <div class="additional-info-label">Vacation Date</div>
+                        <div class="additional-info-value">{{ vacation_date|default:"To be announced" }}</div>
+                    </div>
+                    <div class="additional-info-item">
+                        <div class="additional-info-label">Reopening Date</div>
+                        <div class="additional-info-value">{{ reopening_date|default:"To be announced" }}</div>
+                    </div>
+                    <div class="additional-info-item">
+                        <div class="additional-info-label">Position in Class</div>
+                        <div class="additional-info-value">{{ position_in_class|default:"Not ranked" }}</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="student-info-section animate-element">
                 <div class="row align-items-center">
                     <div class="col-md-8">
@@ -525,6 +666,29 @@ body {
                             <i class="fas fa-user-graduate fa-4x text-muted mb-2"></i>
                             <p class="text-muted mb-0">Student Photo</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NEW: Attendance Section -->
+            <div class="attendance-section animate-element" style="animation-delay: 0.1s">
+                <h4 class="mb-3"><i class="fas fa-calendar-check me-2"></i>Attendance Summary</h4>
+                <div class="attendance-stats">
+                    <div class="attendance-item">
+                        <div class="attendance-value">{{ attendance.present_days|default:"0" }}</div>
+                        <div class="attendance-label">Days Present</div>
+                    </div>
+                    <div class="attendance-item">
+                        <div class="attendance-value">{{ attendance.total_days|default:"0" }}</div>
+                        <div class="attendance-label">Total Days</div>
+                    </div>
+                    <div class="attendance-item">
+                        <div class="attendance-value">{{ attendance.attendance_rate|default:"0" }}%</div>
+                        <div class="attendance-label">Attendance Rate</div>
+                    </div>
+                    <div class="attendance-item">
+                        <div class="attendance-value">{{ attendance.absence_count|default:"0" }}</div>
+                        <div class="attendance-label">Days Absent</div>
                     </div>
                 </div>
             </div>
@@ -705,7 +869,7 @@ body {
                                 <i class="fas fa-print me-2"></i> Print
                             </button>
                             <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
-                               class="btn btn-warning me-2">
+                               class="btn btn-warning me-2" id="pdfDownloadBtn">
                                 <i class="fas fa-file-pdf me-2"></i> Export PDF
                             </a>
                             <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
@@ -838,6 +1002,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Enhanced PDF download functionality
+    const pdfDownloadBtn = document.getElementById('pdfDownloadBtn');
+    if (pdfDownloadBtn) {
+        pdfDownloadBtn.addEventListener('click', function(e) {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating PDF...';
+            this.disabled = true;
+            
+            // Re-enable after 5 seconds in case of failure
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }, 5000);
+        });
+    }
+
     // Add scroll animations
     const observerOptions = {
         threshold: 0.1,
@@ -856,16 +1036,15 @@ document.addEventListener('DOMContentLoaded', function() {
         observer.observe(el);
     });
 
-    // Add loading state for PDF download
-    document.querySelectorAll('a[href*="report_card_pdf"]').forEach(link => {
-        link.addEventListener('click', function(e) {
-            const originalText = this.innerHTML;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generating PDF...';
-            
-            setTimeout(() => {
-                this.innerHTML = originalText;
-            }, 3000);
-        });
+    // Debug mode toggle (Ctrl+D)
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            const debugInfo = document.querySelector('.debug-info');
+            if (debugInfo) {
+                debugInfo.style.display = debugInfo.style.display === 'none' ? 'block' : 'none';
+            }
+        }
     });
 });
 </script>

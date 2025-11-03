@@ -1,19 +1,12 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{% if object %}Edit{% else %}Add{% endif %} Student - School Management System{% endblock %}
+{% block title %}{% if object %}Edit{% else %}Register{% endif %} Student - School Management System{% endblock %}
 
 {% block extra_css %}
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-    :root {
-        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        --success-gradient: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-        --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-        --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-    }
-
     .student-form-container {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         min-height: 100vh;
@@ -22,20 +15,15 @@
 
     .form-card {
         border: none;
-        border-radius: 20px;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
         background: white;
-        transition: all 0.3s ease;
-    }
-
-    .form-card:hover {
-        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+        overflow: hidden;
     }
 
     .card-header {
-        background: var(--primary-gradient);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        border-radius: 20px 20px 0 0 !important;
         padding: 1.5rem 2rem;
         border: none;
     }
@@ -44,11 +32,17 @@
         font-weight: 600;
         color: #2d3748;
         margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-label.required::after {
+        content: " *";
+        color: #dc3545;
     }
 
     .form-control, .form-select {
         border: 2px solid #e2e8f0;
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 0.75rem 1rem;
         transition: all 0.3s ease;
         font-size: 0.95rem;
@@ -56,60 +50,41 @@
 
     .form-control:focus, .form-select:focus {
         border-color: #667eea;
-        box-shadow: 0 0 0 0.3rem rgba(102, 126, 234, 0.2);
-        transform: translateY(-2px);
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
     }
 
     .form-control.is-invalid {
         border-color: #dc3545;
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
     }
 
     .invalid-feedback {
-        font-weight: 500;
-        color: #e53e3e;
-        margin-top: 0.5rem;
-    }
-
-    .form-text {
-        color: #718096;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
+        display: block;
+        font-size: 0.875rem;
+        color: #dc3545;
     }
 
     .btn-primary {
-        background: var(--primary-gradient);
+        background: #667eea;
         border: none;
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 0.75rem 2rem;
         font-weight: 600;
         transition: all 0.3s ease;
     }
 
     .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-    }
-
-    .btn-secondary {
-        border-radius: 12px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    .btn-secondary:hover {
-        transform: translateY(-2px);
+        background: #5a6fd8;
+        transform: translateY(-1px);
     }
 
     .avatar-upload {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 1.5rem;
         text-align: center;
-        padding: 2rem;
-        border: 2px dashed #e2e8f0;
-        border-radius: 15px;
-        transition: all 0.3s ease;
-        background: #fafafa;
+        background: #f8f9fa;
         cursor: pointer;
+        transition: all 0.3s ease;
     }
 
     .avatar-upload:hover {
@@ -117,146 +92,132 @@
         background: #f0f4ff;
     }
 
-    .avatar-upload.dragover {
-        border-color: #667eea;
-        background: #e8f4ff;
-        transform: scale(1.02);
-    }
-
     .avatar-preview {
-        width: 200px;
-        height: 200px;
-        border-radius: 15px;
+        width: 150px;
+        height: 150px;
+        border-radius: 10px;
         object-fit: cover;
-        border: 3px solid #fff;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        transition: all 0.3s ease;
-    }
-
-    .avatar-preview:hover {
-        transform: scale(1.05);
+        border: 3px solid white;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     }
 
     .avatar-placeholder {
-        width: 200px;
-        height: 200px;
-        border-radius: 15px;
-        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        width: 150px;
+        height: 150px;
+        border-radius: 10px;
+        background: #e9ecef;
         display: flex;
         align-items: center;
         justify-content: center;
         color: #6c757d;
-        font-size: 3rem;
-        border: 3px solid #fff;
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-    }
-
-    .password-strength {
-        height: 8px;
-        border-radius: 4px;
-        margin-top: 0.5rem;
-        background: #e2e8f0;
-        overflow: hidden;
-    }
-
-    .password-strength-bar {
-        height: 100%;
-        border-radius: 4px;
-        transition: all 0.3s ease;
+        font-size: 2rem;
     }
 
     .section-header {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 12px;
-        padding: 1rem 1.5rem;
-        margin: 2rem 0 1rem;
+        background: #f8f9fa;
         border-left: 4px solid #667eea;
-        font-weight: 600;
-        color: #2d3748;
+        padding: 1rem 1.5rem;
+        margin: 1.5rem 0 1rem;
+        border-radius: 0 8px 8px 0;
     }
 
-    /* Animation classes */
-    .fade-in {
-        animation: fadeIn 0.6s ease-in;
+    .field-group {
+        margin-bottom: 1.5rem;
     }
 
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
+    .help-text {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
     }
 
-    .slide-in {
-        animation: slideIn 0.8s ease-out;
+    .progress-container {
+        margin-bottom: 2rem;
     }
 
-    @keyframes slideIn {
-        from { transform: translateX(-100px); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-        .student-form-container {
-            padding: 1rem;
-        }
-        
-        .form-card {
-            border-radius: 15px;
-        }
-        
-        .card-header {
-            padding: 1rem;
-        }
-        
-        .avatar-preview, .avatar-placeholder {
-            width: 150px;
-            height: 150px;
-        }
-        
-        .avatar-upload {
-            padding: 1rem;
-        }
-    }
-
-    /* Step indicator */
     .step-indicator {
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
+        position: relative;
         margin-bottom: 2rem;
-        gap: 1rem;
+    }
+
+    .step-indicator::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e9ecef;
+        z-index: 1;
     }
 
     .step {
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: #e2e8f0;
+        background: white;
+        border: 2px solid #e9ecef;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 600;
-        color: #718096;
+        color: #6c757d;
+        position: relative;
+        z-index: 2;
         transition: all 0.3s ease;
     }
 
     .step.active {
-        background: var(--primary-gradient);
+        background: #667eea;
+        border-color: #667eea;
         color: white;
         transform: scale(1.1);
     }
 
     .step.completed {
-        background: var(--success-gradient);
+        background: #28a745;
+        border-color: #28a745;
         color: white;
+    }
+
+    .step-label {
+        position: absolute;
+        top: 45px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 0.8rem;
+        color: #6c757d;
     }
 
     .form-step {
         display: none;
-        animation: fadeIn 0.5s ease-in;
+        animation: fadeIn 0.3s ease-in;
     }
 
     .form-step.active {
         display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+        .student-form-container {
+            padding: 1rem;
+        }
+        
+        .card-header {
+            padding: 1rem;
+        }
+        
+        .step-label {
+            font-size: 0.7rem;
+        }
     }
 </style>
 {% endblock %}
@@ -266,22 +227,48 @@
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-10">
+                <!-- Display Messages -->
+                {% if messages %}
+                <div class="messages-container mb-4">
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-{% if message.tags == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Progress Bar -->
+                <div class="progress-container">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">Step <span id="current-step">1</span> of <span id="total-steps">
+                            {% if not object %}4{% else %}3{% endif %}
+                        </span></small>
+                        <small class="text-muted" id="step-title">Personal Information</small>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" id="form-progress" style="width: 25%"></div>
+                    </div>
+                </div>
+
                 <!-- Step Indicator -->
-                <div class="step-indicator slide-in">
-                    <div class="step-group">
+                <div class="step-indicator">
+                    <div class="step-group text-center">
                         <div class="step active" data-step="1">1</div>
                         <div class="step-label">Personal Info</div>
                     </div>
-                    <div class="step-group">
+                    <div class="step-group text-center">
                         <div class="step" data-step="2">2</div>
                         <div class="step-label">Academic Info</div>
                     </div>
-                    <div class="step-group">
+                    <div class="step-group text-center">
                         <div class="step" data-step="3">3</div>
                         <div class="step-label">Additional Info</div>
                     </div>
                     {% if not object %}
-                    <div class="step-group">
+                    <div class="step-group text-center">
                         <div class="step" data-step="4">4</div>
                         <div class="step-label">Account Setup</div>
                     </div>
@@ -289,19 +276,19 @@
                 </div>
 
                 <!-- Form Card -->
-                <div class="card form-card slide-in">
+                <div class="card form-card">
                     <div class="card-header">
                         <h4 class="mb-0">
                             <i class="fas fa-user-graduate me-2"></i>
                             {% if object %}Edit{% else %}Register{% endif %} Student
                         </h4>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-4">
                         <form method="post" enctype="multipart/form-data" id="studentForm" novalidate>
                             {% csrf_token %}
                             
                             {% if form.non_field_errors %}
-                            <div class="alert alert-danger fade-in">
+                            <div class="alert alert-danger">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
                                 {% for error in form.non_field_errors %}
                                     {{ error }}
@@ -312,57 +299,63 @@
                             <!-- Step 1: Personal Information -->
                             <div class="form-step active" id="step1">
                                 <h5 class="section-header">
-                                    <i class="fas fa-user me-2 text-primary"></i>Personal Information
+                                    <i class="fas fa-user me-2"></i>Personal Information
                                 </h5>
                                 
                                 <div class="row">
-                                    <div class="col-md-4">
-                                        <!-- Avatar Upload -->
-                                        <div class="avatar-upload mb-4" id="avatarUploadArea">
+                                    <div class="col-md-4 mb-4">
+                                        <div class="avatar-upload" id="avatarUploadArea">
                                             {% if object and object.profile_picture %}
                                                 <img src="{{ object.profile_picture.url }}" class="avatar-preview mb-3" id="avatarPreview">
                                             {% else %}
-                                                <div class="avatar-placeholder mb-3">
+                                                <div class="avatar-placeholder mb-3 mx-auto">
                                                     <i class="fas fa-user"></i>
                                                 </div>
                                             {% endif %}
                                             {{ form.profile_picture }}
-                                            <button type="button" class="btn btn-outline-primary mt-2" onclick="document.getElementById('id_profile_picture').click()">
-                                                <i class="fas fa-upload me-2"></i>Choose Image
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('id_profile_picture').click()">
+                                                <i class="fas fa-upload me-1"></i>Upload Photo
                                             </button>
-                                            <div class="form-text">Max file size: 5MB</div>
+                                            <div class="help-text">JPG, PNG, Max 5MB</div>
                                         </div>
                                     </div>
                                     <div class="col-md-8">
                                         <div class="row">
-                                            <div class="col-md-4 fade-in" style="animation-delay: 0.1s;">
-                                                <div class="mb-3">
+                                            <div class="col-md-4">
+                                                <div class="field-group">
                                                     <label for="{{ form.first_name.id_for_label }}" class="form-label">
-                                                        First Name <span class="text-danger">*</span>
+                                                        First Name
                                                     </label>
                                                     {{ form.first_name }}
                                                     {% if form.first_name.errors %}
                                                         <div class="invalid-feedback">
-                                                            {{ form.first_name.errors.as_text }}
+                                                            {{ form.first_name.errors.0 }}
                                                         </div>
                                                     {% endif %}
                                                 </div>
                                             </div>
-                                            <div class="col-md-4 fade-in" style="animation-delay: 0.2s;">
-                                                <div class="mb-3">
-                                                    <label for="{{ form.middle_name.id_for_label }}" class="form-label">Middle Name</label>
+                                            <div class="col-md-4">
+                                                <div class="field-group">
+                                                    <label for="{{ form.middle_name.id_for_label }}" class="form-label">
+                                                        Middle Name
+                                                    </label>
                                                     {{ form.middle_name }}
+                                                    {% if form.middle_name.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.middle_name.errors.0 }}
+                                                        </div>
+                                                    {% endif %}
                                                 </div>
                                             </div>
-                                            <div class="col-md-4 fade-in" style="animation-delay: 0.3s;">
-                                                <div class="mb-3">
+                                            <div class="col-md-4">
+                                                <div class="field-group">
                                                     <label for="{{ form.last_name.id_for_label }}" class="form-label">
-                                                        Last Name <span class="text-danger">*</span>
+                                                        Last Name
                                                     </label>
                                                     {{ form.last_name }}
                                                     {% if form.last_name.errors %}
                                                         <div class="invalid-feedback">
-                                                            {{ form.last_name.errors.as_text }}
+                                                            {{ form.last_name.errors.0 }}
                                                         </div>
                                                     {% endif %}
                                                 </div>
@@ -370,30 +363,31 @@
                                         </div>
                                         
                                         <div class="row">
-                                            <div class="col-md-6 fade-in" style="animation-delay: 0.4s;">
-                                                <div class="mb-3">
-                                                    <label for="{{ form.student_id.id_for_label }}" class="form-label">
-                                                        Student ID <span class="text-danger">*</span>
-                                                    </label>
-                                                    {{ form.student_id }}
-                                                    {% if form.student_id.errors %}
-                                                        <div class="invalid-feedback">
-                                                            {{ form.student_id.errors.as_text }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6 fade-in" style="animation-delay: 0.5s;">
-                                                <div class="mb-3">
+                                            <div class="col-md-6">
+                                                <div class="field-group">
                                                     <label for="{{ form.date_of_birth.id_for_label }}" class="form-label">
-                                                        Date of Birth <span class="text-danger">*</span>
+                                                        Date of Birth
                                                     </label>
                                                     {{ form.date_of_birth }}
                                                     {% if form.date_of_birth.errors %}
                                                         <div class="invalid-feedback">
-                                                            {{ form.date_of_birth.errors.as_text }}
+                                                            {{ form.date_of_birth.errors.0 }}
                                                         </div>
                                                     {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="field-group">
+                                                    <label for="{{ form.phone_number.id_for_label }}" class="form-label">
+                                                        Phone Number
+                                                    </label>
+                                                    {{ form.phone_number }}
+                                                    {% if form.phone_number.errors %}
+                                                        <div class="invalid-feedback">
+                                                            {{ form.phone_number.errors.0 }}
+                                                        </div>
+                                                    {% endif %}
+                                                    <div class="help-text">10 digits starting with 0</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -403,7 +397,7 @@
                                 <div class="d-flex justify-content-between mt-4">
                                     <div></div>
                                     <button type="button" class="btn btn-primary next-step" data-next="2">
-                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                        Continue <i class="fas fa-arrow-right ms-2"></i>
                                     </button>
                                 </div>
                             </div>
@@ -411,36 +405,32 @@
                             <!-- Step 2: Academic Information -->
                             <div class="form-step" id="step2">
                                 <h5 class="section-header">
-                                    <i class="fas fa-graduation-cap me-2 text-info"></i>Academic Information
+                                    <i class="fas fa-graduation-cap me-2"></i>Academic Information
                                 </h5>
                                 
                                 <div class="row">
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.gender.id_for_label }}" class="form-label">
-                                                Gender <span class="text-danger">*</span>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.gender.id_for_label }}" class="form-label required">
+                                                Gender
                                             </label>
-                                            <select name="{{ form.gender.name }}" id="{{ form.gender.id_for_label }}" class="form-select">
-                                                <option value="">Select Gender</option>
-                                                <option value="M" {% if form.gender.value == 'M' %}selected{% endif %}>Male</option>
-                                                <option value="F" {% if form.gender.value == 'F' %}selected{% endif %}>Female</option>
-                                            </select>
+                                            {{ form.gender }}
                                             {% if form.gender.errors %}
                                                 <div class="invalid-feedback">
-                                                    {{ form.gender.errors.as_text }}
+                                                    {{ form.gender.errors.0 }}
                                                 </div>
                                             {% endif %}
                                         </div>
                                     </div>
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.class_level.id_for_label }}" class="form-label">
-                                                Class Level <span class="text-danger">*</span>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.class_level.id_for_label }}" class="form-label required">
+                                                Class Level
                                             </label>
                                             {{ form.class_level }}
                                             {% if form.class_level.errors %}
                                                 <div class="invalid-feedback">
-                                                    {{ form.class_level.errors.as_text }}
+                                                    {{ form.class_level.errors.0 }}
                                                 </div>
                                             {% endif %}
                                         </div>
@@ -449,10 +439,10 @@
 
                                 <div class="d-flex justify-content-between mt-4">
                                     <button type="button" class="btn btn-outline-secondary prev-step" data-prev="1">
-                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                        <i class="fas fa-arrow-left me-2"></i> Back
                                     </button>
                                     <button type="button" class="btn btn-primary next-step" data-next="3">
-                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                        Continue <i class="fas fa-arrow-right ms-2"></i>
                                     </button>
                                 </div>
                             </div>
@@ -460,99 +450,174 @@
                             <!-- Step 3: Additional Information -->
                             <div class="form-step" id="step3">
                                 <h5 class="section-header">
-                                    <i class="fas fa-info-circle me-2 text-warning"></i>Additional Information
+                                    <i class="fas fa-info-circle me-2"></i>Additional Information
                                 </h5>
                                 
                                 <div class="row">
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.nationality.id_for_label }}" class="form-label">Nationality</label>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.nationality.id_for_label }}" class="form-label">
+                                                Nationality
+                                            </label>
                                             {{ form.nationality }}
+                                            {% if form.nationality.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.nationality.errors.0 }}
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     </div>
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.ethnicity.id_for_label }}" class="form-label">Ethnicity</label>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.ethnicity.id_for_label }}" class="form-label">
+                                                Ethnicity
+                                            </label>
                                             {{ form.ethnicity }}
+                                            {% if form.ethnicity.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.ethnicity.errors.0 }}
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
                                 
                                 <div class="row">
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.religion.id_for_label }}" class="form-label">Religion</label>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.religion.id_for_label }}" class="form-label">
+                                                Religion
+                                            </label>
                                             {{ form.religion }}
+                                            {% if form.religion.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.religion.errors.0 }}
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     </div>
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="{{ form.place_of_birth.id_for_label }}" class="form-label">Place of Birth</label>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="{{ form.place_of_birth.id_for_label }}" class="form-label">
+                                                Place of Birth
+                                            </label>
                                             {{ form.place_of_birth }}
+                                            {% if form.place_of_birth.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.place_of_birth.errors.0 }}
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div class="fade-in">
-                                    <div class="mb-3">
-                                        <label for="{{ form.residential_address.id_for_label }}" class="form-label">Residential Address</label>
-                                        {{ form.residential_address }}
-                                    </div>
+                                <div class="field-group">
+                                    <label for="{{ form.residential_address.id_for_label }}" class="form-label">
+                                        Residential Address
+                                    </label>
+                                    {{ form.residential_address }}
+                                    {% if form.residential_address.errors %}
+                                        <div class="invalid-feedback">
+                                            {{ form.residential_address.errors.0 }}
+                                        </div>
+                                    {% endif %}
                                 </div>
 
                                 <div class="d-flex justify-content-between mt-4">
                                     <button type="button" class="btn btn-outline-secondary prev-step" data-prev="2">
-                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                        <i class="fas fa-arrow-left me-2"></i> Back
                                     </button>
                                     {% if not object %}
                                     <button type="button" class="btn btn-primary next-step" data-next="4">
-                                        Next <i class="fas fa-arrow-right ms-2"></i>
+                                        Continue <i class="fas fa-arrow-right ms-2"></i>
                                     </button>
                                     {% else %}
-                                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <button type="submit" class="btn btn-success">
                                         <i class="fas fa-save me-2"></i> Update Student
                                     </button>
                                     {% endif %}
                                 </div>
                             </div>
 
-                            <!-- Step 4: Account Setup (Only for new students) -->
+                            <!-- Step 4: Account Setup -->
                             {% if not object %}
                             <div class="form-step" id="step4">
                                 <h5 class="section-header">
-                                    <i class="fas fa-lock me-2 text-success"></i>Account Setup
+                                    <i class="fas fa-lock me-2"></i>Account Setup
                                 </h5>
                                 
                                 <div class="row">
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="id_password1" class="form-label">
-                                                Password <span class="text-danger">*</span>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="id_username" class="form-label required">
+                                                Username
                                             </label>
-                                            <input type="password" name="password1" class="form-control" id="id_password1" required>
-                                            <div class="password-strength mt-2">
-                                                <div class="password-strength-bar" id="passwordStrengthBar"></div>
-                                            </div>
-                                            <div class="form-text" id="passwordStrengthText">Password strength</div>
+                                            <input type="text" name="username" class="form-control" id="id_username" 
+                                                   value="{{ form.username.value|default:'' }}"
+                                                   placeholder="Choose a username">
+                                            {% if form.username.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.username.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="help-text">Letters, numbers, and @/./+/-/_ only</div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6 fade-in">
-                                        <div class="mb-3">
-                                            <label for="id_password2" class="form-label">
-                                                Confirm Password <span class="text-danger">*</span>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="id_email" class="form-label required">
+                                                Email Address
                                             </label>
-                                            <input type="password" name="password2" class="form-control" id="id_password2" required>
-                                            <div class="form-text" id="passwordMatchText"></div>
+                                            <input type="email" name="email" class="form-control" id="id_email" 
+                                                   value="{{ form.email.value|default:'' }}"
+                                                   placeholder="student@example.com">
+                                            {% if form.email.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.email.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="id_password1" class="form-label required">
+                                                Password
+                                            </label>
+                                            <input type="password" name="password1" class="form-control" id="id_password1" 
+                                                   placeholder="Enter password">
+                                            {% if form.password1.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.password1.errors.0 }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="help-text">Minimum 8 characters</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="field-group">
+                                            <label for="id_password2" class="form-label required">
+                                                Confirm Password
+                                            </label>
+                                            <input type="password" name="password2" class="form-control" id="id_password2" 
+                                                   placeholder="Confirm password">
+                                            {% if form.password2.errors %}
+                                                <div class="invalid-feedback">
+                                                    {{ form.password2.errors.0 }}
+                                                </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="d-flex justify-content-between mt-4">
                                     <button type="button" class="btn btn-outline-secondary prev-step" data-prev="3">
-                                        <i class="fas fa-arrow-left me-2"></i> Previous
+                                        <i class="fas fa-arrow-left me-2"></i> Back
                                     </button>
-                                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                                        <i class="fas fa-user-plus me-2"></i> Create Student
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-user-plus me-2"></i> Create Student Account
                                     </button>
                                 </div>
                             </div>
@@ -576,267 +641,183 @@ document.addEventListener('DOMContentLoaded', function() {
         flatpickr(dobField, {
             dateFormat: "Y-m-d",
             maxDate: "today",
-            placeholder: "Select date of birth"
         });
     }
 
-    // Multi-step form functionality
-    const steps = document.querySelectorAll('.form-step');
-    const stepButtons = document.querySelectorAll('.step');
+    // Step management
+    const totalSteps = {% if not object %}4{% else %}3{% endif %};
     let currentStep = 1;
-
+    
+    function updateProgress() {
+        const progress = (currentStep / totalSteps) * 100;
+        document.getElementById('form-progress').style.width = `${progress}%`;
+        document.getElementById('current-step').textContent = currentStep;
+        
+        const stepTitles = ['Personal Information', 'Academic Information', 'Additional Information', 'Account Setup'];
+        document.getElementById('step-title').textContent = stepTitles[currentStep - 1];
+    }
+    
     function showStep(stepNumber) {
-        steps.forEach(step => step.classList.remove('active'));
-        stepButtons.forEach(btn => {
-            btn.classList.remove('active', 'completed');
-            if (parseInt(btn.dataset.step) < stepNumber) {
-                btn.classList.add('completed');
-            } else if (parseInt(btn.dataset.step) === stepNumber) {
-                btn.classList.add('active');
+        // Hide all steps
+        document.querySelectorAll('.form-step').forEach(step => {
+            step.classList.remove('active');
+        });
+        
+        // Show current step
+        const currentStepElement = document.getElementById(`step${stepNumber}`);
+        if (currentStepElement) {
+            currentStepElement.classList.add('active');
+        }
+        
+        // Update step indicators
+        document.querySelectorAll('.step').forEach(stepEl => {
+            const stepNum = parseInt(stepEl.dataset.step);
+            stepEl.classList.remove('active', 'completed');
+            
+            if (stepNum < stepNumber) {
+                stepEl.classList.add('completed');
+            } else if (stepNum === stepNumber) {
+                stepEl.classList.add('active');
             }
         });
         
-        document.getElementById(`step${stepNumber}`).classList.add('active');
         currentStep = stepNumber;
+        updateProgress();
     }
 
-    // Next/Previous button handlers
+    // Step navigation - NO VALIDATION FOR PERSONAL INFORMATION FIELDS
     document.querySelectorAll('.next-step').forEach(button => {
         button.addEventListener('click', function() {
             const nextStep = parseInt(this.dataset.next);
-            if (validateStep(currentStep)) {
+            const currentStepElement = document.getElementById(`step${currentStep}`);
+            
+            // Only validate required fields (those with .required class)
+            const requiredFields = currentStepElement.querySelectorAll('.required');
+            let isValid = true;
+            
+            requiredFields.forEach(label => {
+                const field = label.closest('.field-group').querySelector('input, select, textarea');
+                if (field && !field.value.trim()) {
+                    isValid = false;
+                    field.classList.add('is-invalid');
+                    if (!field.nextElementSibling || !field.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'invalid-feedback';
+                        errorDiv.textContent = 'This field is required';
+                        field.parentNode.appendChild(errorDiv);
+                    }
+                } else if (field) {
+                    field.classList.remove('is-invalid');
+                    const errorDiv = field.parentNode.querySelector('.invalid-feedback');
+                    if (errorDiv && errorDiv.textContent === 'This field is required') {
+                        errorDiv.remove();
+                    }
+                    
+                    // Additional validation for specific fields
+                    if (field.name === 'phone_number' || field.id === 'id_phone_number') {
+                        const phoneValue = field.value.trim();
+                        if (phoneValue && !isValidPhoneNumber(phoneValue)) {
+                            isValid = false;
+                            field.classList.add('is-invalid');
+                            if (!field.parentNode.querySelector('.invalid-feedback')) {
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'invalid-feedback';
+                                errorDiv.textContent = 'Phone number must be 10 digits starting with 0';
+                                field.parentNode.appendChild(errorDiv);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            if (isValid) {
                 showStep(nextStep);
-                scrollToTop();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                // Scroll to first error
+                const firstError = currentStepElement.querySelector('.is-invalid');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         });
     });
 
+    // Previous step
     document.querySelectorAll('.prev-step').forEach(button => {
         button.addEventListener('click', function() {
             const prevStep = parseInt(this.dataset.prev);
             showStep(prevStep);
-            scrollToTop();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     });
 
-    function validateStep(step) {
-        let isValid = true;
-        const currentStepElement = document.getElementById(`step${step}`);
-        const requiredFields = currentStepElement.querySelectorAll('[required]');
-        
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                field.classList.add('is-invalid');
-                isValid = false;
-                
-                if (!field.nextElementSibling.classList.contains('invalid-feedback')) {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'invalid-feedback';
-                    errorDiv.textContent = 'This field is required';
-                    field.parentNode.appendChild(errorDiv);
-                }
-            } else {
-                field.classList.remove('is-invalid');
-                const errorDiv = field.parentNode.querySelector('.invalid-feedback');
-                if (errorDiv) errorDiv.remove();
-            }
-        });
-
-        if (!isValid) {
-            const firstError = currentStepElement.querySelector('.is-invalid');
-            if (firstError) {
-                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            
-            currentStepElement.style.animation = 'shake 0.5s ease-in-out';
-            setTimeout(() => {
-                currentStepElement.style.animation = '';
-            }, 500);
-        }
-
-        return isValid;
-    }
-
-    function scrollToTop() {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    // Avatar upload functionality
-    const avatarUploadArea = document.getElementById('avatarUploadArea');
+    // Avatar upload preview
     const avatarInput = document.getElementById('id_profile_picture');
     const avatarPreview = document.getElementById('avatarPreview');
-
-    if (avatarUploadArea && avatarInput) {
-        setupFileUpload(avatarUploadArea, avatarInput);
-    }
-
-    function setupFileUpload(dropArea, input) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropArea.addEventListener(eventName, highlight, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropArea.addEventListener(eventName, unhighlight, false);
-        });
-
-        function highlight() {
-            dropArea.classList.add('dragover');
-        }
-
-        function unhighlight() {
-            dropArea.classList.remove('dragover');
-        }
-
-        dropArea.addEventListener('drop', handleDrop, false);
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            input.files = files;
-            updateAvatarPreview(files[0]);
-        }
-
-        input.addEventListener('change', function(e) {
-            if (this.files.length > 0) {
-                updateAvatarPreview(this.files[0]);
-            }
-        });
-    }
-
-    function updateAvatarPreview(file) {
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Error', 'File size must be less than 5MB', 'error');
-                avatarInput.value = '';
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                if (avatarPreview) {
-                    avatarPreview.src = e.target.result;
-                } else {
-                    const placeholder = document.querySelector('.avatar-placeholder');
-                    if (placeholder) {
-                        placeholder.innerHTML = `<img src="${e.target.result}" class="avatar-preview">`;
+    const avatarPlaceholder = document.querySelector('.avatar-placeholder');
+    
+    if (avatarInput) {
+        avatarInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (avatarPreview) {
+                        avatarPreview.src = e.target.result;
+                    } else if (avatarPlaceholder) {
+                        avatarPlaceholder.innerHTML = `<img src="${e.target.result}" class="avatar-preview">`;
                     }
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-
-    // Password strength checker
-    const password1 = document.getElementById('id_password1');
-    const password2 = document.getElementById('id_password2');
-    const strengthBar = document.getElementById('passwordStrengthBar');
-    const strengthText = document.getElementById('passwordStrengthText');
-    const matchText = document.getElementById('passwordMatchText');
-
-    if (password1 && password2) {
-        password1.addEventListener('input', checkPasswordStrength);
-        password2.addEventListener('input', checkPasswordMatch);
-    }
-
-    function checkPasswordStrength() {
-        const password = this.value;
-        let strength = 0;
-        let messages = [];
-
-        if (password.length >= 8) strength += 1;
-        if (password.match(/[a-z]/)) strength += 1;
-        if (password.match(/[A-Z]/)) strength += 1;
-        if (password.match(/[0-9]/)) strength += 1;
-        if (password.match(/[^a-zA-Z0-9]/)) strength += 1;
-
-        let color, width, text;
-        switch(strength) {
-            case 0:
-            case 1:
-                color = '#dc3545'; width = '20%'; text = 'Very Weak';
-                break;
-            case 2:
-                color = '#fd7e14'; width = '40%'; text = 'Weak';
-                break;
-            case 3:
-                color = '#ffc107'; width = '60%'; text = 'Medium';
-                break;
-            case 4:
-                color = '#20c997'; width = '80%'; text = 'Strong';
-                break;
-            case 5:
-                color = '#198754'; width = '100%'; text = 'Very Strong';
-                break;
-        }
-
-        strengthBar.style.width = width;
-        strengthBar.style.background = color;
-        strengthText.textContent = `Password strength: ${text}`;
-        strengthText.style.color = color;
-    }
-
-    function checkPasswordMatch() {
-        const password1Val = password1.value;
-        const password2Val = this.value;
-
-        if (!password2Val) {
-            matchText.textContent = '';
-            return;
-        }
-
-        if (password1Val === password2Val) {
-            matchText.textContent = 'Passwords match!';
-            matchText.style.color = '#198754';
-        } else {
-            matchText.textContent = 'Passwords do not match';
-            matchText.style.color = '#dc3545';
-        }
-    }
-
-    // Form submission handler
-    const form = document.getElementById('studentForm');
-    const submitBtn = document.getElementById('submitBtn');
-
-    if (form && submitBtn) {
-        form.addEventListener('submit', function(e) {
-            if (!validateStep(currentStep)) {
-                e.preventDefault();
-                showStep(currentStep);
-                return;
+                };
+                reader.readAsDataURL(file);
             }
-
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = `
-                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Processing...
-            `;
         });
     }
 
-    // Add shake animation
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-        }
-    `;
-    document.head.appendChild(style);
-});
+    // Phone number formatting
+    const phoneInput = document.getElementById('id_phone_number');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 0 && !value.startsWith('0')) {
+                value = '0' + value;
+            }
+            if (value.length > 10) {
+                value = value.substring(0, 10);
+            }
+            e.target.value = value;
+        });
+    }
 
-function showToast(title, message, type = 'info') {
-    // Toast implementation would go here
-    console.log(`${title}: ${message} (${type})`);
-}
+    // Form submission
+    const form = document.getElementById('studentForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    {% if object %}Updating...{% else %}Creating...{% endif %}
+                `;
+            }
+        });
+    }
+
+    // Validation helper functions
+    function isValidPhoneNumber(phone) {
+        const cleanedPhone = phone.replace(/[\s-]/g, '');
+        const phoneRegex = /^0\d{9}$/;
+        return phoneRegex.test(cleanedPhone);
+    }
+
+    function isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    // Initialize
+    updateProgress();
+});
 </script>
 {% endblock %}

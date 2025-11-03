@@ -68,9 +68,10 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         return context
 
+
 class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
-    template_name = 'core/students/student_detail.html'
+    template_name = 'core/students/student_detail.html'  # Add 'templates/'
     context_object_name = 'student'
     
     def test_func(self):
@@ -104,8 +105,17 @@ class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def form_valid(self, form):
-        messages.success(self.request, 'Student created successfully')
-        return super().form_valid(form)
+        try:
+            response = super().form_valid(form)
+            messages.success(self.request, f'Student {self.object.get_full_name()} created successfully!')
+            return response
+        except Exception as e:
+            messages.error(self.request, f'Error creating student: {str(e)}')
+            return self.form_invalid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, 'Please correct the errors below.')
+        return super().form_invalid(form)
 
 class StudentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Student

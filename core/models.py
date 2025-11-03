@@ -1,8 +1,9 @@
 import os
 import logging
+import re
 from datetime import date, timedelta
-from decimal import Decimal
-from django.db import models
+from decimal import Decimal, InvalidOperation
+from django.db import models, transaction
 from django.contrib.auth import get_user_model
 from django.core.validators import (
     MinValueValidator,
@@ -20,6 +21,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db.models import Q, Count, Avg, Sum
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.translation import gettext_lazy as _  # ADD THIS LINE
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -308,33 +310,38 @@ class Student(models.Model):
         }
     
     def get_attendance_rate(self, term=None):
-        """Get attendance rate for this student"""
+        """
+        Get attendance rate for this student based on ACTUAL recorded days
+        (GES standard - calculates based on days when attendance was actually taken)
+        """
         if not term:
             term = AcademicTerm.objects.filter(is_active=True).first()
         
         if not term:
             return 0
         
-        try:
-            summary = AttendanceSummary.objects.get(
-                student=self,
-                term=term,
-                period__isnull=True
-            )
-            return summary.present_rate
-        except AttendanceSummary.DoesNotExist:
-            return 0
+        # Use the same logic as get_term_attendance_data for consistency
+        attendance_data = self.get_term_attendance_data(term)
+        return attendance_data['attendance_rate']
     
     def get_term_attendance_data(self, term=None):
         """
-        Calculate attendance data for a specific term - FIXED VERSION
+        Calculate attendance data for a specific term based on ACTUAL recorded days
+        (GES standard - calculates based on days when attendance was actually taken)
         """
         try:
             if not term:
                 term = AcademicTerm.objects.filter(is_active=True).first()
             
             if not term:
-                return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+                return {
+                    'attendance_rate': 0, 
+                    'total_days': 0, 
+                    'present_days': 0, 
+                    'absence_count': 0,
+                    'late_count': 0,
+                    'excused_count': 0
+                }
             
             # Calculate attendance records for this term using the database
             attendance_records = StudentAttendance.objects.filter(
@@ -344,16 +351,26 @@ class Student(models.Model):
             
             total_days = attendance_records.count()
             if total_days == 0:
-                return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+                return {
+                    'attendance_rate': 0, 
+                    'total_days': 0, 
+                    'present_days': 0, 
+                    'absence_count': 0,
+                    'late_count': 0,
+                    'excused_count': 0
+                }
             
             # Use database aggregation for better performance
             from django.db.models import Count, Q
             
+            # GES counts present, late, and excused as present
             present_days = attendance_records.filter(
                 Q(status='present') | Q(status='late') | Q(status='excused')
             ).count()
             
             absence_count = attendance_records.filter(status='absent').count()
+            late_count = attendance_records.filter(status='late').count()
+            excused_count = attendance_records.filter(status='excused').count()
             
             attendance_rate = round((present_days / total_days) * 100, 1) if total_days > 0 else 0
             
@@ -361,12 +378,58 @@ class Student(models.Model):
                 'attendance_rate': attendance_rate,
                 'total_days': total_days,
                 'present_days': present_days,
-                'absence_count': absence_count
+                'absence_count': absence_count,
+                'late_count': late_count,
+                'excused_count': excused_count
             }
             
         except Exception as e:
             logger.error(f"Error calculating attendance data for student {self.id}: {e}")
-            return {'attendance_rate': 0, 'total_days': 0, 'present_days': 0, 'absence_count': 0}
+            return {
+                'attendance_rate': 0, 
+                'total_days': 0, 
+                'present_days': 0, 
+                'absence_count': 0,
+                'late_count': 0,
+                'excused_count': 0
+            }
+    
+    def get_ges_attendance_status(self, term=None):
+        """
+        Get GES-compliant attendance status description
+        """
+        attendance_rate = self.get_attendance_rate(term)
+        
+        if attendance_rate >= 90:
+            return "Excellent"
+        elif attendance_rate >= 80:
+            return "Good - GES Compliant"
+        elif attendance_rate >= 70:
+            return "Satisfactory"
+        elif attendance_rate >= 60:
+            return "Fair - Needs Improvement"
+        else:
+            return "Poor - Requires Intervention"
+    
+    def is_ges_compliant(self, term=None):
+        """
+        Check if attendance meets GES minimum requirement (80%)
+        """
+        attendance_rate = self.get_attendance_rate(term)
+        return attendance_rate >= 80.0
+    
+    def get_attendance_summary(self, term=None):
+        """
+        Get comprehensive attendance summary including GES compliance
+        """
+        attendance_data = self.get_term_attendance_data(term)
+        
+        return {
+            **attendance_data,
+            'attendance_status': self.get_ges_attendance_status(term),
+            'is_ges_compliant': self.is_ges_compliant(term),
+            'term': term
+        }
     
     def get_average_grade(self, term=None):
         """Get average grade for this student"""
@@ -421,7 +484,9 @@ class Student(models.Model):
             
         super().save(*args, **kwargs)
 
+
 # ===== TEACHER MANAGEMENT =====
+
 
 class Teacher(models.Model):
     user = models.OneToOneField(
@@ -429,13 +494,16 @@ class Teacher(models.Model):
         on_delete=models.CASCADE, 
         related_name='teacher'
     )
+    
     employee_id = models.CharField(
         max_length=20, 
-        unique=True, 
-        null=True, 
-        blank=True,
-        editable=False  # Prevent manual editing
+        unique=True,
+        null=False,
+        blank=False,
+        editable=False,
+        default='temporary'
     )
+    
     date_of_birth = models.DateField()
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES)
     phone_number = models.CharField(
@@ -465,32 +533,38 @@ class Teacher(models.Model):
         return f"{self.user.first_name} {self.user.last_name}"
     
     def save(self, *args, **kwargs):
-        # Generate employee_id only when creating a new teacher (not updating)
-        if not self.employee_id:
+        # Generate employee_id only when creating a new teacher
+        if self._state.adding or self.employee_id == 'temporary':
             current_year = str(timezone.now().year)
             
-            # Find the last teacher ID for the current year
+            # Find the highest sequence number for the current year
             last_teacher = Teacher.objects.filter(
                 employee_id__startswith=f'TCH{current_year}'
-            ).order_by('-employee_id').first()
+            ).exclude(employee_id='temporary').order_by('-employee_id').first()
             
-            if last_teacher and last_teacher.employee_id:
+            if last_teacher:
                 try:
-                    # Extract sequence from format TCH2025001, TCH2025002, etc.
-                    last_sequence = int(last_teacher.employee_id[7:])  # TCH2025[001]
+                    # Extract the sequence number from the employee_id
+                    # Format: TCH2025001 -> extract "001"
+                    last_sequence = int(last_teacher.employee_id[7:10])  # TCH2025[001]
                     new_sequence = last_sequence + 1
                 except (ValueError, IndexError):
                     new_sequence = 1
             else:
                 new_sequence = 1
             
-            # Format: TCH + Year + 3-digit sequence (TCH2025001, TCH2025002)
+            # Format: TCH + Year + 3-digit sequence
             self.employee_id = f'TCH{current_year}{new_sequence:03d}'
             
-            # Ensure uniqueness
-            while Teacher.objects.filter(employee_id=self.employee_id).exists():
+            # Ensure uniqueness in case of race conditions
+            counter = 1
+            original_id = self.employee_id
+            while Teacher.objects.filter(employee_id=self.employee_id).exclude(pk=self.pk).exists():
                 new_sequence += 1
                 self.employee_id = f'TCH{current_year}{new_sequence:03d}'
+                counter += 1
+                if counter > 1000:  # Safety limit
+                    raise ValueError("Could not generate unique employee ID")
         
         super().save(*args, **kwargs)
     
@@ -504,6 +578,7 @@ class Teacher(models.Model):
             class_levels = [level.strip() for level in self.class_levels.split(',')]
             return Student.objects.filter(class_level__in=class_levels, is_active=True).count()
         return 0
+
 
 # ===== PARENT/GUARDIAN MANAGEMENT =====
 
@@ -936,182 +1011,920 @@ class AttendanceSummary(models.Model):
 
 # ===== GRADE MANAGEMENT =====
 
+
+# In core/models.py - Complete updated Grade class
 class Grade(models.Model):
+    """
+    Enhanced Grade Model with comprehensive validation, business logic,
+    and professional error handling for Ghana Education Service standards.
+    """
+    
+    # Ghana Education Service Standard Weights
+    HOMEWORK_WEIGHT = Decimal('10.00')  # 10%
+    CLASSWORK_WEIGHT = Decimal('30.00')  # 30%  
+    TEST_WEIGHT = Decimal('10.00')       # 10%
+    EXAM_WEIGHT = Decimal('50.00')       # 50%
+
+    # GES Grade Choices with detailed descriptions
     GES_GRADE_CHOICES = [
-        ('1', '1 (90-100%) - Outstanding'),
-        ('2', '2 (80-89%) - Excellent'),
-        ('3', '3 (70-79%) - Very Good'), 
-        ('4', '4 (60-69%) - Good'),
-        ('5', '5 (50-59%) - Satisfactory'),
-        ('6', '6 (40-49%) - Fair'),
-        ('7', '7 (30-39%) - Weak'),
-        ('8', '8 (20-29%) - Very Weak'),
-        ('9', '9 (0-19%) - Fail'),
+        ('1', '1 (90-100%) - Outstanding - Excellent performance'),
+        ('2', '2 (80-89%) - Excellent - Strong performance'), 
+        ('3', '3 (70-79%) - Very Good - Above average performance'),
+        ('4', '4 (60-69%) - Good - Meets expectations'),
+        ('5', '5 (50-59%) - Satisfactory - Needs improvement'),
+        ('6', '6 (40-49%) - Fair - Below expectations'),
+        ('7', '7 (30-39%) - Weak - Significant improvement needed'),
+        ('8', '8 (20-29%) - Very Weak - Concerning performance'),
+        ('9', '9 (0-19%) - Fail - Immediate intervention required'),
         ('N/A', 'Not Available'),
     ]
 
-    # Ghana Education Service Standard Weights
-    HOMEWORK_WEIGHT = 10
-    CLASSWORK_WEIGHT = 30  
-    TEST_WEIGHT = 10
-    EXAM_WEIGHT = 50
+    # Letter Grade Choices
+    LETTER_GRADE_CHOICES = [
+        ('A+', 'A+ (90-100%) - Outstanding - Excellent performance'),
+        ('A', 'A (80-89%) - Excellent - Strong performance'),
+        ('B+', 'B+ (70-79%) - Very Good - Above average performance'),
+        ('B', 'B (60-69%) - Good - Meets expectations'),
+        ('C+', 'C+ (50-59%) - Satisfactory - Needs improvement'),
+        ('C', 'C (40-49%) - Fair - Below expectations'),
+        ('D+', 'D+ (30-39%) - Weak - Significant improvement needed'),
+        ('D', 'D (20-29%) - Very Weak - Concerning performance'),
+        ('F', 'F (0-19%) - Fail - Immediate intervention required'),
+        ('N/A', 'Not Available'),
+    ]
 
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
-    class_assignment = models.ForeignKey(ClassAssignment, on_delete=models.CASCADE)
-    academic_year = models.CharField(max_length=9, validators=[RegexValidator(r'^\d{4}/\d{4}$')])
-    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    # Model Fields
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='grades')
+    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='grades')
+    class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE, related_name='grades')
+    academic_year = models.CharField(
+        max_length=9, 
+        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Academic year must be in format YYYY/YYYY')]
+    )
+    term = models.PositiveSmallIntegerField(choices=[
+        (1, 'Term 1'),
+        (2, 'Term 2'), 
+        (3, 'Term 3')
+    ])
 
+    # Score fields with comprehensive validators
     classwork_score = models.DecimalField(
-        max_digits=5, decimal_places=2, 
-        validators=[MinValueValidator(0), MaxValueValidator(CLASSWORK_WEIGHT)],
-        verbose_name=f"Classwork ({CLASSWORK_WEIGHT}%)",
-        default=0
+        max_digits=5, 
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal('0.00'), 'Score cannot be negative'),
+            MaxValueValidator(CLASSWORK_WEIGHT, f'Classwork score cannot exceed {CLASSWORK_WEIGHT}%')
+        ],
+        verbose_name="Classwork Score (30%)",
+        default=Decimal('0.00'),
+        help_text="Classwork assessment score (0-30%)"
     )
+    
     homework_score = models.DecimalField(
-        max_digits=5, decimal_places=2, 
-        validators=[MinValueValidator(0), MaxValueValidator(HOMEWORK_WEIGHT)],
-        verbose_name=f"Homework ({HOMEWORK_WEIGHT}%)",
-        default=0
+        max_digits=5, 
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal('0.00'), 'Score cannot be negative'),
+            MaxValueValidator(HOMEWORK_WEIGHT, f'Homework score cannot exceed {HOMEWORK_WEIGHT}%')
+        ],
+        verbose_name="Homework Score (10%)",
+        default=Decimal('0.00'),
+        help_text="Homework assignment score (0-10%)"
     )
+    
     test_score = models.DecimalField(
-        max_digits=5, decimal_places=2, 
-        validators=[MinValueValidator(0), MaxValueValidator(TEST_WEIGHT)],
-        verbose_name=f"Test ({TEST_WEIGHT}%)", 
-        default=0
+        max_digits=5, 
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal('0.00'), 'Score cannot be negative'),
+            MaxValueValidator(TEST_WEIGHT, f'Test score cannot exceed {TEST_WEIGHT}%')
+        ],
+        verbose_name="Test Score (10%)", 
+        default=Decimal('0.00'),
+        help_text="Test/examination score (0-10%)"
     )
+    
     exam_score = models.DecimalField(
-        max_digits=5, decimal_places=2, 
-        validators=[MinValueValidator(0), MaxValueValidator(EXAM_WEIGHT)],
-        verbose_name=f"Exam ({EXAM_WEIGHT}%)",
-        default=0
+        max_digits=5, 
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal('0.00'), 'Score cannot be negative'),
+            MaxValueValidator(EXAM_WEIGHT, f'Exam score cannot exceed {EXAM_WEIGHT}%')
+        ],
+        verbose_name="Exam Score (50%)",
+        default=Decimal('0.00'),
+        help_text="Final examination score (0-50%)"
     )
 
-    total_score = models.DecimalField(max_digits=5, decimal_places=2, editable=False, null=True, blank=True)
-    ges_grade = models.CharField(max_length=3, choices=GES_GRADE_CHOICES, editable=False, default='N/A')
-    remarks = models.TextField(blank=True)
-    last_updated = models.DateTimeField(auto_now=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # Calculated fields
+    total_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        editable=False, 
+        null=True, 
+        blank=True,
+        verbose_name="Total Score",
+        help_text="Automatically calculated total score"
+    )
+    
+    ges_grade = models.CharField(
+        max_length=3, 
+        choices=GES_GRADE_CHOICES, 
+        editable=False, 
+        default='N/A',
+        verbose_name="GES Grade",
+        help_text="Automatically determined GES grade"
+    )
+    
+    # FIXED: Letter grade field with correct max_length
+    letter_grade = models.CharField(
+        max_length=3,  # Fixed: Changed from 2 to 3 to accommodate 'N/A'
+        choices=LETTER_GRADE_CHOICES,
+        editable=False,
+        blank=True,
+        null=True,
+        verbose_name="Letter Grade",
+        help_text="Automatically determined letter grade"
+    )
+    
+    remarks = models.TextField(
+        blank=True,
+        verbose_name="Teacher Remarks",
+        help_text="Additional comments or notes about the grade"
+    )
+    
+    # Audit fields
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, 
+        null=True,
+        verbose_name="Recorded By",
+        help_text="User who recorded this grade"
+    )
+    
+    last_updated = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Last Updated"
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Created At"
+    )
+    
+    # Status fields
+    is_locked = models.BooleanField(
+        default=False,
+        verbose_name="Is Locked",
+        help_text="Prevent further modifications to this grade"
+    )
+    
+    requires_review = models.BooleanField(
+        default=False,
+        verbose_name="Requires Review",
+        help_text="Flag for administrative review"
+    )
+    
+    review_notes = models.TextField(
+        blank=True,
+        verbose_name="Review Notes",
+        help_text="Notes from administrative review"
+    )
 
     class Meta:
         unique_together = ('student', 'subject', 'academic_year', 'term')
-        ordering = ['academic_year', 'term', 'student__last_name']
+        ordering = ['academic_year', 'term', 'student__last_name', 'subject__name']
         verbose_name = 'Grade'
         verbose_name_plural = 'Grades'
-
-    def save(self, *args, **kwargs):
-        self.calculate_total_score()
-        self.determine_ges_grade()
-        super().save(*args, **kwargs)
-
-    def calculate_total_score(self):
-        """Calculate total score using standardized Ghanaian weights"""
-        try:
-            self.total_score = (
-                (self.classwork_score or 0) + 
-                (self.homework_score or 0) + 
-                (self.test_score or 0) + 
-                (self.exam_score or 0)
-            )
-        except (TypeError, AttributeError):
-            self.total_score = None
-
-    def determine_ges_grade(self):
-        """Determine GES grade based on Ghana Education Service standards"""
-        if self.total_score is None:
-            self.ges_grade = 'N/A'
-            return
-
-        score = float(self.total_score)
-        
-        if score >= 90: 
-            self.ges_grade = '1'
-        elif score >= 80: 
-            self.ges_grade = '2'
-        elif score >= 70: 
-            self.ges_grade = '3'
-        elif score >= 60: 
-            self.ges_grade = '4' 
-        elif score >= 50: 
-            self.ges_grade = '5'
-        elif score >= 40: 
-            self.ges_grade = '6'
-        elif score >= 30: 
-            self.ges_grade = '7'
-        elif score >= 20: 
-            self.ges_grade = '8'
-        else: 
-            self.ges_grade = '9'
-
-    def get_grade_description(self):
-        """Get descriptive text for the grade"""
-        descriptions = {
-            '1': 'Excellent - Outstanding performance',
-            '2': 'Very Good - Strong performance', 
-            '3': 'Good - Above average performance',
-            '4': 'Satisfactory - Meets expectations',
-            '5': 'Fair - Needs improvement',
-            '6': 'Marginal - Below expectations',
-            '7': 'Poor - Significant improvement needed',
-            '8': 'Very Poor - Concerning performance',
-            '9': 'Fail - Immediate intervention required',
-            'N/A': 'Grade not available'
-        }
-        return descriptions.get(self.ges_grade, '')
-
-    def is_passing(self):
-        """Check if grade is passing (GES standards - 40% and above)"""
-        return self.total_score and float(self.total_score) >= 40.0
-
-    def get_performance_level(self):
-        """Get performance level category"""
-        if not self.total_score:
-            return 'Unknown'
-            
-        score = float(self.total_score)
-        if score >= 80: return 'Excellent'
-        elif score >= 70: return 'Very Good'
-        elif score >= 60: return 'Good' 
-        elif score >= 50: return 'Satisfactory'
-        elif score >= 40: return 'Fair'
-        else: return 'Poor'
+        indexes = [
+            models.Index(fields=['student', 'academic_year', 'term']),
+            models.Index(fields=['subject', 'academic_year']),
+            models.Index(fields=['class_assignment', 'term']),
+            models.Index(fields=['total_score']),
+            models.Index(fields=['ges_grade']),
+            models.Index(fields=['letter_grade']),
+        ]
 
     def __str__(self):
-        return f"{self.student} - {self.subject} ({self.academic_year} Term {self.term}): {self.ges_grade}"
+        """Fixed: Use get_display_grade method for consistent grade display"""
+        grade_display = self.get_display_grade()
+        return f"{self.student.get_full_name()} - {self.subject.name} ({self.academic_year} Term {self.term}): {grade_display}"
+
+    def clean(self):
+        """
+        Comprehensive validation for grade data with detailed error handling
+        """
+        errors = {}
+        
+        try:
+            # Validate basic field presence
+            if not self.student_id:
+                errors['student'] = 'Student is required'
+            
+            if not self.subject_id:
+                errors['subject'] = 'Subject is required'
+            
+            if not self.class_assignment_id:
+                errors['class_assignment'] = 'Class assignment is required'
+            
+            # Validate academic year format and logic
+            if self.academic_year:
+                if not re.match(r'^\d{4}/\d{4}$', self.academic_year):
+                    errors['academic_year'] = 'Academic year must be in format YYYY/YYYY'
+                else:
+                    # Validate consecutive years
+                    try:
+                        year1, year2 = map(int, self.academic_year.split('/'))
+                        if year2 != year1 + 1:
+                            errors['academic_year'] = 'The second year must be exactly one year after the first year'
+                    except (ValueError, IndexError):
+                        errors['academic_year'] = 'Invalid academic year format'
+            
+            # Validate term range
+            if self.term and self.term not in [1, 2, 3]:
+                errors['term'] = 'Term must be 1, 2, or 3'
+            
+            # Validate score limits with precise decimal validation
+            score_fields = {
+                'classwork_score': self.CLASSWORK_WEIGHT,
+                'homework_score': self.HOMEWORK_WEIGHT,
+                'test_score': self.TEST_WEIGHT,
+                'exam_score': self.EXAM_WEIGHT,
+            }
+            
+            for field_name, max_score in score_fields.items():
+                score = getattr(self, field_name, Decimal('0.00'))
+                if score is None:
+                    continue
+                    
+                try:
+                    score_decimal = Decimal(str(score))
+                    if score_decimal < Decimal('0.00'):
+                        errors[field_name] = 'Score cannot be negative'
+                    elif score_decimal > max_score:
+                        errors[field_name] = f'Score cannot exceed {max_score}%'
+                    # Validate decimal precision
+                    if abs(score_decimal - score_decimal.quantize(Decimal('0.01'))) > Decimal('0.001'):
+                        errors[field_name] = 'Score must have at most 2 decimal places'
+                except (InvalidOperation, TypeError, ValueError) as e:
+                    errors[field_name] = 'Invalid score format'
+                    logger.warning(f"Invalid score format in {field_name}: {score} - {e}")
+            
+            # Validate total score consistency
+            if not errors:
+                total_calculated = self._calculate_total_score_safe()
+                if total_calculated is not None and total_calculated > Decimal('100.00'):
+                    errors['__all__'] = f'Total score cannot exceed 100%. Current calculated total: {total_calculated}%'
+            
+            # Validate business rules
+            self._validate_business_rules(errors)
+            
+            # Validate against existing grades for uniqueness
+            if not errors and self.pk is None:  # Only for new instances
+                self._validate_unique_grade(errors)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error during grade validation: {str(e)}", exc_info=True)
+            errors['__all__'] = 'An unexpected validation error occurred. Please try again.'
+        
+        if errors:
+            logger.warning(
+                f"Grade validation failed - Student: {getattr(self.student, 'id', 'Unknown')}, "
+                f"Subject: {getattr(self.subject, 'name', 'Unknown')}, Errors: {errors}"
+            )
+            raise ValidationError(errors)
+
+    def _validate_business_rules(self, errors):
+        """
+        Validate business rules and constraints
+        """
+        try:
+            # Check if student is active
+            if self.student_id and not self.student.is_active:
+                errors['student'] = 'Cannot assign grade to inactive student'
+            
+            # Check if subject is active
+            if self.subject_id and not self.subject.is_active:
+                errors['subject'] = 'Cannot assign grade for inactive subject'
+            
+            # Check if academic term is editable
+            if self._is_term_locked():
+                errors['__all__'] = 'Cannot modify grades for locked academic term'
+            
+            # Validate class assignment consistency
+            if (self.student_id and self.class_assignment_id and 
+                self.student.class_level != self.class_assignment.class_level):
+                errors['class_assignment'] = 'Class assignment does not match student class level'
+            
+            if (self.subject_id and self.class_assignment_id and 
+                self.subject != self.class_assignment.subject):
+                errors['class_assignment'] = 'Class assignment does not match subject'
+            
+            # Check for significant changes if updating existing grade
+            if self.pk:
+                self._validate_grade_changes(errors)
+                
+        except Exception as e:
+            logger.error(f"Business rule validation failed: {str(e)}")
+            errors['__all__'] = 'Error validating business rules'
+
+    def _validate_unique_grade(self, errors):
+        """
+        Validate grade uniqueness constraint
+        """
+        try:
+            existing_grade = Grade.objects.filter(
+                student=self.student,
+                subject=self.subject,
+                academic_year=self.academic_year,
+                term=self.term
+            ).exists()
+            
+            if existing_grade:
+                errors['__all__'] = (
+                    'A grade already exists for this student, subject, term, and academic year. '
+                    'Please update the existing grade instead.'
+                )
+        except Exception as e:
+            logger.error(f"Unique grade validation failed: {str(e)}")
+            errors['__all__'] = 'Error checking for duplicate grades'
+
+    def _validate_grade_changes(self, errors):
+        """
+        Validate changes to existing grade for significant modifications
+        """
+        try:
+            original_grade = Grade.objects.get(pk=self.pk)
+            
+            # Check if grade is locked
+            if original_grade.is_locked:
+                errors['__all__'] = 'This grade is locked and cannot be modified'
+                return
+            
+            # Check for significant score changes
+            significant_changes = []
+            score_fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score']
+            
+            for field in score_fields:
+                original_value = getattr(original_grade, field, Decimal('0.00'))
+                new_value = getattr(self, field, Decimal('0.00'))
+                
+                if abs(float(new_value) - float(original_value)) > 20.0:
+                    significant_changes.append(field.replace('_score', ''))
+            
+            if significant_changes:
+                self.requires_review = True
+                logger.info(
+                    f"Grade marked for review due to significant changes - "
+                    f"Grade ID: {self.pk}, Changes: {significant_changes}"
+                )
+                
+        except Grade.DoesNotExist:
+            logger.warning(f"Original grade not found during change validation - PK: {self.pk}")
+        except Exception as e:
+            logger.error(f"Grade change validation failed: {str(e)}")
+
+    def _is_term_locked(self):
+        """
+        Check if the academic term is locked for editing
+        """
+        try:
+            from .models import AcademicTerm
+            term_obj = AcademicTerm.objects.filter(
+                academic_year=self.academic_year,
+                term=self.term
+            ).first()
+            
+            if term_obj and getattr(term_obj, 'is_locked', False):
+                return True
+                
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking term lock status: {str(e)}")
+            return False
+
+    def _calculate_total_score_safe(self):
+        """
+        Safely calculate total score without side effects
+        """
+        try:
+            scores = [
+                self.classwork_score or Decimal('0.00'),
+                self.homework_score or Decimal('0.00'),
+                self.test_score or Decimal('0.00'),
+                self.exam_score or Decimal('0.00')
+            ]
+            
+            total = sum(score for score in scores if score is not None)
+            return total.quantize(Decimal('0.01'))
+            
+        except (TypeError, InvalidOperation, ValueError) as e:
+            logger.error(f"Error in safe total score calculation: {str(e)}")
+            return None
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        """
+        Enhanced save method with comprehensive error handling, validation,
+        and business logic execution.
+        """
+        try:
+            # Pre-save validation
+            is_new = self.pk is None
+            
+            # Run full validation
+            self.full_clean()
+            
+            # Pre-save calculations
+            self._pre_save_calculations()
+            
+            # Determine if this is an update and capture changes
+            if not is_new:
+                self._capture_changes_for_audit()
+            
+            # Save the instance
+            super().save(*args, **kwargs)
+            
+            # Post-save operations
+            self._post_save_operations(is_new)
+            
+            logger.info(
+                f"Grade saved successfully - ID: {self.pk}, "
+                f"Student: {self.student_id}, Subject: {self.subject_id}, "
+                f"Total Score: {self.total_score}, GES Grade: {self.ges_grade}, Letter Grade: {self.letter_grade}"
+            )
+            
+        except ValidationError as e:
+            logger.error(
+                f"Grade validation failed during save - "
+                f"Student: {getattr(self.student, 'id', 'Unknown')}, "
+                f"Subject: {getattr(self.subject, 'name', 'Unknown')}, "
+                f"Errors: {e.message_dict}"
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                f"Unexpected error saving grade - "
+                f"Student: {getattr(self.student, 'id', 'Unknown')}, "
+                f"Subject: {getattr(self.subject, 'name', 'Unknown')}, "
+                f"Error: {str(e)}",
+                exc_info=True
+            )
+            raise
+
+    def _pre_save_calculations(self):
+        """
+        Perform all calculations before saving
+        """
+        try:
+            # Calculate total score
+            self.calculate_total_score()
+            
+            # Determine both GES and Letter grades
+            self.determine_grades()
+            
+            # Set recorded_by if not set and we have a request context
+            if not self.recorded_by and hasattr(self, '_request_user'):
+                self.recorded_by = self._request_user
+            
+            # Update timestamps
+            if not self.pk:
+                self.created_at = timezone.now()
+            
+        except Exception as e:
+            logger.error(f"Pre-save calculations failed: {str(e)}")
+            raise
+
+    def _capture_changes_for_audit(self):
+        """
+        Capture changes for audit logging (called before update)
+        """
+        try:
+            if self.pk:
+                original = Grade.objects.get(pk=self.pk)
+                self._changes = self._get_field_changes(original)
+        except Grade.DoesNotExist:
+            self._changes = {}
+        except Exception as e:
+            logger.warning(f"Failed to capture changes for audit: {str(e)}")
+            self._changes = {}
+
+    def _get_field_changes(self, original):
+        """
+        Get dictionary of changed fields and their values
+        """
+        changes = {}
+        fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score', 'total_score', 'ges_grade', 'letter_grade']
+        
+        for field in fields:
+            original_value = getattr(original, field)
+            new_value = getattr(self, field)
+            
+            if str(original_value) != str(new_value):
+                changes[field] = {
+                    'from': original_value,
+                    'to': new_value
+                }
+        
+        return changes
+
+    def _post_save_operations(self, is_new):
+        """
+        Execute post-save operations like audit logging and cache updates
+        """
+        try:
+            # Create audit log entry
+            self._create_audit_log_entry(is_new)
+            
+            # Update analytics cache
+            self._update_analytics_cache()
+            
+            # Send notifications for significant changes
+            if not is_new and hasattr(self, '_changes') and self._changes:
+                self._send_change_notifications()
+                
+        except Exception as e:
+            logger.error(f"Post-save operations failed: {str(e)}")
+            # Don't raise exception as the grade was saved successfully
+
+    def _create_audit_log_entry(self, is_new):
+        """
+        Create audit log entry for grade creation or modification
+        """
+        try:
+            from .models import AuditLog
+            
+            action = 'CREATE' if is_new else 'UPDATE'
+            details = {
+                'student_id': self.student_id,
+                'subject_id': self.subject_id,
+                'academic_year': self.academic_year,
+                'term': self.term,
+                'total_score': float(self.total_score) if self.total_score else None,
+                'ges_grade': self.ges_grade,
+                'letter_grade': self.letter_grade,
+            }
+            
+            if hasattr(self, '_changes'):
+                details['changes'] = self._changes
+            
+            AuditLog.objects.create(
+                user=self.recorded_by,
+                action=action,
+                model_name='Grade',
+                object_id=self.id,
+                details=details,
+                timestamp=timezone.now()
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to create audit log entry: {str(e)}")
+
+    def _update_analytics_cache(self):
+        """
+        Update analytics cache after grade changes
+        """
+        try:
+            from django.core.cache import cache
+            
+            cache_keys_to_clear = [
+                f"class_performance_{self.subject_id}_{self.student.class_level}_{self.academic_year}_{self.term}",
+                f"student_progress_{self.student_id}_{self.academic_year}",
+                f"term_report_{self.student.class_level}_{self.academic_year}_{self.term}"
+            ]
+            
+            for cache_key in cache_keys_to_clear:
+                cache.delete(cache_key)
+                
+        except Exception as e:
+            logger.warning(f"Failed to update analytics cache: {str(e)}")
+
+    def _send_change_notifications(self):
+        """
+        Send notifications for significant grade changes
+        """
+        try:
+            # This would integrate with your notification system
+            # For now, just log the notification requirement
+            if hasattr(self, '_changes') and any(
+                field in self._changes for field in 
+                ['classwork_score', 'homework_score', 'test_score', 'exam_score']
+            ):
+                logger.info(
+                    f"Grade change notifications required - "
+                    f"Grade ID: {self.pk}, Student: {self.student_id}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to send change notifications: {str(e)}")
+
+    def calculate_total_score(self):
+        """
+        Calculate total score with comprehensive error handling
+        """
+        try:
+            scores = [
+                self.classwork_score,
+                self.homework_score, 
+                self.test_score,
+                self.exam_score
+            ]
+            
+            # Convert to Decimal and handle None values
+            decimal_scores = []
+            for score in scores:
+                if score is None:
+                    decimal_scores.append(Decimal('0.00'))
+                else:
+                    try:
+                        decimal_scores.append(Decimal(str(score)))
+                    except (InvalidOperation, TypeError, ValueError):
+                        decimal_scores.append(Decimal('0.00'))
+                        logger.warning(f"Invalid score converted to 0: {score}")
+            
+            total = sum(decimal_scores)
+            self.total_score = total.quantize(Decimal('0.01'))
+            
+            logger.debug(f"Total score calculated: {self.total_score} for grade {self.pk}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating total score: {str(e)}", exc_info=True)
+            self.total_score = None
+            raise
+
+    def determine_grades(self):
+        """
+        Determine both GES and letter grades based on Ghana Education Service standards
+        with comprehensive error handling
+        """
+        try:
+            if self.total_score is None:
+                self.ges_grade = 'N/A'
+                self.letter_grade = 'N/A'
+                return
+
+            score = float(self.total_score)
+            
+            # GES grading standards
+            if score >= 90: 
+                self.ges_grade = '1'
+            elif score >= 80: 
+                self.ges_grade = '2'
+            elif score >= 70: 
+                self.ges_grade = '3'
+            elif score >= 60: 
+                self.ges_grade = '4' 
+            elif score >= 50: 
+                self.ges_grade = '5'
+            elif score >= 40: 
+                self.ges_grade = '6'
+            elif score >= 30: 
+                self.ges_grade = '7'
+            elif score >= 20: 
+                self.ges_grade = '8'
+            else: 
+                self.ges_grade = '9'
+            
+            # Letter grading standards
+            if score >= 90: 
+                self.letter_grade = 'A+'
+            elif score >= 80: 
+                self.letter_grade = 'A'
+            elif score >= 70: 
+                self.letter_grade = 'B+'
+            elif score >= 60: 
+                self.letter_grade = 'B'
+            elif score >= 50: 
+                self.letter_grade = 'C+'
+            elif score >= 40: 
+                self.letter_grade = 'C'
+            elif score >= 30: 
+                self.letter_grade = 'D+'
+            elif score >= 20: 
+                self.letter_grade = 'D'
+            else: 
+                self.letter_grade = 'F'
+                
+            logger.debug(f"Grades determined - GES: {self.ges_grade}, Letter: {self.letter_grade} for score {score}")
+            
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error determining grades: {str(e)}")
+            self.ges_grade = 'N/A'
+            self.letter_grade = 'N/A'
+        except Exception as e:
+            logger.error(f"Unexpected error determining grades: {str(e)}", exc_info=True)
+            self.ges_grade = 'N/A'
+            self.letter_grade = 'N/A'
+
+    def get_display_grade(self):
+        """
+        Get the grade to display based on system configuration
+        """
+        try:
+            from .grading_utils import get_display_grade as get_system_display_grade
+            return get_system_display_grade(self.ges_grade, self.letter_grade)
+        except Exception as e:
+            logger.error(f"Error getting display grade: {str(e)}")
+            # Fallback to showing both if there's an error
+            if self.ges_grade and self.ges_grade != 'N/A' and self.letter_grade and self.letter_grade != 'N/A':
+                return f"{self.ges_grade} ({self.letter_grade})"
+            elif self.ges_grade and self.ges_grade != 'N/A':
+                return self.ges_grade
+            elif self.letter_grade and self.letter_grade != 'N/A':
+                return self.letter_grade
+            else:
+                return 'N/A'
+
+    def get_grade_description(self):
+        """
+        Get descriptive text for the grade based on active system
+        """
+        try:
+            from .grading_utils import get_grade_description
+            return get_grade_description(self.ges_grade, self.letter_grade)
+        except Exception as e:
+            logger.error(f"Error getting grade description: {str(e)}")
+            descriptions = {
+                '1': 'Excellent - Outstanding performance',
+                '2': 'Very Good - Strong performance', 
+                '3': 'Good - Above average performance',
+                '4': 'Satisfactory - Meets expectations',
+                '5': 'Fair - Needs improvement',
+                '6': 'Marginal - Below expectations',
+                '7': 'Poor - Significant improvement needed',
+                '8': 'Very Poor - Concerning performance',
+                '9': 'Fail - Immediate intervention required',
+                'N/A': 'Grade not available'
+            }
+            return descriptions.get(self.ges_grade, 'Unknown grade')
+
+    def get_grade_color(self):
+        """
+        Get color for grade display
+        """
+        try:
+            from .grading_utils import get_grade_color
+            return get_grade_color(self.ges_grade)
+        except Exception as e:
+            logger.error(f"Error getting grade color: {str(e)}")
+            return 'secondary'
+
+    def get_performance_level(self):
+        """
+        Get performance level category based on current grading system
+        """
+        try:
+            from .grading_utils import get_grading_system
+            
+            if not self.total_score:
+                return 'Unknown'
+                
+            score = float(self.total_score)
+            grading_system = get_grading_system()
+            
+            if grading_system == 'GES':
+                if score >= 80: return 'Excellent'
+                elif score >= 70: return 'Very Good'
+                elif score >= 60: return 'Good'
+                elif score >= 50: return 'Satisfactory'
+                elif score >= 40: return 'Fair'
+                else: return 'Poor'
+            else:  # LETTER or BOTH
+                if score >= 80: return 'Excellent'
+                elif score >= 70: return 'Very Good'
+                elif score >= 60: return 'Good'
+                elif score >= 50: return 'Satisfactory'
+                elif score >= 40: return 'Fair'
+                else: return 'Poor'
+                
+        except (TypeError, ValueError):
+            return 'Unknown'
+        except Exception as e:
+            logger.error(f"Error getting performance level: {str(e)}")
+            return 'Unknown'
+
+    def is_passing(self):
+        """
+        Check if grade is passing (GES standards - 40% and above)
+        """
+        try:
+            return self.total_score and Decimal(str(self.total_score)) >= Decimal('40.00')
+        except (TypeError, ValueError, InvalidOperation):
+            return False
+
+    def get_performance_level_display(self):
+        """Get performance level display name"""
+        if not self.total_score:
+            return 'Not Available'
+        if self.total_score >= 80: return 'Excellent'
+        elif self.total_score >= 70: return 'Very Good'
+        elif self.total_score >= 60: return 'Good'
+        elif self.total_score >= 50: return 'Satisfactory'
+        elif self.total_score >= 40: return 'Fair'
+        else: return 'Poor'
+    
+    def score_breakdown(self):
+        """Get score breakdown for templates"""
+        return {
+            'classwork': self.classwork_score or 0,
+            'homework': self.homework_score or 0,
+            'test': self.test_score or 0,
+            'exam': self.exam_score or 0,
+        }
 
     @classmethod
     def get_subject_statistics(cls, subject, class_level, academic_year, term):
-        """Get statistics for a specific subject, class, and term"""
-        grades = cls.objects.filter(
-            subject=subject,
-            student__class_level=class_level,
-            academic_year=academic_year,
-            term=term
-        ).exclude(total_score__isnull=True)
-        
-        if not grades.exists():
-            return None
+        """
+        Get comprehensive statistics for a specific subject, class, and term
+        """
+        try:
+            grades = cls.objects.filter(
+                subject=subject,
+                student__class_level=class_level,
+                academic_year=academic_year,
+                term=term
+            ).exclude(total_score__isnull=True)
             
-        scores = [float(grade.total_score) for grade in grades]
+            if not grades.exists():
+                return None
+                
+            scores = [float(grade.total_score) for grade in grades if grade.total_score is not None]
+            
+            return {
+                'count': len(scores),
+                'average': round(sum(scores) / len(scores), 2),
+                'highest': max(scores),
+                'lowest': min(scores),
+                'passing_rate': round(len([s for s in scores if s >= 40]) / len(scores) * 100, 1),
+                'grade_distribution': cls._calculate_grade_distribution(scores),
+                'standard_deviation': cls._calculate_standard_deviation(scores),
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating subject statistics: {str(e)}")
+            return None
+
+    @classmethod
+    def _calculate_grade_distribution(cls, scores):
+        """
+        Calculate grade distribution for statistics
+        """
+        distribution = {}
+        boundaries = {
+            '1': (90, 100), '2': (80, 89), '3': (70, 79), '4': (60, 69),
+            '5': (50, 59), '6': (40, 49), '7': (30, 39), '8': (20, 29), '9': (0, 19)
+        }
         
+        for grade, (lower, upper) in boundaries.items():
+            distribution[grade] = len([s for s in scores if lower <= s <= upper])
+            
+        return distribution
+    
+    @classmethod
+    def _calculate_standard_deviation(cls, scores):
+        """
+        Calculate standard deviation of scores
+        """
+        if len(scores) < 2:
+            return 0.0
+        
+        mean = sum(scores) / len(scores)
+        variance = sum((x - mean) ** 2 for x in scores) / len(scores)
+        return round(variance ** 0.5, 2)
+
+    @property
+    def can_be_modified(self):
+        """
+        Check if the grade can be modified
+        """
+        return not self.is_locked and not self._is_term_locked()
+
+    @property
+    def score_breakdown(self):
+        """
+        Get detailed score breakdown
+        """
         return {
-            'count': len(scores),
-            'average': round(sum(scores) / len(scores), 2),
-            'highest': max(scores),
-            'lowest': min(scores),
-            'passing_rate': round(len([s for s in scores if s >= 40]) / len(scores) * 100, 1)
+            'classwork': float(self.classwork_score) if self.classwork_score else 0.0,
+            'homework': float(self.homework_score) if self.homework_score else 0.0,
+            'test': float(self.test_score) if self.test_score else 0.0,
+            'exam': float(self.exam_score) if self.exam_score else 0.0,
+            'total': float(self.total_score) if self.total_score else 0.0,
         }
 
 
-# ===== SCHOOL CONFIGURATION =====
-
 class SchoolConfiguration(models.Model):
     GRADING_SYSTEM_CHOICES = [
-        ('GES', 'Ghana Education System (Primary/JHS)'),
-        ('WASSCE', 'West African Senior School Certificate Exam'),
+        ('GES', 'Ghana Education System (1-9)'),
+        ('LETTER', 'Letter Grading System (A-F)'),
+        ('BOTH', 'Both Systems'),
     ]
     
-    grading_system = models.CharField(max_length=10, choices=GRADING_SYSTEM_CHOICES, default='GES')
+    grading_system = models.CharField(
+        max_length=10, 
+        choices=GRADING_SYSTEM_CHOICES, 
+        default='GES'
+    )
     is_locked = models.BooleanField(default=False, help_text="Lock the grading system to prevent changes")
     academic_year = models.CharField(max_length=9, default=f"{timezone.now().year}/{timezone.now().year + 1}")
     current_term = models.PositiveSmallIntegerField(choices=TERM_CHOICES, default=1)
@@ -1167,6 +1980,13 @@ class SchoolConfiguration(models.Model):
         """Get or create the single configuration instance"""
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+    
+    def get_grading_system_display_name(self):
+        """Get user-friendly grading system name"""
+        return dict(self.GRADING_SYSTEM_CHOICES).get(self.grading_system, 'GES')
+
+
+
 # ===== ASSIGNMENT MANAGEMENT =====
 
 class Assignment(models.Model):
@@ -1292,6 +2112,36 @@ class Assignment(models.Model):
             'graded': student_assignments.filter(status='GRADED').count(),
             'pending': student_assignments.filter(status='PENDING').count(),
         }
+    
+    def get_student_assignment(self, student):
+        """Get or create StudentAssignment for a specific student"""
+        student_assignment, created = StudentAssignment.objects.get_or_create(
+            assignment=self,
+            student=student,
+            defaults={'status': 'PENDING'}
+        )
+        return student_assignment
+    
+    def can_student_submit(self, student):
+        """Check if student can submit this assignment"""
+        if not self.is_active:
+            return False, "This assignment is no longer active"
+        
+        if self.due_date < timezone.now():
+            return False, "Assignment due date has passed"
+        
+        student_assignment = self.get_student_assignment(student)
+        if student_assignment.status == 'GRADED':
+            return False, "Assignment has already been graded"
+        
+        return True, "Can submit"
+    
+    def get_teacher_download_url(self, student_assignment):
+        """Get download URL for teacher to download student submission"""
+        if student_assignment.file:
+            return student_assignment.file.url
+        return None
+
 
 class StudentAssignment(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
@@ -1368,6 +2218,67 @@ class StudentAssignment(models.Model):
             else:
                 self.status = 'SUBMITTED'
         super().save(*args, **kwargs)
+    
+    def get_assignment_document_url(self):
+        """Get URL for student to download original assignment document"""
+        if self.assignment.attachment:
+            return self.assignment.attachment.url
+        return None
+    
+    def can_student_download_assignment(self):
+        """Check if student can download the original assignment"""
+        return self.assignment.attachment is not None
+    
+    def can_student_submit_work(self):
+        """Check if student can submit their work"""
+        if self.status == 'GRADED':
+            return False, "Assignment has already been graded"
+        
+        if self.assignment.due_date < timezone.now():
+            return False, "Assignment due date has passed"
+        
+        if not self.assignment.is_active:
+            return False, "Assignment is no longer active"
+        
+        return True, "Can submit"
+    
+    def submit_student_work(self, file, feedback=""):
+        """Submit student work with validation"""
+        can_submit, message = self.can_student_submit_work()
+        if not can_submit:
+            raise ValidationError(message)
+        
+        self.file = file
+        self.feedback = feedback
+        self.submitted_date = timezone.now()
+        
+        # Check if submission is late
+        if self.submitted_date > self.assignment.due_date:
+            self.status = 'LATE'
+        else:
+            self.status = 'SUBMITTED'
+        
+        self.save()
+        
+        # Send notification to teacher
+        self.send_submission_notification()
+        
+        return True
+
+    def send_submission_notification(self):
+        """Send notification to teacher when student submits work"""
+        try:
+            teacher = self.assignment.class_assignment.teacher.user
+            create_notification(
+                recipient=teacher,
+                title="New Assignment Submission",
+                message=f"{self.student.get_full_name()} has submitted work for '{self.assignment.title}'",
+                notification_type="ASSIGNMENT",
+                link=reverse('assignment_detail', kwargs={'pk': self.assignment.pk})
+            )
+        except Exception as e:
+            logger.error(f"Error sending submission notification: {str(e)}")
+    
 
 class AssignmentAnalytics(models.Model):
     """Model to track assignment analytics and statistics"""
@@ -1496,6 +2407,7 @@ class AssignmentTemplate(models.Model):
         
         return assignments
 
+
 # ===== FEE MANAGEMENT =====
 
 class FeeCategory(models.Model):
@@ -1575,6 +2487,8 @@ class Bill(models.Model):
     due_date = models.DateField()
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    
+    # FIXED: Use lowercase statuses consistently
     status = models.CharField(max_length=10, choices=[
         ('issued', 'Issued'),
         ('paid', 'Paid'),
@@ -1582,6 +2496,7 @@ class Bill(models.Model):
         ('overdue', 'Overdue'),
         ('cancelled', 'Cancelled')
     ], default='issued')
+    
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -1654,8 +2569,11 @@ class Bill(models.Model):
             return "Due today"
         else:
             return f"{remaining} days remaining"
-
-
+    
+    @property
+    def is_overdue(self):
+        """Check if bill is overdue"""
+        return self.status == 'overdue' or (self.due_date < timezone.now().date() and self.status != 'paid')
 
 class BillItem(models.Model):
     """Individual fee items on a bill"""
@@ -1672,19 +2590,18 @@ class BillItem(models.Model):
     def __str__(self):
         return f"{self.fee_category.name} - GH₵{self.amount}"
 
-
 class BillPayment(models.Model):
     PAYMENT_MODES = [
-        ('CASH', 'Cash'),
-        ('BANK_TRANSFER', 'Bank Transfer'),
-        ('MOBILE_MONEY', 'Mobile Money'),
-        ('CHECK', 'Check'),
-        ('OTHER', 'Other'),
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('mobile_money', 'Mobile Money'),
+        ('check', 'Check'),
+        ('other', 'Other'),
     ]
     
     bill = models.ForeignKey('Bill', on_delete=models.CASCADE, related_name='bill_payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODES, default='CASH')
+    payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODES, default='cash')
     payment_date = models.DateField(default=timezone.now)
     notes = models.TextField(blank=True, null=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
@@ -1705,6 +2622,7 @@ class BillPayment(models.Model):
         self.bill.update_status()
 
 class Fee(models.Model):
+    # FIXED: Use lowercase statuses consistently
     PAYMENT_STATUS_CHOICES = [
         ('paid', 'Paid'),
         ('unpaid', 'Unpaid'),
@@ -1848,6 +2766,7 @@ class Fee(models.Model):
             return f"{remaining} days remaining"
 
 class FeePayment(models.Model):
+    # FIXED: Use lowercase payment modes consistently
     PAYMENT_MODE_CHOICES = [
         ('cash', 'Cash'),
         ('check', 'Check'),
@@ -1894,7 +2813,6 @@ class FeePayment(models.Model):
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
-
 class FeeDiscount(models.Model):
     DISCOUNT_TYPES = [
         ('PERCENT', 'Percentage'),
@@ -1935,6 +2853,7 @@ class FeeInstallment(models.Model):
         
     def __str__(self):
         return f"Installment of {self.amount} due {self.due_date}"
+
 
 # ===== REPORT CARD =====
 
@@ -2515,6 +3434,27 @@ def get_unread_count(user):
     Get count of unread notifications for a user
     """
     return Notification.objects.filter(recipient=user, is_read=False).count()
+
+
+class Holiday(models.Model):
+    """Model to store school holidays"""
+    name = models.CharField(max_length=200)
+    date = models.DateField()
+    is_school_holiday = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = "Holiday"
+        verbose_name_plural = "Holidays"
+        ordering = ['-date']
+    
+    def __str__(self):
+        return f"{self.name} ({self.date})"
+
+
+
+
+
 
 
 

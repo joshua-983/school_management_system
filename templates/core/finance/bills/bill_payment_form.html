@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Record Bill Payment{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>Record Payment for Bill #{{ bill.bill_number }}</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'bill_list' %}">Bills</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'bill_detail' pk=bill.pk %}">Bill #{{ bill.bill_number }}</a></li>
+                    <li class="breadcrumb-item active">Record Payment</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Bill Summary -->
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Bill Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Student:</strong><br>
+                        {{ bill.student.get_full_name }}<br>
+                        <small class="text-muted">{{ bill.student.student_id }}</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Class:</strong><br>
+                        {{ bill.student.get_class_level_display }}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Total Amount:</strong><br>
+                        <span class="h5 text-primary">GH₵{{ bill.total_amount|floatformat:2 }}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Amount Paid:</strong><br>
+                        <span class="h6 text-success">GH₵{{ bill.amount_paid|floatformat:2 }}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Balance Due:</strong><br>
+                        <span class="h6 text-danger">GH₵{{ bill.get_balance_due|floatformat:2 }}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Status:</strong><br>
+                        <span class="badge bg-{% if bill.status == 'paid' %}success{% elif bill.status == 'partial' %}warning{% else %}danger{% endif %}">
+                            {{ bill.get_status_display }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Payments -->
+            {% if bill.payments.exists %}
+            <div class="card shadow-sm mt-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">Recent Payments</h6>
+                </div>
+                <div class="card-body">
+                    {% for payment in bill.payments.all|slice:":3" %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <small class="text-muted">{{ payment.payment_date|date:"M d" }}</small><br>
+                            <span class="fw-bold">GH₵{{ payment.amount|floatformat:2 }}</span>
+                        </div>
+                        <span class="badge bg-secondary">{{ payment.get_payment_mode_display }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Payment Form -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Payment Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {% for error in form.non_field_errors %}
+                                    {{ error }}
+                                {% endfor>
+                            </div>
+                        {% endif %}
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Amount *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">GH₵</span>
+                                    {{ form.amount }}
+                                </div>
+                                {% if form.amount.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.amount.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="text-muted">Balance: GH₵{{ bill.get_balance_due|floatformat:2 }}</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Method *</label>
+                                {{ form.payment_mode }}
+                                {% if form.payment_mode.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.payment_mode.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Date *</label>
+                                {{ form.payment_date }}
+                                {% if form.payment_date.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.payment_date.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Reference Number</label>
+                                {{ form.reference_number }}
+                                {% if form.reference_number.errors %}
+                                    <div class="text-danger small">
+                                        {% for error in form.reference_number.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="text-muted">Optional: Transaction ID or reference</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.notes.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="text-muted">Any additional payment details</small>
+                        </div>
+
+                        <!-- Hidden Fields -->
+                        {% for hidden in form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+
+                        <!-- Payment Preview -->
+                        <div class="alert alert-info mt-4">
+                            <h6 class="alert-heading">Payment Preview</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small>Current Balance:</small><br>
+                                    <strong>GH₵{{ bill.get_balance_due|floatformat:2 }}</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small>New Balance After Payment:</small><br>
+                                    <strong id="new-balance">GH₵{{ bill.get_balance_due|floatformat:2 }}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <a href="{% url 'bill_detail' pk=bill.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check me-2"></i>Record Payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const amountField = document.getElementById('id_amount');
+        const paymentDateField = document.getElementById('id_payment_date');
+        const balanceDue = {{ bill.get_balance_due|floatformat:2 }};
+        
+        // Set today's date as default for payment date
+        if (paymentDateField && !paymentDateField.value) {
+            const today = new Date().toISOString().split('T')[0];
+            paymentDateField.value = today;
+        }
+        
+        // Update new balance in real-time
+        function updateNewBalance() {
+            const paymentAmount = parseFloat(amountField.value) || 0;
+            const newBalance = Math.max(0, balanceDue - paymentAmount);
+            document.getElementById('new-balance').textContent = 'GH₵' + newBalance.toFixed(2);
+            
+            // Highlight if overpayment
+            if (paymentAmount > balanceDue) {
+                document.getElementById('new-balance').classList.add('text-danger');
+            } else {
+                document.getElementById('new-balance').classList.remove('text-danger');
+            }
+        }
+        
+        // Validate amount on form submission
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            const paymentAmount = parseFloat(amountField.value) || 0;
+            
+            if (paymentAmount <= 0) {
+                e.preventDefault();
+                alert('Please enter a valid payment amount.');
+                amountField.focus();
+                return false;
+            }
+            
+            if (paymentAmount > balanceDue) {
+                e.preventDefault();
+                const confirmOverpayment = confirm(
+                    `Payment amount (GH₵${paymentAmount.toFixed(2)}) exceeds balance due (GH₵${balanceDue.toFixed(2)}). Do you want to continue?`
+                );
+                if (!confirmOverpayment) {
+                    amountField.focus();
+                    return false;
+                }
+            }
+        });
+        
+        // Real-time balance update
+        if (amountField) {
+            amountField.addEventListener('input', updateNewBalance);
+            amountField.addEventListener('change', updateNewBalance);
+        }
+        
+        // Initialize balance display
+        updateNewBalance();
+    });
+</script>
+
+<style>
+    .form-control:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    .input-group-text {
+        background-color: #e9ecef;
+        border-color: #ced4da;
+    }
+    
+    .card {
+        border: none;
+        border-radius: 10px;
+    }
+    
+    .card-header {
+        border-radius: 10px 10px 0 0 !important;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item.active {
+        color: #007bff;
+    }
+</style>
+{% endblock %}

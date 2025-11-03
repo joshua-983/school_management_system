@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generate Term Fees{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="bi bi-gear me-2"></i>Generate Term Fees</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item active">Generate Fees</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Generate Fees for Current Term
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-info-circle me-2"></i>About This Process
+                        </h6>
+                        <p class="mb-0">
+                            This will automatically create fee records for all active students based on mandatory fee categories for the current academic term.
+                        </p>
+                    </div>
+
+                    <!-- Summary Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-primary">{{ active_students }}</h4>
+                                    <small class="text-muted">Active Students</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-primary">{{ mandatory_categories.count }}</h4>
+                                    <small class="text-muted">Mandatory Categories</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-primary">
+                                        {% if current_term %}
+                                            {{ current_term.academic_year }} - {{ current_term.get_term_display }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </h4>
+                                    <small class="text-muted">Current Term</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Term Info -->
+                    {% if current_term %}
+                    <div class="alert alert-success">
+                        <h6 class="alert-heading">Current Term Information</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Academic Year:</strong> {{ current_term.academic_year }}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Term:</strong> {{ current_term.get_term_display }}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Start Date:</strong> {{ current_term.start_date|date:"M d, Y" }}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>End Date:</strong> {{ current_term.end_date|date:"M d, Y" }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mandatory Categories -->
+                    <div class="mb-4">
+                        <h6>Mandatory Fee Categories:</h6>
+                        <div class="list-group">
+                            {% for category in mandatory_categories %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">{{ category.name }}</h6>
+                                        <small class="text-muted">
+                                            Default Amount: GH₵{{ category.default_amount|floatformat:2 }}
+                                            {% if category.class_levels %}
+                                            • Classes: {{ category.class_levels }}
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-success">Mandatory</span>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="list-group-item text-center text-muted">
+                                No mandatory fee categories found
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Generation Form -->
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Important Notes
+                            </h6>
+                            <ul class="mb-0">
+                                <li>This process will only create fees for students who don't already have fees for the current term</li>
+                                <li>Fees will be generated based on mandatory categories applicable to each student's class</li>
+                                <li>Due dates will be set to 2 weeks after the term start date</li>
+                                <li>This action cannot be undone automatically</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-gear me-2"></i>Generate Term Fees
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-danger">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-exclamation-triangle me-2"></i>No Active Term Found
+                        </h6>
+                        <p class="mb-0">
+                            There is no active academic term configured. Please set up an active academic term before generating fees.
+                        </p>
+                    </div>
+                    <div class="text-center">
+                        <a href="{% url 'fee_list' %}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Fee Records
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

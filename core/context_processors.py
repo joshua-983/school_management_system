@@ -1,12 +1,12 @@
 # core/context_processors.py
 from django.db.models import Prefetch
+from django.conf import settings
 from .models import Notification, ParentGuardian, Student, Teacher
 from .utils import is_admin, is_teacher
 
 def global_context(request):
     """
-    Combined context processor for all global template variables
-    Optimized with select_related and prefetch_related for better performance
+    Fixed context processor that properly handles user profiles
     """
     context = {
         'is_admin': False,
@@ -24,35 +24,42 @@ def global_context(request):
     
     user = request.user
     
-    # Single query to get all related profiles with select_related
     try:
-        # Get parent status and related profiles in optimized way
-        parent_obj = ParentGuardian.objects.filter(email=user.email).select_related('user').first()
-        has_student_profile = hasattr(user, 'student')
-        has_teacher_profile = hasattr(user, 'teacher')
+        # Check user profiles safely
+        has_student_profile = hasattr(user, 'student') and user.student is not None
+        has_teacher_profile = hasattr(user, 'teacher') and user.teacher is not None
+        
+        # Get parent status safely
+        parent_obj = None
+        try:
+            parent_obj = ParentGuardian.objects.filter(email=user.email).select_related('user').first()
+        except (ParentGuardian.DoesNotExist, AttributeError):
+            pass
+        
         is_parent_user = parent_obj is not None
         
-        # Set user roles
+        # Set user roles with safe defaults
         context.update({
             'is_admin': is_admin(user),
-            'is_teacher': is_teacher(user),
+            'is_teacher': has_teacher_profile,
             'is_student': has_student_profile,
             'is_parent': is_parent_user,
             'user_parentguardian': parent_obj,
             'dashboard_url': get_dashboard_url(user, is_parent_user, parent_obj)
         })
         
-        # Get notifications with optimized queries
-        notification_data = get_notification_data(user)
-        context.update(notification_data)
+        # Get notifications safely
+        try:
+            notification_data = get_notification_data(user)
+            context.update(notification_data)
+        except Exception as e:
+            logger.error(f"Error loading notifications: {str(e)}")
         
     except Exception as e:
-        # Log error but don't break the site
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Error in global context processor: {str(e)}")
     
     return context
+
 
 def notification_context(request):
     """
@@ -79,20 +86,45 @@ def notification_context(request):
     
     return context
 
+def settings_context(request):
+    """
+    Expose certain settings to templates
+    """
+    return {
+        'DEBUG': settings.DEBUG,
+        'SCHOOL_NAME': settings.SCHOOL_NAME,
+        'SCHOOL_SHORT_NAME': settings.SCHOOL_SHORT_NAME,
+        'SCHOOL_EMAIL': settings.SCHOOL_EMAIL,
+        'SCHOOL_PHONE': settings.SCHOOL_PHONE,
+        'SCHOOL_ADDRESS': settings.SCHOOL_ADDRESS,
+        'VERSION': settings.VERSION,
+        'BUILD_NUMBER': settings.BUILD_NUMBER,
+        'ENABLE_TWO_FACTOR_AUTH': settings.ENABLE_TWO_FACTOR_AUTH,
+        'ENABLE_API_ACCESS': settings.ENABLE_API_ACCESS,
+        'ENABLE_BACKGROUND_TASKS': settings.ENABLE_BACKGROUND_TASKS,
+        'ENABLE_NOTIFICATIONS': settings.ENABLE_NOTIFICATIONS,
+    }
+
+
 def get_dashboard_url(user, is_parent_user, parent_obj):
     """
-    Determine the appropriate dashboard URL for the user
+    Safe dashboard URL determination
     """
-    if user.is_superuser or is_admin(user):
-        return 'admin_dashboard'
-    elif hasattr(user, 'teacher'):
-        return 'teacher_dashboard'
-    elif hasattr(user, 'student'):
-        return 'student_dashboard'
-    elif is_parent_user:
-        return 'parent_dashboard'
-    else:
+    try:
+        if user.is_superuser or is_admin(user):
+            return 'admin_dashboard'
+        elif hasattr(user, 'teacher') and user.teacher is not None:
+            return 'teacher_dashboard'
+        elif hasattr(user, 'student') and user.student is not None:
+            return 'student_dashboard'
+        elif is_parent_user:
+            return 'parent_dashboard'
+        else:
+            return 'home'
+    except Exception as e:
+        logger.error(f"Error determining dashboard URL: {str(e)}")
         return 'home'
+
 
 def get_notification_data(user):
     """

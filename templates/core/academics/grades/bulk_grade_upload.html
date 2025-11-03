@@ -1,81 +1,382 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Bulk Grade Upload{% endblock %}
+{% block title %}Bulk Grade Upload - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<style>
+:root {
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    background: white;
+}
+
+.upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: var(--border-radius);
+    padding: 3rem 2rem;
+    text-align: center;
+    background: #f8f9fa;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: var(--primary);
+    background: #e9ecef;
+}
+
+.upload-area.dragover {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+.upload-area.dragover .upload-icon {
+    color: white;
+}
+
+.upload-icon {
+    font-size: 4rem;
+    color: var(--primary);
+    margin-bottom: 1rem;
+}
+
+.file-input {
+    display: none;
+}
+
+.file-info {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    border: 1px solid #e9ecef;
+    display: none;
+}
+
+.instructions-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+}
+
+.progress {
+    height: 8px;
+    border-radius: 4px;
+    margin-top: 1rem;
+    display: none;
+}
+
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    padding: 0.75rem;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: var(--secondary);
+    margin-top: 0.5rem;
+}
+
+.template-features {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border: 1px solid #e9ecef;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.feature-item:last-child {
+    margin-bottom: 0;
+}
+
+.feature-item i {
+    color: var(--success);
+    margin-right: 0.75rem;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .upload-area {
+        padding: 2rem 1rem;
+    }
+    
+    .upload-icon {
+        font-size: 3rem;
+    }
+}
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="bi bi-upload me-2"></i>Bulk Grade Upload
-                    </h5>
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb" class="text-white-50 mb-2">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-white-50">Home</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'grade_list' %}" class="text-white-50">Grades</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page">Bulk Upload</li>
+                    </ol>
+                </nav>
+                <h1 class="h2 mb-2 text-white">
+                    <i class="bi bi-upload me-3"></i>Bulk Grade Upload
+                </h1>
+                <p class="lead mb-0 text-white-50">Upload multiple student grades at once using CSV or Excel files</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="btn-group">
+                    <a href="{% url 'grade_list' %}" class="btn btn-light btn-lg">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Grades
+                    </a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow">
+                <div class="card-header text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-upload me-2"></i>Bulk Grade Upload
+                    </h4>
+                </div>
+                
                 <div class="card-body">
                     {% if messages %}
                     <div class="alert alert-info">
                         {% for message in messages %}
-                        <div{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi 
+                                {% if message.tags == 'success' %}bi-check-circle-fill
+                                {% elif message.tags == 'warning' %}bi-exclamation-triangle-fill
+                                {% elif message.tags == 'error' %}bi-x-circle-fill
+                                {% else %}bi-info-circle-fill{% endif %} me-2 fs-5"></i>
+                            <div class="flex-grow-1">
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
                         {% endfor %}
                     </div>
                     {% endif %}
                     
-                    <div class="alert alert-info">
-                        <h6>Instructions:</h6>
-                        <ol>
-                            <li>Download the <a href="{% url 'grade_upload_template' %}" class="alert-link">template file</a> (CSV or Excel)</li>
-                            <li>Fill in the student IDs and scores</li>
-                            <li>Select the correct assignment and term</li>
-                            <li>Upload the completed file below</li>
-                        </ol>
-                        <p class="mb-0">Required columns: <code>student_id</code> and <code>score</code></p>
-                        <p class="mt-2"><strong>Note:</strong> Scores must be between 0 and the assignment's maximum score.</p>
+                    <!-- Instructions -->
+                    <div class="alert alert-info instructions-card mb-4">
+                        <h6 class="alert-heading mb-3">
+                            <i class="bi bi-info-circle me-2"></i>Upload Instructions
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Step-by-Step Guide:</strong>
+                                <ol class="mb-2">
+                                    <li>Download the <a href="{% url 'grade_upload_template' %}" class="alert-link fw-bold">template file</a></li>
+                                    <li>Fill in student IDs and scores</li>
+                                    <li>Select assignment and term below</li>
+                                    <li>Upload the completed file</li>
+                                </ol>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>File Requirements:</strong>
+                                <ul class="mb-0">
+                                    <li><strong>Required columns:</strong> <code>student_id</code>, <code>score</code></li>
+                                    <li><strong>Formats:</strong> CSV, XLSX, XLS</li>
+                                    <li><strong>Max size:</strong> 5MB</li>
+                                    <li><strong>Score range:</strong> 0 to assignment maximum</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
-                    
+
+                    <!-- Upload Form -->
                     <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
                         {% csrf_token %}
                         
-                        <div class="mb-3">
-                            <label for="{{ form.assignment.id_for_label }}" class="form-label">Assignment *</label>
-                            {{ form.assignment }}
-                            {% if form.assignment.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.assignment.errors.as_text }}
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-4">
+                                    <label for="{{ form.assignment.id_for_label }}" class="form-label">Assignment *</label>
+                                    {{ form.assignment }}
+                                    {% if form.assignment.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.assignment.errors.as_text }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="help-text">Filtered by your teaching assignments</div>
                                 </div>
-                            {% endif %}
-                            <small class="text-muted">Filtered by your teaching assignments</small>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="{{ form.term.id_for_label }}" class="form-label">Term *</label>
-                            {{ form.term }}
-                            {% if form.term.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.term.errors.as_text }}
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-4">
+                                    <label for="{{ form.term.id_for_label }}" class="form-label">Term *</label>
+                                    {{ form.term }}
+                                    {% if form.term.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.term.errors.as_text }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="help-text">Select the current academic term</div>
                                 </div>
-                            {% endif %}
-                            <small class="text-muted">Select the current academic term</small>
+                            </div>
                         </div>
-                        
-                        <div class="mb-3">
-                            <label for="{{ form.file.id_for_label }}" class="form-label">Grade File *</label>
-                            {{ form.file }}
+
+                        <!-- File Upload Area -->
+                        <div class="mb-4">
+                            <label class="form-label">Grade File *</label>
+                            <div class="upload-area" id="uploadArea">
+                                <input type="file" name="file" id="{{ form.file.id_for_label }}" class="file-input" accept=".csv,.xlsx,.xls">
+                                <div class="upload-icon">
+                                    <i class="bi bi-cloud-arrow-up"></i>
+                                </div>
+                                <h5>Drag & Drop your file here</h5>
+                                <p class="text-muted mb-3">or click to browse files</p>
+                                <button type="button" class="btn btn-primary">
+                                    <i class="bi bi-folder2-open me-2"></i>Choose File
+                                </button>
+                                <div class="help-text mt-2">Supported formats: CSV, Excel (.xlsx, .xls) | Max 5MB</div>
+                            </div>
+                            
+                            <div class="file-info" id="fileInfo">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="bi bi-file-earmark-text me-2"></i>
+                                        <span id="fileName">No file selected</span>
+                                        <small class="text-muted ms-2" id="fileSize"></small>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="removeFile">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
                             {% if form.file.errors %}
-                                <div class="invalid-feedback d-block">
+                                <div class="invalid-feedback d-block mt-2">
                                     {{ form.file.errors.as_text }}
                                 </div>
                             {% endif %}
-                            <small class="text-muted">Accepted formats: .csv, .xlsx, .xls (Max 5MB)</small>
+                        </div>
+
+                        <!-- Template Features -->
+                        <div class="template-features">
+                            <h6 class="mb-3">
+                                <i class="bi bi-download me-2"></i>Template Features
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Pre-formatted columns</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Automatic validation</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Error reporting</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Batch processing</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Duplicate detection</span>
+                                    </div>
+                                    <div class="feature-item">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span>Progress tracking</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center mt-3">
+                                <a href="{% url 'grade_upload_template' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-download me-2"></i>Download Template
+                                </a>
+                            </div>
                         </div>
                         
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-arrow-left me-1"></i> Back to Grades
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between pt-4 border-top mt-4">
+                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-arrow-left me-2"></i> Cancel
                             </a>
-                            <button type="submit" class="btn btn-primary" id="uploadBtn">
+                            <button type="submit" class="btn btn-primary btn-lg px-4" id="uploadBtn" disabled>
                                 <span class="upload-text">
-                                    <i class="bi bi-upload me-1"></i> Upload Grades
+                                    <i class="bi bi-upload me-2"></i> Upload Grades
                                 </span>
                                 <span class="spinner-border spinner-border-sm d-none" role="status"></span>
                             </button>
@@ -86,76 +387,155 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('bulkUploadForm');
     const uploadBtn = document.getElementById('uploadBtn');
     const fileInput = document.getElementById('{{ form.file.id_for_label }}');
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const removeFileBtn = document.getElementById('removeFile');
+    const progressBar = document.querySelector('.progress-bar');
+
+    // Initialize Select2
+    $('#{{ form.assignment.id_for_label }}').select2({
+        theme: 'bootstrap-5',
+        placeholder: "Select an assignment",
+        allowClear: true,
+        width: '100%'
+    });
+
+    // File upload handling
+    uploadArea.addEventListener('click', () => fileInput.click());
     
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileSelection(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileSelection(e.target.files[0]);
+        }
+    });
+
+    function handleFileSelection(file) {
+        // Validate file type
+        const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        const isValidType = validTypes.includes(file.type) || ['csv', 'xls', 'xlsx'].includes(fileExtension);
+        
+        if (!isValidType) {
+            alert('Please select a valid file type (CSV or Excel)');
+            return;
+        }
+
+        // Validate file size (5MB)
+        const maxSize = 5 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert('File size exceeds 5MB limit');
+            return;
+        }
+
+        // Display file info
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+        fileInfo.style.display = 'block';
+        uploadBtn.disabled = false;
+
+        // Create a new FileList and set it to the file input
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    removeFileBtn.addEventListener('click', () => {
+        fileInput.value = '';
+        fileInfo.style.display = 'none';
+        uploadBtn.disabled = true;
+    });
+
     // Form submission handler
-    form.addEventListener('submit', function() {
+    form.addEventListener('submit', function(e) {
         // Validate file is selected
         if (!fileInput.files.length) {
+            e.preventDefault();
             alert('Please select a file to upload');
             return false;
         }
+
+        // Validate assignment and term
+        const assignment = document.getElementById('{{ form.assignment.id_for_label }}');
+        const term = document.getElementById('{{ form.term.id_for_label }}');
         
+        if (!assignment.value) {
+            e.preventDefault();
+            alert('Please select an assignment');
+            assignment.focus();
+            return false;
+        }
+        
+        if (!term.value) {
+            e.preventDefault();
+            alert('Please select a term');
+            term.focus();
+            return false;
+        }
+
         // Show loading state
         uploadBtn.disabled = true;
         uploadBtn.querySelector('.upload-text').classList.add('d-none');
         uploadBtn.querySelector('.spinner-border').classList.remove('d-none');
+        
+        // Show progress bar
+        document.querySelector('.progress').style.display = 'block';
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            progressBar.style.width = progress + '%';
+            if (progress >= 90) clearInterval(interval);
+        }, 200);
+
         return true;
     });
-    
-    // Initialize select2 for assignment selection
-    $('#{{ form.assignment.id_for_label }}').select2({
-        placeholder: "Select an assignment",
-        allowClear: true,
-        width: '100%',
-        dropdownParent: $('#bulkUploadForm')
-    });
-    
-    // File size validation
-    fileInput.addEventListener('change', function() {
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (this.files[0] && this.files[0].size > maxSize) {
-            alert('File size exceeds 5MB limit');
-            this.value = '';
+
+    // Auto-hide alerts
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        if (alert.classList.contains('alert-dismissible')) {
+            setTimeout(() => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 8000);
         }
     });
 });
 </script>
-
-<style>
-/* Improved form styling */
-.card {
-    max-width: 800px;
-    margin: 0 auto;
-}
-.alert-info {
-    background-color: #f8f9fa;
-    border-color: #dee2e6;
-}
-.form-label {
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-}
-/* Select2 adjustments */
-.select2-container--default .select2-selection--single {
-    height: 38px;
-    padding: 5px 10px;
-    border: 1px solid #ced4da;
-}
-.select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 36px;
-}
-/* Button improvements */
-.btn-primary {
-    min-width: 150px;
-}
-.invalid-feedback {
-    font-size: 0.875em;
-}
-</style>
 {% endblock %}

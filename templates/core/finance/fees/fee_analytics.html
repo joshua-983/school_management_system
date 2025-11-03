@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Fee Analytics{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js">
+<style>
+    .analytics-card {
+        border-radius: 10px;
+        border-left: 4px solid #3a7bd5;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="bi bi-graph-up me-2"></i>Fee Analytics</h2>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card analytics-card">
+                <div class="card-body text-center">
+                    <div class="stat-number text-primary">
+                        GH₵{{ total_revenue|default:0|floatformat:2 }}
+                    </div>
+                    <div class="text-muted">Total Revenue</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card analytics-card">
+                <div class="card-body text-center">
+                    <div class="stat-number text-success">
+                        {{ paid_count|default:0 }}
+                    </div>
+                    <div class="text-muted">Paid Fees</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card analytics-card">
+                <div class="card-body text-center">
+                    <div class="stat-number text-warning">
+                        {{ pending_count|default:0 }}
+                    </div>
+                    <div class="text-muted">Pending Fees</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card analytics-card">
+                <div class="card-body text-center">
+                    <div class="stat-number text-danger">
+                        {{ overdue_count|default:0 }}
+                    </div>
+                    <div class="text-muted">Overdue Fees</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Monthly Revenue Chart -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5>Monthly Revenue - {{ current_year }}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="monthlyRevenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5>Category Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Details -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5>Fee Category Performance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Total Revenue</th>
+                                    <th>Fee Count</th>
+                                    <th>Average Amount</th>
+                                    <th>Completion Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for category in category_breakdown %}
+                                <tr>
+                                    <td>{{ category.name }}</td>
+                                    <td>GH₵{{ category.total_revenue|default:0|floatformat:2 }}</td>
+                                    <td>{{ category.fee_count }}</td>
+                                    <td>GH₵{{ category.average|default:0|floatformat:2 }}</td>
+                                    <td>
+                                        <div class="progress">
+                                            <div class="progress-bar" style="width: {{ category.completion_rate }}%">
+                                                {{ category.completion_rate }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Monthly Revenue Chart
+    const monthlyCtx = document.getElementById('monthlyRevenueChart').getContext('2d');
+    const monthlyData = {{ monthly_data|safe }};
+    
+    new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [{
+                label: 'Monthly Revenue',
+                data: monthlyData.map(item => item.revenue),
+                borderColor: '#3a7bd5',
+                backgroundColor: 'rgba(58, 123, 213, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'GH₵' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Category Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ category_labels|safe }},
+            datasets: [{
+                data: {{ category_values|safe }},
+                backgroundColor: [
+                    '#3a7bd5', '#00d2ff', '#928DAB', '#FF416C', 
+                    '#FF4B2B', '#7b4397', '#dc2430', '#4A00E0'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+});
+</script>
+{% endblock %}

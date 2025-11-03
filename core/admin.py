@@ -197,25 +197,25 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(SchoolConfiguration)
 class SchoolConfigurationAdmin(admin.ModelAdmin):
-    list_display = ('grading_system', 'is_locked', 'last_updated')
-    readonly_fields = ('last_updated',)
+    list_display = ['grading_system', 'academic_year', 'current_term', 'is_locked']
+    list_editable = ['is_locked']
+    fieldsets = (
+        ('Grading System Configuration', {
+            'fields': ('grading_system', 'is_locked'),
+            'description': 'Configure the grading system used throughout the application.'
+        }),
+        ('Academic Information', {
+            'fields': ('academic_year', 'current_term')
+        }),
+        ('School Information', {
+            'fields': ('school_name', 'school_address', 'school_phone', 'school_email', 'principal_name')
+        }),
+    )
     
     def has_add_permission(self, request):
-        # Only allow adding if no SchoolConfiguration exists
+        # Only allow one configuration instance
         return not SchoolConfiguration.objects.exists()
-    
-    def has_delete_permission(self, request, obj=None):
-        # Prevent deletion of the only configuration
-        return False
-    
-    def add_view(self, request, form_url='', extra_context=None):
-        # Check if a configuration already exists
-        if SchoolConfiguration.objects.exists():
-            # Redirect to the change view of the existing object
-            existing_obj = SchoolConfiguration.objects.first()
-            messages.info(request, 'School configuration already exists. You can only edit the existing configuration.')
-            return redirect(reverse('admin:core_schoolconfiguration_change', args=[existing_obj.id]))
-        return super().add_view(request, form_url, extra_context)
+
 
 # Register models without custom admin classes
 admin.site.register(AnalyticsCache)

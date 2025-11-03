@@ -3,12 +3,29 @@ from django import template
 register = template.Library()
 
 @register.filter
-def filter_by_published(queryset, is_published):
-    return [item for item in queryset if item.is_published == is_published]
+def cut(value, arg):
+    """Remove all occurrences of arg from the given string"""
+    if value and arg:
+        return value.replace(arg, '')
+    return value
 
 @register.filter
-def avg_score(queryset):
-    if not queryset:
+def get_item(dictionary, key):
+    """Get item from dictionary"""
+    return dictionary.get(key)
+
+@register.filter
+def multiply(value, arg):
+    """Multiply the value by the argument"""
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
         return 0
-    total = sum(item.average_score for item in queryset if hasattr(item, 'average_score'))
-    return total / len(queryset)
+
+@register.filter
+def divide(value, arg):
+    """Divide the value by the argument"""
+    try:
+        return float(value) / float(arg)
+    except (ValueError, TypeError, ZeroDivisionError):
+        return 0

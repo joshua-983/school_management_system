@@ -1,14 +1,15 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import JsonResponse
-from django.db.models import Count, Q
-from datetime import datetime, date
+from django.db.models import Count, Q, Case, When, IntegerField, FloatField
+from django.db.models.functions import Cast
+from datetime import datetime, date, timedelta
 from urllib.parse import urlencode
 
 from .base_views import *
-from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment
+from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment, Holiday
 # Attendance Period Views
-from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment, CLASS_LEVEL_CHOICES
+from ..models import AcademicTerm, AttendancePeriod, StudentAttendance, Student, ClassAssignment, CLASS_LEVEL_CHOICES, Holiday
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.db import transaction
@@ -24,89 +25,109 @@ class AttendanceBaseView(LoginRequiredMixin, UserPassesTestMixin):
 
 
 class GhanaEducationAttendanceMixin:
-    """Mixin for Ghana Education Service specific attendance functionality"""
+    """
+    Mixin implementing Ghana Education Service (GES) attendance policies
+    """
+    
+    def is_ghana_school_day(self, date_obj):
+        """Check if a date is a school day in Ghana (Monday-Friday)"""
+        return date_obj.weekday() < 5  # 0=Monday, 4=Friday
     
     def get_ghana_academic_calendar(self):
-        """Get current Ghana academic calendar structure"""
-        current_year = datetime.now().year
-        next_year = current_year + 1
-        
-        # Ghana Education Service Standard Calendar (adjust as needed)
-        ghana_calendar = {
-            'academic_year': f"{current_year}/{next_year}",
-            'terms': {
-                1: {
-                    'name': 'Term 1',
-                    'start_date': date(current_year, 9, 2),  # Early September
-                    'end_date': date(current_year, 12, 18),  # Mid-December
-                    'mid_term_break': date(current_year, 10, 16),  # Approximate
-                },
-                2: {
-                    'name': 'Term 2', 
-                    'start_date': date(next_year, 1, 8),     # Early January
-                    'end_date': date(next_year, 4, 1),       # Early April
-                    'mid_term_break': date(next_year, 2, 15),  # Approximate
-                },
-                3: {
-                    'name': 'Term 3',
-                    'start_date': date(next_year, 4, 21),    # Late April
-                    'end_date': date(next_year, 7, 23),      # Late July
-                    'mid_term_break': date(next_year, 6, 1),   # Approximate
-                }
+        """
+        Get Ghana academic calendar information
+        This is a simplified version - you might want to enhance this
+        """
+        current_year = timezone.now().year
+        return {
+            'first_term': {
+                'start': date(current_year, 1, 10),
+                'end': date(current_year, 4, 15)
+            },
+            'second_term': {
+                'start': date(current_year, 5, 10),
+                'end': date(current_year, 8, 15)
+            },
+            'third_term': {
+                'start': date(current_year, 9, 10),
+                'end': date(current_year, 12, 15)
             }
         }
-        return ghana_calendar
     
-    def is_ghana_school_day(self, check_date):
+    def calculate_ges_attendance_rate(self, student, start_date, end_date):
         """
-        Check if date is a valid school day in Ghana
-        - Monday to Friday are school days
-        - Exclude public holidays (basic implementation)
+        Calculate attendance rate according to GES standards
+        GES counts: Present, Late, and Excused Absence as 'present'
+        Only Unexcused Absence counts as absent
         """
-        # Monday = 0, Friday = 4, Saturday = 5, Sunday = 6
-        if check_date.weekday() >= 5:  # Weekend
-            return False
-        
-        # Basic Ghana public holidays (you can expand this)
-        ghana_holidays = [
-            date(check_date.year, 1, 1),   # New Year
-            date(check_date.year, 3, 6),   # Independence Day
-            date(check_date.year, 5, 1),   # Workers Day
-            date(check_date.year, 7, 1),   # Republic Day
-            date(check_date.year, 12, 25), # Christmas
-            date(check_date.year, 12, 26), # Boxing Day
-        ]
-        
-        return check_date not in ghana_holidays
-    
-    def calculate_ges_attendance_rate(self, student, term):
-        """Calculate attendance rate following GES requirements (80% minimum)"""
-        total_school_days = self._get_total_school_days(term)
-        if total_school_days == 0:
-            return 0
-        
-        present_days = StudentAttendance.objects.filter(
+        # Get all attendance records for the period
+        attendance_records = StudentAttendance.objects.filter(
             student=student,
-            term=term,
-            status__in=['present', 'late', 'excused']  # GES counts late and excused as present
-        ).count()
+            date__range=[start_date, end_date]
+        )
         
+        # Count actual school days in the period (excluding weekends and holidays)
+        total_school_days = self.get_school_days_count(start_date, end_date)
+        
+        if total_school_days == 0:
+            return 0.0
+        
+        # Count present days according to GES standards
+        present_days = 0
+        for record in attendance_records:
+            if record.status in ['present', 'late', 'excused']:
+                present_days += 1
+        
+        # Calculate percentage
         attendance_rate = (present_days / total_school_days) * 100
         return round(attendance_rate, 1)
     
-    def _get_total_school_days(self, term):
-        """Calculate total school days in a term (basic implementation)"""
-        from datetime import timedelta
+    def get_school_days_count(self, start_date, end_date):
+        """
+        Calculate actual school days between two dates
+        Excludes weekends and school holidays
+        """
+        from django.db.models import Q
         
-        current_date = term.start_date
+        current_date = start_date
         school_days = 0
         
-        while current_date <= term.end_date:
-            if self.is_ghana_school_day(current_date):
-                school_days += 1
+        # Get school holidays for this period
+        holidays = Holiday.objects.filter(
+            date__range=[start_date, end_date],
+            is_school_holiday=True
+        ).values_list('date', flat=True)
+        
+        while current_date <= end_date:
+            # Check if it's a weekday (Monday-Friday)
+            if current_date.weekday() < 5:  # 0=Monday, 4=Friday
+                # Check if it's not a holiday
+                if current_date not in holidays:
+                    school_days += 1
             current_date += timedelta(days=1)
         
         return school_days
+    
+    def get_ges_attendance_status(self, attendance_rate):
+        """
+        Get GES attendance status description based on rate
+        """
+        if attendance_rate >= 90:
+            return "Excellent"
+        elif attendance_rate >= 80:
+            return "Good" 
+        elif attendance_rate >= 70:
+            return "Satisfactory"
+        elif attendance_rate >= 60:
+            return "Needs Improvement"
+        else:
+            return "Unsatisfactory"
+    
+    def is_ges_compliant(self, attendance_rate):
+        """
+        Check if attendance meets GES minimum requirements
+        """
+        return attendance_rate >= 75.0
 
 
 class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin, TemplateView):
@@ -147,7 +168,7 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         return context
 
     def _get_filtered_attendance(self, date, active_term):
-        """Filter attendance records with optimized queries - FIXED VERSION"""
+        """Filter attendance records with optimized queries"""
         queryset = StudentAttendance.objects.filter(
             date=date
         ).select_related('student', 'term', 'period').order_by(
@@ -166,64 +187,30 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             ).values_list('class_level', flat=True)
             queryset = queryset.filter(student__class_level__in=teacher_classes)
         
-        # FIXED: Pre-calculate attendance rates for all students in one query
-        if active_term and queryset.exists():
-            # Get all student IDs from today's attendance
-            student_ids = list(queryset.values_list('student_id', flat=True))
-            
-            if student_ids:
-                # Calculate attendance rates for these students in bulk using Django ORM
-                from django.db.models import Count, Case, When, IntegerField, FloatField
-                from django.db.models.functions import Cast
+        # Use Student model's methods for attendance data (more efficient and consistent)
+        for record in queryset:
+            if active_term:
+                # Get comprehensive attendance summary using Student model method
+                attendance_summary = record.student.get_attendance_summary(active_term)
                 
-                # Get all attendance records for these students in the active term
-                term_attendance = StudentAttendance.objects.filter(
-                    student_id__in=student_ids,
-                    term=active_term
-                )
-                
-                # Calculate statistics for each student
-                attendance_stats = term_attendance.values('student_id').annotate(
-                    total_days=Count('id'),
-                    present_days=Count(
-                        Case(
-                            When(status__in=['present', 'late', 'excused'], then=1),
-                            output_field=IntegerField()
-                        )
-                    )
-                ).annotate(
-                    attendance_rate=Case(
-                        When(total_days=0, then=0.0),
-                        default=Cast('present_days', FloatField()) / Cast('total_days', FloatField()) * 100.0,
-                        output_field=FloatField()
-                    )
-                )
-                
-                # Create a dictionary for quick lookup
-                attendance_dict = {}
-                for stat in attendance_stats:
-                    student_id = stat['student_id']
-                    attendance_rate = round(stat['attendance_rate'], 1)
-                    attendance_dict[student_id] = attendance_rate
-                
-                # Add attendance rates to each record
-                for record in queryset:
-                    record.term_attendance_rate = attendance_dict.get(record.student.id, 0.0)
-                    # Also add absence count
-                    record.absence_count = term_attendance.filter(
-                        student=record.student,
-                        status='absent'
-                    ).count()
+                record.term_attendance_rate = attendance_summary['attendance_rate']
+                record.attendance_status = attendance_summary['attendance_status']
+                record.is_ges_compliant = attendance_summary['is_ges_compliant']
+                record.absence_count = attendance_summary['absence_count']
+                record.total_attendance_days = attendance_summary['total_days']
+                record.present_days = attendance_summary['present_days']
+                record.late_count = attendance_summary['late_count']
+                record.excused_count = attendance_summary['excused_count']
             else:
-                # If no student IDs, set default values
-                for record in queryset:
-                    record.term_attendance_rate = 0.0
-                    record.absence_count = 0
-        else:
-            # Set default values if no active term
-            for record in queryset:
+                # Set default values if no active term
                 record.term_attendance_rate = 0.0
+                record.attendance_status = 'No Data'
+                record.is_ges_compliant = False
                 record.absence_count = 0
+                record.total_attendance_days = 0
+                record.present_days = 0
+                record.late_count = 0
+                record.excused_count = 0
         
         return queryset
 
@@ -232,10 +219,11 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         context = {}
         
         if active_term:
-            # Calculate GES compliance statistics
+            # Calculate GES compliance statistics based on ACTUAL recorded days
             context['ges_attendance_rate'] = self._calculate_school_ges_attendance_rate(active_term)
             context['low_attendance_students'] = self._get_low_attendance_students(active_term)
             context['term_progress'] = self._calculate_term_progress(active_term)
+            context['ges_compliance_rate'] = self._calculate_ges_compliance_rate(active_term)
         
         context['ghana_calendar'] = self.get_ghana_academic_calendar()
         context['is_school_day'] = self.is_ghana_school_day(timezone.now().date())
@@ -243,33 +231,86 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         return context
 
     def _calculate_school_ges_attendance_rate(self, term):
-        """Calculate overall school attendance rate for GES reporting"""
-        total_students = Student.objects.filter(is_active=True).count()
-        if total_students == 0:
+        """Calculate overall school attendance rate for GES reporting based on ACTUAL days - OPTIMIZED"""
+        # Use aggregation for better performance with many students
+        attendance_stats = StudentAttendance.objects.filter(
+            term=term
+        ).values('student_id').annotate(
+            total_days=Count('id'),
+            present_days=Count(
+                Case(
+                    When(status__in=['present', 'late', 'excused'], then=1),
+                    output_field=IntegerField()
+                )
+            )
+        ).annotate(
+            student_rate=Case(
+                When(total_days=0, then=0.0),
+                default=Cast('present_days', FloatField()) / Cast('total_days', FloatField()) * 100.0,
+                output_field=FloatField()
+            )
+        )
+        
+        if not attendance_stats:
             return 0
         
-        total_attendance_rate = 0
-        students = Student.objects.filter(is_active=True)
+        # Calculate average of all student rates
+        total_rate = sum(stat['student_rate'] for stat in attendance_stats)
+        return round(total_rate / len(attendance_stats), 1)
+
+    def _calculate_ges_compliance_rate(self, term):
+        """Calculate percentage of students meeting GES 80% requirement - OPTIMIZED"""
+        # Use aggregation for better performance
+        attendance_stats = StudentAttendance.objects.filter(
+            term=term
+        ).values('student_id').annotate(
+            total_days=Count('id'),
+            present_days=Count(
+                Case(
+                    When(status__in=['present', 'late', 'excused'], then=1),
+                    output_field=IntegerField()
+                )
+            )
+        ).annotate(
+            student_rate=Case(
+                When(total_days=0, then=0.0),
+                default=Cast('present_days', FloatField()) / Cast('total_days', FloatField()) * 100.0,
+                output_field=FloatField()
+            )
+        )
         
-        for student in students:
-            total_attendance_rate += self.calculate_ges_attendance_rate(student, term)
+        if not attendance_stats:
+            return 0
         
-        return round(total_attendance_rate / total_students, 1) if total_students > 0 else 0
+        # Count students meeting GES requirement
+        compliant_students = sum(1 for stat in attendance_stats if stat['student_rate'] >= 80.0)
+        return round((compliant_students / len(attendance_stats)) * 100, 1)
 
     def _get_low_attendance_students(self, term, threshold=80):
-        """Identify students with attendance below GES requirement (80%)"""
+        """Identify students with attendance below GES requirement (80%) - OPTIMIZED"""
         low_attendance = []
-        students = Student.objects.filter(is_active=True)
+        
+        # Get all active students
+        students = Student.objects.filter(is_active=True).select_related('user')
         
         for student in students:
-            attendance_rate = self.calculate_ges_attendance_rate(student, term)
-            if attendance_rate < threshold:
+            # Use the Student model's method for consistency
+            attendance_summary = student.get_attendance_summary(term)
+            
+            if attendance_summary['attendance_rate'] < threshold:
                 low_attendance.append({
                     'student': student,
-                    'attendance_rate': attendance_rate,
-                    'class_level': student.get_class_level_display()
+                    'attendance_rate': attendance_summary['attendance_rate'],
+                    'attendance_status': attendance_summary['attendance_status'],
+                    'class_level': student.get_class_level_display(),
+                    'is_compliant': attendance_summary['is_ges_compliant'],
+                    'total_days': attendance_summary['total_days'],
+                    'present_days': attendance_summary['present_days'],
+                    'absence_count': attendance_summary['absence_count']
                 })
         
+        # Sort by lowest attendance first
+        low_attendance.sort(key=lambda x: x['attendance_rate'])
         return low_attendance[:10]  # Return top 10 for dashboard
 
     def _calculate_term_progress(self, term):
@@ -314,13 +355,25 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
         # Add GES compliance stat if active term exists
         if active_term:
             ges_rate = self._calculate_school_ges_attendance_rate(active_term)
+            compliance_rate = self._calculate_ges_compliance_rate(active_term)
+            
             ges_color = 'success' if ges_rate >= 80 else 'warning' if ges_rate >= 70 else 'danger'
-            stats.append({
-                'label': 'GES Attendance Rate', 
-                'value': f'{ges_rate}%', 
-                'color': ges_color, 
-                'icon': 'clipboard-data-fill'
-            })
+            compliance_color = 'success' if compliance_rate >= 80 else 'warning' if compliance_rate >= 70 else 'danger'
+            
+            stats.extend([
+                {
+                    'label': 'GES Attendance Rate', 
+                    'value': f'{ges_rate}%', 
+                    'color': ges_color, 
+                    'icon': 'clipboard-data-fill'
+                },
+                {
+                    'label': 'GES Compliance', 
+                    'value': f'{compliance_rate}%', 
+                    'color': compliance_color, 
+                    'icon': 'shield-check'
+                }
+            ])
         
         return stats
 
@@ -362,31 +415,10 @@ class AttendanceDashboardView(AttendanceBaseView, GhanaEducationAttendanceMixin,
             'excused_percentage': excused_percentage,
         }
 
+
 class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, View):
     """View for recording and viewing attendance records - Ghana Education System"""
     template_name = 'core/academics/attendance_record.html'
-
-    def _get_filtered_attendance(self, date, active_term):
-        """Filter attendance records for record view - OPTIMIZED VERSION"""
-        queryset = StudentAttendance.objects.filter(
-            date=date
-        ).select_related('student', 'term', 'period').order_by(
-            'student__class_level',
-            'student__last_name',
-            'student__first_name'
-        )
-        
-        # Filter by active term if available
-        if active_term:
-            queryset = queryset.filter(term=active_term)
-        
-        if is_teacher(self.request.user):
-            teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher
-            ).values_list('class_level', flat=True)
-            queryset = queryset.filter(student__class_level__in=teacher_classes)
-        
-        return queryset
 
     def get(self, request):
         try:
@@ -442,7 +474,7 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
         return {'is_valid': True, 'message': 'All required parameters are selected.'}
 
     def _extract_filters(self, request):
-        """Extract and validate filter parameters from GET request - ENHANCED VERSION"""
+        """Extract and validate filter parameters from GET request"""
         term_id = request.GET.get('term')
         period_id = request.GET.get('period')
         date_str = request.GET.get('date', timezone.now().date().strftime('%Y-%m-%d'))
@@ -565,9 +597,18 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
                 status='absent'
             ).count()
             
-            # Get GES attendance rate
+            # Use the Student model's methods for consistency and comprehensive data
             if filters['selected_term']:
-                student.ges_attendance_rate = self.calculate_ges_attendance_rate(student, filters['selected_term'])
+                # Get comprehensive attendance data using Student model methods
+                attendance_summary = student.get_attendance_summary(filters['selected_term'])
+                
+                student.ges_attendance_rate = attendance_summary['attendance_rate']
+                student.attendance_status = attendance_summary['attendance_status']
+                student.is_ges_compliant = attendance_summary['is_ges_compliant']
+                student.total_attendance_days = attendance_summary['total_days']
+                student.present_days = attendance_summary['present_days']
+                student.late_count = attendance_summary['late_count']
+                student.excused_count = attendance_summary['excused_count']
             
             # Get today's attendance if exists
             existing_attendance = StudentAttendance.objects.filter(
@@ -807,7 +848,7 @@ class AttendanceRecordView(AttendanceBaseView, GhanaEducationAttendanceMixin, Vi
         except:
             return redirect(reverse('attendance_dashboard'))
 
-# Keep your existing views below (they remain the same)
+
 class AttendancePeriodListView(AttendanceBaseView, ListView):
     """View for listing attendance periods"""
     model = AttendancePeriod

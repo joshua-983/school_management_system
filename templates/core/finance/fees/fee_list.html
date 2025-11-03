@@ -48,6 +48,9 @@
     .summary-balance {
         border-left-color: #dc3545;
     }
+    .summary-completion {
+        border-left-color: #6f42c1;
+    }
     .action-buttons .btn {
         padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
@@ -82,7 +85,7 @@
     }
     .student-info {
         display: flex;
-        justify-content: between;
+        justify-content: space-between;
         align-items: center;
     }
     .student-name {
@@ -117,6 +120,8 @@
         color: white;
         text-decoration: none;
         transition: transform 0.2s;
+        border: none;
+        cursor: pointer;
     }
     .quick-action-btn:hover {
         transform: translateY(-2px);
@@ -147,17 +152,84 @@
         }
         .action-buttons {
             flex-direction: column;
+            gap: 5px;
         }
         .action-buttons .btn {
             margin-bottom: 5px;
             width: 100%;
         }
+        .quick-actions {
+            flex-direction: column;
+        }
+        .quick-action-btn {
+            min-width: auto;
+        }
+        .summary-card .card-body {
+            padding: 1rem;
+        }
+        .summary-card h4 {
+            font-size: 1.1rem;
+        }
     }
+    /* Loading overlay */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    .loading-spinner {
+        color: white;
+        font-size: 2rem;
+    }
+    /* Progress bar for completion rate */
+    .completion-progress {
+        height: 6px;
+        background-color: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    .completion-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+        transition: width 0.3s ease;
+    }
+    /* Status distribution */
+    .status-distribution {
+        display: flex;
+        gap: 5px;
+        margin-top: 10px;
+    }
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .dot-paid { background-color: #28a745; }
+    .dot-partial { background-color: #ffc107; }
+    .dot-unpaid { background-color: #dc3545; }
+    .dot-overdue { background-color: #6f42c1; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="bi bi-arrow-repeat spinner"></i>
+            <span class="ms-2">Processing...</span>
+        </div>
+    </div>
+
     <div class="row mb-4">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
@@ -193,29 +265,29 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="quick-actions">
-                <a href="#" class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
+                <button type="button" class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
                     <div class="quick-action-icon">
                         <i class="bi bi-plus-circle"></i>
                     </div>
                     <div>Add Fee</div>
-                </a>
+                </button>
                 <a href="{% url 'fee_report' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                     <div class="quick-action-icon">
                         <i class="bi bi-graph-up"></i>
                     </div>
                     <div>View Reports</div>
                 </a>
-                <a href="#" class="quick-action-btn btn-export" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <button type="button" class="quick-action-btn btn-export" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
                     <div class="quick-action-icon">
                         <i class="bi bi-download"></i>
                     </div>
                     <div>Export Data</div>
-                </a>
-                <a href="{% url 'bill_generate' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                </button>
+                <a href="{% url 'fee_analytics' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
                     <div class="quick-action-icon">
-                        <i class="bi bi-receipt"></i>
+                        <i class="bi bi-bar-chart"></i>
                     </div>
-                    <div>Generate Bills</div>
+                    <div>Analytics</div>
                 </a>
             </div>
         </div>
@@ -224,7 +296,7 @@
 
     <!-- Summary Cards -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card summary-payable h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -240,7 +312,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card summary-paid h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -256,7 +328,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card summary-card summary-balance h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -272,6 +344,37 @@
                 </div>
             </div>
         </div>
+        <div class="col-md-3">
+            <div class="card summary-card summary-completion h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Completion Rate</h6>
+                            <h4 class="mb-0">{{ completion_rate|floatformat:1 }}%</h4>
+                            <small class="text-muted">Payment Progress</small>
+                            
+                            <!-- Progress Bar -->
+                            <div class="completion-progress">
+                                <div class="completion-progress-bar" style="width: {{ completion_rate }}%"></div>
+                            </div>
+                            
+                            <!-- Status Distribution -->
+                            {% if object_list.count > 0 %}
+                            <div class="status-distribution mt-2">
+                                <span class="status-dot dot-paid" title="{{ paid_count }} Paid"></span>
+                                <span class="status-dot dot-partial" title="{{ partial_count }} Partial"></span>
+                                <span class="status-dot dot-unpaid" title="{{ unpaid_count }} Unpaid"></span>
+                                <span class="status-dot dot-overdue" title="{{ overdue_count }} Overdue"></span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="bg-light rounded p-3">
+                            <i class="bi bi-percent text-muted fs-4"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="row">
@@ -280,12 +383,17 @@
                 <div class="card-header bg-light">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Fee Records</h5>
-                        <span class="badge bg-primary">{{ object_list.count }} records</span>
+                        <div>
+                            <span class="badge bg-primary me-2">{{ object_list.count }} records</span>
+                            {% if is_paginated %}
+                            <span class="badge bg-secondary">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
                     <!-- Filter Form -->
-                    <form method="get" class="mb-4">
+                    <form method="get" class="mb-4" id="filterForm">
                         <div class="row g-3">
                             <div class="col-md-2">
                                 <label class="form-label">Academic Year</label>
@@ -309,14 +417,14 @@
                                 {{ filter_form.student }}
                             </div>
                             {% endif %}
-                            <div class="col-md-12 d-flex justify-content-end">
+                            <div class="col-md-12 d-flex justify-content-end align-items-center">
                                 <button type="submit" class="btn btn-primary me-2">
                                     <i class="bi bi-funnel me-1"></i> Apply Filters
                                 </button>
-                                <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                                <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary me-2">
                                     <i class="bi bi-arrow-counterclockwise me-1"></i> Clear
                                 </a>
-                                <button type="button" class="btn btn-outline-success btn-export ms-2">
+                                <button type="button" class="btn btn-outline-success btn-export">
                                     <i class="bi bi-download me-1"></i> Export
                                 </button>
                             </div>
@@ -326,7 +434,7 @@
                     <!-- Fee Records Table -->
                     {% if object_list %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover table-striped">
                             <thead class="table-dark">
                                 <tr>
                                     {% if is_admin or is_teacher %}
@@ -428,7 +536,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </a>
                                             <a href="{% url 'fee_delete' pk=fee.pk %}" 
-                                               class="btn btn-sm btn-outline-danger"
+                                               class="btn btn-sm btn-outline-danger me-1"
                                                title="Delete"
                                                data-bs-toggle="tooltip">
                                                 <i class="bi bi-trash"></i>
@@ -631,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Clear search when modal closes
-    $('#selectStudentModal').on('hidden.bs.modal', function () {
+    document.getElementById('selectStudentModal').addEventListener('hidden.bs.modal', function () {
         studentSearch.value = '';
         studentOptions.forEach(option => {
             option.style.display = 'block';
@@ -641,7 +749,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Auto-focus on search when modal opens
-    $('#selectStudentModal').on('shown.bs.modal', function () {
+    document.getElementById('selectStudentModal').addEventListener('shown.bs.modal', function () {
         studentSearch.focus();
     });
 
@@ -649,36 +757,85 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.btn-export').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
+            showLoading();
             
             // Get current filter parameters
             const params = new URLSearchParams(window.location.search);
             params.set('export', 'excel');
             
             // Redirect to export URL
-            window.location.href = window.location.pathname + '?' + params.toString();
+            setTimeout(() => {
+                window.location.href = window.location.pathname + '?' + params.toString();
+            }, 500);
         });
     });
 
     // Auto-submit form when filter changes for better UX
-    const filterSelects = document.querySelectorAll('#filter-form select');
+    const filterSelects = document.querySelectorAll('#filterForm select');
     filterSelects.forEach(select => {
         select.addEventListener('change', function() {
+            showLoading();
             this.form.submit();
         });
     });
 
-    // Add loading state for export button
-    document.querySelectorAll('.btn-export').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const originalText = this.innerHTML;
-            this.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Exporting...';
-            this.disabled = true;
-            
-            setTimeout(() => {
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }, 3000);
+    // Loading overlay functions
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // Hide loading when page fully loads
+    window.addEventListener('load', hideLoading);
+
+    // Add spinner animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Add confirmation for delete actions
+    document.querySelectorAll('a[href*="delete"]').forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (!confirm('Are you sure you want to delete this fee record? This action cannot be undone.')) {
+                e.preventDefault();
+            }
         });
+    });
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+F to focus on search (if modal is open)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            if (studentSearch) {
+                studentSearch.focus();
+            }
+        }
+        
+        // Escape to close modal
+        if (e.key === 'Escape') {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('selectStudentModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+    });
+
+    // Add status dot tooltips
+    const statusDots = document.querySelectorAll('.status-dot');
+    statusDots.forEach(dot => {
+        new bootstrap.Tooltip(dot);
     });
 });
 </script>

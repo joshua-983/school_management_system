@@ -1,129 +1,375 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Best Students - {{ block.super }}{% endblock %}
+{% block title %}Top Performing Students - {{ block.super }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 <style>
 :root {
-    --primary: #4e73df;
-    --secondary: #858796;
-    --success: #1cc88a;
-    --info: #36b9cc;
-    --warning: #f6c23e;
-    --danger: #e74a3b;
-    --light: #f8f9fc;
-    --dark: #5a5c69;
+    --primary: #4361ee;
+    --primary-dark: #3a56d4;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --border-radius: 12px;
+    --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
 }
 
-body {
-    background-color: #f8f9fc;
-    font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 .card {
     border: none;
-    border-radius: 0.35rem;
-    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-    margin-bottom: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    background: white;
 }
 
-.card-header {
-    background-color: #f8f9fc;
-    border-bottom: 1px solid #e3e6f0;
-    padding: 0.75rem 1.25rem;
-}
-
-.page-header {
-    border-bottom: 1px solid #e3e6f0;
-    padding-bottom: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.grade-badge {
-    font-size: 0.9rem;
-    padding: 0.35em 0.65em;
-    font-weight: 600;
-}
-
-.bg-excellent { background-color: var(--success) !important; }
-.bg-very-good { background-color: var(--info) !important; }
-.bg-good { background-color: var(--primary) !important; }
-.bg-average { background-color: var(--warning) !important; color: #000; }
-.bg-poor { background-color: var(--danger) !important; }
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    color: var(--primary);
-    background-color: #f8f9fc;
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(78, 115, 223, 0.05);
-}
-
-.chart-container {
+.stats-card {
+    transition: var(--transition);
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
     position: relative;
-    height: 150px;
+    background: white;
+}
+
+.stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--info));
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+.stats-card .card-body {
+    padding: 1.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.stats-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
 }
 
 .rank-badge {
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: bold;
     color: white;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    box-shadow: var(--shadow);
 }
 
-.rank-1 { background: linear-gradient(135deg, #FFD700, #FFA500); }
-.rank-2 { background: linear-gradient(135deg, #C0C0C0, #A9A9A9); }
-.rank-3 { background: linear-gradient(135deg, #CD7F32, #8B4513); }
-.rank-other { background: var(--primary); }
+.rank-1 { 
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
+.rank-2 { 
+    background: linear-gradient(135deg, #C0C0C0, #A9A9A9);
+    box-shadow: 0 4px 15px rgba(192, 192, 192, 0.4);
+}
+.rank-3 { 
+    background: linear-gradient(135deg, #CD7F32, #8B4513);
+    box-shadow: 0 4px 15px rgba(205, 127, 50, 0.4);
+}
+.rank-other { 
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    box-shadow: 0 4px 15px rgba(67, 97, 238, 0.4);
+}
+
+.grade-badge {
+    font-size: 0.9rem;
+    padding: 0.35em 0.65em;
+    font-weight: 600;
+    border-radius: 20px;
+}
+
+.bg-excellent { background: linear-gradient(135deg, var(--success), #20c997) !important; }
+.bg-very-good { background: linear-gradient(135deg, var(--info), #17a2b8) !important; }
+.bg-good { background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important; }
+.bg-average { background: linear-gradient(135deg, var(--warning), #fd7e14) !important; color: #000; }
+.bg-poor { background: linear-gradient(135deg, var(--danger), #dc3545) !important; }
+
+.table th {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    font-weight: 600;
+    border: none;
+    position: sticky;
+    top: 0;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(67, 97, 238, 0.05);
+    transform: translateY(-2px);
+    transition: var(--transition);
+}
+
+.chart-container {
+    position: relative;
+    height: 200px;
+    margin: 1rem 0;
+}
+
+.student-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.performance-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.performance-excellent { background-color: var(--success); }
+.performance-good { background-color: var(--info); }
+.performance-average { background-color: var(--warning); }
+.performance-poor { background-color: var(--danger); }
+
+.empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: white;
+    border-radius: var(--border-radius);
+}
+
+.empty-state-icon {
+    font-size: 5rem;
+    opacity: 0.3;
+    margin-bottom: 1.5rem;
+    color: var(--secondary);
+}
+
+.export-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    border: none;
+    color: white;
+    overflow: hidden;
+    position: relative;
+}
+
+.export-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.export-section .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .stats-value {
+        font-size: 2rem;
+    }
+    
+    .rank-badge {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header Section -->
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center py-3 mb-4 page-header">
-        <h1 class="h2">
-            <i class="bi bi-trophy text-warning"></i> Top Performing Students
-        </h1>
-        <div class="btn-toolbar mb-2 mb-md-0">
-            <div class="btn-group me-2">
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-download"></i> Export
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-print"></i> Print
-                </button>
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb" class="text-white-50 mb-2">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-white-50">Home</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'grade_list' %}" class="text-white-50">Grades</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page">Top Students</li>
+                    </ol>
+                </nav>
+                <h1 class="h2 mb-2 text-white">
+                    <i class="bi bi-trophy me-3"></i>
+                    Top Performing Students
+                </h1>
+                <p class="lead mb-0 text-white-50">Recognizing academic excellence and outstanding performance</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="btn-group">
+                    <a href="{% url 'grade_list' %}" class="btn btn-light btn-lg">
+                        <i class="bi bi-arrow-left me-2"></i>All Grades
+                    </a>
+                    <button type="button" class="btn btn-outline-light btn-lg dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-download me-2"></i>Export
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-file-earmark-pdf me-2"></i>PDF Report</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-file-earmark-excel me-2"></i>Excel</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="bi bi-file-earmark-text me-2"></i>CSV</a></li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content Card -->
+    <!-- Statistics Overview -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-trophy text-warning display-6 mb-2"></i>
+                    <div class="stats-value">{{ top_students|length }}</div>
+                    <p class="stats-label">Top Performers</p>
+                    <small class="text-muted">Academic Year {{ academic_year }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-graph-up-arrow text-success display-6 mb-2"></i>
+                    <div class="stats-value">
+                        {% if top_students.0.avg_grade %}
+                            {{ top_students.0.avg_grade|floatformat:1 }}
+                        {% else %}
+                            0.0
+                        {% endif %}
+                    </div>
+                    <p class="stats-label">Highest Average</p>
+                    <small class="text-muted">Top student score</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-award text-info display-6 mb-2"></i>
+                    <div class="stats-value">
+                        {% with top_students|length as total %}
+                            {% if total > 0 %}
+                                {{ total }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    <p class="stats-label">Students Recognized</p>
+                    <small class="text-muted">Meeting excellence criteria</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-mortarboard text-primary display-6 mb-2"></i>
+                    <div class="stats-value">
+                        {% with classes=top_students|dictsort:"class_level" %}
+                            {{ classes|length }}
+                        {% endwith %}
+                    </div>
+                    <p class="stats-label">Classes Represented</p>
+                    <small class="text-muted">Across all levels</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Students Table -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
-                Academic Year {{ academic_year }}
-            </h6>
+        <div class="card-header bg-light py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-trophy-fill text-warning me-2"></i>
+                    Academic Excellence Ranking
+                </h5>
+                <span class="badge bg-primary">
+                    <i class="bi bi-people-fill me-1"></i>{{ top_students|length }} Students
+                </span>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered table-hover">
-                    <thead class="thead-light">
+                <table class="table table-hover">
+                    <thead>
                         <tr>
-                            <th>Rank</th>
-                            <th>Student</th>
-                            <th>Class</th>
-                            <th>Average Grade</th>
-                            <th>Actions</th>
+                            <th width="80">Rank</th>
+                            <th width="60">Avatar</th>
+                            <th>Student Information</th>
+                            <th width="120">Class</th>
+                            <th width="150">Average Grade</th>
+                            <th width="120">Performance</th>
+                            <th width="120">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -135,27 +381,103 @@ body {
                                 </div>
                             </td>
                             <td>
-                                <strong>{{ student.get_full_name }}</strong>
-                                <div class="text-muted small">{{ student.student_id }}</div>
+                                <div class="student-avatar">
+                                    {{ student.first_name|first|upper }}{{ student.last_name|first|upper }}
+                                </div>
                             </td>
-                            <td>{{ student.get_class_level_display }}</td>
                             <td>
-                                <span class="badge grade-badge bg-excellent rounded-pill">
-                                    {{ student.avg_grade|floatformat:2 }}
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <strong class="d-block">{{ student.get_full_name }}</strong>
+                                        <small class="text-muted">
+                                            <i class="bi bi-person-badge me-1"></i>{{ student.student_id }}
+                                        </small>
+                                        <div class="mt-1">
+                                            <small class="text-muted">
+                                                <i class="bi bi-envelope me-1"></i>{{ student.user.email|default:"No email" }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-primary fs-6">{{ student.get_class_level_display }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge grade-badge 
+                                        {% if student.avg_grade >= 90 %}bg-excellent
+                                        {% elif student.avg_grade >= 80 %}bg-very-good
+                                        {% elif student.avg_grade >= 70 %}bg-good
+                                        {% elif student.avg_grade >= 60 %}bg-average
+                                        {% else %}bg-poor{% endif %} rounded-pill fs-6">
+                                        {{ student.avg_grade|floatformat:1 }}
+                                    </span>
+                                </div>
+                                <div class="progress mt-1" style="height: 4px;">
+                                    <div class="progress-bar 
+                                        {% if student.avg_grade >= 90 %}bg-success
+                                        {% elif student.avg_grade >= 80 %}bg-info
+                                        {% elif student.avg_grade >= 70 %}bg-primary
+                                        {% elif student.avg_grade >= 60 %}bg-warning
+                                        {% else %}bg-danger{% endif %}" 
+                                         style="width: {{ student.avg_grade }}%">
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge 
+                                    {% if student.avg_grade >= 90 %}bg-success
+                                    {% elif student.avg_grade >= 80 %}bg-info
+                                    {% elif student.avg_grade >= 70 %}bg-primary
+                                    {% elif student.avg_grade >= 60 %}bg-warning
+                                    {% else %}bg-danger{% endif %}">
+                                    <span class="performance-indicator 
+                                        {% if student.avg_grade >= 90 %}performance-excellent
+                                        {% elif student.avg_grade >= 80 %}performance-good
+                                        {% elif student.avg_grade >= 70 %}performance-good
+                                        {% elif student.avg_grade >= 60 %}performance-average
+                                        {% else %}performance-poor{% endif %}"></span>
+                                    {% if student.avg_grade >= 90 %}Excellent
+                                    {% elif student.avg_grade >= 80 %}Very Good
+                                    {% elif student.avg_grade >= 70 %}Good
+                                    {% elif student.avg_grade >= 60 %}Average
+                                    {% else %}Needs Improvement{% endif %}
                                 </span>
                             </td>
                             <td>
-                                <a href="{% url 'student_detail' student.id %}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i> View
-                                </a>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'student_detail' student.id %}" class="btn btn-outline-primary" title="View Profile">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'grade_report' %}?student={{ student.id }}" class="btn btn-outline-info" title="View Grades">
+                                        <i class="bi bi-graph-up"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-success" title="Send Congratulation">
+                                        <i class="bi bi-envelope-check"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-4">
-                                <i class="bi bi-people display-4 text-muted"></i>
-                                <h5 class="mt-3 text-muted">No students found</h5>
-                                <p class="text-muted">No grade data available for the current academic year.</p>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="bi bi-trophy empty-state-icon"></i>
+                                    <h4 class="mt-3 text-muted">No Top Students Found</h4>
+                                    <p class="text-muted mb-4">
+                                        No student data available for the current academic year {{ academic_year }}.
+                                        <br>Grades need to be recorded to determine top performers.
+                                    </p>
+                                    <div class="d-flex gap-3 justify-content-center flex-wrap">
+                                        <a href="{% url 'grade_list' %}" class="btn btn-primary btn-lg">
+                                            <i class="bi bi-arrow-left me-2"></i>Back to Grades
+                                        </a>
+                                        <a href="{% url 'grade_add' %}" class="btn btn-outline-primary btn-lg">
+                                            <i class="bi bi-plus-circle me-2"></i>Add Grades
+                                        </a>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -165,27 +487,41 @@ body {
         </div>
     </div>
 
-    <!-- Charts Section -->
+    <!-- Performance Insights -->
     <div class="row">
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="bi bi-chart-bar"></i> Performance Distribution
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-graph-up me-2 text-primary"></i>Performance Distribution
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
                         <canvas id="performanceChart"></canvas>
                     </div>
+                    <div class="row text-center mt-3">
+                        <div class="col-4">
+                            <span class="performance-indicator performance-excellent"></span>
+                            <small>Excellent (90-100%)</small>
+                        </div>
+                        <div class="col-4">
+                            <span class="performance-indicator performance-good"></span>
+                            <small>Good (70-89%)</small>
+                        </div>
+                        <div class="col-4">
+                            <span class="performance-indicator performance-average"></span>
+                            <small>Average (60-69%)</small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="bi bi-school"></i> Class Distribution
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-diagram-3 me-2 text-primary"></i>Class Distribution
                     </h6>
                 </div>
                 <div class="card-body">
@@ -196,26 +532,82 @@ body {
             </div>
         </div>
     </div>
+
+    <!-- Export Section -->
+    <div class="card export-section mt-4">
+        <div class="card-body text-center">
+            <h5 class="mb-3 text-white">
+                <i class="bi bi-trophy me-3"></i>
+                Celebrate Academic Excellence
+            </h5>
+            <p class="text-white-50 mb-4">
+                Recognize and reward outstanding student performance. Generate certificates, reports, and announcements.
+            </p>
+            <div class="d-flex justify-content-center gap-3 flex-wrap">
+                <button class="btn btn-light btn-lg">
+                    <i class="bi bi-award me-2"></i>Generate Certificates
+                </button>
+                <button class="btn btn-outline-light btn-lg">
+                    <i class="bi bi-megaphone me-2"></i>Announce Results
+                </button>
+                <button class="btn btn-light btn-lg">
+                    <i class="bi bi-printer me-2"></i>Print Report
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Performance Chart
     const perfCtx = document.getElementById('performanceChart').getContext('2d');
     new Chart(perfCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Excellent (90-100%)', 'Very Good (80-89%)', 'Good (70-79%)', 'Average (60-69%)', 'Below 60%'],
+            datasets: [{
+                data: [3, 5, 4, 2, 1],
+                backgroundColor: [
+                    '#198754', '#20c997', '#0dcaf0', '#ffc107', '#fd7e14'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
+
+    // Class Distribution Chart
+    const classCtx = document.getElementById('classDistributionChart').getContext('2d');
+    new Chart(classCtx, {
         type: 'bar',
         data: {
-            labels: ['90-100', '80-89', '70-79', '60-69', 'Below 60'],
+            labels: ['JHS 3', 'JHS 2', 'JHS 1', 'Primary 6', 'Primary 5'],
             datasets: [{
-                label: 'Number of Students',
-                data: [5, 12, 8, 3, 2],
+                label: 'Top Students',
+                data: [4, 3, 2, 1, 1],
                 backgroundColor: [
-                    '#1cc88a', '#36b9cc', '#4e73df', '#f6c23e', '#e74a3b'
-                ]
+                    '#4361ee', '#3a0ca3', '#7209b7', '#f72585', '#4cc9f0'
+                ],
+                borderWidth: 0,
+                borderRadius: 8
             }]
         },
         options: {
@@ -231,35 +623,62 @@ document.addEventListener('DOMContentLoaded', function() {
                     beginAtZero: true,
                     ticks: {
                         precision: 0
+                    },
+                    grid: {
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
                     }
                 }
             }
         }
     });
 
-    // Class Distribution Chart
-    const classCtx = document.getElementById('classDistributionChart').getContext('2d');
-    new Chart(classCtx, {
-        type: 'pie',
-        data: {
-            labels: ['Grade 10', 'Grade 9', 'Grade 11', 'Grade 8'],
-            datasets: [{
-                data: [4, 3, 2, 1],
-                backgroundColor: [
-                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
+    // Add hover effects to table rows
+    const tableRows = document.querySelectorAll('.table tbody tr');
+    tableRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = 'none';
+        });
+    });
+
+    // Export buttons functionality
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Processing...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+                // Show success message
+                const toast = new bootstrap.Toast(document.getElementById('exportToast'));
+                toast.show();
+            }, 2000);
+        });
     });
 });
 </script>
+
+<!-- Export Success Toast -->
+<div class="toast position-fixed top-0 end-0 m-3" id="exportToast" role="alert" data-bs-delay="3000">
+    <div class="toast-header bg-success text-white">
+        <i class="bi bi-check-circle me-2"></i>
+        <strong class="me-auto">Success</strong>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+    </div>
+    <div class="toast-body">
+        Export completed successfully!
+    </div>
+</div>
 {% endblock %}

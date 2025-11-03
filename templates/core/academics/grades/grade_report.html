@@ -5,6 +5,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
 :root {
     --primary: #4361ee;
@@ -18,305 +20,621 @@
     --dark: #212529;
     --border-radius: 12px;
     --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
+}
+
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
 .card {
     border: none;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
+    background: white;
+}
+
+.filter-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    border: none;
 }
 
 .stats-card {
-    transition: all 0.3s ease;
+    transition: var(--transition);
     border: none;
     border-radius: var(--border-radius);
     overflow: hidden;
+    position: relative;
+    background: white;
+}
+
+.stats-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--info));
 }
 
 .stats-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+.stats-card .card-body {
+    padding: 1.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.stats-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stats-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
 }
 
 .grade-badge {
     font-size: 0.75rem;
     padding: 0.5em 0.8em;
     border-radius: 20px;
-}
-
-.filter-card {
-    background-color: var(--light);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
+    font-weight: 600;
 }
 
 .progress {
     height: 8px;
     border-radius: 4px;
+    background-color: #e9ecef;
 }
 
-.grade-A { background-color: var(--success); }
-.grade-B { background-color: #20c997; }
-.grade-C { background-color: var(--warning); color: #000; }
-.grade-D { background-color: #fd7e14; }
-.grade-E { background-color: var(--danger); }
-.grade-F { background-color: var(--secondary); }
+.grade-1 { background-color: var(--success); }
+.grade-2 { background-color: #20c997; }
+.grade-3 { background-color: var(--info); }
+.grade-4 { background-color: var(--primary); }
+.grade-5 { background-color: var(--warning); color: #000; }
+.grade-6 { background-color: #fd7e14; }
+.grade-7 { background-color: #ff6b6b; }
+.grade-8 { background-color: var(--danger); }
+.grade-9 { background-color: var(--secondary); }
+
+.export-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--border-radius);
+    border: none;
+    color: white;
+    overflow: hidden;
+    position: relative;
+}
+
+.export-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.export-section .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+.export-features {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.export-feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.export-feature-item:last-child {
+    margin-bottom: 0;
+}
+
+.export-feature-item i {
+    color: #20c997;
+    margin-right: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.export-format-badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+    margin-left: 0.5rem;
+    border-radius: 15px;
+}
+
+.table th {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    font-weight: 600;
+    border: none;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(67, 97, 238, 0.05);
+}
+
+.empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: white;
+    border-radius: var(--border-radius);
+}
+
+.empty-state-icon {
+    font-size: 5rem;
+    opacity: 0.3;
+    margin-bottom: 1.5rem;
+    color: var(--secondary);
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .stats-value {
+        font-size: 2rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    padding: 0.75rem;
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <nav aria-label="breadcrumb">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-                            <li class="breadcrumb-item"><a href="{% url 'grade_list' %}">Grades</a></li>
-                            <li class="breadcrumb-item active" aria-current="page">Grade Reports</li>
-                        </ol>
-                    </nav>
-                    <h1 class="h3 mb-0">
-                        <i class="bi bi-graph-up text-primary me-2"></i>
-                        Grade Reports & Analytics
-                    </h1>
-                    <p class="text-muted mb-0">Comprehensive grade analysis and reporting</p>
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <nav aria-label="breadcrumb" class="text-white-50 mb-2">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-white-50">Home</a></li>
+                        <li class="breadcrumb-item"><a href="{% url 'grade_list' %}" class="text-white-50">Grades</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page">Grade Reports</li>
+                    </ol>
+                </nav>
+                <h1 class="h2 mb-2 text-white">
+                    <i class="bi bi-graph-up me-3"></i>
+                    Grade Reports & Analytics
+                </h1>
+                <p class="lead mb-0 text-white-50">Comprehensive grade analysis and reporting with detailed insights</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="btn-group">
+                    <a href="{% url 'grade_list' %}" class="btn btn-light btn-lg">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Grades
+                    </a>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Filters -->
-            <div class="card filter-card mb-4">
-                <div class="card-header bg-light py-3">
+    <!-- Filters -->
+    <div class="card filter-card mb-4">
+        <div class="card-header bg-light py-3">
+            <h6 class="mb-0">
+                <i class="bi bi-funnel me-2 text-primary"></i>
+                Report Filters
+                {% if show_results %}
+                <span class="badge bg-primary ms-2">
+                    <i class="bi bi-funnel me-1"></i>Results Filtered
+                </span>
+                {% endif %}
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="subject" class="form-label">Subject</label>
+                    <select name="subject" id="subject" class="form-select">
+                        <option value="">All Subjects</option>
+                        {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if selected_subject and selected_subject.id == subject.id %}selected{% endif %}>
+                            {{ subject.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="class_level" class="form-label">Class</label>
+                    <select name="class_level" id="class_level" class="form-select">
+                        <option value="">All Classes</option>
+                        {% for level_code, level_name in class_levels %}
+                        <option value="{{ level_code }}" {% if selected_class_level == level_code %}selected{% endif %}>
+                            {{ level_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="academic_year" class="form-label">Academic Year</label>
+                    <input type="text" name="academic_year" id="academic_year" class="form-control" 
+                           value="{{ selected_academic_year }}" placeholder="YYYY/YYYY"
+                           pattern="\d{4}/\d{4}">
+                    <div class="form-text">Format: YYYY/YYYY</div>
+                </div>
+                <div class="col-md-3">
+                    <label for="term" class="form-label">Term</label>
+                    <select name="term" id="term" class="form-select">
+                        <option value="">All Terms</option>
+                        <option value="1" {% if selected_term == "1" %}selected{% endif %}>Term 1</option>
+                        <option value="2" {% if selected_term == "2" %}selected{% endif %}>Term 2</option>
+                        <option value="3" {% if selected_term == "3" %}selected{% endif %}>Term 3</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            {% if show_results %}
+                            <small class="text-muted">
+                                <i class="bi bi-funnel me-1"></i>
+                                Filters applied: 
+                                {% if selected_subject %}Subject, {% endif %}
+                                {% if selected_class_level %}Class, {% endif %}
+                                {% if selected_academic_year %}Year, {% endif %}
+                                {% if selected_term %}Term{% endif %}
+                            </small>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-filter me-2"></i>Generate Report
+                            </button>
+                            <a href="{% url 'grade_report' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if show_results %}
+    <!-- Results Section -->
+    <div class="row mb-4">
+        <!-- Statistics Cards -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-people-fill text-primary display-6 mb-2"></i>
+                    <div class="stats-value">{{ grades.count }}</div>
+                    <p class="stats-label">Total Students</p>
+                    {% if selected_class_level %}
+                    <small class="text-muted">Filtered by Class</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-graph-up text-success display-6 mb-2"></i>
+                    <div class="stats-value">{{ class_average|floatformat:1 }}</div>
+                    <p class="stats-label">Class Average</p>
+                    <div class="progress mt-2">
+                        <div class="progress-bar bg-success" 
+                             style="width: {{ class_average|default:0 }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-check-circle text-info display-6 mb-2"></i>
+                    <div class="stats-value">{{ passing_rate|floatformat:1 }}%</div>
+                    <p class="stats-label">Passing Rate</p>
+                    <div class="progress mt-2">
+                        <div class="progress-bar bg-info" 
+                             style="width: {{ passing_rate|default:0 }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stats-card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-award text-warning display-6 mb-2"></i>
+                    <div class="stats-value">
+                        {% for dist in grade_distribution %}
+                            {% if dist.ges_grade == '1' or dist.ges_grade == '2' %}
+                                {{ dist.count|default:0 }}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <p class="stats-label">Top Grades (1-2)</p>
+                    <small class="text-muted">Excellent & Very Good</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grade Distribution & Performance -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
                     <h6 class="mb-0">
-                        <i class="bi bi-funnel me-2"></i>
-                        Report Filters
+                        <i class="bi bi-pie-chart me-2 text-primary"></i>Grade Distribution
                     </h6>
                 </div>
                 <div class="card-body">
-                    <form method="get" class="row g-3">
-                        <div class="col-md-3">
-                            <label for="subject" class="form-label">Subject</label>
-                            <select name="subject" id="subject" class="form-select">
-                                <option value="">All Subjects</option>
-                                {% for subject in subjects %}
-                                <option value="{{ subject.id }}" {% if selected_subject and selected_subject.id == subject.id %}selected{% endif %}>
-                                    {{ subject.name }}
-                                </option>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Grade</th>
+                                    <th>Description</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
+                                    <th>Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for dist in grade_distribution %}
+                                <tr>
+                                    <td>
+                                        <span class="badge grade-badge grade-{{ dist.ges_grade }}">
+                                            {{ dist.ges_grade }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if dist.ges_grade == '1' %}Excellent
+                                            {% elif dist.ges_grade == '2' %}Very Good
+                                            {% elif dist.ges_grade == '3' %}Good
+                                            {% elif dist.ges_grade == '4' %}Satisfactory
+                                            {% elif dist.ges_grade == '5' %}Fair
+                                            {% elif dist.ges_grade == '6' %}Marginal
+                                            {% elif dist.ges_grade == '7' %}Poor
+                                            {% elif dist.ges_grade == '8' %}Very Poor
+                                            {% elif dist.ges_grade == '9' %}Fail
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ dist.count }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">{{ dist.percentage|floatformat:1 }}%</span>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 6px;">
+                                            <div class="progress-bar grade-{{ dist.ges_grade }}" 
+                                                 style="width: {{ dist.percentage }}%"></div>
+                                        </div>
+                                    </td>
+                                </tr>
                                 {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="class_level" class="form-label">Class</label>
-                            <select name="class_level" id="class_level" class="form-select">
-                                <option value="">All Classes</option>
-                                {% for level_code, level_name in class_levels %}
-                                <option value="{{ level_code }}" {% if selected_class_level == level_code %}selected{% endif %}>
-                                    {{ level_name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="academic_year" class="form-label">Academic Year</label>
-                            <input type="text" name="academic_year" id="academic_year" class="form-control" 
-                                   value="{{ selected_academic_year }}" placeholder="YYYY/YYYY"
-                                   pattern="\d{4}/\d{4}">
-                        </div>
-                        <div class="col-md-3">
-                            <label for="term" class="form-label">Term</label>
-                            <select name="term" id="term" class="form-select">
-                                <option value="">All Terms</option>
-                                <option value="1" {% if selected_term == "1" %}selected{% endif %}>Term 1</option>
-                                <option value="2" {% if selected_term == "2" %}selected{% endif %}>Term 2</option>
-                                <option value="3" {% if selected_term == "3" %}selected{% endif %}>Term 3</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-filter me-1"></i>Generate Report
-                            </button>
-                            <a href="{% url 'grade_report' %}" class="btn btn-outline-secondary">Reset</a>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            {% if show_results %}
-            <!-- Results Section -->
-            <div class="row mb-4">
-                <!-- Statistics Cards -->
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-people-fill text-primary display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ grades.count }}</h3>
-                            <p class="text-muted mb-0">Students</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-graph-up text-success display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ class_average|floatformat:1 }}</h3>
-                            <p class="text-muted mb-0">Class Average</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-check-circle text-info display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ passing_rate|floatformat:1 }}%</h3>
-                            <p class="text-muted mb-0">Passing Rate</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="card stats-card">
-                        <div class="card-body text-center">
-                            <i class="bi bi-award text-warning display-6 mb-2"></i>
-                            <h3 class="h2 mb-1">{{ grade_distribution.0.count|default:0 }}</h3>
-                            <p class="text-muted mb-0">Top Grades (A)</p>
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Grade Distribution -->
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h6 class="mb-0">
-                                <i class="bi bi-pie-chart me-2"></i>Grade Distribution
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Grade</th>
-                                            <th>Count</th>
-                                            <th>Percentage</th>
-                                            <th>Progress</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for dist in grade_distribution %}
-                                        <tr>
-                                            <td>
-                                                <span class="badge grade-badge grade-{{ dist.ges_grade }}">
-                                                    {{ dist.ges_grade }}
-                                                </span>
-                                            </td>
-                                            <td>{{ dist.count }}</td>
-                                            <td>{{ dist.percentage|floatformat:1 }}%</td>
-                                            <td>
-                                                <div class="progress">
-                                                    <div class="progress-bar grade-{{ dist.ges_grade }}" 
-                                                         style="width: {{ dist.percentage }}%"></div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="bi bi-list-check me-2 text-primary"></i>Student Performance
+                    </h6>
                 </div>
-
-                <div class="col-md-6">
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h6 class="mb-0">
-                                <i class="bi bi-list-check me-2"></i>Student Performance
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive" style="max-height: 400px;">
-                                <table class="table table-sm table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Student</th>
-                                            <th>Score</th>
-                                            <th>Grade</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for grade in grades %}
-                                        <tr>
-                                            <td>
-                                                <strong>{{ grade.student.get_full_name }}</strong>
-                                                <br>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 400px;">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th>Score</th>
+                                    <th>Grade</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for grade in grades %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="flex-shrink-0">
+                                                <i class="bi bi-person-circle text-muted"></i>
+                                            </div>
+                                            <div class="flex-grow-1 ms-2">
+                                                <strong class="d-block">{{ grade.student.get_full_name }}</strong>
                                                 <small class="text-muted">{{ grade.student.student_id }}</small>
-                                            </td>
-                                            <td>
-                                                <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
-                                                    {{ grade.total_score|default:"N/A" }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span class="badge grade-badge grade-{{ grade.ges_grade|default:'F' }}">
-                                                    {{ grade.get_ges_grade_display|default:"N/A" }}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {% if grade.total_score >= 50 %}
-                                                <span class="badge bg-success">Pass</span>
-                                                {% else %}
-                                                <span class="badge bg-danger">Fail</span>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ grade.student.get_class_level_display }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold {% if grade.total_score >= 80 %}text-success{% elif grade.total_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ grade.total_score|default:"N/A" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge grade-badge grade-{{ grade.ges_grade|default:'9' }}">
+                                            {{ grade.get_ges_grade_display|default:"N/A" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if grade.total_score >= 50 %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle me-1"></i>Pass
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Fail
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-
-            <!-- Export Options -->
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center">
-                    <h6 class="mb-3">Export Report</h6>
-                    <div class="d-flex justify-content-center gap-2 flex-wrap">
-                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success">
-                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
-                        </a>
-                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-                        </a>
-                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary">
-                            <i class="bi bi-file-earmark-excel me-1"></i>Excel
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            {% else %}
-            <!-- No Results -->
-            <div class="text-center py-5">
-                <i class="bi bi-graph-up display-1 text-muted"></i>
-                <h4 class="mt-3 text-muted">Generate Grade Report</h4>
-                <p class="text-muted">Select filters above to generate a comprehensive grade report.</p>
-            </div>
-            {% endif %}
         </div>
     </div>
+
+    <!-- Export Options -->
+    <div class="card export-section mt-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="mb-2 text-white">
+                        <i class="bi bi-download me-3"></i>
+                        Export Report Data
+                    </h5>
+                    <p class="text-white-50 mb-3">Download the current report in your preferred format for analysis, sharing, or record-keeping.</p>
+                    
+                    <div class="export-buttons">
+                        <a href="?export=csv{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-light export-btn">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV Format
+                            <span class="badge bg-success export-format-badge">.CSV</span>
+                        </a>
+                        <a href="?export=pdf{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-light export-btn">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>PDF Report
+                            <span class="badge bg-danger export-format-badge">.PDF</span>
+                        </a>
+                        <a href="?export=excel{% for key, value in request.GET.items %}{% if key != 'export' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-light export-btn">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Excel Format
+                            <span class="badge bg-primary export-format-badge">.XLSX</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="export-features">
+                        <h6 class="text-white mb-3">Export Includes:</h6>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>All current filters and data</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Grade distribution statistics</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Student performance details</span>
+                        </div>
+                        <div class="export-feature-item text-white">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Professional formatting</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <small class="text-white-50 mt-3 d-block">
+                <i class="bi bi-info-circle me-1"></i>
+                Export includes currently filtered results only ({{ grades.count }} records)
+            </small>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- No Results -->
+    <div class="empty-state">
+        <i class="bi bi-graph-up empty-state-icon"></i>
+        <h3 class="mt-3 text-muted">Generate Grade Report</h3>
+        <p class="text-muted mb-4 lead">
+            Select filters above to generate a comprehensive grade report with detailed analytics and insights.
+        </p>
+        <div class="d-flex gap-3 justify-content-center flex-wrap">
+            <button type="button" class="btn btn-primary btn-lg" onclick="document.querySelector('form').submit()">
+                <i class="bi bi-filter me-2"></i>Apply Default Filters
+            </button>
+            <a href="{% url 'grade_list' %}" class="btn btn-outline-primary btn-lg">
+                <i class="bi bi-arrow-left me-2"></i>Back to Grades
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Select2
+    $('#subject, #class_level, #term').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Select an option',
+        allowClear: true
+    });
+
     // Academic year format validation
     const academicYearInput = document.getElementById('academic_year');
     if (academicYearInput) {
@@ -324,14 +642,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const pattern = /^\d{4}\/\d{4}$/;
             if (this.value && !pattern.test(this.value)) {
                 this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
+                this.classList.add('is-invalid');
             } else {
                 this.setCustomValidity('');
+                this.classList.remove('is-invalid');
             }
         });
-    }
 
-    // Auto-format academic year input
-    if (academicYearInput) {
+        // Auto-format academic year input
         academicYearInput.addEventListener('blur', function() {
             if (this.value && !this.value.includes('/')) {
                 if (this.value.length === 4) {
@@ -343,6 +661,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Export button enhancements
+    document.querySelectorAll('.export-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const originalText = this.innerHTML;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Preparing...';
+            this.disabled = true;
+            
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }, 3000);
+        });
+    });
+
+    // Auto-hide alerts
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        setTimeout(() => {
+            if (alert.classList.contains('alert-dismissible')) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }
+        }, 5000);
+    });
 });
 </script>
 {% endblock %}

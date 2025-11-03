@@ -3,11 +3,11 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import transaction
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.db.models import Sum, Count, Q, Avg
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -19,7 +19,7 @@ from openpyxl.styles import Font
 from io import BytesIO
 
 from .base_views import is_admin, is_teacher, is_student
-from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment, Bill
+from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment, Bill, BillPayment
 from ..forms import FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, FeeStatusReportForm
 from django.contrib import messages
 
@@ -183,16 +183,31 @@ class FeeListView(LoginRequiredMixin, ListView):
         total_paid = queryset.aggregate(Sum('amount_paid'))['amount_paid__sum'] or Decimal('0.00')
         total_balance = total_payable - total_paid
         
-        # Fix: Use lowercase statuses for counting
+        # Calculate completion rate
+        if total_payable > 0:
+            completion_rate = (total_paid / total_payable) * 100
+        else:
+            completion_rate = 0
+        
+        # FIXED: Use lowercase statuses for counting
         paid_count = queryset.filter(payment_status='paid').count()
         pending_count = queryset.filter(payment_status__in=['unpaid', 'partial', 'overdue']).count()
+        
+        # Count by status for detailed breakdown
+        unpaid_count = queryset.filter(payment_status='unpaid').count()
+        partial_count = queryset.filter(payment_status='partial').count()
+        overdue_count = queryset.filter(payment_status='overdue').count()
         
         context.update({
             'total_payable': total_payable,
             'total_paid': total_paid,
             'total_balance': total_balance,
+            'completion_rate': completion_rate,
             'paid_count': paid_count,
             'pending_count': pending_count,
+            'unpaid_count': unpaid_count,
+            'partial_count': partial_count,
+            'overdue_count': overdue_count,
             'is_admin': is_admin(self.request.user),
             'is_teacher': is_teacher(self.request.user),
         })
@@ -263,6 +278,7 @@ class FeeListView(LoginRequiredMixin, ListView):
         
         wb.save(response)
         return response
+
 
 class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Fee
@@ -494,7 +510,7 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
                 fee.amount_paid = total_paid
                 fee.balance = fee.amount_payable - fee.amount_paid
                 
-                # Update payment status
+                # FIXED: Use lowercase statuses consistently
                 if fee.balance <= 0:
                     fee.payment_status = 'paid'
                     fee.payment_date = timezone.now().date()
@@ -557,7 +573,7 @@ class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
             fee.amount_paid = total_paid
             fee.balance = fee.amount_payable - fee.amount_paid
             
-            # Update payment status
+            # FIXED: Use lowercase statuses consistently
             if fee.amount_paid <= 0:
                 fee.payment_status = 'unpaid'
                 fee.payment_date = None
@@ -579,6 +595,149 @@ class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     
     def get_success_url(self):
         return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
+
+# NEW: Bill Payment Views
+class BillPaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = BillPayment
+    fields = ['amount', 'payment_mode', 'payment_date', 'notes']
+    template_name = 'core/finance/bills/bill_payment_form.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def form_valid(self, form):
+        bill = get_object_or_404(Bill, pk=self.kwargs['bill_id'])
+        form.instance.bill = bill
+        form.instance.recorded_by = self.request.user
+        messages.success(self.request, f'Payment of GH₵{form.instance.amount:.2f} recorded for bill #{bill.bill_number}')
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('bill_detail', kwargs={'pk': self.kwargs['bill_id']})
+
+# NEW: Automated Fee Generation
+# NEW: Automated Fee Generation
+class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request):
+        """Display fee generation form"""
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        mandatory_categories = FeeCategory.objects.filter(
+            is_active=True, 
+            is_mandatory=True
+        )
+        active_students = Student.objects.filter(is_active=True).count()
+        
+        context = {
+            'current_term': current_term,
+            'mandatory_categories': mandatory_categories,
+            'active_students': active_students,
+        }
+        return render(request, 'core/finance/fees/generate_term_fees.html', context)
+    
+    def post(self, request):
+        """Generate fees for current term"""
+        created_count = generate_term_fees(request.user)
+        messages.success(request, f'Generated {created_count} fee records for current term')
+        return redirect('fee_list')
+
+
+# NEW: Bulk Fee Operations
+class BulkFeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def post(self, request):
+        fee_ids = request.POST.getlist('fee_ids')
+        action = request.POST.get('action')
+        
+        if not fee_ids:
+            messages.error(request, 'No fees selected')
+            return redirect('fee_list')
+        
+        updated_count = 0
+        with transaction.atomic():
+            for fee_id in fee_ids:
+                try:
+                    fee = Fee.objects.get(pk=fee_id)
+                    if action == 'mark_paid':
+                        fee.payment_status = 'paid'
+                        fee.payment_date = timezone.now().date()
+                        fee.save()
+                        updated_count += 1
+                    elif action == 'mark_overdue':
+                        fee.payment_status = 'overdue'
+                        fee.save()
+                        updated_count += 1
+                except Fee.DoesNotExist:
+                    continue
+        
+        messages.success(request, f'Updated {updated_count} fee records')
+        return redirect('fee_list')
+
+# NEW: Payment Reminders
+class SendPaymentRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def post(self, request):
+        # Get overdue fees
+        overdue_fees = Fee.objects.filter(
+            payment_status='overdue',
+            due_date__lt=timezone.now().date()
+        ).select_related('student')
+        
+        reminder_count = 0
+        for fee in overdue_fees:
+            # In a real implementation, this would send emails/SMS
+            # For now, just log the action
+            print(f"Reminder sent for {fee.student.get_full_name()} - Fee: {fee.category.name}")
+            reminder_count += 1
+        
+        messages.success(request, f'Payment reminders sent for {reminder_count} overdue fees')
+        return redirect('fee_list')
+
+# NEW: Fee Analytics
+class FeeAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/finance/fees/fee_analytics.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Monthly trends
+        current_year = timezone.now().year
+        monthly_data = []
+        for month in range(1, 13):
+            month_fees = Fee.objects.filter(
+                date_recorded__year=current_year,
+                date_recorded__month=month
+            )
+            monthly_revenue = month_fees.aggregate(total=Sum('amount_paid'))['total'] or 0
+            monthly_data.append({
+                'month': month,
+                'revenue': float(monthly_revenue),
+                'count': month_fees.count()
+            })
+        
+        # Category breakdown
+        category_breakdown = FeeCategory.objects.annotate(
+            total_revenue=Sum('fees__amount_paid'),
+            fee_count=Count('fees')
+        ).values('name', 'total_revenue', 'fee_count')
+        
+        context.update({
+            'monthly_data': monthly_data,
+            'category_breakdown': category_breakdown,
+            'current_year': current_year,
+        })
+        
+        return context
+
 # Reports
 class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
