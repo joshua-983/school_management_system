@@ -15,6 +15,7 @@
     .period-card {
         border-left: 3px solid #ff6b6b;
         margin-bottom: 10px;
+        padding: 15px;
     }
     .current-period {
         background-color: #fff3cd;
@@ -32,6 +33,11 @@
     }
     .teacher-period {
         background-color: #e9ecef;
+    }
+    .no-periods {
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
     }
 </style>
 {% endblock %}
@@ -68,15 +74,27 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h5 class="card-title">Teacher Information</h5>
-                            <p class="mb-1"><strong>Name:</strong> {{ teacher.user.get_full_name }}</p>
-                            <p class="mb-1"><strong>Department:</strong> {{ teacher.department|default:"Not assigned" }}</p>
-                            <p class="mb-1"><strong>Staff ID:</strong> {{ teacher.staff_id }}</p>
+                            <p class="mb-1"><strong>Name:</strong> {{ teacher.get_full_name }}</p>
+                            <p class="mb-1"><strong>Employee ID:</strong> {{ teacher.employee_id }}</p>
+                            <p class="mb-1"><strong>Subjects:</strong> 
+                                {% for subject in teacher.subjects.all %}
+                                <span class="badge bg-secondary me-1">{{ subject.name }}</span>
+                                {% endfor %}
+                            </p>
                         </div>
                         <div class="col-md-6">
                             <h5 class="card-title">Schedule Summary</h5>
                             <p class="mb-1"><strong>Total Periods:</strong> {{ total_periods }}</p>
-                            <p class="mb-1"><strong>Classes Teaching:</strong> {{ classes_teaching|join:", " }}</p>
-                            <p class="mb-1"><strong>Subjects Teaching:</strong> {{ subjects_teaching|join:", " }}</p>
+                            <p class="mb-1"><strong>Classes Teaching:</strong> 
+                                {% for class in classes_teaching %}
+                                <span class="badge bg-primary me-1">{{ class }}</span>
+                                {% endfor %}
+                            </p>
+                            <p class="mb-1"><strong>Subjects Teaching:</strong> 
+                                {% for subject in subjects_teaching %}
+                                <span class="badge bg-success me-1">{{ subject }}</span>
+                                {% endfor %}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -101,7 +119,6 @@
                 <div class="card-header">
                     <ul class="nav nav-tabs card-header-tabs" id="timetableTabs" role="tablist">
                         {% for day in days_order %}
-                        {% if day in periods_by_day %}
                         <li class="nav-item" role="presentation">
                             <button class="nav-link {% if forloop.first %}active{% endif %}" 
                                     id="{{ day|lower }}-tab" 
@@ -112,61 +129,68 @@
                                     aria-controls="{{ day|lower }}" 
                                     aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
                                 {{ day }}
+                                {% if day == current_day %}
+                                <span class="badge bg-primary ms-1">Today</span>
+                                {% endif %}
                             </button>
                         </li>
-                        {% endif %}
                         {% endfor %}
                     </ul>
                 </div>
                 <div class="card-body">
                     <div class="tab-content" id="timetableTabContent">
                         {% for day in days_order %}
-                        {% if day in periods_by_day %}
                         <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" 
                              id="{{ day|lower }}" 
                              role="tabpanel" 
                              aria-labelledby="{{ day|lower }}-tab">
-                            <div class="row">
-                                <div class="col-12">
-                                    <div class="card timetable-card">
-                                        <div class="card-header day-header">
-                                            <h5 class="card-title mb-0">
-                                                <i class="bi bi-calendar-day me-2"></i>
-                                                {{ day }} Schedule
-                                            </h5>
-                                        </div>
-                                        <div class="card-body">
-                                            {% if periods_by_day|get_item:day %}
-                                            <div class="list-group">
-                                                {% for period in periods_by_day|get_item:day %}
-                                                <div class="list-group-item period-card {% if period.is_current %}current-period{% endif %}" 
-                                                     data-period-id="{{ period.id }}">
-                                                    <div class="d-flex w-100 justify-content-between">
-                                                        <h6 class="mb-1">{{ period.subject.name }}</h6>
-                                                        <small>{{ period.start_time|time:"H:i" }} - {{ period.end_time|time:"H:i" }}</small>
-                                                    </div>
-                                                    <div class="d-flex justify-content-between align-items-center">
-                                                        <div>
-                                                            <span class="badge class-badge me-2">{{ period.timetable.class_level }}</span>
-                                                            <span class="badge subject-badge">{{ period.subject.code }}</span>
-                                                        </div>
-                                                        <small class="text-muted">Room: {{ period.room_number }}</small>
-                                                    </div>
-                                                    <div class="mt-2">
-                                                        <small class="text-muted">Timetable: {{ period.timetable.academic_year }} - Term {{ period.timetable.term }}</small>
-                                                    </div>
+                            
+                            <div class="card timetable-card">
+                                <div class="card-header day-header">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-calendar-day me-2"></i>
+                                        {{ day }} Schedule
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if periods_by_day|get_item:day %}
+                                        <div class="list-group">
+                                            {% for period in periods_by_day|get_item:day %}
+                                            <div class="list-group-item period-card {% if period.is_current %}current-period{% endif %}" 
+                                                 data-period-id="{{ period.id }}">
+                                                <div class="d-flex w-100 justify-content-between">
+                                                    <h6 class="mb-1">{{ period.subject.name }}</h6>
+                                                    <small>{{ period.time_slot.start_time|time:"H:i" }} - {{ period.time_slot.end_time|time:"H:i" }}</small>
                                                 </div>
-                                                {% endfor %}
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <span class="badge class-badge me-2">{{ period.timetable.get_class_level_display }}</span>
+                                                        <span class="badge subject-badge">{{ period.subject.code }}</span>
+                                                    </div>
+                                                    {% if period.classroom %}
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-building me-1"></i>
+                                                        {{ period.classroom }}
+                                                    </small>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="mt-2">
+                                                    <small class="text-muted">
+                                                        Timetable: {{ period.timetable.academic_year }} - Term {{ period.timetable.term }}
+                                                    </small>
+                                                </div>
                                             </div>
-                                            {% else %}
-                                            <p class="text-muted">No teaching periods scheduled for {{ day }}</p>
-                                            {% endif %}
+                                            {% endfor %}
                                         </div>
-                                    </div>
+                                    {% else %}
+                                        <div class="no-periods">
+                                            <i class="bi bi-calendar-x display-4 text-muted"></i>
+                                            <p class="mt-2 mb-0">No teaching periods scheduled for {{ day }}</p>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
-                        {% endif %}
                         {% endfor %}
                     </div>
                 </div>
@@ -187,39 +211,33 @@
                                 <tr>
                                     <th>Time</th>
                                     {% for day in days_order %}
-                                    {% if day in periods_by_day %}
                                     <th>{{ day }}</th>
-                                    {% endif %}
                                     {% endfor %}
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for time_slot in time_slots %}
                                 <tr>
-                                    <td>{{ time_slot }}</td>
+                                    <td class="fw-bold">{{ time_slot }}</td>
                                     {% for day in days_order %}
-                                    {% if day in periods_by_day %}
                                     <td>
-                                        {% for period in periods_by_day|get_item:day %}
-                                        {% if period.timeslot.name == time_slot or period.get_time_slot == time_slot %}
-                                        <div class="period-item teacher-period p-2 mb-2 rounded">
-                                            <strong>{{ period.subject.code }}</strong>
-                                            <br>
-                                            <small>{{ period.timetable.class_level }}</small>
-                                            <br>
-                                            <small>{{ period.room_number }}</small>
-                                        </div>
-                                        {% endif %}
-                                        {% endfor %}
+                                        {% with day_periods=periods_by_day|get_item:day %}
+                                            {% for period in day_periods %}
+                                                {% if period.time_slot.start_time|time:"H:i" == time_slot|slice:":5" or period.get_time_slot_display == time_slot %}
+                                                <div class="period-item teacher-period p-2 mb-2 rounded bg-primary bg-opacity-10">
+                                                    <strong>{{ period.subject.code }}</strong>
+                                                    <br>
+                                                    <small class="text-muted">{{ period.timetable.get_class_level_display }}</small>
+                                                    {% if period.classroom %}
+                                                    <br>
+                                                    <small class="text-muted">{{ period.classroom }}</small>
+                                                    {% endif %}
+                                                </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endwith %}
                                     </td>
-                                    {% endif %}
                                     {% endfor %}
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="{{ days_order|length|add:1 }}" class="text-center">
-                                        <p class="text-muted my-3">No timetable data available for weekly overview</p>
-                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -245,7 +263,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateCurrentPeriods() {
         const now = new Date();
         const currentTime = now.getHours() * 60 + now.getMinutes();
+        const currentDay = now.toLocaleString('en-us', { weekday: 'long' });
         
+        // Highlight current day tab
+        document.querySelectorAll('.nav-link').forEach(tab => {
+            tab.classList.remove('active');
+            if (tab.textContent.includes(currentDay)) {
+                tab.classList.add('active');
+                const target = tab.getAttribute('data-bs-target');
+                document.querySelectorAll('.tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                    if (pane.id === target.substring(1)) {
+                        pane.classList.add('show', 'active');
+                    }
+                });
+            }
+        });
+        
+        // Highlight current periods
         document.querySelectorAll('.period-card').forEach(card => {
             card.classList.remove('current-period');
             
@@ -269,18 +304,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update initially and every minute
     updateCurrentPeriods();
     setInterval(updateCurrentPeriods, 60000);
-    
-    // Handle responsive tabs
-    function handleTabs() {
-        if (window.innerWidth < 768) {
-            $('#timetableTabs').addClass('flex-column');
-        } else {
-            $('#timetableTabs').removeClass('flex-column');
-        }
-    }
-    
-    handleTabs();
-    window.addEventListener('resize', handleTabs);
 });
 </script>
 {% endblock %}

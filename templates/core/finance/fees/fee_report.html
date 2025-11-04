@@ -149,7 +149,7 @@
                                     <th>Fee Category</th>
                                     <th class="text-end">Amount Payable</th>
                                     <th class="text-end">Amount Paid</th>
-                                    <th class="text-end">Balance</th>
+                                    <th class="text-end">Balance/Credit</th>
                                     <th>Status</th>
                                     <th>Due Date</th>
                                     <th>Actions</th>
@@ -177,14 +177,26 @@
                                     <td>{{ fee.category.name }}</td>
                                     <td class="text-end">GH₵{{ fee.amount_payable|floatformat:2 }}</td>
                                     <td class="text-end">GH₵{{ fee.amount_paid|floatformat:2 }}</td>
-                                    <td class="text-end">GH₵{{ fee.balance|floatformat:2 }}</td>
-                                    <td>
-                                        {% if fee.payment_status == 'PAID' %}
-                                        <span class="badge bg-success">Paid</span>
-                                        {% elif fee.payment_status == 'PARTIAL' %}
-                                        <span class="badge bg-warning text-dark">Partial</span>
+                                    <td class="text-end {% if fee.balance < 0 %}text-success{% elif fee.balance > 0 %}text-danger{% endif %}">
+                                        {% if fee.balance < 0 %}
+                                            GH₵{{ fee.overpayment_amount|floatformat:2 }} Credit
                                         {% else %}
-                                        <span class="badge bg-danger">Unpaid</span>
+                                            GH₵{{ fee.balance|floatformat:2 }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if fee.payment_status == 'paid' %}
+                                            {% if fee.has_overpayment %}
+                                                <span class="badge bg-info">Paid (Credit)</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Paid</span>
+                                            {% endif %}
+                                        {% elif fee.payment_status == 'partial' %}
+                                            <span class="badge bg-warning text-dark">Partial</span>
+                                        {% elif fee.payment_status == 'overdue' %}
+                                            <span class="badge bg-danger">Overdue</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Unpaid</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ fee.due_date|date:"M d, Y" }}</td>

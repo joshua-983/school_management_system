@@ -2410,6 +2410,8 @@ class AssignmentTemplate(models.Model):
 
 # ===== FEE MANAGEMENT =====
 
+# ===== FEE MANAGEMENT =====
+
 class FeeCategory(models.Model):
     CATEGORY_TYPES = [
         ('ADMISSION', 'Admission Fees'),
@@ -2675,17 +2677,21 @@ class Fee(models.Model):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
 
     def update_payment_status(self):
-        """Update payment status with grace period logic"""
+        """Update payment status with proper overpayment handling"""
         tolerance = Decimal('1.00')
         grace_period = 5
         today = timezone.now().date()
         effective_due_date = self.due_date + timedelta(days=grace_period)
-        difference = abs(self.amount_payable - self.amount_paid)
         
-        if difference <= tolerance:
-            self.payment_status = 'paid'
-        elif self.amount_paid >= self.amount_payable:
-            self.payment_status = 'paid'
+        # Calculate the actual difference
+        difference = self.amount_payable - self.amount_paid
+        
+        # Handle overpayment (amount_paid > amount_payable)
+        if self.amount_paid >= self.amount_payable:
+            if abs(difference) <= tolerance:
+                self.payment_status = 'paid'
+            else:
+                self.payment_status = 'paid'  # Still mark as paid for overpayment
         elif self.amount_paid > Decimal('0.00'):
             self.payment_status = 'partial'
         elif today > effective_due_date:
@@ -2694,24 +2700,20 @@ class Fee(models.Model):
             self.payment_status = 'unpaid'
 
     @property
-    def payment_percentage(self):
-        """Calculate payment percentage"""
-        if self.amount_payable > 0:
-            return (self.amount_paid / self.amount_payable) * 100
-        return 0
-    
+    def overpayment_amount(self):
+        """Calculate overpayment amount"""
+        if self.amount_paid > self.amount_payable:
+            return self.amount_paid - self.amount_payable
+        return Decimal('0.00')
+
     @property
-    def is_overdue(self):
-        """Check if fee is overdue"""
-        if self.due_date and self.payment_status != 'paid':
-            return self.due_date < timezone.now().date()
-        return False
+    def has_overpayment(self):
+        """Check if there's an overpayment"""
+        return self.amount_paid > self.amount_payable
 
     def clean(self):
-        """Validate the fee data"""
-        if self.amount_paid > self.amount_payable:
-            raise ValidationError({'amount_paid': 'Amount paid cannot exceed amount payable'})
-        
+        """Validate the fee data with overpayment handling"""
+        # Allow overpayment but track it
         if self.payment_status == 'paid' and self.amount_paid < self.amount_payable:
             raise ValidationError({
                 'payment_status': 'Cannot mark as paid when amount paid is less than payable'
@@ -2724,7 +2726,9 @@ class Fee(models.Model):
 
     def save(self, *args, **kwargs):
         """Auto-calculate balance and update payment status before saving"""
+        # Calculate balance (can be negative for overpayment)
         self.balance = self.amount_payable - self.amount_paid
+        
         self.update_payment_status()
         
         if self.payment_status == 'paid' and not self.payment_date:
@@ -2735,8 +2739,11 @@ class Fee(models.Model):
         super().save(*args, **kwargs)
 
     def get_payment_status_html(self):
-        """Get HTML badge for payment status"""
+        """Get HTML badge for payment status with overpayment indicator"""
         status_display = self.get_payment_status_display()
+        if self.has_overpayment:
+            status_display += " (Credit)"
+            
         color_map = {
             'paid': 'success',
             'unpaid': 'danger',
@@ -2813,6 +2820,27 @@ class FeePayment(models.Model):
             if not cls.objects.filter(receipt_number=receipt_number).exists():
                 return receipt_number
 
+# NEW: Student Credit Model to track overpayments
+class StudentCredit(models.Model):
+    """Track student credit balances from overpayments"""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='credits')
+    source_fee = models.ForeignKey(Fee, on_delete=models.CASCADE, null=True, blank=True)
+    credit_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=200, default='Overpayment')
+    created_date = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+    used_date = models.DateTimeField(null=True, blank=True)
+    used_for_fee = models.ForeignKey(Fee, on_delete=models.SET_NULL, null=True, blank=True, related_name='applied_credits')
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        verbose_name = 'Student Credit'
+        verbose_name_plural = 'Student Credits'
+        ordering = ['-created_date']
+    
+    def __str__(self):
+        return f"{self.student} - GH₵{self.credit_amount} Credit"
+
 class FeeDiscount(models.Model):
     DISCOUNT_TYPES = [
         ('PERCENT', 'Percentage'),
@@ -2853,6 +2881,7 @@ class FeeInstallment(models.Model):
         
     def __str__(self):
         return f"Installment of {self.amount} due {self.due_date}"
+
 
 
 # ===== REPORT CARD =====
@@ -3164,6 +3193,7 @@ class Announcement(models.Model):
         ('STUDENTS', 'Students'),
         ('TEACHERS', 'Teachers'),
         ('ADMINS', 'Administrators'),
+        ('CLASS', 'Specific Classes'),
     ]
     
     title = models.CharField(max_length=200)
@@ -3191,16 +3221,6 @@ class Announcement(models.Model):
     def __str__(self):
         return self.title
     
-    def is_expired(self):
-        """Check if announcement has expired"""
-        if self.end_date:
-            return timezone.now() > self.end_date
-        return False
-    
-    def is_active_now(self):
-        """Check if announcement is currently active"""
-        return self.is_active and not self.is_expired()
-    
     def get_target_class_levels(self):
         """Get list of target class levels"""
         if not self.target_class_levels:
@@ -3212,7 +3232,26 @@ class Announcement(models.Model):
         if not self.target_class_levels:
             return True
         return class_level in self.get_target_class_levels()
-
+    
+    def is_expired(self):
+        """Check if announcement has expired"""
+        if self.end_date:
+            return timezone.now() > self.end_date
+        return False
+    
+    def is_active_now(self):
+        """Check if announcement is currently active"""
+        return self.is_active and not self.is_expired()
+    
+    def get_priority_color(self):
+        """Get Bootstrap color for priority"""
+        colors = {
+            'URGENT': 'danger',
+            'HIGH': 'warning', 
+            'NORMAL': 'info',
+            'LOW': 'secondary'
+        }
+        return colors.get(self.priority, 'secondary')
 
 class UserAnnouncementView(models.Model):
     """Track which users have seen/dismissed which announcements"""
@@ -3452,7 +3491,25 @@ class Holiday(models.Model):
         return f"{self.name} ({self.date})"
 
 
+# Add to your models.py
+class Budget(models.Model):
+    academic_year = models.CharField(max_length=9)
+    category = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('academic_year', 'category')
 
+class Expense(models.Model):
+    category = models.CharField(max_length=100)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField()
+    description = models.TextField()
+    recorded_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    
+    class Meta:
+        ordering = ['-date']
 
 
 

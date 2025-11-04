@@ -105,6 +105,11 @@ class TimetableListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             'term': self.request.GET.get('term', ''),
             'day_of_week': self.request.GET.get('day_of_week', ''),
         }
+        
+        # Add entries count for each timetable
+        for timetable in context['timetables']:
+            timetable.entries_count = timetable.entries.count()
+            
         return context
 
 class TimetableCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
@@ -185,22 +190,56 @@ class TimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
         
         for timeslot in timeslots:
             entry_id = request.POST.get(f'entry_{timeslot.id}')
-            if entry_id:
-                # Update existing entry
-                entry = get_object_or_404(TimetableEntry, id=entry_id, timetable=timetable)
-                form = TimetableEntryForm(request.POST, instance=entry, timetable=timetable)
-            else:
-                # Create new entry
-                form = TimetableEntryForm(request.POST, timetable=timetable)
+            subject_id = request.POST.get(f'timeslot_{timeslot.id}_subject')
+            teacher_id = request.POST.get(f'timeslot_{timeslot.id}_teacher')
+            classroom = request.POST.get(f'timeslot_{timeslot.id}_classroom', '')
+            is_break = request.POST.get(f'timeslot_{timeslot.id}_is_break') == 'true'
+            break_name = request.POST.get(f'timeslot_{timeslot.id}_break_name', '')
             
-            if form.is_valid():
-                entry = form.save(commit=False)
-                entry.timetable = timetable
-                entry.time_slot = timeslot
-                entry.save()
+            if is_break:
+                # Handle break period
+                if entry_id:
+                    entry = get_object_or_404(TimetableEntry, id=entry_id, timetable=timetable)
+                    entry.is_break = True
+                    entry.break_name = break_name
+                    entry.subject = None
+                    entry.teacher = None
+                    entry.classroom = ''
+                    entry.save()
+                else:
+                    TimetableEntry.objects.create(
+                        timetable=timetable,
+                        time_slot=timeslot,
+                        is_break=True,
+                        break_name=break_name
+                    )
+            elif subject_id and teacher_id:
+                # Handle class period
+                subject = get_object_or_404(Subject, id=subject_id)
+                teacher = get_object_or_404(Teacher, id=teacher_id)
+                
+                if entry_id:
+                    entry = get_object_or_404(TimetableEntry, id=entry_id, timetable=timetable)
+                    entry.subject = subject
+                    entry.teacher = teacher
+                    entry.classroom = classroom
+                    entry.is_break = False
+                    entry.break_name = ''
+                    entry.save()
+                else:
+                    TimetableEntry.objects.create(
+                        timetable=timetable,
+                        time_slot=timeslot,
+                        subject=subject,
+                        teacher=teacher,
+                        classroom=classroom,
+                        is_break=False
+                    )
         
         messages.success(request, 'Timetable updated successfully')
         return redirect('timetable_detail', pk=timetable.pk)
+
+
 
 class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Timetable
@@ -246,7 +285,7 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             current_term = AcademicTerm.objects.filter(is_active=True).first()
             term = current_term.term if current_term else 1
             
-            # Get timetable for the week
+            # Get timetable for the week - FIXED QUERY
             timetables = Timetable.objects.filter(
                 class_level=class_level,
                 academic_year=academic_year,
@@ -258,23 +297,33 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                 'entries__teacher'
             ).order_by('day_of_week')
             
-            # Organize by day
+            # Organize by day - FIXED LOGIC
             weekly_timetable = {}
             days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
             
             for day_num, day_name in enumerate(days_order):
                 try:
                     timetable = timetables.get(day_of_week=day_num)
-                    weekly_timetable[day_name] = timetable.entries.order_by('time_slot__period_number')
+                    # Order entries by time slot period number
+                    entries = timetable.entries.select_related(
+                        'time_slot', 'subject', 'teacher'
+                    ).order_by('time_slot__period_number')
+                    weekly_timetable[day_name] = entries
                 except Timetable.DoesNotExist:
-                    weekly_timetable[day_name] = None
+                    weekly_timetable[day_name] = []
             
             # Get all time slots for the weekly overview
             time_slots = TimeSlot.objects.order_by('period_number')
             time_slot_list = []
             
             for slot in time_slots:
-                time_slot_list.append(f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}")
+                time_slot_list.append({
+                    'id': slot.id,
+                    'period': slot.period_number,
+                    'time_range': f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}",
+                    'is_break': slot.is_break,
+                    'break_name': slot.break_name
+                })
             
             context.update({
                 'weekly_timetable': weekly_timetable,
@@ -283,6 +332,7 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                 'class_level': class_level,
                 'academic_year': academic_year,
                 'term': term,
+                'timetables_by_day': weekly_timetable  # Add this for template compatibility
             })
         
         return context
@@ -307,17 +357,17 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         term = current_term.term if current_term else 1
         
-        # Get all timetable entries for this teacher
+        # Get all timetable entries for this teacher - FIXED QUERY
         entries = TimetableEntry.objects.filter(
             teacher=teacher,
             timetable__academic_year=academic_year,
             timetable__term=term,
             timetable__is_active=True
         ).select_related(
-            'timetable', 'subject', 'time_slot'
+            'timetable', 'subject', 'time_slot', 'teacher__user'
         ).order_by('timetable__day_of_week', 'time_slot__period_number')
         
-        # Group entries by day of week
+        # Group entries by day of week - FIXED LOGIC
         days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
         periods_by_day = {}
         
@@ -347,16 +397,10 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
         context['subjects_teaching'] = list(set([entry.subject.name for entry in entries]))
         
         # Generate time slots for weekly overview
-        time_slots = []
-        for entry in entries:
-            time_slot = f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}"
-            if time_slot not in time_slots:
-                time_slots.append(time_slot)
-        
-        context['time_slots'] = sorted(time_slots)
+        time_slots = TimeSlot.objects.order_by('period_number')
+        context['time_slots'] = [f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}" for slot in time_slots]
         
         return context
-
 @login_required
 def get_timetable_entries(request):
     """AJAX view to get timetable entries for a specific class and day"""

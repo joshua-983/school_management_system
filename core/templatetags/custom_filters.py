@@ -28,3 +28,16 @@ def multiply(value, arg):
 def in_list(value, arg):
     """Check if value is in the comma-separated list"""
     return value in arg.split(',')
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Get dictionary item by key in templates"""
+    return dictionary.get(key)
+
+@register.filter
+def get_class_level_display(class_level):
+    """Get display name for class level"""
+    from ..models import CLASS_LEVEL_CHOICES
+    return dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
+

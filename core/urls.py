@@ -31,6 +31,9 @@ from .views.fee_views import (
     FeeStatusReportView, BillPaymentCreateView, GenerateTermFeesView,
     BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView
 )
+from .views.fee_views import (
+    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView, BudgetManagementView
+)
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
 from .views.assignment_views import (
@@ -97,7 +100,7 @@ from .views.bill_views import BillListView, BillDetailView, BillGenerateView
 from .views.announcement_views import (
     AnnouncementListView, CreateAnnouncementView, UpdateAnnouncementView, 
     DeleteAnnouncementView, get_active_announcements, dismiss_announcement, 
-    dismiss_all_announcements
+    dismiss_all_announcements, announcement_detail, toggle_announcement_status  # ADD THESE IMPORTS
 )
 
 # Import API views
@@ -176,6 +179,13 @@ urlpatterns = [
     path('reports/fees/', FeeReportView.as_view(), name='fee_report'),
     path('reports/fee-status/', FeeStatusReportView.as_view(), name='fee_status_report'),
     path('analytics/fees/', FeeAnalyticsView.as_view(), name='fee_analytics'),
+    
+    
+    # Finance Dashboard URLs
+    path('finance/dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
+    path('finance/revenue-analytics/', RevenueAnalyticsView.as_view(), name='revenue_analytics'),
+    path('finance/financial-health/', FinancialHealthView.as_view(), name='financial_health'),
+    path('finance/budget-management/', BudgetManagementView.as_view(), name='budget_management'),
     
     # ==============================
     # SUBJECT URLS
@@ -359,35 +369,37 @@ urlpatterns = [
     # TIMETABLE URLS
     # ==============================
     
-    # TimeSlot URLs
+    # Timetable URLs
     path('timeslots/', TimeSlotListView.as_view(), name='timeslot_list'),
     path('timeslots/create/', TimeSlotCreateView.as_view(), name='timeslot_create'),
     path('timeslots/<int:pk>/update/', TimeSlotUpdateView.as_view(), name='timeslot_update'),
     path('timeslots/<int:pk>/delete/', TimeSlotDeleteView.as_view(), name='timeslot_delete'),
     
-    # Timetable URLs
     path('timetable/', TimetableListView.as_view(), name='timetable_list'),
     path('timetable/create/', TimetableCreateView.as_view(), name='timetable_create'),
     path('timetable/<int:pk>/', TimetableDetailView.as_view(), name='timetable_detail'),
     path('timetable/<int:pk>/manage/', TimetableManageView.as_view(), name='timetable_manage'),
     path('timetable/<int:pk>/delete/', TimetableDeleteView.as_view(), name='timetable_delete'),
     
-    # Student/Parent/Teacher Views
     path('timetable/student/', StudentTimetableView.as_view(), name='student_timetable'),
     path('timetable/teacher/', TeacherTimetableView.as_view(), name='teacher_timetable'),
     
+    path('timetable/ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
+    path('timetable/generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
     # AJAX URLs
     path('timetable/ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
     path('timetable/generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
     path('api/timetable-entries/', get_timetable_entries, name='get_timetable_entries'),
     
     # ==============================
-    # ANNOUNCEMENT URLS
-    # ==============================
+# ANNOUNCEMENT URLS
+# ==============================
     path('announcements/', AnnouncementListView.as_view(), name='announcement_list'),
     path('announcements/create/', CreateAnnouncementView.as_view(), name='create_announcement'),
+    path('announcements/<int:pk>/', announcement_detail, name='announcement_detail'),
     path('announcements/<int:pk>/update/', UpdateAnnouncementView.as_view(), name='update_announcement'),
     path('announcements/<int:pk>/delete/', DeleteAnnouncementView.as_view(), name='delete_announcement'),
+    path('announcements/<int:pk>/toggle-status/', toggle_announcement_status, name='toggle_announcement_status'),  # ADD THIS LINE
     path('announcements/active/', get_active_announcements, name='active_announcements'),
     path('announcements/<int:pk>/dismiss/', dismiss_announcement, name='dismiss_announcement'),
     path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),

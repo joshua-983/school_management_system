@@ -1,4 +1,3 @@
-<!-- finance_dashboard.html -->
 {% extends 'base.html' %}
 {% load static %}
 
@@ -31,6 +30,10 @@
     }
     .revenue-trend {
         height: 400px;
+    }
+    .credit-badge {
+        background-color: #17a2b8;
+        color: white;
     }
 </style>
 {% endblock %}
@@ -140,10 +143,27 @@
                         <a href="{% url 'fee_detail' fee.id %}" class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <h6 class="mb-1">{{ fee.student.get_full_name }}</h6>
-                                <small>GH₵{{ fee.balance|floatformat:2 }}</small>
+                                <small class="{% if fee.balance < 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {% if fee.balance < 0 %}
+                                        GH₵{{ fee.overpayment_amount|floatformat:2 }} Credit
+                                    {% else %}
+                                        GH₵{{ fee.balance|floatformat:2 }}
+                                    {% endif %}
+                                </small>
                             </div>
-                            <small class="text-muted">{{ fee.category.name }} • Due {{ fee.due_date|date:"M d" }}</small>
+                            <small class="text-muted">
+                                {{ fee.category.name }} • 
+                                <span class="badge {% if fee.payment_status == 'paid' %}{% if fee.has_overpayment %}credit-badge{% else %}bg-success{% endif %}{% elif fee.payment_status == 'partial' %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ fee.get_payment_status_display }}
+                                    {% if fee.has_overpayment %} (Credit){% endif %}
+                                </span>
+                                • Due {{ fee.due_date|date:"M d" }}
+                            </small>
                         </a>
+                        {% empty %}
+                        <div class="list-group-item text-center text-muted">
+                            No outstanding fees
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -175,18 +195,15 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize date pickers
-    flatpickr(".datepicker", {
-        dateFormat: "Y-m-d",
-        allowInput: true
-    });
-
     // Revenue Trend Chart
     const revenueCtx = document.getElementById('revenueTrendChart').getContext('2d');
     new Chart(revenueCtx, {
         type: 'line',
         data: {
-            labels: {{ daily_revenue|safe }}.map(item => item.payment_date),
+            labels: {{ daily_revenue|safe }}.map(item => {
+                const date = new Date(item.payment_date);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }),
             datasets: [{
                 label: 'Daily Revenue',
                 data: {{ daily_revenue|safe }}.map(item => item.total),
@@ -226,7 +243,16 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(paymentCtx, {
         type: 'doughnut',
         data: {
-            labels: {{ payment_methods|safe }}.map(item => item.payment_method),
+            labels: {{ payment_methods|safe }}.map(item => {
+                const methodMap = {
+                    'cash': 'Cash',
+                    'bank_transfer': 'Bank Transfer',
+                    'mobile_money': 'Mobile Money',
+                    'check': 'Check',
+                    'other': 'Other'
+                };
+                return methodMap[item.payment_mode] || item.payment_mode;
+            }),
             datasets: [{
                 data: {{ payment_methods|safe }}.map(item => item.total),
                 backgroundColor: [
@@ -244,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return context.label + ': $' + context.raw.toFixed(2);
+                            return context.label + ': GH₵' + context.raw.toFixed(2);
                         }
                     }
                 }
@@ -295,22 +321,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-
-    // Date range handling
-    document.querySelectorAll('.date-range-option').forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            const range = this.getAttribute('data-range');
-            updateDateRange(range);
-        });
-    });
-
-    function updateDateRange(range) {
-        let url = window.location.pathname;
-        let params = new URLSearchParams(window.location.search);
-        params.set('range', range);
-        window.location.href = url + '?' + params.toString();
-    }
 });
 </script>
 {% endblock %}

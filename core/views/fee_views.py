@@ -17,6 +17,9 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 from io import BytesIO
+from django.db.models import F, ExpressionWrapper, DecimalField
+from datetime import datetime, timedelta
+from django.utils.timezone import make_aware
 
 from .base_views import is_admin, is_teacher, is_student
 from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment, Bill, BillPayment
@@ -510,8 +513,8 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
                 fee.amount_paid = total_paid
                 fee.balance = fee.amount_payable - fee.amount_paid
                 
-                # FIXED: Use lowercase statuses consistently
-                if fee.balance <= 0:
+                # FIXED: Proper status calculation with overpayment handling
+                if fee.amount_paid >= fee.amount_payable:
                     fee.payment_status = 'paid'
                     fee.payment_date = timezone.now().date()
                 elif fee.amount_paid > 0:
@@ -528,9 +531,33 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
                 fee.save()
                 print(f"DEBUG: After update - Amount paid: {fee.amount_paid}, Balance: {fee.balance}, Status: {fee.payment_status}")
                 
-                messages.success(self.request, f'Payment of GH₵{form.instance.amount:.2f} recorded successfully for {fee.student.get_full_name()}')
-                print("DEBUG: Success message set")
+                # Handle overpayment - create credit record
+                if fee.has_overpayment:
+                    # Create or update student credit
+                    credit, created = StudentCredit.objects.get_or_create(
+                        student=fee.student,
+                        source_fee=fee,
+                        is_used=False,
+                        defaults={
+                            'credit_amount': fee.overpayment_amount,
+                            'reason': f'Overpayment for {fee.category.name}'
+                        }
+                    )
+                    if not created:
+                        credit.credit_amount = fee.overpayment_amount
+                        credit.save()
+                    
+                    messages.warning(
+                        self.request, 
+                        f'Payment recorded successfully! Overpayment of GH₵{fee.overpayment_amount:.2f} has been credited to student account.'
+                    )
+                else:
+                    messages.success(
+                        self.request, 
+                        f'Payment of GH₵{form.instance.amount:.2f} recorded successfully for {fee.student.get_full_name()}'
+                    )
                 
+                print("DEBUG: Success message set")
                 return response
                 
         except Exception as e:
@@ -552,6 +579,8 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             return url
         print("DEBUG: No object, returning to fee list")
         return reverse_lazy('fee_list')
+
+
 
 class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = FeePayment
@@ -1102,3 +1131,280 @@ def generate_term_fees(request_user=None):
                 created_count += 1
                 
     return created_count
+
+
+class FinanceDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/finance/reports/finance_dashboard.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get date range from request or default to current month
+        start_date = self.request.GET.get('start_date')
+        end_date = self.request.GET.get('end_date')
+        
+        if start_date and end_date:
+            try:
+                start_date = make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+                end_date = make_aware(datetime.strptime(end_date, '%Y-%m-%d'))
+            except ValueError:
+                start_date = timezone.now() - timedelta(days=30)
+                end_date = timezone.now()
+        else:
+            start_date = timezone.now() - timedelta(days=30)
+            end_date = timezone.now()
+        
+        # Fee statistics
+        fees = Fee.objects.all()
+        total_collected = fees.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+        total_expected = fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
+        collection_rate = (total_collected / total_expected * 100) if total_expected > 0 else 0
+        
+        # Outstanding fees
+        outstanding_fees = fees.filter(payment_status__in=['unpaid', 'partial', 'overdue'])
+        outstanding_total = outstanding_fees.aggregate(total=Sum('balance'))['total'] or Decimal('0.00')
+        outstanding_count = outstanding_fees.count()
+        
+        # Daily revenue trend
+        daily_revenue = FeePayment.objects.filter(
+            payment_date__range=[start_date.date(), end_date.date()]
+        ).values('payment_date').annotate(
+            total=Sum('amount')
+        ).order_by('payment_date')
+        
+        # Payment methods breakdown
+        payment_methods = FeePayment.objects.filter(
+            payment_date__range=[start_date.date(), end_date.date()]
+        ).values('payment_mode').annotate(
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        # Budget data (you'll need to create a Budget model for this)
+        budget_data = self.get_budget_data()
+        
+        # Calculate financial metrics
+        net_profit = total_collected - Decimal('10000.00')  # Placeholder for expenses
+        profit_margin = (net_profit / total_collected * 100) if total_collected > 0 else 0
+        budget_utilization = 75.0  # Placeholder
+        budget_variance = Decimal('1500.00')  # Placeholder
+        
+        context.update({
+            'start_date': start_date.date(),
+            'end_date': end_date.date(),
+            'total_collected': total_collected,
+            'total_expected': total_expected,
+            'collection_rate': collection_rate,
+            'outstanding_total': outstanding_total,
+            'outstanding_count': outstanding_count,
+            'daily_revenue': list(daily_revenue),
+            'payment_methods': list(payment_methods),
+            'budget_data': budget_data,
+            'net_profit': net_profit,
+            'profit_margin': profit_margin,
+            'budget_utilization': budget_utilization,
+            'budget_variance': budget_variance,
+            'outstanding_payments': outstanding_fees.select_related('student', 'category')[:10],
+        })
+        
+        return context
+    
+    def get_budget_data(self):
+        """Get budget vs actual data (placeholder - implement with your Budget model)"""
+        return [
+            {'category': 'Tuition', 'budget': 50000, 'actual': 45000},
+            {'category': 'Feeding', 'budget': 20000, 'actual': 18000},
+            {'category': 'Transport', 'budget': 10000, 'actual': 9500},
+            {'category': 'Materials', 'budget': 5000, 'actual': 5200},
+            {'category': 'Other', 'budget': 3000, 'actual': 2800},
+        ]
+
+# Revenue Analytics View
+class RevenueAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/finance/reports/revenue_analytics.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get date range from request
+        start_date = self.request.GET.get('start_date', (timezone.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        end_date = self.request.GET.get('end_date', timezone.now().strftime('%Y-%m-%d'))
+        
+        try:
+            start_date_obj = make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+            end_date_obj = make_aware(datetime.strptime(end_date, '%Y-%m-%d'))
+        except ValueError:
+            start_date_obj = timezone.now() - timedelta(days=30)
+            end_date_obj = timezone.now()
+        
+        # Revenue calculations
+        payments = FeePayment.objects.filter(
+            payment_date__range=[start_date_obj.date(), end_date_obj.date()]
+        )
+        
+        total_collected = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        # Expected revenue from fees due in this period
+        expected_fees = Fee.objects.filter(
+            due_date__range=[start_date_obj.date(), end_date_obj.date()]
+        )
+        total_expected = expected_fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
+        
+        collection_rate = (total_collected / total_expected * 100) if total_expected > 0 else 0
+        
+        # Daily revenue trend
+        daily_revenue = payments.values('payment_date').annotate(
+            total=Sum('amount')
+        ).order_by('payment_date')
+        
+        # Payment methods
+        payment_methods = payments.values('payment_mode').annotate(
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        # Outstanding payments
+        outstanding_payments = Fee.objects.filter(
+            payment_status__in=['unpaid', 'partial', 'overdue']
+        ).select_related('student', 'category')[:20]
+        
+        context.update({
+            'start_date': start_date_obj.date(),
+            'end_date': end_date_obj.date(),
+            'total_collected': total_collected,
+            'total_expected': total_expected,
+            'collection_rate': collection_rate,
+            'daily_revenue': list(daily_revenue),
+            'payment_methods': list(payment_methods),
+            'outstanding_payments': outstanding_payments,
+        })
+        
+        return context
+
+# Financial Health View
+class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/finance/reports/financial_health.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        current_year = timezone.now().year
+        
+        # Income (fee collections for current year)
+        income = FeePayment.objects.filter(
+            payment_date__year=current_year
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        # Expenses (placeholder - implement with Expense model)
+        expenses = Decimal('75000.00')  # Placeholder
+        
+        # Net profit/loss
+        net_profit = income - expenses
+        
+        # Receivables (outstanding fees)
+        receivables = Fee.objects.filter(
+            payment_status__in=['unpaid', 'partial', 'overdue']
+        ).aggregate(total=Sum('balance'))['total'] or Decimal('0.00')
+        
+        # Cash flow (last 90 days)
+        ninety_days_ago = timezone.now() - timedelta(days=90)
+        cash_flow = FeePayment.objects.filter(
+            payment_date__gte=ninety_days_ago.date()
+        ).values('payment_date').annotate(
+            income=Sum('amount')
+        ).order_by('payment_date')
+        
+        # Debts/liabilities (placeholder)
+        debts = [
+            {'name': 'Supplier Payment', 'amount': Decimal('5000.00'), 'paid': False},
+            {'name': 'Utility Bills', 'amount': Decimal('2500.00'), 'paid': True},
+            {'name': 'Equipment Loan', 'amount': Decimal('15000.00'), 'paid': False},
+        ]
+        
+        context.update({
+            'income': income,
+            'expenses': expenses,
+            'net_profit': net_profit,
+            'receivables': receivables,
+            'cash_flow': list(cash_flow),
+            'debts': debts,
+        })
+        
+        return context
+
+# Budget Management View
+class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    template_name = 'core/finance/reports/budget_management.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        current_year = timezone.now().year
+        
+        # Budget vs Actual data (placeholder - implement with Budget model)
+        budget_data = [
+            {
+                'category': {'name': 'Tuition Fees'},
+                'budget': Decimal('50000.00'),
+                'actual': Decimal('45000.00'),
+                'variance': Decimal('-5000.00'),
+                'variance_percent': -10.0
+            },
+            {
+                'category': {'name': 'Feeding Program'},
+                'budget': Decimal('20000.00'),
+                'actual': Decimal('18000.00'),
+                'variance': Decimal('-2000.00'),
+                'variance_percent': -10.0
+            },
+            {
+                'category': {'name': 'Transportation'},
+                'budget': Decimal('10000.00'),
+                'actual': Decimal('9500.00'),
+                'variance': Decimal('-500.00'),
+                'variance_percent': -5.0
+            },
+            {
+                'category': {'name': 'Teaching Materials'},
+                'budget': Decimal('5000.00'),
+                'actual': Decimal('5200.00'),
+                'variance': Decimal('200.00'),
+                'variance_percent': 4.0
+            },
+            {
+                'category': {'name': 'Administrative'},
+                'budget': Decimal('8000.00'),
+                'actual': Decimal('7500.00'),
+                'variance': Decimal('-500.00'),
+                'variance_percent': -6.25
+            },
+        ]
+        
+        # Historical spending (last 3 years)
+        historical_spending = []
+        for year in range(current_year - 2, current_year + 1):
+            year_income = FeePayment.objects.filter(
+                payment_date__year=year
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            historical_spending.append({
+                'date__year': year,
+                'total': float(year_income)
+            })
+        
+        context.update({
+            'current_year': current_year,
+            'budget_data': budget_data,
+            'historical_spending': historical_spending,
+        })
+        
+        return context

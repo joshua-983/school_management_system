@@ -18,7 +18,7 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">Total Collected</h5>
-                    <h3 class="card-text">Ksh {{ total_collected|intcomma }}</h3>
+                    <h3 class="card-text">GH₵ {{ total_collected|intcomma }}</h3>
                 </div>
             </div>
         </div>
@@ -26,7 +26,7 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">Total Expected</h5>
-                    <h3 class="card-text">Ksh {{ total_expected|intcomma }}</h3>
+                    <h3 class="card-text">GH₵ {{ total_expected|intcomma }}</h3>
                 </div>
             </div>
         </div>
@@ -76,7 +76,7 @@
                                     <th>Fee Category</th>
                                     <th>Amount Due</th>
                                     <th>Amount Paid</th>
-                                    <th>Balance</th>
+                                    <th>Balance/Credit</th>
                                     <th>Status</th>
                                     <th>Due Date</th>
                                 </tr>
@@ -86,12 +86,19 @@
                                 <tr>
                                     <td>{{ fee.student.get_full_name }}</td>
                                     <td>{{ fee.category.name }}</td>
-                                    <td>Ksh {{ fee.amount_payable|intcomma }}</td>
-                                    <td>Ksh {{ fee.amount_paid|intcomma }}</td>
-                                    <td>Ksh {{ fee.balance|intcomma }}</td>
+                                    <td>GH₵ {{ fee.amount_payable|intcomma }}</td>
+                                    <td>GH₵ {{ fee.amount_paid|intcomma }}</td>
+                                    <td class="{% if fee.balance < 0 %}text-success{% elif fee.balance > 0 %}text-danger{% endif %}">
+                                        {% if fee.balance < 0 %}
+                                            GH₵ {{ fee.overpayment_amount|intcomma }} Credit
+                                        {% else %}
+                                            GH₵ {{ fee.balance|intcomma }}
+                                        {% endif %}
+                                    </td>
                                     <td>
-                                        <span class="badge {% if fee.payment_status == 'paid' %}bg-success{% elif fee.payment_status == 'partial' %}bg-warning{% else %}bg-danger{% endif %}">
+                                        <span class="badge {% if fee.payment_status == 'paid' %}{% if fee.has_overpayment %}bg-info{% else %}bg-success{% endif %}{% elif fee.payment_status == 'partial' %}bg-warning{% else %}bg-danger{% endif %}">
                                             {{ fee.get_payment_status_display }}
+                                            {% if fee.has_overpayment %} (Credit){% endif %}
                                         </span>
                                     </td>
                                     <td>{{ fee.due_date }}</td>
@@ -133,11 +140,23 @@
             plugins: {
                 legend: {
                     position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'GH₵' + context.raw.toFixed(2);
+                        }
+                    }
                 }
             },
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'GH₵' + value;
+                        }
+                    }
                 }
             }
         }
@@ -166,6 +185,13 @@
             plugins: {
                 legend: {
                     position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': GH₵' + context.raw.toFixed(2);
+                        }
+                    }
                 }
             }
         }
