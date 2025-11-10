@@ -1,129 +1,516 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block content %}
-<div class="container-fluid">
-  <h1 class="mt-4">Audit Log Dashboard</h1>
-  
-  <!-- Filter Form -->
-  <div class="card mb-4">
-    <div class="card-header">
-      <i class="fas fa-filter me-1"></i>
-      Filters
-    </div>
-    <div class="card-body">
-      <form method="get">
-        <div class="row">
-          <div class="col-md-3">
-            <label for="id_date_range_after">Date Range</label>
-            {{ filter.form.date_range }}
-          </div>
-          <div class="col-md-2">
-            <label for="id_action">Action</label>
-            {{ filter.form.action }}
-          </div>
-          <div class="col-md-2">
-            <label for="id_user">User</label>
-            {{ filter.form.user }}
-          </div>
-          <div class="col-md-2">
-            <label for="id_model_name">Model</label>
-            {{ filter.form.model_name }}
-          </div>
-          <div class="col-md-3 align-self-end">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="?" class="btn btn-secondary">Reset</a>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
+{% block title %}Audit Dashboard - Audit System{% endblock %}
 
-  <!-- Audit Log Table -->
-  <div class="card mb-4">
-    <div class="card-header">
-      <i class="fas fa-table me-1"></i>
-      Audit Logs
-    </div>
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-bordered" id="auditTable">
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Model</th>
-              <th>Object</th>
-              <th>IP</th>
-              <th>Location</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in object_list %}
-            <tr>
-              <td>{{ log.timestamp|date:"Y-m-d H:i" }}</td>
-              <td>{{ log.user.get_full_name|default:log.user.username }}</td>
-              <td><span class="badge bg-{{ log.get_action_class }}">{{ log.action }}</span></td>
-              <td>{{ log.model_name }}</td>
-              <td>
-                <a href="#" data-bs-toggle="modal" data-bs-target="#detailsModal{{ log.id }}">
-                  View Details
-                </a>
-              </td>
-              <td>{{ log.ip_address }}</td>
-              <td>
-                {% if log.location %}
-                  <i class="fas fa-map-marker-alt"></i> {{ log.location }}
-                {% endif %}
-              </td>
-            </tr>
-            
-            <!-- Details Modal -->
-            <div class="modal fade" id="detailsModal{{ log.id }}" tabindex="-1">
-              <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title">Audit Log Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div class="row">
-                      <div class="col-md-6">
-                        <h6>Basic Info</h6>
-                        <p><strong>Timestamp:</strong> {{ log.timestamp }}</p>
-                        <p><strong>User Agent:</strong> {{ log.user_agent }}</p>
-                        <p><strong>Location:</strong> {{ log.location }}</p>
-                      </div>
-                      <div class="col-md-6">
-                        <h6>Changes</h6>
-                        <pre>{{ log.details|pprint }}</pre>
-                      </div>
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4"><i class="fas fa-tachometer-alt me-2"></i>Audit Dashboard</h1>
+    
+    <!-- Overview Statistics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ total_actions }}</div>
+                            <div>Total Actions</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-bar fa-2x"></i>
+                        </div>
                     </div>
-                  </div>
                 </div>
-              </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{% url 'audit_log_list' %}">View Details</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
             </div>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      
-      <!-- Pagination -->
-      {% include 'includes/pagination.html' %}
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ today_actions }}</div>
+                            <div>Today's Actions</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-calendar-day fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{% url 'audit_log_list' %}?date_from={% now 'Y-m-d' %}">View Details</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ unique_users }}</div>
+                            <div>Active Users</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-users fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{% url 'audit_log_list' %}">View Details</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-danger text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="suspiciousActivities">{{ suspicious_activity|length }}</div>
+                            <div>Suspicious Activities</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{% url 'security_events' %}">View Details</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
+
+    <!-- Charts and Graphs -->
+    <div class="row mb-4">
+        <!-- Action Distribution -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-pie me-1"></i>
+                    Action Type Distribution
+                </div>
+                <div class="card-body">
+                    <div id="actionDistributionChart" style="height: 300px;">
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Action distribution chart will be displayed here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Daily Activity -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-line me-1"></i>
+                    Daily Activity (Last 30 Days)
+                </div>
+                <div class="card-body">
+                    <div id="dailyActivityChart" style="height: 300px;">
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Daily activity chart will be displayed here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity and Statistics -->
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-lg-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-table me-1"></i>
+                    Recent Activity
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Model</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in daily_activity|slice:":5" %}
+                                <tr>
+                                    <td><small class="text-muted">{{ log.timestamp|date:"H:i" }}</small></td>
+                                    <td>
+                                        <small>{{ log.user.username|default:"System" }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if log.action == 'CREATE' %}bg-success
+                                            {% elif log.action == 'UPDATE' %}bg-warning
+                                            {% elif log.action == 'DELETE' %}bg-danger
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ log.action }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ log.model_name }}</small></td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-3">
+                                        <div class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            No recent activity
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-end">
+                        <a href="{% url 'audit_log_list' %}" class="btn btn-sm btn-outline-primary">
+                            View All Activity
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Users and Models -->
+        <div class="col-lg-6">
+            <div class="row">
+                <!-- Top Users -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="fas fa-users me-1"></i>
+                            Top Users
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group list-group-flush">
+                                {% for user in user_stats|slice:":5" %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <div>
+                                        <h6 class="mb-0">{{ user.user__username }}</h6>
+                                        <small class="text-muted">{{ user.user__first_name }} {{ user.user__last_name }}</small>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill">{{ user.count }}</span>
+                                </div>
+                                {% empty %}
+                                <div class="text-center py-3">
+                                    <i class="fas fa-users fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted small">No user data</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Models -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <i class="fas fa-cube me-1"></i>
+                            Top Models
+                        </div>
+                        <div class="card-body">
+                            <div class="list-group list-group-flush">
+                                {% for model in model_stats|slice:":5" %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <span class="font-monospace">{{ model.model_name }}</span>
+                                    <span class="badge bg-info rounded-pill">{{ model.count }}</span>
+                                </div>
+                                {% empty %}
+                                <div class="text-center py-3">
+                                    <i class="fas fa-cube fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted small">No model data</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Alerts -->
+    {% if suspicious_activity %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Security Alerts
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>IP Address</th>
+                                    <th>Activity</th>
+                                    <th>Count</th>
+                                    <th>Risk Level</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in suspicious_activity %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ activity.user__username }}</strong>
+                                    </td>
+                                    <td><code>{{ activity.ip_address }}</code></td>
+                                    <td>Multiple logins</td>
+                                    <td>{{ activity.count }} attempts</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if activity.count > 20 %}bg-danger
+                                            {% elif activity.count > 10 %}bg-warning
+                                            {% else %}bg-info{% endif %}">
+                                            {% if activity.count > 20 %}High
+                                            {% elif activity.count > 10 %}Medium
+                                            {% else %}Low{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-warning" 
+                                                onclick="investigateUser('{{ activity.user__username }}')">
+                                            Investigate
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{% url 'audit_log_list' %}" class="btn btn-outline-primary w-100 h-100 py-3">
+                                <i class="fas fa-list fa-2x mb-2"></i><br>
+                                View All Logs
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'security_events' %}" class="btn btn-outline-danger w-100 h-100 py-3">
+                                <i class="fas fa-shield-alt fa-2x mb-2"></i><br>
+                                Security Events
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'generate_report' %}" class="btn btn-outline-success w-100 h-100 py-3">
+                                <i class="fas fa-file-alt fa-2x mb-2"></i><br>
+                                Generate Report
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'advanced_analytics' %}" class="btn btn-outline-info w-100 h-100 py-3">
+                                <i class="fas fa-chart-line fa-2x mb-2"></i><br>
+                                Advanced Analytics
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-$(document).ready(function() {
-    $('#auditTable').DataTable({
-        ordering: false,
-        dom: 'Bfrtip',
-        buttons: ['csv', 'excel']
-    });
+let actionChart, dailyChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    startRealTimeUpdates();
 });
+
+function initializeCharts() {
+    // Action Distribution Chart
+    const actionCtx = document.getElementById('actionDistributionChart').getContext('2d');
+    actionChart = new Chart(actionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'OTHER'],
+            datasets: [{
+                data: [25, 40, 10, 20, 5],
+                backgroundColor: [
+                    '#28a745',
+                    '#ffc107',
+                    '#dc3545',
+                    '#17a2b8',
+                    '#6c757d'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                }
+            }
+        }
+    });
+
+    // Daily Activity Chart
+    const dailyCtx = document.getElementById('dailyActivityChart').getContext('2d');
+    dailyChart = new Chart(dailyCtx, {
+        type: 'line',
+        data: {
+            labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+            datasets: [{
+                label: 'Actions',
+                data: [65, 59, 80, 81, 56, 55, 40],
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function investigateUser(username) {
+    showAlert(`Investigating user: ${username}`, 'info');
+    // In real implementation, this would redirect to user investigation page
+    setTimeout(() => {
+        window.location.href = `{% url 'user_activity_report' 0 %}`.replace('0', '1'); // Example user ID
+    }, 1000);
+}
+
+function startRealTimeUpdates() {
+    // Simulate real-time updates
+    setInterval(() => {
+        updateDashboardStats();
+    }, 30000); // Update every 30 seconds
+}
+
+function updateDashboardStats() {
+    // Simulate updating statistics
+    console.log('Updating dashboard statistics...');
+    
+    // In real implementation, this would fetch updated data from the server
+    fetch('{% url "audit_statistics_api" %}?period=week')
+        .then(response => response.json())
+        .then(data => {
+            // Update charts with new data
+            if (actionChart && data.action_distribution) {
+                actionChart.data.datasets[0].data = data.action_distribution.map(item => item.count);
+                actionChart.update();
+            }
+            
+            if (dailyChart && data.daily_activity) {
+                dailyChart.data.labels = data.daily_activity.map(item => item.date);
+                dailyChart.data.datasets[0].data = data.daily_activity.map(item => item.count);
+                dailyChart.update();
+            }
+        })
+        .catch(error => {
+            console.error('Error updating dashboard:', error);
+        });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+}
+
+// Auto-refresh the entire dashboard every 5 minutes
+setInterval(() => {
+    console.log('Refreshing dashboard data...');
+    window.location.reload();
+}, 300000);
 </script>
+
+<style>
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 700;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.list-group-item {
+    border: none;
+    padding: 0.75rem 0;
+}
+
+.list-group-item:first-child {
+    padding-top: 0;
+}
+
+.list-group-item:last-child {
+    padding-bottom: 0;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.btn {
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+</style>
 {% endblock %}

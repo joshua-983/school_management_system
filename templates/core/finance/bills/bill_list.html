@@ -274,47 +274,227 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Search functionality
+    // Enhanced search functionality
     const searchInput = document.getElementById('billSearch');
     const billRows = document.querySelectorAll('.bill-row');
     
     if (searchInput && billRows.length > 0) {
         searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
+            const searchTerm = this.value.toLowerCase().trim();
             
             billRows.forEach(row => {
                 const text = row.textContent.toLowerCase();
-                if (text.includes(searchTerm)) {
+                const studentName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const billNumber = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                
+                if (studentName.includes(searchTerm) || billNumber.includes(searchTerm) || text.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
                 }
             });
+            
+            // Show/hide no results message
+            const visibleRows = document.querySelectorAll('.bill-row[style=""]');
+            const noResults = document.getElementById('noResults');
+            
+            if (!noResults) {
+                if (visibleRows.length === 0 && searchTerm) {
+                    const tbody = document.querySelector('#billsTable tbody');
+                    const messageRow = document.createElement('tr');
+                    messageRow.id = 'noResults';
+                    messageRow.innerHTML = `<td colspan="9" class="text-center py-4 text-muted">
+                        <i class="bi bi-search me-2"></i>No bills found matching "${searchTerm}"
+                    </td>`;
+                    tbody.appendChild(messageRow);
+                }
+            } else {
+                if (visibleRows.length > 0 || !searchTerm) {
+                    noResults.remove();
+                } else {
+                    noResults.querySelector('td').innerHTML = 
+                        `<i class="bi bi-search me-2"></i>No bills found matching "${searchTerm}"`;
+                }
+            }
         });
     }
 
-    // Format currency amounts
-    document.querySelectorAll('.bill-amount').forEach(element => {
-        const amount = element.textContent.trim();
-        if (!amount.startsWith('₵')) {
-            element.textContent = 'GH₵' + amount;
+    // Status filter badges with click functionality
+    const statusBadges = document.querySelectorAll('.bill-status');
+    statusBadges.forEach(badge => {
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', function() {
+            const status = this.textContent.trim().toLowerCase();
+            const statusSelect = document.querySelector('select[name="status"]');
+            
+            if (statusSelect) {
+                // Map display text to value
+                const statusMap = {
+                    'issued': 'issued',
+                    'paid': 'paid', 
+                    'partially paid': 'partial',
+                    'overdue': 'overdue',
+                    'cancelled': 'cancelled'
+                };
+                
+                const statusValue = statusMap[status] || status;
+                statusSelect.value = statusValue;
+                
+                // Trigger form submission
+                document.querySelector('form').submit();
+            }
+        });
+        
+        // Add hover effects
+        badge.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+            this.style.transition = 'transform 0.2s ease';
+        });
+        
+        badge.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+    });
+
+    // Auto-submit filters when values change
+    const filterInputs = document.querySelectorAll('select[name], input[name]');
+    filterInputs.forEach(input => {
+        if (input.name !== 'page') { // Don't auto-submit on pagination
+            input.addEventListener('change', function() {
+                // Add loading indicator
+                const submitBtn = document.createElement('button');
+                submitBtn.type = 'submit';
+                submitBtn.style.display = 'none';
+                this.form.appendChild(submitBtn);
+                submitBtn.click();
+            });
         }
     });
 
-    // Auto-expand filters if any filter is applied
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.toString() && !urlParams.has('page')) {
-        const filterCollapse = document.getElementById('filterCollapse');
-        if (filterCollapse) {
-            new bootstrap.Collapse(filterCollapse, { show: true });
+    // Export functionality
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function() {
+            // Get current filters
+            const params = new URLSearchParams(window.location.search);
+            params.set('export', 'excel');
+            
+            // Show loading state
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Exporting...';
+            this.disabled = true;
+            
+            // Trigger download
+            window.location.href = `?${params.toString()}`;
+            
+            // Reset button after delay
+            setTimeout(() => {
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }, 3000);
+        });
+    }
+
+    // Quick actions for bills
+    function quickAction(action, billId) {
+        const actions = {
+            'send_reminder': {
+                url: `/bills/${billId}/send-reminder/`,
+                message: 'Sending payment reminder...'
+            },
+            'print': {
+                url: `/bills/${billId}/print/`,
+                message: 'Generating printable bill...'
+            },
+            'duplicate': {
+                url: `/bills/${billId}/duplicate/`,
+                message: 'Duplicating bill...'
+            }
+        };
+        
+        if (actions[action]) {
+            if (confirm(`Are you sure you want to ${action.replace('_', ' ')} this bill?`)) {
+                // Show loading
+                const billRow = document.querySelector(`tr[data-bill-id="${billId}"]`);
+                if (billRow) {
+                    const originalContent = billRow.innerHTML;
+                    billRow.innerHTML = `<td colspan="9" class="text-center">
+                        <div class="spinner-border spinner-border-sm me-2"></div>
+                        ${actions[action].message}
+                    </td>`;
+                    
+                    // Simulate API call - replace with actual fetch
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+            }
         }
     }
+
+    // Add data attributes for quick actions
+    document.querySelectorAll('.bill-row').forEach(row => {
+        const billId = row.querySelector('td:first-child').textContent.trim();
+        row.setAttribute('data-bill-id', billId.replace('Bill #', ''));
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + F for search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            searchInput?.focus();
+        }
+        
+        // Ctrl/Cmd + E for export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            exportBtn?.click();
+        }
+    });
+
+    // Responsive table enhancements
+    function enhanceTableResponsiveness() {
+        const table = document.getElementById('billsTable');
+        if (table && window.innerWidth < 768) {
+            table.classList.add('table-sm');
+            
+            // Add responsive wrapper if not exists
+            if (!table.parentElement.classList.contains('table-responsive')) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'table-responsive';
+                table.parentElement.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+            }
+        }
+    }
+
+    // Initialize on load and resize
+    enhanceTableResponsiveness();
+    window.addEventListener('resize', enhanceTableResponsiveness);
+
+    // Auto-refresh data every 5 minutes
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            // Only refresh if page is visible
+            const refreshIndicator = document.getElementById('autoRefresh');
+            if (!refreshIndicator) {
+                const indicator = document.createElement('div');
+                indicator.id = 'autoRefresh';
+                indicator.className = 'alert alert-info alert-dismissible fade show';
+                indicator.innerHTML = `
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Auto-refreshing bill data...
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('.container-fluid').prepend(indicator);
+            }
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    }, 300000); // 5 minutes
 });
 </script>
 {% endblock %}

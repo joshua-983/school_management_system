@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}System Health - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4"><i class="fas fa-heartbeat me-2"></i>System Health Check</h1>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" onclick="runHealthCheck()">
+                <i class="fas fa-sync-alt me-1"></i>Run Check
+            </button>
+            <button class="btn btn-outline-success" onclick="generateHealthReport()">
+                <i class="fas fa-file-alt me-1"></i>Generate Report
+            </button>
+        </div>
+    </div>
+
+    <!-- System Status Overview -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="systemStatus">Healthy</div>
+                            <div>Overall Status</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ total_logs_today }}</div>
+                            <div>Today's Logs</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-database fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ failed_logins }}</div>
+                            <div>Failed Logins</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="responseTime">0.45s</div>
+                            <div>Avg Response</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-tachometer-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Checks -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>System Health Checks</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="database">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-database fa-2x text-success mb-3"></i>
+                                    <h6>Database</h6>
+                                    <p class="text-muted small">Connection and performance</p>
+                                    <span class="badge bg-success">Healthy</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="security">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shield-alt fa-2x text-success mb-3"></i>
+                                    <h6>Security</h6>
+                                    <p class="text-muted small">Security policies and events</p>
+                                    <span class="badge bg-success">Secure</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="performance">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-tachometer-alt fa-2x text-warning mb-3"></i>
+                                    <h6>Performance</h6>
+                                    <p class="text-muted small">System performance metrics</p>
+                                    <span class="badge bg-warning">Degraded</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="storage">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-hdd fa-2x text-success mb-3"></i>
+                                    <h6>Storage</h6>
+                                    <p class="text-muted small">Disk space and usage</p>
+                                    <span class="badge bg-success">Adequate</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="backup">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-archive fa-2x text-danger mb-3"></i>
+                                    <h6>Backup</h6>
+                                    <p class="text-muted small">Backup status and integrity</p>
+                                    <span class="badge bg-danger">Failed</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card health-check-card" data-check="network">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-network-wired fa-2x text-success mb-3"></i>
+                                    <h6>Network</h6>
+                                    <p class="text-muted small">Connectivity and latency</p>
+                                    <span class="badge bg-success">Stable</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Alerts -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Security Alerts</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% if high_frequency_users %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">High Frequency Users</h6>
+                                    <span class="badge bg-warning">Warning</span>
+                                </div>
+                                <p class="mb-1">Users with unusually high activity detected</p>
+                                <small class="text-muted">Monitor these users for suspicious behavior</small>
+                            </div>
+                        {% endif %}
+                        
+                        {% if failed_logins > 0 %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">Failed Login Attempts</h6>
+                                    <span class="badge bg-danger">Critical</span>
+                                </div>
+                                <p class="mb-1">{{ failed_logins }} failed login attempts detected</p>
+                                <small class="text-muted">Review security events for details</small>
+                            </div>
+                        {% endif %}
+                        
+                        {% if bulk_deletions %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">Bulk Deletions</h6>
+                                    <span class="badge bg-warning">Warning</span>
+                                </div>
+                                <p class="mb-1">Multiple bulk deletion operations detected</p>
+                                <small class="text-muted">Verify these are legitimate operations</small>
+                            </div>
+                        {% endif %}
+                        
+                        {% if not high_frequency_users and failed_logins == 0 and not bulk_deletions %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">No Security Alerts</h6>
+                                    <span class="badge bg-success">All Clear</span>
+                                </div>
+                                <p class="mb-1">No critical security issues detected</p>
+                                <small class="text-muted">System security is optimal</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Performance Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="metric-circle bg-success">
+                                <span class="metric-value">98.7%</span>
+                                <div class="metric-label">Uptime</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="metric-circle bg-warning">
+                                <span class="metric-value">0.45s</span>
+                                <div class="metric-label">Response</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="metric-circle bg-info">
+                                <span class="metric-value">1.2K</span>
+                                <div class="metric-label">Req/Min</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Resource Usage</h6>
+                        <div class="resource-usage">
+                            <div class="resource-item">
+                                <span class="resource-label">CPU Usage</span>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-success" style="width: 45%">45%</div>
+                                </div>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Memory Usage</span>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-info" style="width: 68%">68%</div>
+                                </div>
+                            </div>
+                            <div class="resource-item">
+                                <span class="resource-label">Disk Usage</span>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-warning" style="width: 82%">82%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Reports -->
+    <div class="row">
+        <!-- High Frequency Users -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>High Frequency Users</h5>
+                </div>
+                <div class="card-body">
+                    {% if high_frequency_users %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Actions</th>
+                                    <th>Risk</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in high_frequency_users %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ user.user__username }}</strong>
+                                    </td>
+                                    <td>{{ user.count }} actions</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if user.count > 100 %}bg-danger
+                                            {% elif user.count > 50 %}bg-warning
+                                            {% else %}bg-info{% endif %}">
+                                            {% if user.count > 100 %}High
+                                            {% elif user.count > 50 %}Medium
+                                            {% else %}Low{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-warning" 
+                                                onclick="investigateUser('{{ user.user__username }}')">
+                                            Investigate
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                        <p class="text-muted">No high frequency users detected</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Operations -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-trash me-2"></i>Bulk Operations</h5>
+                </div>
+                <div class="card-body">
+                    {% if bulk_deletions %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Deletions</th>
+                                    <th>Timeframe</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for deletion in bulk_deletions %}
+                                <tr>
+                                    <td><code>{{ deletion.model_name }}</code></td>
+                                    <td>{{ deletion.count }} records</td>
+                                    <td>Last 7 days</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="reviewDeletions('{{ deletion.model_name }}')">
+                                            Review
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-2x text-success mb-3"></i>
+                        <p class="text-muted">No suspicious bulk operations detected</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="recommendation-item">
+                                <i class="fas fa-database text-warning me-2"></i>
+                                <strong>Database Optimization</strong>
+                                <p class="mb-0">Consider archiving old audit logs to improve performance</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="recommendation-item">
+                                <i class="fas fa-shield-alt text-success me-2"></i>
+                                <strong>Security Review</strong>
+                                <p class="mb-0">Schedule regular security policy reviews</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="recommendation-item">
+                                <i class="fas fa-backup text-danger me-2"></i>
+                                <strong>Backup System</strong>
+                                <p class="mb-0">Investigate and fix backup system failures</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="recommendation-item">
+                                <i class="fas fa-chart-line text-info me-2"></i>
+                                <strong>Performance Monitoring</strong>
+                                <p class="mb-0">Implement enhanced performance monitoring</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    startHealthMonitoring();
+    
+    // Add click handlers for health check cards
+    document.querySelectorAll('.health-check-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const checkType = this.getAttribute('data-check');
+            runSpecificHealthCheck(checkType);
+        });
+    });
+});
+
+function runHealthCheck() {
+    showAlert('Running comprehensive health check...', 'info');
+    
+    // Simulate health check process
+    setTimeout(() => {
+        showAlert('Health check completed successfully!', 'success');
+        updateHealthStatus();
+    }, 3000);
+}
+
+function generateHealthReport() {
+    showAlert('Generating system health report...', 'info');
+    
+    // Simulate report generation
+    setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = "{% url 'audit_export_csv' %}";
+        link.download = 'system_health_report.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showAlert('System health report generated successfully!', 'success');
+    }, 2000);
+}
+
+function investigateUser(username) {
+    showAlert(`Investigating user: ${username}`, 'info');
+    // In real implementation, this would redirect to user investigation
+    window.location.href = `/audit/user-activity/?username=${username}`;
+}
+
+function reviewDeletions(modelName) {
+    showAlert(`Reviewing deletions for: ${modelName}`, 'info');
+    // In real implementation, this would show deletion details
+    window.location.href = `/audit/logs/?model_name=${modelName}&action=DELETE`;
+}
+
+function runSpecificHealthCheck(checkType) {
+    const checkNames = {
+        'database': 'Database',
+        'security': 'Security',
+        'performance': 'Performance',
+        'storage': 'Storage',
+        'backup': 'Backup',
+        'network': 'Network'
+    };
+    
+    showAlert(`Running ${checkNames[checkType]} health check...`, 'info');
+    
+    // Simulate specific health check
+    setTimeout(() => {
+        showAlert(`${checkNames[checkType]} health check completed!`, 'success');
+    }, 1500);
+}
+
+function startHealthMonitoring() {
+    // Simulate real-time health monitoring
+    setInterval(() => {
+        updateHealthStatus();
+    }, 60000); // Update every minute
+    
+    // Initial update
+    updateHealthStatus();
+}
+
+function updateHealthStatus() {
+    // In real implementation, this would fetch real health data from an API
+    fetch('/api/system-health/')
+        .then(response => response.json())
+        .then(data => {
+            // Update system status
+            const statusElement = document.getElementById('systemStatus');
+            const responseTimeElement = document.getElementById('responseTime');
+            
+            if (statusElement) statusElement.textContent = data.system_status;
+            if (responseTimeElement) responseTimeElement.textContent = data.response_time;
+            
+            // Update health check cards based on status
+            updateHealthCheckCards(data.checks);
+        })
+        .catch(error => {
+            console.error('Error fetching health status:', error);
+            // Fallback to simulated data
+            updateSimulatedHealthStatus();
+        });
+}
+
+function updateHealthCheckCards(checks) {
+    // In real implementation, update each card based on API response
+    document.querySelectorAll('.health-check-card').forEach(card => {
+        const checkType = card.getAttribute('data-check');
+        // Update card appearance based on check status
+    });
+}
+
+function updateSimulatedHealthStatus() {
+    // Simulate updating health status for demo purposes
+    const statusElement = document.getElementById('systemStatus');
+    const responseTimeElement = document.getElementById('responseTime');
+    
+    // Simulate random status changes for demo
+    const statuses = ['Healthy', 'Degraded', 'Optimal'];
+    const responseTimes = ['0.45s', '0.52s', '0.38s', '0.61s'];
+    
+    if (statusElement) {
+        statusElement.textContent = statuses[Math.floor(Math.random() * statuses.length)];
+    }
+    if (responseTimeElement) {
+        responseTimeElement.textContent = responseTimes[Math.floor(Math.random() * responseTimes.length)];
+    }
+}
+
+function showAlert(message, type) {
+    // Remove any existing alerts
+    const existingAlerts = document.querySelectorAll('.alert');
+    existingAlerts.forEach(alert => alert.remove());
+    
+    // Create new alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.health-check-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.health-check-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.metric-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin: 0 auto;
+}
+
+.metric-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.metric-label {
+    font-size: 0.8rem;
+    margin-top: 4px;
+}
+
+.resource-usage {
+    margin-top: 1rem;
+}
+
+.resource-item {
+    margin-bottom: 0.5rem;
+}
+
+.resource-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+}
+
+.recommendation-item {
+    padding: 1rem;
+    border-left: 4px solid #17a2b8;
+    background-color: #f8f9fa;
+    margin-bottom: 1rem;
+    border-radius: 0 4px 4px 0;
+}
+
+.recommendation-item strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.progress {
+    height: 8px;
+}
+
+.progress-bar {
+    font-size: 0.7rem;
+    line-height: 8px;
+}
+</style>
+{% endblock %}

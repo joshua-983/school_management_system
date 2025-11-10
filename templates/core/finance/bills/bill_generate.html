@@ -174,36 +174,282 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Set default academic year (current year/next year)
-    const currentYear = new Date().getFullYear();
-    const nextYear = currentYear + 1;
-    document.querySelector('input[name="academic_year"]').value = `${currentYear}/${nextYear}`;
-    
-    // Set default due date (2 weeks from now)
-    const twoWeeksFromNow = new Date();
-    twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14);
-    const dueDateStr = twoWeeksFromNow.toISOString().split('T')[0];
-    document.querySelector('input[name="due_date"]').value = dueDateStr;
-    
-    // Form validation
     const form = document.getElementById('billGenerationForm');
-    form.addEventListener('submit', function(e) {
-        const academicYear = document.querySelector('input[name="academic_year"]').value;
-        const term = document.querySelector('select[name="term"]').value;
-        const dueDate = document.querySelector('input[name="due_date"]').value;
+    const classLevelsSelect = document.querySelector('select[name="class_levels"]');
+    const dueDateInput = document.querySelector('input[name="due_date"]');
+    const academicYearInput = document.querySelector('input[name="academic_year"]');
+    const termSelect = document.querySelector('select[name="term"]');
+
+    // Initialize datepicker with validation
+    if (dueDateInput) {
+        // Set min date to today
+        const today = new Date().toISOString().split('T')[0];
+        dueDateInput.min = today;
         
-        if (!academicYear || !term || !dueDate) {
-            e.preventDefault();
-            alert('Please fill in all required fields');
+        // Set default to 30 days from now
+        const defaultDueDate = new Date();
+        defaultDueDate.setDate(defaultDueDate.getDate() + 30);
+        dueDateInput.value = defaultDueDate.toISOString().split('T')[0];
+        
+        dueDateInput.addEventListener('change', validateDueDate);
+    }
+
+    // Academic year validation
+    if (academicYearInput) {
+        academicYearInput.addEventListener('blur', validateAcademicYear);
+        academicYearInput.addEventListener('input', formatAcademicYear);
+    }
+
+    // Class levels selection enhancement
+    if (classLevelsSelect) {
+        // Add "Select All" option
+        const selectAllOption = document.createElement('option');
+        selectAllOption.value = 'all';
+        selectAllOption.textContent = 'Select All Classes';
+        classLevelsSelect.insertBefore(selectAllOption, classLevelsSelect.firstChild);
+        
+        classLevelsSelect.addEventListener('change', function() {
+            if (this.value === 'all') {
+                // Select all options except "Select All"
+                Array.from(this.options).forEach(option => {
+                    if (option.value !== 'all') {
+                        option.selected = true;
+                    }
+                });
+            }
+            updateStudentCount();
+        });
+    }
+
+    // Real-time student count update
+    function updateStudentCount() {
+        const selectedClasses = Array.from(classLevelsSelect?.selectedOptions || [])
+            .map(opt => opt.value)
+            .filter(val => val !== 'all');
+            
+        const academicYear = academicYearInput?.value;
+        const term = termSelect?.value;
+
+        if (selectedClasses.length > 0 && academicYear && term) {
+            // Show loading
+            const previewCard = document.querySelector('.preview-card .stat-number');
+            const originalContent = previewCard?.textContent;
+            
+            if (previewCard) {
+                previewCard.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+            }
+
+            // Simulate API call to get student count
+            setTimeout(() => {
+                // This would be an actual API call in production
+                const mockCount = selectedClasses.length * 25; // Mock data
+                if (previewCard) {
+                    previewCard.textContent = mockCount;
+                }
+                
+                updateGenerationPreview();
+            }, 1000);
+        }
+    }
+
+    // Update generation preview
+    function updateGenerationPreview() {
+        const selectedClasses = Array.from(classLevelsSelect?.selectedOptions || [])
+            .map(opt => opt.value)
+            .filter(val => val !== 'all');
+            
+        const studentCount = parseInt(document.querySelector('.preview-card .stat-number:first-child')?.textContent || '0');
+        const categoryCount = parseInt(document.querySelector('.preview-card .stat-number:last-child')?.textContent || '0');
+        
+        const totalBills = studentCount * categoryCount;
+        
+        const previewSection = document.getElementById('generationPreview');
+        if (!previewSection) {
+            const cardBody = document.querySelector('.preview-card .card-body');
+            const previewDiv = document.createElement('div');
+            previewDiv.id = 'generationPreview';
+            previewDiv.className = 'mt-3 p-3 bg-light rounded';
+            previewDiv.innerHTML = `
+                <h6>Generation Preview</h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="fw-bold text-primary">${totalBills}</div>
+                        <small class="text-muted">Total Bills</small>
+                    </div>
+                    <div class="col-6">
+                        <div class="fw-bold text-success">GH₵${(totalBills * 500).toLocaleString()}</div>
+                        <small class="text-muted">Estimated Revenue</small>
+                    </div>
+                </div>
+            `;
+            cardBody?.appendChild(previewDiv);
+        } else {
+            previewSection.querySelector('.fw-bold:first-child').textContent = totalBills;
+            previewSection.querySelector('.fw-bold:last-child').textContent = 
+                `GH₵${(totalBills * 500).toLocaleString()}`;
+        }
+    }
+
+    // Form validation
+    function validateDueDate() {
+        const dueDate = new Date(dueDateInput.value);
+        const today = new Date();
+        
+        if (dueDate < today) {
+            showError(dueDateInput, 'Due date cannot be in the past');
             return false;
         }
         
-        // Confirm before generating
-        if (!confirm('Are you sure you want to generate bills? This action cannot be undone.')) {
-            e.preventDefault();
+        clearError(dueDateInput);
+        return true;
+    }
+
+    function validateAcademicYear() {
+        const pattern = /^\d{4}\/\d{4}$/;
+        if (!pattern.test(academicYearInput.value)) {
+            showError(academicYearInput, 'Academic year must be in format YYYY/YYYY (e.g., 2024/2025)');
             return false;
+        }
+        
+        const years = academicYearInput.value.split('/');
+        const startYear = parseInt(years[0]);
+        const endYear = parseInt(years[1]);
+        
+        if (endYear !== startYear + 1) {
+            showError(academicYearInput, 'The second year must be exactly one year after the first year');
+            return false;
+        }
+        
+        clearError(academicYearInput);
+        return true;
+    }
+
+    function formatAcademicYear() {
+        let value = this.value.replace(/[^0-9\/]/g, '');
+        
+        // Auto-insert slash after 4 digits
+        if (value.length === 4 && !value.includes('/')) {
+            value += '/';
+        }
+        
+        this.value = value;
+    }
+
+    function showError(input, message) {
+        clearError(input);
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'invalid-feedback d-block';
+        errorDiv.textContent = message;
+        
+        input.classList.add('is-invalid');
+        input.parentNode.appendChild(errorDiv);
+    }
+
+    function clearError(input) {
+        input.classList.remove('is-invalid');
+        const existingError = input.parentNode.querySelector('.invalid-feedback');
+        if (existingError) {
+            existingError.remove();
+        }
+    }
+
+    // Form submission handling
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validate all fields
+        const isDueDateValid = validateDueDate();
+        const isAcademicYearValid = validateAcademicYear();
+        const areClassesSelected = classLevelsSelect?.selectedOptions.length > 0 || 
+                                 (classLevelsSelect?.selectedOptions[0]?.value === 'all');
+
+        if (!areClassesSelected) {
+            showError(classLevelsSelect, 'Please select at least one class level');
+        } else {
+            clearError(classLevelsSelect);
+        }
+
+        if (isDueDateValid && isAcademicYearValid && areClassesSelected) {
+            // Show confirmation modal
+            showConfirmationModal();
         }
     });
+
+    function showConfirmationModal() {
+        const selectedClasses = Array.from(classLevelsSelect.selectedOptions)
+            .filter(opt => opt.value !== 'all')
+            .map(opt => opt.textContent);
+            
+        const modalHtml = `
+            <div class="modal fade" id="confirmationModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning text-dark">
+                            <h5 class="modal-title">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Confirm Bill Generation
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <h6>Generation Summary</h6>
+                                <ul class="mb-0">
+                                    <li>Academic Year: ${academicYearInput.value}</li>
+                                    <li>Term: ${termSelect.options[termSelect.selectedIndex].text}</li>
+                                    <li>Classes: ${selectedClasses.join(', ')}</li>
+                                    <li>Due Date: ${dueDateInput.value}</li>
+                                    <li>Estimated Bills: ${document.querySelector('#generationPreview .fw-bold:first-child')?.textContent || 'N/A'}</li>
+                                </ul>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="confirmGeneration">
+                                <label class="form-check-label" for="confirmGeneration">
+                                    I understand that this action will generate multiple bills and cannot be easily undone
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-warning" id="confirmGenerateBtn" disabled>
+                                <i class="bi bi-gear me-2"></i>Generate Bills
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('confirmationModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+        modal.show();
+        
+        // Enable generate button when checkbox is checked
+        document.getElementById('confirmGeneration').addEventListener('change', function() {
+            document.getElementById('confirmGenerateBtn').disabled = !this.checked;
+        });
+        
+        // Handle final confirmation
+        document.getElementById('confirmGenerateBtn').addEventListener('click', function() {
+            // Show loading state
+            this.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Generating...';
+            this.disabled = true;
+            
+            // Submit the form
+            form.submit();
+        });
+    }
+
+    // Initialize
+    updateStudentCount();
 });
 </script>
 {% endblock %}

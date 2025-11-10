@@ -23,7 +23,7 @@ from .models import (
 )
 
 User = apps.get_model(settings.AUTH_USER_MODEL)
-
+ 
 
 logger = logging.getLogger(__name__)
 

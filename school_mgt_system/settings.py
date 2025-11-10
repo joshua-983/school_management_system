@@ -69,7 +69,8 @@ THIRD_PARTY_APPS = [
     'admin_honeypot',
     'corsheaders',
     'compressor',
-    'django_cleanup.apps.CleanupConfig',  # Automatically delete old files
+    'django_cleanup.apps.CleanupConfig',
+    'widget_tweaks',
 ]
 
 # Local applications

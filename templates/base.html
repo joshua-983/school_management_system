@@ -14,6 +14,9 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Chart.js for Security Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
         :root {
             --primary-color: #3a7bd5;
@@ -25,6 +28,9 @@
         body {
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
         }
         
         /* Announcement Banner Styles */
@@ -111,6 +117,147 @@
             }
         }
         
+        /* Security Alert Container */
+        #security-alerts-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1060;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .security-alert {
+            border-left: 4px solid;
+            animation: slideInRight 0.3s ease-out;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .security-alert.alert-danger {
+            border-left-color: #dc3545;
+        }
+        
+        .security-alert.alert-warning {
+            border-left-color: #ffc107;
+        }
+        
+        .security-alert.alert-info {
+            border-left-color: #0dcaf0;
+        }
+        
+        .security-alert.alert-secondary {
+            border-left-color: #6c757d;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Threat level indicators */
+        .threat-level-critical {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .threat-level-high {
+            background: linear-gradient(135deg, #fd7e14, #e55a00);
+            color: white;
+        }
+        
+        .threat-level-medium {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: black;
+        }
+        
+        .threat-level-low {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            color: white;
+        }
+        
+        /* Security activity items */
+        .activity-item.critical {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        
+        .activity-item.high {
+            border-left-color: #fd7e14;
+            background-color: #fff3cd;
+        }
+        
+        .activity-item.medium {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        
+        .activity-item.low {
+            border-left-color: #20c997;
+            background-color: #d1ecf1;
+        }
+        
+        /* Security status badges */
+        .security-status-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .security-status-online {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .security-status-warning {
+            background-color: #ffc107;
+            color: black;
+        }
+        
+        .security-status-offline {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        /* Real-time monitoring pulse */
+        .pulse-warning {
+            animation: pulse-warning 2s infinite;
+        }
+        
+        @keyframes pulse-warning {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+            }
+        }
+        
+        .pulse-danger {
+            animation: pulse-danger 2s infinite;
+        }
+        
+        @keyframes pulse-danger {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+        
         /* Top Navigation */
         .top-navbar {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
@@ -189,6 +336,7 @@
             padding: 2rem;
             min-height: calc(100vh - var(--topbar-height));
             transition: margin-left 0.3s ease;
+            flex: 1;
         }
         
         /* Collapsed State */
@@ -245,6 +393,342 @@
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
+
+        /* Security Dashboard Specific Styles */
+        .severity-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .severity-critical { background-color: #dc3545; }
+        .severity-high { background-color: #fd7e14; }
+        .severity-medium { background-color: #ffc107; color: #000; }
+        .severity-low { background-color: #20c997; }
+        
+        .threat-indicators .indicator-item {
+            margin-bottom: 1rem;
+        }
+        
+        .health-item, .status-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .health-item:last-child, .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-item {
+            padding: 0.5rem;
+            border-left: 3px solid #007bff;
+            margin-bottom: 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .activity-item.critical { border-left-color: #dc3545; background-color: #f8d7da; }
+        .activity-item.high { border-left-color: #fd7e14; background-color: #fff3cd; }
+        .activity-item.medium { border-left-color: #ffc107; background-color: #fff3cd; }
+        .activity-item.low { border-left-color: #20c997; background-color: #d1ecf1; }
+        
+        .event-row:hover {
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+        
+        .bg-purple {
+            background-color: #6f42c1 !important;
+        }
+        
+        .quick-action-btn {
+            transition: all 0.3s ease;
+        }
+        
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .progress {
+            height: 8px;
+        }
+        
+        .progress-bar {
+            font-size: 0.7rem;
+            line-height: 8px;
+        }
+        
+        /* Pulse animation for real-time updates */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .pulse {
+            animation: pulse 1s infinite;
+        }
+        
+        /* Custom scrollbar for activity monitor */
+        .activity-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .activity-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .activity-list::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .activity-list::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Alert positioning for security dashboard */
+        .alert-dashboard {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        }
+        
+        /* Security Dashboard Layout */
+        .security-dashboard {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .security-stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid;
+            height: 100%;
+        }
+        
+        .security-stat-card.critical {
+            border-left-color: #dc3545;
+        }
+        
+        .security-stat-card.high {
+            border-left-color: #fd7e14;
+        }
+        
+        .security-stat-card.medium {
+            border-left-color: #ffc107;
+        }
+        
+        .security-stat-card.low {
+            border-left-color: #20c997;
+        }
+        
+        .security-quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .real-time-monitor {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            background: #f8f9fa;
+        }
+        
+        .security-chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 100%;
+        }
+        
+        /* Enhanced Footer Styles */
+        .site-footer {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: #ecf0f1;
+            padding: 3rem 0 1rem;
+            margin-top: auto;
+            position: relative;
+            z-index: 100;
+            margin-left: var(--sidebar-width);
+            transition: margin-left 0.3s ease;
+            width: calc(100% - var(--sidebar-width));
+        }
+        
+        .sidebar-collapsed .site-footer {
+            margin-left: 0;
+            width: 100%;
+        }
+        
+        .footer-section {
+            margin-bottom: 2rem;
+        }
+        
+        .footer-heading {
+            color: #3498db;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            font-size: 1.1rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .footer-heading::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 40px;
+            height: 2px;
+            background: #3498db;
+        }
+        
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .footer-links li {
+            margin-bottom: 0.6rem;
+        }
+        
+        .footer-links a {
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        .footer-links a:hover {
+            color: #3498db;
+            transform: translateX(5px);
+        }
+        
+        .footer-links a i {
+            margin-right: 8px;
+            font-size: 0.9rem;
+            width: 16px;
+            text-align: center;
+        }
+        
+        .contact-info {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .contact-info li {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .contact-info i {
+            color: #3498db;
+            margin-right: 10px;
+            margin-top: 3px;
+            font-size: 1rem;
+            width: 16px;
+            text-align: center;
+        }
+        
+        .social-links {
+            display: flex;
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: rgba(52, 152, 219, 0.1);
+            color: #3498db;
+            border-radius: 50%;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .social-links a:hover {
+            background: #3498db;
+            color: white;
+            transform: translateY(-3px);
+        }
+        
+        .newsletter-form {
+            display: flex;
+            margin-top: 1rem;
+        }
+        
+        .newsletter-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px 0 0 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .newsletter-input::placeholder {
+            color: #bdc3c7;
+        }
+        
+        .newsletter-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .newsletter-btn:hover {
+            background: #2980b9;
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .copyright {
+            text-align: center;
+            color: #95a5a6;
+            margin-bottom: 0;
+        }
+        
+        .footer-badges {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 1rem;
+        }
+        
+        .badge-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #bdc3c7;
+        }
         
         /* Responsive */
         @media (max-width: 992px) {
@@ -264,6 +748,11 @@
                 margin-left: 0;
             }
             
+            .site-footer {
+                margin-left: 0;
+                width: 100%;
+            }
+            
             .sidebar-mobile-visible .sidebar {
                 transform: translateX(0);
             }
@@ -281,6 +770,36 @@
             
             .sidebar-mobile-visible .sidebar-overlay {
                 display: block;
+            }
+            
+            #security-alerts-container {
+                top: 70px;
+                right: 10px;
+                max-width: 300px;
+            }
+            
+            .security-quick-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            /* Responsive Footer */
+            .footer-section {
+                text-align: center;
+            }
+            
+            .footer-heading::after {
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            
+            .social-links {
+                justify-content: center;
+            }
+            
+            .newsletter-form {
+                max-width: 300px;
+                margin-left: auto;
+                margin-right: auto;
             }
         }
         
@@ -324,6 +843,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Security Alerts Container -->
+    <div id="security-alerts-container"></div>
 
     <!-- Side Navigation -->
     <nav class="sidebar">
@@ -658,6 +1180,56 @@
                 </div>
             </li>
             {% endif %}
+
+            <!-- Audit & Security Menu - For Admin Only -->
+            {% if user.is_superuser %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#auditMenu">
+                    <i class="bi bi-shield-check"></i>
+                    <span>Audit & Security</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="auditMenu">
+                    <!-- Security Dashboard - Integrated into Audit & Security -->
+                    <a class="nav-link" href="{% url 'security_dashboard' %}">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Security Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_dashboard' %}">
+                        <i class="bi bi-graph-up"></i>
+                        <span>Audit Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_log_list' %}">
+                        <i class="bi bi-list-check"></i>
+                        <span>Audit Logs</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'security_events' %}">
+                        <i class="bi bi-shield-exclamation"></i>
+                        <span>Security Events</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'alert_rule_list' %}">
+                        <i class="bi bi-bell"></i>
+                        <span>Alert Rules</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'advanced_analytics' %}">
+                        <i class="bi bi-graph-up-arrow"></i>
+                        <span>Advanced Analytics</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_reports' %}">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <span>Audit Reports</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'retention_policies' %}">
+                        <i class="bi bi-archive"></i>
+                        <span>Retention Policies</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'system_health_check' %}">
+                        <i class="bi bi-heart-pulse"></i>
+                        <span>System Health</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
             
             <!-- Analytics (for admin/teachers) -->
             {% if user.is_superuser or user.teacher %}
@@ -701,6 +1273,16 @@
             <div class="navbar-collapse">
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
+                    <!-- Security Status Indicator (Admin Only) -->
+                    {% if user.is_superuser %}
+                    <li class="nav-item me-2">
+                        <div class="nav-link position-relative" id="securityStatusIndicator">
+                            <i class="bi bi-shield-check fs-6 text-success" id="securityStatusIcon"></i>
+                            <span class="security-status-badge security-status-online ms-1" id="securityStatusBadge">Secure</span>
+                        </div>
+                    </li>
+                    {% endif %}
+                    
                     <!-- Notifications -->
                     <li class="nav-item dropdown me-3">
                         <a class="nav-link position-relative" href="#" id="notificationsMenu" data-bs-toggle="dropdown">
@@ -801,36 +1383,123 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-dark text-white py-4 mt-auto">
+    <!-- Enhanced Footer -->
+    <footer class="site-footer">
         <div class="container-fluid">
             <div class="row">
-                <div class="col-md-4">
-                    <h5>Judith's International School</h5>
-                    <p class="text-muted">Providing quality education since 2005</p>
+                <!-- School Information -->
+                <div class="col-lg-3 col-md-6 footer-section">
+                    <h5 class="footer-heading">About Our School</h5>
+                    <p class="mb-3" style="color: #bdc3c7; line-height: 1.6;">
+                        Judith's International School has been providing quality education since 2005, 
+                        nurturing young minds to become global citizens and future leaders.
+                    </p>
+                    <div class="social-links">
+                        <a href="#" title="Facebook"><i class="bi bi-facebook"></i></a>
+                        <a href="#" title="Twitter"><i class="bi bi-twitter"></i></a>
+                        <a href="#" title="Instagram"><i class="bi bi-instagram"></i></a>
+                        <a href="#" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                        <a href="#" title="YouTube"><i class="bi bi-youtube"></i></a>
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <h5>Quick Links</h5>
-                    <ul class="list-unstyled">
-                        <li><a href="{% url 'home' %}" class="text-white">Home</a></li>
+                
+                <!-- Quick Links -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Quick Links</h5>
+                    <ul class="footer-links">
+                        <li><a href="{% url 'home' %}"><i class="bi bi-house-door"></i> Home</a></li>
                         {% if user.is_authenticated %}
-                        <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}" class="text-white">Attendance</a></li>
-                        <li><a href="{% url 'grade_list' %}" class="text-white">Grades</a></li>
+                            <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}"><i class="bi bi-calendar-check"></i> Attendance</a></li>
+                            <li><a href="{% url 'grade_list' %}"><i class="bi bi-clipboard-data"></i> Grades</a></li>
+                            <li><a href="{% url 'assignment_list' %}"><i class="bi bi-journal-text"></i> Assignments</a></li>
+                        {% else %}
+                            <li><a href="{% url 'signin' %}"><i class="bi bi-box-arrow-in-right"></i> Sign In</a></li>
+                            <li><a href="{% url 'signup' %}"><i class="bi bi-person-plus"></i> Sign Up</a></li>
                         {% endif %}
+                        <li><a href="#"><i class="bi bi-info-circle"></i> About Us</a></li>
+                        <li><a href="#"><i class="bi bi-telephone"></i> Contact</a></li>
                     </ul>
                 </div>
-                <div class="col-md-4">
-                    <h5>Contact Us</h5>
-                    <ul class="list-unstyled text-muted">
-                        <li><i class="bi bi-envelope me-2"></i> mensahbedijosh983@gmail.com</li>
-                        <li><i class="bi bi-telephone me-2"></i> +2330541345564</li>
-                        <li><i class="bi bi-geo-alt me-2"></i> judithschool.edu</li>
+                
+                <!-- Academic Resources -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Resources</h5>
+                    <ul class="footer-links">
+                        <li><a href="#"><i class="bi bi-download"></i> Downloads</a></li>
+                        <li><a href="#"><i class="bi bi-book"></i> Library</a></li>
+                        <li><a href="#"><i class="bi bi-calendar-event"></i> Events</a></li>
+                        <li><a href="#"><i class="bi bi-newspaper"></i> News</a></li>
+                        <li><a href="#"><i class="bi bi-question-circle"></i> Support</a></li>
                     </ul>
+                </div>
+                
+                <!-- Contact Information -->
+                <div class="col-lg-3 col-md-6 footer-section">
+                    <h5 class="footer-heading">Contact Us</h5>
+                    <ul class="contact-info">
+                        <li>
+                            <i class="bi bi-geo-alt"></i>
+                            <div>
+                                <strong>Main Campus</strong><br>
+                                123 Education Street<br>
+                                Academic City, AC 12345
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-telephone"></i>
+                            <div>
+                                <strong>Phone:</strong><br>
+                                +233 054 134 5564
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-envelope"></i>
+                            <div>
+                                <strong>Email:</strong><br>
+                                mensahbedijosh983@gmail.com
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-clock"></i>
+                            <div>
+                                <strong>Office Hours:</strong><br>
+                                Mon-Fri: 8:00 AM - 4:00 PM
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Newsletter -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Newsletter</h5>
+                    <p style="color: #bdc3c7; font-size: 0.9rem;">
+                        Subscribe to our newsletter for updates on school events and important announcements.
+                    </p>
+                    <form class="newsletter-form">
+                        <input type="email" class="newsletter-input" placeholder="Your email" required>
+                        <button type="submit" class="newsletter-btn">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
-            <hr class="my-3 bg-secondary">
-            <div class="text-center">
-                <p class="mb-0">&copy; {% now "Y" %} Judith's International School. All rights reserved.</p>
+            
+            <!-- Footer Bottom -->
+            <div class="footer-bottom">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <p class="copyright">
+                            &copy; {% now "Y" %} Judith's International School. All rights reserved.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="footer-badges">
+                            <span class="badge-item">Accredited</span>
+                            <span class="badge-item">ISO Certified</span>
+                            <span class="badge-item">Safe School</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </footer>
@@ -842,6 +1511,710 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     
     <script>
+        // Security Dashboard Integration
+        class SecurityDashboardManager {
+            constructor() {
+                this.isSecurityPage = window.location.pathname.includes('security-dashboard') || 
+                                    window.location.pathname.includes('security-events') ||
+                                    window.location.pathname.includes('audit-dashboard');
+                this.init();
+            }
+
+            init() {
+                if (this.isSecurityPage) {
+                    this.initializeSecurityDashboard();
+                    this.startSecurityMonitoring();
+                }
+                
+                // Always initialize security notifications and status
+                this.initializeSecurityNotifications();
+                this.initializeSecurityStatus();
+            }
+
+            initializeSecurityDashboard() {
+                console.log('Initializing Security Dashboard...');
+                
+                // Load real-time security data
+                this.loadSecurityStats();
+                
+                // Initialize WebSocket connection for real-time updates
+                this.initSecurityWebSocket();
+                
+                // Set up auto-refresh
+                this.setupAutoRefresh();
+            }
+
+            async loadSecurityStats() {
+                try {
+                    const response = await fetch('/api/security/stats/');
+                    const data = await response.json();
+                    
+                    this.updateSecurityStats(data);
+                } catch (error) {
+                    console.error('Error loading security stats:', error);
+                }
+            }
+
+            updateSecurityStats(stats) {
+                // Update security overview cards
+                if (document.getElementById('totalEvents')) {
+                    document.getElementById('totalEvents').textContent = stats.total_events || 0;
+                }
+                if (document.getElementById('criticalEvents')) {
+                    document.getElementById('criticalEvents').textContent = stats.critical_events || 0;
+                }
+                if (document.getElementById('activeRules')) {
+                    document.getElementById('activeRules').textContent = stats.active_rules || 0;
+                }
+                
+                // Update threat level
+                if (document.getElementById('threatLevel')) {
+                    document.getElementById('threatLevel').textContent = stats.threat_level || 'Medium';
+                    document.getElementById('threatLevel').className = `badge threat-level-${stats.threat_level?.toLowerCase() || 'medium'}`;
+                }
+            }
+
+            initSecurityWebSocket() {
+                // WebSocket implementation for real-time security updates
+                try {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws/security/`;
+                    
+                    this.socket = new WebSocket(wsUrl);
+                    
+                    this.socket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleSecurityUpdate(data);
+                    };
+                    
+                    this.socket.onclose = () => {
+                        console.log('Security WebSocket disconnected. Reconnecting...');
+                        setTimeout(() => this.initSecurityWebSocket(), 5000);
+                    };
+                    
+                } catch (error) {
+                    console.warn('WebSocket not available:', error);
+                }
+            }
+
+            handleSecurityUpdate(data) {
+                switch (data.type) {
+                    case 'security_event':
+                        this.handleNewSecurityEvent(data.event);
+                        break;
+                    case 'threat_level_update':
+                        this.updateThreatLevel(data.level);
+                        break;
+                    case 'system_status':
+                        this.updateSystemStatus(data.status);
+                        break;
+                }
+            }
+
+            handleNewSecurityEvent(event) {
+                // Show notification for new security events
+                this.showSecurityAlert(event);
+                
+                // Update activity monitor
+                this.addSecurityActivity(event);
+                
+                // Refresh stats if on security dashboard
+                if (this.isSecurityPage) {
+                    this.loadSecurityStats();
+                }
+            }
+
+            showSecurityAlert(event) {
+                const alertLevel = this.getAlertLevel(event.severity);
+                
+                const alertHTML = `
+                    <div class="alert alert-${alertLevel} alert-dismissible fade show security-alert" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-exclamation me-2"></i>
+                            <div>
+                                <strong>Security Alert: ${event.title}</strong>
+                                <div class="small">${event.description}</div>
+                                <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                // Add to security alerts container
+                const alertContainer = document.getElementById('security-alerts-container');
+                if (alertContainer) {
+                    alertContainer.insertAdjacentHTML('afterbegin', alertHTML);
+                    
+                    // Auto-remove after 10 seconds
+                    setTimeout(() => {
+                        const alertElement = alertContainer.querySelector('.security-alert');
+                        if (alertElement) {
+                            alertElement.remove();
+                        }
+                    }, 10000);
+                }
+            }
+
+            getAlertLevel(severity) {
+                const levels = {
+                    'CRITICAL': 'danger',
+                    'HIGH': 'warning',
+                    'MEDIUM': 'info',
+                    'LOW': 'secondary'
+                };
+                return levels[severity] || 'info';
+            }
+
+            addSecurityActivity(event) {
+                const activityList = document.getElementById('activityList');
+                if (!activityList) return;
+                
+                const activityItem = document.createElement('div');
+                activityItem.className = `activity-item ${event.severity.toLowerCase()}`;
+                activityItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${event.user || 'System'}</strong>
+                            <small class="d-block text-muted">${event.description}</small>
+                        </div>
+                        <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+                
+                activityList.insertBefore(activityItem, activityList.firstChild);
+                
+                // Limit activities
+                if (activityList.children.length > 10) {
+                    activityList.removeChild(activityList.lastChild);
+                }
+            }
+
+            updateThreatLevel(level) {
+                const threatLevelElement = document.getElementById('threatLevel');
+                if (threatLevelElement) {
+                    threatLevelElement.textContent = level;
+                    threatLevelElement.className = `badge threat-level-${level.toLowerCase()}`;
+                }
+                
+                // Update security status indicator
+                this.updateSecurityStatusIndicator(level);
+            }
+
+            updateSystemStatus(status) {
+                // Update system status indicators
+                console.log('System status update:', status);
+            }
+
+            setupAutoRefresh() {
+                // Auto-refresh security data every 30 seconds
+                setInterval(() => {
+                    if (this.isSecurityPage && document.visibilityState === 'visible') {
+                        this.loadSecurityStats();
+                    }
+                }, 30000);
+            }
+
+            startSecurityMonitoring() {
+                // Monitor for security-related activities
+                this.monitorUserActivity();
+                this.monitorNetworkRequests();
+            }
+
+            monitorUserActivity() {
+                // Track user activity for security analysis
+                let lastActivity = Date.now();
+                
+                document.addEventListener('click', () => {
+                    lastActivity = Date.now();
+                });
+                
+                document.addEventListener('keypress', () => {
+                    lastActivity = Date.now();
+                });
+                
+                // Check for inactivity
+                setInterval(() => {
+                    const inactiveTime = Date.now() - lastActivity;
+                    if (inactiveTime > 300000) { // 5 minutes
+                        console.log('User inactive for 5 minutes');
+                    }
+                }, 60000);
+            }
+
+            monitorNetworkRequests() {
+                // Monitor AJAX requests for suspicious activity
+                const originalFetch = window.fetch;
+                
+                window.fetch = function(...args) {
+                    const startTime = Date.now();
+                    
+                    return originalFetch.apply(this, args).then(response => {
+                        const duration = Date.now() - startTime;
+                        
+                        // Log suspiciously long requests
+                        if (duration > 10000) { // 10 seconds
+                            console.warn('Long network request detected:', args[0], duration);
+                        }
+                        
+                        return response;
+                    });
+                };
+            }
+
+            initializeSecurityNotifications() {
+                // Check for security notifications on page load
+                this.checkSecurityNotifications();
+                
+                // Set up periodic security checks
+                setInterval(() => this.checkSecurityNotifications(), 60000); // Every minute
+            }
+
+            async checkSecurityNotifications() {
+                try {
+                    const response = await fetch('/api/security/notifications/');
+                    const notifications = await response.json();
+                    
+                    notifications.forEach(notification => {
+                        if (!notification.dismissed) {
+                            this.showSecurityNotification(notification);
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error checking security notifications:', error);
+                }
+            }
+
+            showSecurityNotification(notification) {
+                // Implementation for showing security notifications
+                console.log('Security Notification:', notification);
+            }
+
+            initializeSecurityStatus() {
+                // Initialize security status indicator
+                this.updateSecurityStatusIndicator('medium');
+                
+                // Update status periodically
+                setInterval(() => {
+                    this.checkSecurityStatus();
+                }, 30000);
+            }
+
+            async checkSecurityStatus() {
+                try {
+                    const response = await fetch('/api/security/status/');
+                    const status = await response.json();
+                    this.updateSecurityStatusIndicator(status.level);
+                } catch (error) {
+                    console.error('Error checking security status:', error);
+                    this.updateSecurityStatusIndicator('warning');
+                }
+            }
+
+            updateSecurityStatusIndicator(level) {
+                const statusIcon = document.getElementById('securityStatusIcon');
+                const statusBadge = document.getElementById('securityStatusBadge');
+                
+                if (!statusIcon || !statusBadge) return;
+                
+                const statusConfig = {
+                    'low': { icon: 'bi-shield-check', color: 'success', text: 'Secure' },
+                    'medium': { icon: 'bi-shield-exclamation', color: 'warning', text: 'Warning' },
+                    'high': { icon: 'bi-shield-x', color: 'danger', text: 'At Risk' },
+                    'critical': { icon: 'bi-shield-fill-x', color: 'danger', text: 'Critical' }
+                };
+                
+                const config = statusConfig[level] || statusConfig.medium;
+                
+                statusIcon.className = `bi ${config.icon} fs-6 text-${config.color}`;
+                statusBadge.className = `security-status-badge security-status-${config.color} ms-1`;
+                statusBadge.textContent = config.text;
+                
+                // Add pulse animation for critical status
+                if (level === 'critical') {
+                    statusIcon.classList.add('pulse-danger');
+                } else if (level === 'high') {
+                    statusIcon.classList.add('pulse-warning');
+                } else {
+                    statusIcon.classList.remove('pulse-danger', 'pulse-warning');
+                }
+            }
+        }
+
+        // Security Dashboard Functions
+        let autoRefreshInterval;
+        let severityChart;
+
+        function initializeSecurityDashboard() {
+            console.log('Initializing security dashboard...');
+            
+            // Initialize severity chart if element exists
+            const severityChartElement = document.getElementById('severityChart');
+            if (severityChartElement) {
+                initializeSeverityChart();
+            }
+            
+            // Load threat indicators if element exists
+            const threatIndicators = document.getElementById('failedLogins');
+            if (threatIndicators) {
+                loadThreatIndicators();
+            }
+            
+            // Update last update time
+            updateLastUpdateTime();
+            
+            // Start auto-refresh if enabled
+            const autoRefreshCheckbox = document.getElementById('autoRefresh');
+            if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
+                startAutoRefresh();
+            }
+        }
+
+        function initializeSeverityChart() {
+            const ctx = document.getElementById('severityChart').getContext('2d');
+            
+            // Default data - in production, this would come from the backend
+            const severityData = [
+                { severity: 'LOW', count: 15 },
+                { severity: 'MEDIUM', count: 8 },
+                { severity: 'HIGH', count: 3 },
+                { severity: 'CRITICAL', count: 2 }
+            ];
+            
+            const labels = [];
+            const data = [];
+            const backgroundColors = [
+                '#20c997', // Low - green
+                '#ffc107', // Medium - yellow
+                '#fd7e14', // High - orange
+                '#dc3545'  // Critical - red
+            ];
+            
+            // Process severity data for chart
+            severityData.forEach(item => {
+                labels.push(item.severity);
+                data.push(item.count);
+            });
+            
+            severityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadThreatIndicators() {
+            // Simulate loading threat indicator data
+            setTimeout(() => {
+                const failedLoginsElement = document.getElementById('failedLogins');
+                const failedLoginsBar = document.getElementById('failedLoginsBar');
+                const suspiciousIPs = document.getElementById('suspiciousIPs');
+                const suspiciousIPsBar = document.getElementById('suspiciousIPsBar');
+                const dataExports = document.getElementById('dataExports');
+                const dataExportsBar = document.getElementById('dataExportsBar');
+                const privilegeChanges = document.getElementById('privilegeChanges');
+                const privilegeChangesBar = document.getElementById('privilegeChangesBar');
+                
+                if (failedLoginsElement) failedLoginsElement.textContent = '12';
+                if (failedLoginsBar) failedLoginsBar.style.width = '60%';
+                
+                if (suspiciousIPs) suspiciousIPs.textContent = '3';
+                if (suspiciousIPsBar) suspiciousIPsBar.style.width = '30%';
+                
+                if (dataExports) dataExports.textContent = '8';
+                if (dataExportsBar) dataExportsBar.style.width = '40%';
+                
+                if (privilegeChanges) privilegeChanges.textContent = '2';
+                if (privilegeChangesBar) privilegeChangesBar.style.width = '20%';
+            }, 1000);
+        }
+
+        function startRealTimeMonitoring() {
+            // Simulate real-time activity updates
+            updateActivityMonitor();
+            
+            // Update activity monitor every 30 seconds
+            setInterval(updateActivityMonitor, 30000);
+        }
+
+        function updateActivityMonitor() {
+            const activityList = document.getElementById('activityList');
+            if (!activityList) return;
+            
+            // Simulate new activities
+            const activities = [
+                { type: 'login', user: 'admin', severity: 'low', message: 'Successful login from trusted IP' },
+                { type: 'alert', user: 'system', severity: 'high', message: 'Multiple failed login attempts detected' },
+                { type: 'export', user: 'user123', severity: 'medium', message: 'Large data export initiated' },
+                { type: 'config', user: 'admin', severity: 'low', message: 'Security settings updated' },
+                { type: 'alert', user: 'system', severity: 'critical', message: 'Suspicious database query detected' }
+            ];
+            
+            const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+            
+            const activityItem = document.createElement('div');
+            activityItem.className = `activity-item ${randomActivity.severity}`;
+            activityItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong>${randomActivity.user}</strong>
+                        <small class="d-block text-muted">${randomActivity.message}</small>
+                    </div>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                </div>
+            `;
+            
+            // Add new activity at the top
+            activityList.insertBefore(activityItem, activityList.firstChild);
+            
+            // Limit to 10 activities
+            if (activityList.children.length > 10) {
+                activityList.removeChild(activityList.lastChild);
+            }
+        }
+
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(refreshDashboard, 30000); // Refresh every 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Security Dashboard Event Handlers
+        function refreshDashboard() {
+            showAlert('Refreshing dashboard...', 'info');
+            
+            // Add pulse animation to indicate refresh
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.add('pulse');
+            });
+            
+            setTimeout(() => {
+                // Remove pulse animation
+                document.querySelectorAll('.card').forEach(card => {
+                    card.classList.remove('pulse');
+                });
+                
+                // Reload the page for complete refresh
+                window.location.reload();
+            }, 1000);
+        }
+
+        function runSecurityScan() {
+            showAlert('Initiating comprehensive security scan...', 'warning');
+            
+            // Simulate scan progress
+            let progress = 0;
+            const scanInterval = setInterval(() => {
+                progress += 10;
+                showAlert(`Security scan in progress... ${progress}%`, 'info');
+                
+                if (progress >= 100) {
+                    clearInterval(scanInterval);
+                    setTimeout(() => {
+                        showAlert('Security scan completed. No critical threats found.', 'success');
+                    }, 1000);
+                }
+            }, 500);
+        }
+
+        function generateSecurityReport() {
+            showAlert('Generating security report...', 'info');
+            
+            setTimeout(() => {
+                // Simulate report generation
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = 'security_report.pdf';
+                link.click();
+                
+                showAlert('Security report generated successfully!', 'success');
+            }, 2000);
+        }
+
+        function filterEvents(severity) {
+            const rows = document.querySelectorAll('.event-row');
+            
+            rows.forEach(row => {
+                if (severity === 'all' || row.getAttribute('data-severity') === severity) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            showAlert(`Filtered events by severity: ${severity}`, 'info');
+        }
+
+        function viewEventDetails(eventId) {
+            window.location.href = `/audit/security-events/${eventId}/`;
+        }
+
+        function resolveEvent(eventId) {
+            if (confirm('Are you sure you want to mark this event as resolved?')) {
+                fetch(`/audit/security-events/${eventId}/resolve/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCSRFToken(),
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Event marked as resolved successfully!', 'success');
+                        // Reload the event row or the entire table
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showAlert('Error resolving event: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showAlert('Error resolving event: ' + error, 'danger');
+                });
+            }
+        }
+
+        function runComplianceCheck() {
+            showAlert('Running compliance check...', 'info');
+            window.location.href = "{% url 'advanced_analytics' %}";
+        }
+
+        function runVulnerabilityScan() {
+            showAlert('Starting vulnerability assessment...', 'warning');
+            // This would typically open a vulnerability scanning interface
+        }
+
+        function viewAnalytics() {
+            window.location.href = "{% url 'advanced_analytics' %}";
+        }
+
+        function manageAlertRules() {
+            window.location.href = "{% url 'alert_rule_list' %}";
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = now.toLocaleTimeString();
+            }
+        }
+
+        function showAlert(message, type) {
+            // Remove any existing alerts
+            const existingAlerts = document.querySelectorAll('.alert-dashboard');
+            existingAlerts.forEach(alert => alert.remove());
+            
+            // Create new alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-dashboard`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Export dashboard data
+        function exportDashboardData() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                total_events: document.getElementById('totalEvents')?.textContent || 0,
+                critical_events: document.getElementById('criticalEvents')?.textContent || 0,
+                threat_level: document.getElementById('threatLevel')?.textContent || 'Unknown'
+            };
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "security_dashboard_export.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            
+            showAlert('Dashboard data exported successfully!', 'success');
+        }
+
+        // Auto-refresh toggle for security dashboard
+        const autoRefreshCheckbox = document.getElementById('autoRefresh');
+        if (autoRefreshCheckbox) {
+            autoRefreshCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                    showAlert('Auto-refresh enabled', 'success');
+                } else {
+                    stopAutoRefresh();
+                    showAlert('Auto-refresh disabled', 'warning');
+                }
+            });
+        }
+
+        // Keyboard shortcuts for security dashboard
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey || event.metaKey) {
+                switch(event.key) {
+                    case 'r':
+                        event.preventDefault();
+                        refreshDashboard();
+                        break;
+                    case 's':
+                        event.preventDefault();
+                        runSecurityScan();
+                        break;
+                    case 'f':
+                        event.preventDefault();
+                        const searchInput = document.querySelector('#eventsTable_filter input');
+                        if (searchInput) searchInput.focus();
+                        break;
+                }
+            }
+        });
+
         // Toggle sidebar
         function toggleSidebar() {
             document.body.classList.toggle('sidebar-collapsed');
@@ -1010,111 +2383,15 @@
             }, 1000);
         }
 
-        // WebSocket handling for real-time announcements and notifications
-        function connectToWebSocket() {
-            // Replace with your actual WebSocket URL
-            const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-            const wsUrl = `${wsScheme}://${window.location.host}/ws/notifications/`;
+        // Newsletter form submission
+        document.querySelector('.newsletter-form')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = this.querySelector('.newsletter-input').value;
             
-            try {
-                const ws = new WebSocket(wsUrl);
-                
-                ws.onopen = function() {
-                    console.log('WebSocket connection established');
-                };
-                
-                ws.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        
-                        if (data.type === 'announcement') {
-                            showAnnouncement(data.announcement);
-                        } else if (data.type === 'notification_update') {
-                            handleNotificationUpdate(data);
-                        }
-                    } catch (error) {
-                        console.error('Error parsing WebSocket message:', error);
-                    }
-                };
-                
-                ws.onclose = function(event) {
-                    console.log('WebSocket connection closed:', event.code, event.reason);
-                    // Attempt to reconnect after 5 seconds
-                    setTimeout(connectToWebSocket, 5000);
-                };
-                
-                ws.onerror = function(error) {
-                    console.error('WebSocket error:', error);
-                };
-                
-                return ws;
-            } catch (error) {
-                console.error('WebSocket connection failed:', error);
-                // Retry connection after 10 seconds
-                setTimeout(connectToWebSocket, 10000);
-            }
-        }
-
-        // Handle notification updates from WebSocket
-        function handleNotificationUpdate(data) {
-            // Update notification badge count
-            const badge = document.querySelector('.notification-badge');
-            if (badge) {
-                if (data.unread_count > 0) {
-                    badge.textContent = data.unread_count;
-                    badge.style.display = 'block';
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-            
-            // If it's a new notification, show a toast or update the dropdown
-            if (data.action === 'new_notification') {
-                showNewNotificationToast(data);
-            }
-        }
-
-        // Show toast for new notifications
-        function showNewNotificationToast(data) {
-            // Create a toast notification
-            const toastContainer = document.getElementById('toast-container');
-            if (!toastContainer) {
-                // Create toast container if it doesn't exist
-                const container = document.createElement('div');
-                container.id = 'toast-container';
-                container.className = 'toast-container position-fixed top-0 end-0 p-3';
-                container.style.zIndex = '9999';
-                document.body.appendChild(container);
-            }
-            
-            const toastId = 'toast-' + Date.now();
-            const toastHtml = `
-                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="toast-header">
-                        <i class="bi bi-bell-fill text-primary me-2"></i>
-                        <strong class="me-auto">New Notification</strong>
-                        <small class="text-muted">just now</small>
-                        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-                    </div>
-                    <div class="toast-body">
-                        <strong>${data.notification_title}</strong><br>
-                        ${data.notification_message}
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('toast-container').insertAdjacentHTML('beforeend', toastHtml);
-            
-            // Show the toast
-            const toastElement = document.getElementById(toastId);
-            const toast = new bootstrap.Toast(toastElement);
-            toast.show();
-            
-            // Remove toast from DOM after it's hidden
-            toastElement.addEventListener('hidden.bs.toast', function () {
-                toastElement.remove();
-            });
-        }
+            // Simulate newsletter subscription
+            showAlert('Thank you for subscribing to our newsletter!', 'success');
+            this.querySelector('.newsletter-input').value = '';
+        });
 
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1123,9 +2400,17 @@
             // Load active announcements
             loadActiveAnnouncements();
             
-            // Connect to WebSocket for real-time updates
-            // Uncomment when WebSocket is set up
-            // connectToWebSocket();
+            // Initialize security dashboard manager
+            window.securityDashboard = new SecurityDashboardManager();
+            
+            // Initialize security dashboard if we're on that page
+            initializeSecurityDashboard();
+            
+            // Start real-time monitoring if we're on security dashboard
+            const securityDashboardElements = document.querySelectorAll('.severity-badge, .threat-indicators');
+            if (securityDashboardElements.length > 0) {
+                startRealTimeMonitoring();
+            }
             
             // Mobile sidebar handling
             if (window.innerWidth < 992) {

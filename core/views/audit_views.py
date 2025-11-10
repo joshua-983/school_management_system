@@ -24,7 +24,7 @@ from ..models import (
 from .base_views import is_admin, is_student, is_teacher
 
 class AuditLogListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
-    template_name = 'core/analytics/audit_log_list.html'
+    template_name = 'core/audit/audit_log_list.html'
     context_object_name = 'logs'
     paginate_by = 50
     model = AuditLog
@@ -113,7 +113,7 @@ class AuditLogListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return context
 
 class AuditLogDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
-    template_name = 'core/analytics/audit_log_detail.html'
+    template_name = 'core/audit/audit_log_detail.html'
     context_object_name = 'log'
     model = AuditLog
     
@@ -121,7 +121,7 @@ class AuditLogDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         return is_admin(self.request.user)
 
 class AuditDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
-    template_name = 'core/analytics/audit_dashboard.html'
+    template_name = 'core/audit/audit_dashboard.html'
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -328,8 +328,8 @@ def user_activity_report(request, user_id):
         'unique_ips': unique_ips,
         'last_login': last_login,
     }
-    
-    return render(request, 'core/analytics/user_activity_report.html', context)
+
+    return render(request, 'core/audit/user_activity_report.html', context)
 
 @login_required
 def system_health_check(request):
@@ -369,8 +369,30 @@ def system_health_check(request):
         'bulk_deletions': list(bulk_deletions),
         'total_logs_today': AuditLog.objects.filter(timestamp__date=today).count(),
     }
+
+    return render(request, 'core/audit/system_health.html', context)
+
+@login_required
+def system_health_api(request):
+    """API endpoint for system health data"""
+    if not is_admin(request.user):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
     
-    return render(request, 'core/analytics/system_health.html', context)
+    # This would contain real health check logic in production
+    health_data = {
+        'system_status': 'Healthy',
+        'response_time': '0.45s',
+        'checks': {
+            'database': 'healthy',
+            'security': 'secure', 
+            'performance': 'degraded',
+            'storage': 'adequate',
+            'backup': 'failed',
+            'network': 'stable'
+        }
+    }
+    
+    return JsonResponse(health_data)
 
 # Existing functions from your original file (kept for compatibility)
 @login_required

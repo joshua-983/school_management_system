@@ -1,7 +1,6 @@
 # core/urls.py - FIXED VERSION
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views.SecurityEvent_views import SecurityEventListView
 from . import views
 
 # Import views from modular files
@@ -15,13 +14,16 @@ from .views.student_views import (
     StudentDeleteView, StudentGradeListView, StudentAttendanceView, 
     StudentFeeListView, StudentProfileView, StudentDashboardView
 )
+# ==============================
+# PARENT VIEWS IMPORTS - FIXED
+# ==============================
 from .views.parents_views import (
     ParentCreateView, ParentUpdateView, ParentDeleteView,
     ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
     ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
     parent_dashboard,
     ParentAnnouncementListView, ParentMessageListView,
-    ParentMessageCreateView, ParentCalendarView, ParentMessageDetailView,
+    ParentMessageCreateView, ParentMessageDetailView, ParentCalendarView,  # ADDED ParentCalendarView
     ParentDirectoryView, BulkParentMessageView, ParentCommunicationLogView, ParentEngagementDashboardView
 )
 from .views.fee_views import (
@@ -69,7 +71,8 @@ from .views.grade_views import (
 )
 
 from .views.reportcard_views import ReportCardDashboardView, CreateReportCardView, ReportCardView, ReportCardPDFView, SaveReportCardView
-from .views.analytics_views import AnalyticsDashboardView
+from .views.analytics_views import ComprehensiveAnalyticsDashboardView
+
 from .views.audit_views import (
     AuditLogListView, AuditLogDetailView, AuditDashboardView, 
     audit_export_csv, audit_statistics_api, user_activity_report, 
@@ -77,12 +80,15 @@ from .views.audit_views import (
 )
 
 # ==============================
-# ENHANCED AUDIT VIEWS IMPORTS
+# ENHANCED AUDIT VIEWS IMPORTS - FIXED: Import security API functions
 # ==============================
 from .views.audit_enhancements import (
-    SecurityEventListView, AuditAlertRuleListView, AuditAlertRuleCreateView,
+    SecurityEventListView, SecurityEventDetailView,
+    AuditAlertRuleListView, AuditAlertRuleCreateView, AuditAlertRuleUpdateView,
     AdvancedAnalyticsView, AuditReportListView, DataRetentionPolicyListView,
-    run_anomaly_detection, generate_custom_report, apply_retention_policies
+    run_anomaly_detection, generate_custom_report, apply_retention_policies,
+    resolve_security_event, toggle_alert_rule, security_dashboard,
+    security_stats_api, security_notifications_api, system_health_api  # ADD THESE IMPORTANT MISSING IMPORTS
 )
 
 from .views.attendance_views import AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
@@ -100,7 +106,7 @@ from .views.bill_views import BillListView, BillDetailView, BillGenerateView
 from .views.announcement_views import (
     AnnouncementListView, CreateAnnouncementView, UpdateAnnouncementView, 
     DeleteAnnouncementView, get_active_announcements, dismiss_announcement, 
-    dismiss_all_announcements, announcement_detail, toggle_announcement_status  # ADD THESE IMPORTS
+    dismiss_all_announcements, announcement_detail, toggle_announcement_status
 )
 
 # Import API views
@@ -179,7 +185,6 @@ urlpatterns = [
     path('reports/fees/', FeeReportView.as_view(), name='fee_report'),
     path('reports/fee-status/', FeeStatusReportView.as_view(), name='fee_status_report'),
     path('analytics/fees/', FeeAnalyticsView.as_view(), name='fee_analytics'),
-    
     
     # Finance Dashboard URLs
     path('finance/dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
@@ -286,8 +291,7 @@ urlpatterns = [
     # ==============================
     path('students/<int:student_id>/progress-chart/', student_progress_chart, name='student_progress_chart'),
     path('class/<str:class_level>/performance-chart/', class_performance_chart, name='class_performance_chart'),
-    path('analytics/', AnalyticsDashboardView.as_view(), name='analytics_dashboard'),
-    
+    path('analytics/', ComprehensiveAnalyticsDashboardView.as_view(), name='analytics_dashboard'),
     # ==============================
     # ENHANCED AUDIT LOG URLS
     # ==============================
@@ -300,13 +304,22 @@ urlpatterns = [
     path('system-health/', system_health_check, name='system_health_check'),
     
     # ==============================
-    # ENHANCED SECURITY & ANALYTICS URLS
+    # ENHANCED SECURITY & ANALYTICS URLS - FIXED
     # ==============================
+    
+    # Security Dashboard
+    path('audit/security-dashboard/', security_dashboard, name='security_dashboard'),
     
     # Real-time Security Monitoring
     path('audit/security-events/', SecurityEventListView.as_view(), name='security_events'),
+    path('audit/security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='security_event_detail'),
+    path('audit/security-events/<int:event_id>/resolve/', resolve_security_event, name='resolve_security_event'),
+    
+    # Alert Rules Management
     path('audit/alert-rules/', AuditAlertRuleListView.as_view(), name='alert_rule_list'),
     path('audit/alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='alert_rule_create'),
+    path('audit/alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='alert_rule_update'),
+    path('audit/alert-rules/<int:rule_id>/toggle/', toggle_alert_rule, name='toggle_alert_rule'),
     
     # Advanced Analytics & Machine Learning
     path('audit/advanced-analytics/', AdvancedAnalyticsView.as_view(), name='advanced_analytics'),
@@ -319,6 +332,11 @@ urlpatterns = [
     # Data Retention & Archiving
     path('audit/retention-policies/', DataRetentionPolicyListView.as_view(), name='retention_policies'),
     path('audit/apply-retention/', apply_retention_policies, name='apply_retention'),
+    
+    # Security API endpoints - FIXED: Use imported functions directly
+    path('api/security/stats/', security_stats_api, name='security_stats_api'),
+    path('api/security/notifications/', security_notifications_api, name='security_notifications_api'),
+    path('api/system-health/', system_health_api, name='system_health_api'),
     
     # ==============================
     # NOTIFICATION URLS
@@ -392,14 +410,14 @@ urlpatterns = [
     path('api/timetable-entries/', get_timetable_entries, name='get_timetable_entries'),
     
     # ==============================
-# ANNOUNCEMENT URLS
-# ==============================
+    # ANNOUNCEMENT URLS
+    # ==============================
     path('announcements/', AnnouncementListView.as_view(), name='announcement_list'),
     path('announcements/create/', CreateAnnouncementView.as_view(), name='create_announcement'),
     path('announcements/<int:pk>/', announcement_detail, name='announcement_detail'),
     path('announcements/<int:pk>/update/', UpdateAnnouncementView.as_view(), name='update_announcement'),
     path('announcements/<int:pk>/delete/', DeleteAnnouncementView.as_view(), name='delete_announcement'),
-    path('announcements/<int:pk>/toggle-status/', toggle_announcement_status, name='toggle_announcement_status'),  # ADD THIS LINE
+    path('announcements/<int:pk>/toggle-status/', toggle_announcement_status, name='toggle_announcement_status'),
     path('announcements/active/', get_active_announcements, name='active_announcements'),
     path('announcements/<int:pk>/dismiss/', dismiss_announcement, name='dismiss_announcement'),
     path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),

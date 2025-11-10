@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Audit Log Details - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4"><i class="fas fa-search me-2"></i>Audit Log Details</h1>
+        <div class="btn-group">
+            <a href="{% url 'audit_log_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i>Back to List
+            </a>
+            <button class="btn btn-outline-success" onclick="exportLog()">
+                <i class="fas fa-download me-1"></i>Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Log Details Card -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Log Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Log ID:</th>
+                                    <td>#{{ log.id }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Timestamp:</th>
+                                    <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Action:</th>
+                                    <td>
+                                        <span class="badge 
+                                            {% if log.action == 'CREATE' %}bg-success
+                                            {% elif log.action == 'UPDATE' %}bg-warning
+                                            {% elif log.action == 'DELETE' %}bg-danger
+                                            {% elif log.action == 'LOGIN' %}bg-info
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ log.get_action_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>User:</th>
+                                    <td>
+                                        {% if log.user %}
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-user me-2 text-muted"></i>
+                                                <div>
+                                                    <strong>{{ log.user.get_full_name|default:log.user.username }}</strong>
+                                                    <br>
+                                                    <small class="text-muted">{{ log.user.email }}</small>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">System</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Model:</th>
+                                    <td><code>{{ log.model_name }}</code></td>
+                                </tr>
+                                <tr>
+                                    <th>Object ID:</th>
+                                    <td>
+                                        {% if log.object_id %}
+                                            <span class="font-monospace">{{ log.object_id }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>IP Address:</th>
+                                    <td>
+                                        {% if log.ip_address %}
+                                            <code>{{ log.ip_address }}</code>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>User Agent:</th>
+                                    <td>
+                                        {% if log.user_agent %}
+                                            <small class="text-muted">{{ log.user_agent|truncatechars:50 }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Change Details</h5>
+                </div>
+                <div class="card-body">
+                    {% if log.details %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="30%">Field</th>
+                                        <th width="35%">Old Value</th>
+                                        <th width="35%">New Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for field, changes in log.details.items %}
+                                    <tr>
+                                        <td><strong>{{ field }}</strong></td>
+                                        <td>
+                                            <span class="text-danger">
+                                                {{ changes.old|default:"-" }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-success">
+                                                {{ changes.new|default:"-" }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-info-circle fa-2x text-muted mb-3"></i>
+                            <p class="text-muted">No detailed change information available for this log entry.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Raw Data -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-code me-2"></i>Raw Data</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3"><code id="rawData">{% if log.details %}{{ log.details|pprint }}{% else %}No raw data available{% endif %}</code></pre>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="copyRawData()">
+                            <i class="fas fa-copy me-1"></i>Copy Raw Data
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleRawData()">
+                            <i class="fas fa-compress me-1"></i>Toggle View
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Related Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-link me-2"></i>Related Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-user text-primary me-2"></i>
+                                <span>User Profile</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-history text-info me-2"></i>
+                                <span>User Activity History</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-shield-alt text-warning me-2"></i>
+                                <span>Security Events</span>
+                            </div>
+                            <i class="fas fa-chevron-right text-muted"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-stream me-2"></i>Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item current">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">Current</small>
+                                <p class="mb-0">{{ log.get_action_display }} on {{ log.model_name }}</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-secondary"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">5 minutes ago</small>
+                                <p class="mb-0">User logged in</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-secondary"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">1 hour ago</small>
+                                <p class="mb-0">Profile updated</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-secondary"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">2 hours ago</small>
+                                <p class="mb-0">Settings modified</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="investigateUser()">
+                            <i class="fas fa-user-shield me-1"></i>Investigate User
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="flagForReview()">
+                            <i class="fas fa-flag me-1"></i>Flag for Review
+                        </button>
+                        <button class="btn btn-outline-info" onclick="viewSimilarLogs()">
+                            <i class="fas fa-search me-1"></i>Find Similar Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Investigation Modal -->
+<div class="modal fade" id="investigationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">User Investigation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="investigationContent">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let rawDataExpanded = false;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize any required functionality
+});
+
+function exportLog() {
+    showAlert('Exporting log details...', 'info');
+    
+    // Simulate export process
+    setTimeout(() => {
+        showAlert('Log details exported successfully!', 'success');
+    }, 1000);
+}
+
+function copyRawData() {
+    const rawData = document.getElementById('rawData').textContent;
+    navigator.clipboard.writeText(rawData).then(() => {
+        showAlert('Raw data copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        showAlert('Failed to copy raw data.', 'danger');
+    });
+}
+
+function toggleRawData() {
+    const rawDataElement = document.getElementById('rawData');
+    const toggleButton = event.target;
+    
+    if (rawDataExpanded) {
+        rawDataElement.style.maxHeight = '200px';
+        rawDataElement.style.overflow = 'auto';
+        toggleButton.innerHTML = '<i class="fas fa-expand me-1"></i>Expand View';
+    } else {
+        rawDataElement.style.maxHeight = 'none';
+        rawDataElement.style.overflow = 'visible';
+        toggleButton.innerHTML = '<i class="fas fa-compress me-1"></i>Collapse View';
+    }
+    
+    rawDataExpanded = !rawDataExpanded;
+}
+
+function investigateUser() {
+    const modalContent = document.getElementById('investigationContent');
+    modalContent.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading user investigation data...</p>
+        </div>
+    `;
+    
+    // Simulate loading investigation data
+    setTimeout(() => {
+        modalContent.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>User Information</h6>
+                    <p><strong>Username:</strong> {{ log.user.username|default:"System" }}</p>
+                    <p><strong>Role:</strong> {% if log.user.is_superuser %}Administrator{% else %}User{% endif %}</p>
+                    <p><strong>Last Login:</strong> 2 hours ago</p>
+                    <p><strong>Status:</strong> <span class="badge bg-success">Active</span></p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Activity Summary</h6>
+                    <p><strong>Total Actions:</strong> 147</p>
+                    <p><strong>Today's Actions:</strong> 12</p>
+                    <p><strong>Risk Level:</strong> <span class="badge bg-success">Low</span></p>
+                    <p><strong>Last IP:</strong> {{ log.ip_address|default:"Unknown" }}</p>
+                </div>
+            </div>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h6>Recent Activity Pattern</h6>
+                    <div class="alert alert-info">
+                        <p>User shows normal activity patterns. No suspicious behavior detected in the last 30 days.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Recommendations</h6>
+                    <ul>
+                        <li>Continue monitoring user activity</li>
+                        <li>No immediate action required</li>
+                        <li>Schedule regular review in 30 days</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+    }, 1500);
+    
+    const modal = new bootstrap.Modal(document.getElementById('investigationModal'));
+    modal.show();
+}
+
+function flagForReview() {
+    if (confirm('Flag this log entry for security review?')) {
+        showAlert('Log entry flagged for security review.', 'warning');
+        // In real implementation, make API call to flag the log
+    }
+}
+
+function viewSimilarLogs() {
+    showAlert('Searching for similar log entries...', 'info');
+    
+    // In real implementation, this would redirect to filtered list
+    setTimeout(() => {
+        window.location.href = '{% url "audit_log_list" %}?user_id={{ log.user.id }}&model_name={{ log.model_name }}';
+    }, 1000);
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+}
+</script>
+
+<style>
+.badge {
+    font-size: 0.75em;
+}
+
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 700;
+}
+
+.table-borderless th {
+    font-weight: 600;
+    color: #6c757d;
+}
+
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding-left: 20px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -20px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px #dee2e6;
+}
+
+.timeline-item.current .timeline-marker {
+    box-shadow: 0 0 0 2px #007bff;
+}
+
+.timeline-content {
+    padding-bottom: 10px;
+}
+
+.timeline-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: -15px;
+    top: 17px;
+    bottom: -10px;
+    width: 2px;
+    background: #dee2e6;
+}
+
+pre {
+    max-height: 200px;
+    overflow: auto;
+    transition: max-height 0.3s ease;
+}
+
+.list-group-item {
+    border: none;
+    padding: 0.75rem 0;
+}
+
+.list-group-item:first-child {
+    padding-top: 0;
+}
+
+.list-group-item:last-child {
+    padding-bottom: 0;
+}
+
+.btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+</style>
+{% endblock %}

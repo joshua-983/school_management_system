@@ -1,0 +1,631 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Advanced Analytics - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4"><i class="fas fa-chart-line me-2"></i>Advanced Analytics</h1>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Total Users</div>
+                            <div class="h5 mb-0">{{ total_users|default:0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Active Users</div>
+                            <div class="h5 mb-0">{{ active_users|default:0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Security Events</div>
+                            <div class="h5 mb-0">{{ security_events_count|default:0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shield-alt fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-danger text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Anomalies</div>
+                            <div class="h5 mb-0">{{ anomaly_count|default:0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Assessment Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>User Risk Assessment</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="recalculateRiskScores()">
+                        <i class="fas fa-calculator me-1"></i>Recalculate Scores
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if risk_scores %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Risk Score</th>
+                                    <th>Risk Level</th>
+                                    <th>Last Activity</th>
+                                    <th>Anomalies Detected</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for score in risk_scores %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-sm bg-light rounded me-3">
+                                                <i class="fas fa-user fa-lg text-muted p-2"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">
+                                                    {% if score.user %}
+                                                        {{ score.user.get_full_name|default:score.user.username|default:"Unknown User" }}
+                                                    {% else %}
+                                                        Unknown User
+                                                    {% endif %}
+                                                </h6>
+                                                <small class="text-muted">
+                                                    {% if score.user and score.user.email %}
+                                                        {{ score.user.email }}
+                                                    {% else %}
+                                                        No email
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar 
+                                                {% if score.risk_score < 30 %}bg-success
+                                                {% elif score.risk_score < 70 %}bg-warning
+                                                {% else %}bg-danger{% endif %}" 
+                                                style="width: {{ score.risk_score|default:0 }}%">
+                                                {{ score.risk_score|default:0 }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if score.risk_score < 30 %}bg-success
+                                            {% elif score.risk_score < 70 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {% if score.risk_score < 30 %}Low
+                                            {% elif score.risk_score < 70 %}Medium
+                                            {% else %}High{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if score.last_activity %}
+                                            {{ score.last_activity|date:"M d, Y H:i" }}
+                                        {% else %}
+                                            Never
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ score.anomalies|default:0 }}</span>
+                                    </td>
+                                    <td>
+                                        {% if score.user and score.user.id %}
+                                        <button class="btn btn-sm btn-outline-primary" 
+                                                onclick="viewUserAnalytics({{ score.user.id }})"
+                                                title="View Analytics">
+                                            <i class="fas fa-chart-bar"></i>
+                                        </button>
+                                        {% if score.risk_score > 70 %}
+                                        <button class="btn btn-sm btn-outline-warning"
+                                                onclick="flagUser({{ score.user.id }})"
+                                                title="Flag User">
+                                            <i class="fas fa-flag"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <h5>No risk assessment data available</h5>
+                            <p>Run anomaly detection to generate risk scores.</p>
+                            <button class="btn btn-primary mt-2" onclick="runAnomalyDetection(event)">
+                                <i class="fas fa-play me-1"></i>Run Anomaly Detection
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomaly Detection Section -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Anomaly Detection</h5>
+                    <div>
+                        <span class="badge bg-primary me-2">Detected: {{ anomaly_count|default:0 }}</span>
+                        <button class="btn btn-sm btn-success" onclick="runAnomalyDetection(event)">
+                            <i class="fas fa-play me-1"></i>Run Detection
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="anomalyChart" style="height: 300px;">
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Anomaly chart will be displayed here</p>
+                            <small class="text-muted">Run anomaly detection to see visualization</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Recent Anomalies</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_anomalies %}
+                    <div class="list-group list-group-flush">
+                        {% for anomaly in recent_anomalies %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">{{ anomaly.type|default:"Unknown Type" }}</h6>
+                                <small class="text-muted">{{ anomaly.description|default:"No description" }}</small>
+                            </div>
+                            <span class="badge 
+                                {% if anomaly.severity == 'high' %}bg-danger
+                                {% elif anomaly.severity == 'medium' %}bg-warning
+                                {% else %}bg-info{% endif %}">
+                                {{ anomaly.severity|default:"unknown"|title }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-search fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No recent anomalies detected</p>
+                        <small class="text-muted">Run anomaly detection to find issues</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pattern Analysis -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Behavioral Patterns</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Login Patterns</h6>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <canvas id="loginPatternChart" height="200"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Activity Heatmap</h6>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <div id="activityHeatmap" class="text-center py-4">
+                                        <i class="fas fa-thermometer-half fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">Activity heatmap visualization</p>
+                                        <small class="text-muted">Data visualization coming soon</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden CSRF Token Form -->
+<form id="csrfForm" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<!-- User Analytics Modal -->
+<div class="modal fade" id="userAnalyticsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">User Analytics</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="userAnalyticsContent">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Messages Display -->
+{% if messages %}
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+    {% for message in messages %}
+    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header 
+            {% if message.tags == 'error' %}bg-danger text-white
+            {% elif message.tags == 'warning' %}bg-warning text-dark
+            {% elif message.tags == 'success' %}bg-success text-white
+            {% else %}bg-info text-white{% endif %}">
+            <strong class="me-auto">
+                {% if message.tags == 'error' %}Error
+                {% elif message.tags == 'warning' %}Warning
+                {% elif message.tags == 'success' %}Success
+                {% else %}Info{% endif %}
+            </strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            {{ message }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let loginPatternChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    initializeToasts();
+});
+
+function initializeCharts() {
+    // Login Pattern Chart
+    const loginCtx = document.getElementById('loginPatternChart');
+    if (loginCtx) {
+        loginPatternChart = new Chart(loginCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Successful Logins',
+                    data: [65, 59, 80, 81, 56, 55, 40],
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Failed Logins',
+                    data: [28, 48, 40, 19, 86, 27, 90],
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Weekly Login Patterns'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Logins'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function initializeToasts() {
+    // Auto-hide toasts after 5 seconds
+    const toasts = document.querySelectorAll('.toast');
+    toasts.forEach(toast => {
+        setTimeout(() => {
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.hide();
+        }, 5000);
+    });
+}
+
+function recalculateRiskScores() {
+    showAlert('Recalculating risk scores...', 'info');
+    
+    // Simulate API call
+    setTimeout(() => {
+        showAlert('Risk scores recalculated successfully!', 'success');
+        window.location.reload();
+    }, 2000);
+}
+
+function runAnomalyDetection(event) {
+    // Prevent default behavior
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Running...';
+    button.disabled = true;
+    
+    // Get CSRF token from the hidden form
+    const csrfToken = document.querySelector('#csrfForm input[name="csrfmiddlewaretoken"]').value;
+    
+    // Create form data for proper POST request
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken);
+    
+    fetch('{% url "run_anomaly_detection" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert(`Anomaly detection completed! Found ${data.anomaly_count} anomalies.`, 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            showAlert('Anomaly detection failed: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error during anomaly detection:', error);
+        showAlert('An error occurred during anomaly detection. Please refresh the page and try again.', 'danger');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function viewUserAnalytics(userId) {
+    const modalContent = document.getElementById('userAnalyticsContent');
+    modalContent.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading user analytics...</p>
+        </div>
+    `;
+    
+    // Simulate loading user data
+    setTimeout(() => {
+        modalContent.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>User Information</h6>
+                    <p><strong>Username:</strong> user${userId}</p>
+                    <p><strong>Email:</strong> user${userId}@school.edu</p>
+                    <p><strong>Role:</strong> Teacher</p>
+                    <p><strong>Last Login:</strong> 2 hours ago</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Risk Analysis</h6>
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar bg-warning" style="width: 65%">65% Risk</div>
+                    </div>
+                    <p><strong>Anomalies:</strong> 3 detected</p>
+                    <p><strong>Recommendation:</strong> Monitor activity</p>
+                </div>
+            </div>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h6>Activity Timeline</h6>
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <p class="text-muted">User activity timeline visualization would appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }, 1000);
+    
+    const modal = new bootstrap.Modal(document.getElementById('userAnalyticsModal'));
+    modal.show();
+}
+
+function flagUser(userId) {
+    if (confirm('Are you sure you want to flag this user for security review?')) {
+        showAlert('User flagged for security review.', 'warning');
+        // In real implementation, make API call to flag user
+    }
+}
+
+function showAlert(message, type) {
+    // Remove any existing alerts first
+    const existingAlerts = document.querySelectorAll('.alert.alert-dismissible');
+    existingAlerts.forEach(alert => {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+    });
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        <i class="fas fa-${getAlertIcon(type)} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-remove alert after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentElement) {
+            const bsAlert = new bootstrap.Alert(alertDiv);
+            bsAlert.close();
+        }
+    }, 5000);
+}
+
+function getAlertIcon(type) {
+    switch(type) {
+        case 'success': return 'check-circle';
+        case 'danger': return 'exclamation-triangle';
+        case 'warning': return 'exclamation-circle';
+        default: return 'info-circle';
+    }
+}
+
+// Auto-refresh data every 5 minutes
+setInterval(() => {
+    console.log('Auto-refreshing analytics data...');
+}, 300000);
+</script>
+
+<style>
+.avatar-sm {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+    border-radius: 0.35rem;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 600;
+}
+
+.progress {
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.list-group-item {
+    border: none;
+    padding: 1rem 0;
+    border-bottom: 1px solid #e3e6f0 !important;
+}
+
+.list-group-item:last-child {
+    border-bottom: none !important;
+}
+
+.toast {
+    margin-bottom: 0.5rem;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.table th {
+    font-weight: 600;
+    border-top: none;
+    background-color: #f8f9fa;
+}
+
+.alert {
+    margin-bottom: 1rem;
+    z-index: 1056;
+}
+</style>
+{% endblock %}

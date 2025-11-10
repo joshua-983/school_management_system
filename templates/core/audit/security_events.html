@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Security Events - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4"><i class="fas fa-shield-alt me-2"></i>Security Events</h1>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" onclick="refreshEvents()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh
+            </button>
+            <button class="btn btn-outline-success" onclick="exportEvents()">
+                <i class="fas fa-download me-1"></i>Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="totalEvents">-</div>
+                            <div>Total Events</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-shield-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="criticalEvents">-</div>
+                            <div>Critical Events</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-danger text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="failedLogins">-</div>
+                            <div>Failed Logins</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-user-lock fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="todayEvents">-</div>
+                            <div>Today's Events</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-calendar-day fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-1"></i>
+            Filter Events
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Event Type</label>
+                    <select class="form-select" id="eventTypeFilter">
+                        <option value="">All Types</option>
+                        <option value="login_success">Login Success</option>
+                        <option value="login_failed">Login Failed</option>
+                        <option value="password_change">Password Change</option>
+                        <option value="user_created">User Created</option>
+                        <option value="user_deleted">User Deleted</option>
+                        <option value="permission_change">Permission Change</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Severity</label>
+                    <select class="form-select" id="severityFilter">
+                        <option value="">All Severities</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date From</label>
+                    <input type="date" class="form-control" id="dateFromFilter">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date To</label>
+                    <input type="date" class="form-control" id="dateToFilter">
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <i class="fas fa-search me-1"></i>Apply Filters
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                        <i class="fas fa-times me-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Events Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            Security Events
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="eventsTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Event Type</th>
+                            <th>User</th>
+                            <th>Severity</th>
+                            <th>IP Address</th>
+                            <th>Description</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                        <tr>
+                            <td>{{ event.timestamp|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ event.get_event_type_display }}</span>
+                            </td>
+                            <td>
+                                {% if event.user %}
+                                    {{ event.user.username }}
+                                {% else %}
+                                    <span class="text-muted">System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {% if event.severity == 'critical' %}bg-danger
+                                {% elif event.severity == 'high' %}bg-warning
+                                {% elif event.severity == 'medium' %}bg-primary
+                                {% else %}bg-secondary{% endif %}">
+                                    {{ event.get_severity_display|upper }}
+                                </span>
+                            </td>
+                            <td>
+                                <code>{{ event.ip_address|default:"-" }}</code>
+                            </td>
+                            <td>{{ event.description|truncatechars:50 }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" 
+                                        onclick="viewEventDetails({{ event.id }})"
+                                        data-bs-toggle="tooltip" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                {% if event.severity == 'critical' or event.severity == 'high' %}
+                                <button class="btn btn-sm btn-outline-warning"
+                                        onclick="markAsResolved({{ event.id }})"
+                                        data-bs-toggle="tooltip" title="Mark Resolved">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-shield-alt fa-3x mb-3"></i>
+                                    <h5>No security events found</h5>
+                                    <p>All systems are secure and no events have been recorded.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav aria-label="Events pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Event Details Modal -->
+<div class="modal fade" id="eventDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Security Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventDetailsContent">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Load statistics
+    loadStatistics();
+});
+
+function loadStatistics() {
+    // Simulate loading statistics - in real implementation, this would be an API call
+    setTimeout(() => {
+        document.getElementById('totalEvents').textContent = '{{ events|length }}';
+        document.getElementById('criticalEvents').textContent = '{{ events|length }}'; // Simplified
+        document.getElementById('failedLogins').textContent = '{{ events|length }}'; // Simplified
+        document.getElementById('todayEvents').textContent = '{{ events|length }}'; // Simplified
+    }, 500);
+}
+
+function refreshEvents() {
+    window.location.reload();
+}
+
+function exportEvents() {
+    // Implement export functionality
+    alert('Export functionality would be implemented here');
+}
+
+function applyFilters() {
+    const eventType = document.getElementById('eventTypeFilter').value;
+    const severity = document.getElementById('severityFilter').value;
+    const dateFrom = document.getElementById('dateFromFilter').value;
+    const dateTo = document.getElementById('dateToFilter').value;
+    
+    // Build query string
+    let queryParams = [];
+    if (eventType) queryParams.push(`event_type=${eventType}`);
+    if (severity) queryParams.push(`severity=${severity}`);
+    if (dateFrom) queryParams.push(`date_from=${dateFrom}`);
+    if (dateTo) queryParams.push(`date_to=${dateTo}`);
+    
+    const queryString = queryParams.length ? '?' + queryParams.join('&') : '';
+    window.location.href = window.location.pathname + queryString;
+}
+
+function clearFilters() {
+    window.location.href = window.location.pathname;
+}
+
+function viewEventDetails(eventId) {
+    // Simulate loading event details
+    const modalContent = document.getElementById('eventDetailsContent');
+    modalContent.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading event details...</p>
+        </div>
+    `;
+    
+    // In real implementation, this would be an API call
+    setTimeout(() => {
+        modalContent.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Basic Information</h6>
+                    <p><strong>Event ID:</strong> ${eventId}</p>
+                    <p><strong>Timestamp:</strong> Just now</p>
+                    <p><strong>Event Type:</strong> Security Event</p>
+                    <p><strong>Severity:</strong> High</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Additional Details</h6>
+                    <p><strong>IP Address:</strong> 192.168.1.1</p>
+                    <p><strong>User Agent:</strong> Mozilla/5.0...</p>
+                    <p><strong>Location:</strong> Accra, Ghana</p>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Description</h6>
+                    <div class="alert alert-info">
+                        This is a detailed description of the security event that occurred.
+                        It contains all the relevant information about what happened.
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6>Metadata</h6>
+                    <pre class="bg-light p-3"><code>{
+    "event_id": ${eventId},
+    "action": "security_event",
+    "details": "Detailed event information"
+}</code></pre>
+                </div>
+            </div>
+        `;
+    }, 1000);
+    
+    const modal = new bootstrap.Modal(document.getElementById('eventDetailsModal'));
+    modal.show();
+}
+
+function markAsResolved(eventId) {
+    if (confirm('Are you sure you want to mark this event as resolved?')) {
+        // In real implementation, this would be an API call
+        fetch(`/audit/security-events/${eventId}/resolve/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken(),
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Event marked as resolved successfully!', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showAlert('Failed to mark event as resolved.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('An error occurred while marking the event as resolved.', 'danger');
+        });
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+}
+
+// Real-time updates (WebSocket simulation)
+function startRealTimeUpdates() {
+    setInterval(() => {
+        // Check for new events
+        console.log('Checking for new security events...');
+    }, 30000); // Check every 30 seconds
+}
+
+// Start real-time updates when page loads
+document.addEventListener('DOMContentLoaded', startRealTimeUpdates);
+</script>
+
+<style>
+.badge {
+    font-size: 0.75em;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 700;
+}
+
+#eventsTable tbody tr:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+</style>
+{% endblock %}

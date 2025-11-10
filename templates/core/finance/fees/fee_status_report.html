@@ -108,3 +108,313 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize charts
+    initializeCharts();
+    
+    // Tab functionality
+    initializeTabs();
+    
+    // Filter functionality
+    initializeFilters();
+    
+    // Export functionality
+    initializeExport();
+
+    function initializeCharts() {
+        // Summary Chart
+        const summaryCtx = document.getElementById('summaryChart');
+        if (summaryCtx) {
+            new Chart(summaryCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Paid', 'Partial', 'Unpaid', 'Overdue'],
+                    datasets: [{
+                        data: [
+                            {{ summary.counts.paid }},
+                            {{ summary.counts.partial }},
+                            {{ summary.counts.unpaid }},
+                            {{ summary.counts.overdue }}
+                        ],
+                        backgroundColor: [
+                            '#28a745',
+                            '#ffc107', 
+                            '#dc3545',
+                            '#6c757d'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Revenue Trend Chart
+        const revenueCtx = document.getElementById('revenueTrendChart');
+        if (revenueCtx) {
+            // This would use actual revenue data from your context
+            new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Revenue',
+                        data: [12000, 19000, 15000, 25000, 22000, 30000],
+                        borderColor: '#3a7bd5',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function initializeTabs() {
+        const tabLinks = document.querySelectorAll('[data-bs-toggle="tab"]');
+        
+        tabLinks.forEach(link => {
+            link.addEventListener('shown.bs.tab', function(e) {
+                // Update URL hash without page reload
+                const target = e.target.getAttribute('data-bs-target');
+                history.replaceState(null, null, target);
+                
+                // Update export button text
+                const exportBtn = document.getElementById('exportBtn');
+                if (exportBtn) {
+                    const tabName = e.target.textContent.trim().split(' ')[0];
+                    exportBtn.innerHTML = `<i class="bi bi-download me-2"></i>Export ${tabName} Data`;
+                }
+            });
+        });
+
+        // Load saved tab from URL
+        const hash = window.location.hash;
+        if (hash) {
+            const tab = document.querySelector(`[data-bs-target="${hash}"]`);
+            if (tab) {
+                new bootstrap.Tab(tab).show();
+            }
+        }
+    }
+
+    function initializeFilters() {
+        const filterForm = document.getElementById('filterForm');
+        const filterInputs = filterForm.querySelectorAll('select, input');
+        
+        // Auto-submit on change
+        filterInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                // Add loading indicator
+                const submitBtn = filterForm.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Filtering...';
+                
+                setTimeout(() => {
+                    filterForm.submit();
+                }, 500);
+            });
+        });
+
+        // Date range preset buttons
+        const presetButtons = document.querySelectorAll('.date-preset');
+        presetButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const days = parseInt(this.dataset.days);
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - days);
+                
+                document.getElementById('start_date').value = startDate.toISOString().split('T')[0];
+                document.getElementById('end_date').value = endDate.toISOString().split('T')[0];
+                
+                filterForm.submit();
+            });
+        });
+
+        // Quick status filters
+        const statusFilters = document.querySelectorAll('.status-filter');
+        statusFilters.forEach(filter => {
+            filter.addEventListener('click', function() {
+                const status = this.dataset.status;
+                document.querySelector('select[name="payment_status"]').value = status;
+                filterForm.submit();
+            });
+        });
+    }
+
+    function initializeExport() {
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function() {
+                const activeTab = document.querySelector('.tab-pane.active');
+                const tabName = document.querySelector('[data-bs-target="#' + activeTab.id + '"]').textContent.trim().split(' ')[0];
+                
+                // Get current filters
+                const formData = new FormData(document.getElementById('filterForm'));
+                formData.set('export', 'true');
+                formData.set('tab', tabName.toLowerCase());
+                
+                // Show loading
+                const originalHtml = this.innerHTML;
+                this.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Exporting...';
+                this.disabled = true;
+                
+                // Create and submit form
+                const exportForm = document.createElement('form');
+                exportForm.method = 'GET';
+                exportForm.action = window.location.pathname;
+                
+                for (let [key, value] of formData) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    exportForm.appendChild(input);
+                }
+                
+                document.body.appendChild(exportForm);
+                exportForm.submit();
+                
+                // Reset button after delay
+                setTimeout(() => {
+                    this.innerHTML = originalHtml;
+                    this.disabled = false;
+                }, 3000);
+            });
+        }
+
+        // Print functionality
+        const printBtn = document.getElementById('printBtn');
+        if (printBtn) {
+            printBtn.addEventListener('click', function() {
+                const activeTab = document.querySelector('.tab-pane.active');
+                const tabName = document.querySelector('[data-bs-target="#' + activeTab.id + '"]').textContent.trim();
+                
+                // Create print-friendly version
+                const printContent = activeTab.cloneNode(true);
+                const printWindow = window.open('', '_blank');
+                
+                printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Fee Status Report - ${tabName}</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; }
+                            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                            th { background-color: #f8f9fa; }
+                            .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+                            .bg-success { background-color: #28a745; color: white; }
+                            .bg-warning { background-color: #ffc107; color: black; }
+                            .bg-danger { background-color: #dc3545; color: white; }
+                            .text-end { text-align: right; }
+                            .summary { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; }
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Fee Status Report - ${tabName}</h2>
+                        <div class="summary">
+                            <strong>Generated:</strong> ${new Date().toLocaleString()}<br>
+                            <strong>Total Records:</strong> ${activeTab.querySelector('tbody tr').length}
+                        </div>
+                        ${printContent.innerHTML}
+                    </body>
+                    </html>
+                `);
+                
+                printWindow.document.close();
+                printWindow.print();
+            });
+        }
+    }
+
+    // Real-time data updates
+    function initializeRealTimeUpdates() {
+        // Refresh data every 2 minutes if enabled
+        const refreshToggle = document.getElementById('autoRefreshToggle');
+        let refreshInterval;
+        
+        if (refreshToggle) {
+            refreshToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    refreshInterval = setInterval(() => {
+                        if (document.visibilityState === 'visible') {
+                            refreshData();
+                        }
+                    }, 120000); // 2 minutes
+                } else {
+                    clearInterval(refreshInterval);
+                }
+            });
+        }
+    }
+
+    function refreshData() {
+        // Show refresh indicator
+        const indicator = document.getElementById('refreshIndicator');
+        if (!indicator) {
+            const refreshDiv = document.createElement('div');
+            refreshDiv.id = 'refreshIndicator';
+            refreshDiv.className = 'alert alert-info alert-dismissible fade show';
+            refreshDiv.innerHTML = `
+                <i class="bi bi-arrow-clockwise me-2"></i>
+                Auto-refreshing data...
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.container-fluid').prepend(refreshDiv);
+        }
+        
+        // Reload page after short delay
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + 1-4 for tabs
+        if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '4') {
+            e.preventDefault();
+            const tabIndex = parseInt(e.key) - 1;
+            const tab = document.querySelectorAll('[data-bs-toggle="tab"]')[tabIndex];
+            if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+        }
+        
+        // Ctrl/Cmd + E for export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            document.getElementById('exportBtn')?.click();
+        }
+        
+        // Ctrl/Cmd + P for print
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            document.getElementById('printBtn')?.click();
+        }
+    });
+
+    // Initialize all components
+    initializeRealTimeUpdates();
+});
+</script>
+{% endblock %}

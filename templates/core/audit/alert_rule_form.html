@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Alert Rule - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-8 col-lg-10">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-{% if form.instance.pk %}edit{% else %}plus-circle{% endif %} me-2"></i>
+                        {% if form.instance.pk %}Edit{% else %}Create New{% endif %} Alert Rule
+                    </h4>
+                    <a href="{% url 'alert_rule_list' %}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Rules
+                    </a>
+                </div>
+                <div class="card-body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="row">
+                            <!-- Basic Information -->
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.name.id_for_label }}" class="form-label">
+                                        <strong>Rule Name *</strong>
+                                    </label>
+                                    <input type="text" 
+                                           name="{{ form.name.name }}" 
+                                           id="{{ form.name.id_for_label }}" 
+                                           class="form-control {% if form.name.errors %}is-invalid{% endif %}" 
+                                           value="{{ form.name.value|default:'' }}" 
+                                           placeholder="Enter rule name"
+                                           required>
+                                    {% if form.name.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.name.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.severity.id_for_label }}" class="form-label">
+                                        <strong>Severity Level *</strong>
+                                    </label>
+                                    <select name="{{ form.severity.name }}" 
+                                            id="{{ form.severity.id_for_label }}" 
+                                            class="form-select {% if form.severity.errors %}is-invalid{% endif %}" 
+                                            required>
+                                        <option value="">Select Severity</option>
+                                        {% for value, label in form.severity.field.choices %}
+                                            <option value="{{ value }}" {% if form.severity.value == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if form.severity.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.severity.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                <strong>Description</strong>
+                            </label>
+                            <textarea name="{{ form.description.name }}" 
+                                      id="{{ form.description.id_for_label }}" 
+                                      class="form-control {% if form.description.errors %}is-invalid{% endif %}" 
+                                      rows="3" 
+                                      placeholder="Describe what this alert rule monitors...">{{ form.description.value|default:'' }}</textarea>
+                            {% if form.description.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.description.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.condition_type.id_for_label }}" class="form-label">
+                                        <strong>Condition Type *</strong>
+                                    </label>
+                                    <select name="{{ form.condition_type.name }}" 
+                                            id="{{ form.condition_type.id_for_label }}" 
+                                            class="form-select {% if form.condition_type.errors %}is-invalid{% endif %}" 
+                                            required>
+                                        <option value="">Select Condition Type</option>
+                                        {% for value, label in form.condition_type.field.choices %}
+                                            <option value="{{ value }}" {% if form.condition_type.value == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if form.condition_type.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.condition_type.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">
+                                        Type of condition to evaluate for this alert
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.action.id_for_label }}" class="form-label">
+                                        <strong>Action *</strong>
+                                    </label>
+                                    <select name="{{ form.action.name }}" 
+                                            id="{{ form.action.id_for_label }}" 
+                                            class="form-select {% if form.action.errors %}is-invalid{% endif %}" 
+                                            required>
+                                        <option value="">Select Action</option>
+                                        {% for value, label in form.action.field.choices %}
+                                            <option value="{{ value }}" {% if form.action.value == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if form.action.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in form.action.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">
+                                        What happens when this rule triggers
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.condition_config.id_for_label }}" class="form-label">
+                                <strong>Condition Configuration *</strong>
+                            </label>
+                            <textarea name="{{ form.condition_config.name }}" 
+                                      id="{{ form.condition_config.id_for_label }}" 
+                                      class="form-control {% if form.condition_config.errors %}is-invalid{% endif %}" 
+                                      rows="5" 
+                                      placeholder='{"threshold": 5, "timeframe": "1h"}' 
+                                      required>{{ form.condition_config.value|default:'' }}</textarea>
+                            {% if form.condition_config.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.condition_config.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Enter JSON configuration for the condition
+                                <br>Example: <code>{"threshold": 5, "timeframe": "1h", "operator": "greater_than"}</code>
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" 
+                                       name="{{ form.is_active.name }}" 
+                                       id="{{ form.is_active.id_for_label }}" 
+                                       class="form-check-input" 
+                                       {% if form.is_active.value %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    <strong>Active Rule</strong>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Enable or disable this alert rule
+                            </small>
+                        </div>
+
+                        <!-- JSON Validation Helper -->
+                        <div class="alert alert-info">
+                            <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>JSON Configuration Tips</h6>
+                            <ul class="mb-0 small">
+                                <li>Use valid JSON format with double quotes</li>
+                                <li>Common fields: threshold, timeframe, operator, field_name</li>
+                                <li>Example: <code>{"threshold": 5, "timeframe": "1h", "operator": ">"}</code></li>
+                                <li>Validate your JSON using online tools if unsure</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'alert_rule_list' %}" class="btn btn-secondary me-md-2">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>
+                                {% if form.instance.pk %}Update{% else %}Create{% endif %} Rule
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add JSON validation
+    const conditionConfigField = document.getElementById('{{ form.condition_config.id_for_label }}');
+    
+    if (conditionConfigField) {
+        conditionConfigField.addEventListener('blur', function() {
+            validateJSON(this);
+        });
+    }
+    
+    function validateJSON(field) {
+        const value = field.value.trim();
+        if (!value) return;
+        
+        try {
+            JSON.parse(value);
+            field.classList.remove('is-invalid');
+            field.classList.add('is-valid');
+        } catch (e) {
+            field.classList.remove('is-valid');
+            field.classList.add('is-invalid');
+            
+            // Show error message
+            let errorDiv = field.nextElementSibling;
+            if (!errorDiv || !errorDiv.classList.contains('invalid-feedback')) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'invalid-feedback';
+                field.parentNode.insertBefore(errorDiv, field.nextElementSibling);
+            }
+            errorDiv.textContent = `Invalid JSON format: ${e.message}`;
+        }
+    }
+    
+    // Form submission validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        let isValid = true;
+        
+        // Validate required fields
+        const requiredFields = form.querySelectorAll('[required]');
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            }
+        });
+        
+        // Validate JSON
+        if (conditionConfigField && conditionConfigField.value.trim()) {
+            try {
+                JSON.parse(conditionConfigField.value.trim());
+            } catch (e) {
+                conditionConfigField.classList.add('is-invalid');
+                isValid = false;
+                
+                // Show alert
+                showAlert('Please fix the JSON configuration errors before submitting.', 'danger');
+                e.preventDefault();
+                return;
+            }
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+            showAlert('Please fill in all required fields correctly.', 'danger');
+        }
+    });
+    
+    function showAlert(message, type) {
+        // Remove existing alerts
+        const existingAlerts = document.querySelectorAll('.alert.alert-dismissible');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            <i class="fas fa-${type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const cardBody = document.querySelector('.card-body');
+        cardBody.insertBefore(alertDiv, cardBody.firstChild);
+    }
+});
+</script>
+
+<style>
+.form-label strong {
+    color: #2c3e50;
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.card-header h4 {
+    color: white;
+    margin: 0;
+}
+
+.is-valid {
+    border-color: #28a745;
+}
+
+.is-invalid {
+    border-color: #dc3545;
+}
+
+.alert-info {
+    border-left: 4px solid #17a2b8;
+}
+
+code {
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.875em;
+}
+
+.form-check-input:checked {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+</style>
+{% endblock %}

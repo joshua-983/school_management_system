@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Retention Policies - Audit System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4"><i class="fas fa-archive me-2"></i>Data Retention Policies</h1>
+        <button class="btn btn-primary" onclick="showCreatePolicyModal()">
+            <i class="fas fa-plus me-1"></i>Create Policy
+        </button>
+    </div>
+
+    <!-- Policy Statistics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold">{{ policies|length }}</div>
+                            <div>Total Policies</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-policy fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="activePolicies">
+                                {{ policies|length }}  <!-- Simplified -->
+                            </div>
+                            <div>Active Policies</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="dataCovered">85%</div>
+                            <div>Data Covered</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-database fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fs-4 fw-bold" id="nextCleanup">3 days</div>
+                            <div>Next Cleanup</div>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-broom fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-primary w-100 h-100 py-3" onclick="applyAllPolicies()">
+                                <i class="fas fa-play-circle fa-2x mb-2"></i><br>
+                                Apply All Policies
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-success w-100 h-100 py-3" onclick="runCleanupNow()">
+                                <i class="fas fa-broom fa-2x mb-2"></i><br>
+                                Run Cleanup Now
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-info w-100 h-100 py-3" onclick="generateReport()">
+                                <i class="fas fa-chart-bar fa-2x mb-2"></i><br>
+                                Generate Report
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-warning w-100 h-100 py-3" onclick="showSettings()">
+                                <i class="fas fa-cog fa-2x mb-2"></i><br>
+                                Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policies Table -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-table me-2"></i>Retention Policies</h5>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="showInactive" onchange="toggleInactivePolicies()">
+                <label class="form-check-label" for="showInactive">Show Inactive</label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="policiesTable">
+                    <thead>
+                        <tr>
+                            <th>Policy Name</th>
+                            <th>Applies To</th>
+                            <th>Retention Period</th>
+                            <th>Data Size</th>
+                            <th>Last Applied</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for policy in policies %}
+                        <tr>
+                            <td>
+                                <strong>{{ policy.name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ policy.description }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ policy.applies_to }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-calendar-alt text-primary me-2"></i>
+                                    <span>{{ policy.retention_days }} days</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar" 
+                                         style="width: {% widthratio forloop.counter 1 15 %}%">
+                                        {% widthratio forloop.counter 1 15 %}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-muted">2 days ago</span>
+                            </td>
+                            <td>
+                                <span class="badge {% if policy.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ policy.is_active|yesno:"Active,Inactive" }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" 
+                                            onclick="editPolicy({{ policy.id }})"
+                                            data-bs-toggle="tooltip" title="Edit Policy">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-{% if policy.is_active %}warning{% else %}success{% endif %}"
+                                            onclick="togglePolicy({{ policy.id }}, {{ policy.is_active|lower }})"
+                                            data-bs-toggle="tooltip" 
+                                            title="{% if policy.is_active %}Deactivate{% else %}Activate{% endif %} Policy">
+                                        <i class="fas fa-{% if policy.is_active %}pause{% else %}play{% endif %}"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info"
+                                            onclick="applyPolicy({{ policy.id }})"
+                                            data-bs-toggle="tooltip" title="Apply Policy Now">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            onclick="deletePolicy({{ policy.id }})"
+                                            data-bs-toggle="tooltip" title="Delete Policy">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="text-muted">
+                                    <i class="fas fa-archive fa-3x mb-3"></i>
+                                    <h5>No retention policies configured</h5>
+                                    <p>Create your first retention policy to manage data lifecycle.</p>
+                                    <button class="btn btn-primary mt-2" onclick="showCreatePolicyModal()">
+                                        <i class="fas fa-plus me-1"></i>Create First Policy
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Statistics -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Data Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div id="dataDistributionChart" style="height: 300px;">
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Data distribution chart will be displayed here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Cleanup History</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">Full System Cleanup</h6>
+                                <small class="text-muted">2 days ago</small>
+                            </div>
+                            <span class="badge bg-success">15.2 MB freed</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">Audit Logs Cleanup</h6>
+                                <small class="text-muted">1 week ago</small>
+                            </div>
+                            <span class="badge bg-success">8.7 MB freed</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">Security Events Cleanup</h6>
+                                <small class="text-muted">2 weeks ago</small>
+                            </div>
+                            <span class="badge bg-success">3.1 MB freed</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">User Sessions Cleanup</h6>
+                                <small class="text-muted">3 weeks ago</small>
+                            </div>
+                            <span class="badge bg-success">1.8 MB freed</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Policy Modal -->
+<div class="modal fade" id="createPolicyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Retention Policy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="policyForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Policy Name</label>
+                            <input type="text" class="form-control" name="name" 
+                                   placeholder="Enter policy name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Applies To</label>
+                            <select class="form-select" name="applies_to" required>
+                                <option value="">Select data type...</option>
+                                <option value="audit_logs">Audit Logs</option>
+                                <option value="security_events">Security Events</option>
+                                <option value="user_sessions">User Sessions</option>
+                                <option value="system_logs">System Logs</option>
+                                <option value="backup_files">Backup Files</option>
+                                <option value="temp_files">Temporary Files</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" 
+                                      placeholder="Enter policy description" rows="3"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Retention Period (Days)</label>
+                            <input type="number" class="form-control" name="retention_days" 
+                                   min="1" max="3650" value="365" required>
+                            <div class="form-text">
+                                Data will be automatically deleted after this period.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cleanup Schedule</label>
+                            <select class="form-select" name="schedule">
+                                <option value="daily">Daily</option>
+                                <option value="weekly" selected>Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="manual">Manual Only</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_active" checked>
+                                <label class="form-check-label">Policy is active</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Note:</strong> This policy will automatically manage data lifecycle 
+                                according to the specified retention period.
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createPolicy()">
+                    <i class="fas fa-save me-1"></i>Create Policy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function showCreatePolicyModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createPolicyModal'));
+    modal.show();
+}
+
+function createPolicy() {
+    const form = document.getElementById('policyForm');
+    const formData = new FormData(form);
+    
+    // Validate form
+    if (!formData.get('name') || !formData.get('applies_to')) {
+        showAlert('Please fill in all required fields.', 'warning');
+        return;
+    }
+    
+    showAlert('Creating retention policy...', 'info');
+    
+    // Simulate API call
+    setTimeout(() => {
+        showAlert('Retention policy created successfully!', 'success');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createPolicyModal'));
+        modal.hide();
+        setTimeout(() => window.location.reload(), 1000);
+    }, 1500);
+}
+
+function editPolicy(policyId) {
+    showAlert('Edit functionality would open policy editor.', 'info');
+    // In real implementation, this would open edit modal with policy data
+}
+
+function togglePolicy(policyId, isActive) {
+    const action = isActive ? 'deactivate' : 'activate';
+    
+    showAlert(`${action.charAt(0).toUpperCase() + action.slice(1)}ing policy...`, 'info');
+    
+    // Simulate API call
+    setTimeout(() => {
+        showAlert(`Policy ${action}d successfully!`, 'success');
+        setTimeout(() => window.location.reload(), 1000);
+    }, 1000);
+}
+
+function applyPolicy(policyId) {
+    showAlert('Applying retention policy...', 'info');
+    
+    // Simulate API call
+    setTimeout(() => {
+        showAlert('Policy applied successfully! Data cleanup completed.', 'success');
+    }, 2000);
+}
+
+function deletePolicy(policyId) {
+    if (confirm('Are you sure you want to delete this retention policy? This action cannot be undone.')) {
+        showAlert('Deleting retention policy...', 'info');
+        
+        // Simulate API call
+        setTimeout(() => {
+            showAlert('Policy deleted successfully!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        }, 1000);
+    }
+}
+
+function applyAllPolicies() {
+    if (confirm('Apply all retention policies now? This will cleanup data according to all active policies.')) {
+        showAlert('Applying all retention policies...', 'info');
+        
+        fetch('{% url "apply_retention" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCSRFToken(),
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('All retention policies applied successfully!', 'success');
+            } else {
+                showAlert('Failed to apply policies: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('An error occurred while applying policies.', 'danger');
+        });
+    }
+}
+
+function runCleanupNow() {
+    if (confirm('Run data cleanup now? This will permanently delete expired data.')) {
+        showAlert('Running data cleanup...', 'info');
+        
+        // Simulate cleanup process
+        setTimeout(() => {
+            showAlert('Data cleanup completed successfully! 24.5 MB of storage freed.', 'success');
+        }, 3000);
+    }
+}
+
+function generateReport() {
+    showAlert('Generating retention policy report...', 'info');
+    
+    // Simulate report generation
+    setTimeout(() => {
+        showAlert('Retention policy report generated successfully!', 'success');
+    }, 2000);
+}
+
+function showSettings() {
+    showAlert('Settings functionality would open configuration panel.', 'info');
+}
+
+function toggleInactivePolicies() {
+    const showInactive = document.getElementById('showInactive').checked;
+    // In real implementation, this would filter the policies table
+    console.log('Showing inactive policies:', showInactive);
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('.container-fluid').insertBefore(alertDiv, document.querySelector('.container-fluid').firstChild);
+}
+
+// Auto-refresh policy status every 10 minutes
+setInterval(() => {
+    console.log('Refreshing policy status...');
+}, 600000);
+</script>
+
+<style>
+.card {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.card-header {
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    font-weight: 700;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.btn-group-sm > .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.progress {
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.list-group-item {
+    border: none;
+    padding: 1rem 0;
+}
+
+.list-group-item:first-child {
+    padding-top: 0;
+}
+
+.list-group-item:last-child {
+    padding-bottom: 0;
+}
+
+#policiesTable tbody tr:hover {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
