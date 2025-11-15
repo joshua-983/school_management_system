@@ -183,7 +183,7 @@
                             </thead>
                             <tbody>
                                 {% for bill in bills %}
-                                <tr class="bill-row">
+                                <tr class="bill-row" data-bill-id="{{ bill.bill_number }}">
                                     <td>
                                         <strong>{{ bill.bill_number }}</strong>
                                     </td>
@@ -214,11 +214,14 @@
                                             <i class="bi bi-eye"></i>
                                         </a>
                                         {% if is_admin %}
-                                        <a href="#" class="btn btn-sm btn-outline-success"
+                                        {% if bill.can_accept_payment %}
+                                        <a href="{% url 'bill_detail' pk=bill.pk %}" 
+                                           class="btn btn-sm btn-outline-success"
                                            title="Record Payment"
                                            data-bs-toggle="tooltip">
                                             <i class="bi bi-cash-coin"></i>
                                         </a>
+                                        {% endif %}
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -283,11 +286,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const searchTerm = this.value.toLowerCase().trim();
             
             billRows.forEach(row => {
-                const text = row.textContent.toLowerCase();
+                const rowText = row.textContent.toLowerCase();
                 const studentName = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
                 const billNumber = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
                 
-                if (studentName.includes(searchTerm) || billNumber.includes(searchTerm) || text.includes(searchTerm)) {
+                if (studentName.includes(searchTerm) || billNumber.includes(searchTerm) || rowText.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
@@ -395,43 +398,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Quick actions for bills
-    function quickAction(action, billId) {
-        const actions = {
-            'send_reminder': {
-                url: `/bills/${billId}/send-reminder/`,
-                message: 'Sending payment reminder...'
-            },
-            'print': {
-                url: `/bills/${billId}/print/`,
-                message: 'Generating printable bill...'
-            },
-            'duplicate': {
-                url: `/bills/${billId}/duplicate/`,
-                message: 'Duplicating bill...'
-            }
-        };
-        
-        if (actions[action]) {
-            if (confirm(`Are you sure you want to ${action.replace('_', ' ')} this bill?`)) {
-                // Show loading
-                const billRow = document.querySelector(`tr[data-bill-id="${billId}"]`);
-                if (billRow) {
-                    const originalContent = billRow.innerHTML;
-                    billRow.innerHTML = `<td colspan="9" class="text-center">
-                        <div class="spinner-border spinner-border-sm me-2"></div>
-                        ${actions[action].message}
-                    </td>`;
-                    
-                    // Simulate API call - replace with actual fetch
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                }
-            }
-        }
-    }
-
     // Add data attributes for quick actions
     document.querySelectorAll('.bill-row').forEach(row => {
         const billId = row.querySelector('td:first-child').textContent.trim();
@@ -495,6 +461,74 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 2000);
         }
     }, 300000); // 5 minutes
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Enhanced row highlighting on hover
+    document.querySelectorAll('.bill-row').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#f8f9fa';
+            this.style.transition = 'background-color 0.2s ease';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+        });
+    });
+
+    // Real-time status updates
+    function updateBillStatuses() {
+        // This would typically make an API call to get updated statuses
+        // For now, we'll just simulate it
+        console.log('Updating bill statuses...');
+        
+        // You could implement WebSocket or polling here for real-time updates
+    }
+
+    // Periodically update statuses (every 2 minutes)
+    setInterval(updateBillStatuses, 120000);
+
+    // Print functionality
+    function printBill(billId) {
+        const printWindow = window.open(`/bills/${billId}/print/`, '_blank');
+        printWindow.addEventListener('load', function() {
+            printWindow.print();
+        });
+    }
+
+    // Enhanced filtering with local storage
+    function saveFilterState() {
+        const filterState = {
+            academic_year: document.querySelector('input[name="academic_year"]').value,
+            term: document.querySelector('select[name="term"]').value,
+            status: document.querySelector('select[name="status"]').value
+        };
+        localStorage.setItem('billFilters', JSON.stringify(filterState));
+    }
+
+    function loadFilterState() {
+        const savedFilters = localStorage.getItem('billFilters');
+        if (savedFilters) {
+            const filters = JSON.parse(savedFilters);
+            document.querySelector('input[name="academic_year"]').value = filters.academic_year || '';
+            document.querySelector('select[name="term"]').value = filters.term || '';
+            document.querySelector('select[name="status"]').value = filters.status || '';
+        }
+    }
+
+    // Save filters when they change
+    document.querySelectorAll('input[name], select[name]').forEach(element => {
+        if (element.name !== 'page') {
+            element.addEventListener('change', saveFilterState);
+        }
+    });
+
+    // Load saved filters on page load
+    loadFilterState();
 });
 </script>
 {% endblock %}

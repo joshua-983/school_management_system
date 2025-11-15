@@ -1,238 +1,626 @@
+<!-- templates/core/announcements/update_announcement.html -->
 {% extends 'base.html' %}
 {% load static %}
+{% load widget_tweaks %}
 
-{% block title %}Edit Announcement - School Management{% endblock %}
+{% block title %}Update Announcement - School Management System{% endblock %}
 
 {% block extra_css %}
 <style>
-    .announcement-form-container {
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 25px rgba(0,0,0,0.1);
-        overflow: hidden;
+.update-announcement-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+}
+
+.form-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-section h6 {
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.selection-container {
+    margin-top: 1rem;
+}
+
+.selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.selection-card {
+    position: relative;
+}
+
+.selection-checkbox {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.selection-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0.5rem;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 80px;
+    user-select: none;
+}
+
+.selection-label:hover {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.selection-checkbox:checked + .selection-label {
+    border-color: #007bff;
+    background: #007bff;
+    color: white;
+}
+
+.selection-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.selection-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.selection-badge {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    background: rgba(255,255,255,0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.selection-checkbox:not(:checked) + .selection-label .selection-badge {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.selection-summary {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.selection-summary.has-selection {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.priority-option {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.priority-option:hover {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.priority-option.selected {
+    border-color: #007bff;
+    background: #007bff;
+    color: white;
+}
+
+.priority-option.urgent {
+    border-left: 4px solid #dc3545;
+}
+
+.priority-option.high {
+    border-left: 4px solid #fd7e14;
+}
+
+.priority-option.normal {
+    border-left: 4px solid #17a2b8;
+}
+
+.priority-option.low {
+    border-left: 4px solid #6c757d;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    border-left: 4px solid #007bff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-number {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #007bff;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+.required-field::after {
+    content: " *";
+    color: #dc3545;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.changes-indicator {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 1rem;
+    display: none;
+}
+
+.alert-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 300px;
+}
+
+.field-error {
+    border-color: #dc3545 !important;
+    background: #fff5f5 !important;
+}
+
+.quick-selection-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.quick-selection-btn {
+    border-radius: 20px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .alert-container {
+        left: 10px;
+        right: 10px;
+        top: 70px;
     }
     
-    .form-header {
-        background: linear-gradient(135deg, #fd7e14, #e55a00);
-        color: white;
-        padding: 2rem;
+    .selection-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
-    
-    .status-badge {
-        font-size: 0.8rem;
-        padding: 4px 12px;
-        border-radius: 20px;
-    }
-    
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-    }
-    
-    .stat-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
-        border-left: 4px solid #3a7bd5;
-    }
-    
-    .stat-number {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #3a7bd5;
-        display: block;
-    }
-    
-    .stat-label {
-        font-size: 0.875rem;
-        color: #6c757d;
-    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <div class="announcement-form-container">
-                <!-- Header -->
-                <div class="form-header">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h2 class="mb-1"><i class="bi bi-pencil-square me-2"></i>Edit Announcement</h2>
-                            <p class="mb-0">Update announcement details and visibility</p>
-                            
-                            <!-- Status Badge -->
-                            <div class="mt-2">
-                                <span class="status-badge bg-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
-                                    <i class="bi bi-{% if announcement.is_active %}check-circle{% else %}pause-circle{% endif %} me-1"></i>
-                                    {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
-                                </span>
-                                <span class="status-badge bg-{{ announcement.priority|lower }} ms-2">
-                                    <i class="bi bi-flag me-1"></i>{{ announcement.priority }}
-                                </span>
-                            </div>
-                        </div>
-                        <a href="{% url 'announcement_list' %}" class="btn btn-light btn-sm">
-                            <i class="bi bi-arrow-left me-1"></i>Back to List
-                        </a>
-                    </div>
+    <!-- Messages Display -->
+    <div class="alert-container">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            <i class="bi 
+                {% if message.tags == 'success' %}bi-check-circle 
+                {% elif message.tags == 'error' %}bi-exclamation-circle 
+                {% else %}bi-info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-2">Update Announcement</h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="/">Home</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'announcement_list' %}">Announcements</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'announcement_detail' announcement.pk %}">{{ announcement.title|truncatewords:5 }}</a></li>
+                            <li class="breadcrumb-item active">Update</li>
+                        </ol>
+                    </nav>
                 </div>
-                
-                <!-- Stats Grid -->
-                <div class="px-4 pt-3">
+                <div class="btn-group">
+                    <a href="{% url 'announcement_detail' announcement.pk %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-eye me-2"></i>View
+                    </a>
+                    <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to List
+                    </a>
+                </div>
+            </div>
+
+            <!-- Announcement Stats -->
+            <div class="card mb-4">
+                <div class="card-body">
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.views_count|default:0 }}</span>
+                            <span class="stat-number">{{ views_count }}</span>
                             <span class="stat-label">Total Views</span>
                         </div>
                         <div class="stat-card">
                             <span class="stat-number">{{ announcement.created_at|date:"M d, Y" }}</span>
-                            <span class="stat-label">Created Date</span>
+                            <span class="stat-label">Created</span>
                         </div>
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.created_by.get_full_name }}</span>
-                            <span class="stat-label">Created By</span>
+                            <span class="stat-number">{{ announcement.updated_at|date:"M d, Y" }}</span>
+                            <span class="stat-label">Last Updated</span>
                         </div>
-                        {% if announcement.end_date %}
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.end_date|date:"M d, Y" }}</span>
-                            <span class="stat-label">Expiry Date</span>
+                            <span class="stat-number">{% if announcement.is_active %}Active{% else %}Inactive{% endif %}</span>
+                            <span class="stat-label">Status</span>
                         </div>
-                        {% endif %}
                     </div>
                 </div>
+            </div>
+
+            <!-- Changes Indicator -->
+            <div class="changes-indicator" id="changesIndicator">
+                <i class="bi bi-info-circle me-2"></i>
+                <span id="changesText">You have unsaved changes</span>
+            </div>
+
+            <!-- Main Form -->
+            <div class="card update-announcement-card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pencil-square me-2"></i>Edit Announcement Details
+                    </h5>
+                </div>
                 
-                <!-- Form Content -->
-                <div class="p-4">
-                    <form method="post" id="announcementForm">
-                        {% csrf_token %}
-                        
-                        <div class="row">
-                            <!-- Left Column - Form Fields -->
-                            <div class="col-lg-8">
-                                <!-- Title -->
-                                <div class="mb-4">
-                                    <label for="title" class="form-label fw-semibold">Announcement Title *</label>
-                                    <input type="text" class="form-control form-control-lg" id="title" name="title" 
-                                           value="{{ announcement.title }}" required maxlength="200">
-                                    <div class="character-count mt-1">
-                                        <span id="titleCount">{{ announcement.title|length }}</span>/200 characters
-                                    </div>
+                <form method="post" id="announcementForm">
+                    {% csrf_token %}
+                    
+                    <div class="card-body">
+                        <!-- Basic Information Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-info-circle me-2"></i>Basic Information</h6>
+                            
+                            <!-- Title -->
+                            <div class="mb-3">
+                                <label for="{{ form.title.id_for_label }}" class="form-label required-field">
+                                    <i class="bi bi-type me-1"></i>Announcement Title
+                                </label>
+                                {{ form.title|add_class:"form-control" }}
+                                {% if form.title.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.title.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
                                 </div>
-                                
-                                <!-- Message -->
-                                <div class="mb-4">
-                                    <label for="message" class="form-label fw-semibold">Message Content *</label>
-                                    <textarea class="form-control" id="message" name="message" rows="8" required>{{ announcement.message }}</textarea>
-                                    <div class="character-count mt-1">
-                                        <span id="messageCount">{{ announcement.message|length }}</span> characters
-                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Message -->
+                            <div class="mb-3">
+                                <label for="{{ form.message.id_for_label }}" class="form-label required-field">
+                                    <i class="bi bi-chat-text me-1"></i>Announcement Message
+                                </label>
+                                {{ form.message|add_class:"form-control"|attr:"rows:6" }}
+                                {% if form.message.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.message.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
                                 </div>
-                                
-                                <!-- Settings Row -->
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="mb-4">
-                                            <label for="priority" class="form-label fw-semibold">Priority Level</label>
-                                            <select class="form-select" id="priority" name="priority">
-                                                <option value="LOW" {% if announcement.priority == 'LOW' %}selected{% endif %}>
-                                                    Low Priority
-                                                </option>
-                                                <option value="NORMAL" {% if announcement.priority == 'NORMAL' %}selected{% endif %}>
-                                                    Normal Priority
-                                                </option>
-                                                <option value="HIGH" {% if announcement.priority == 'HIGH' %}selected{% endif %}>
-                                                    High Priority
-                                                </option>
-                                                <option value="URGENT" {% if announcement.priority == 'URGENT' %}selected{% endif %}>
-                                                    Urgent Priority
-                                                </option>
-                                            </select>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Priority and Scheduling Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-clock me-2"></i>Priority & Scheduling</h6>
+                            
+                            <div class="row">
+                                <!-- Priority -->
+                                <div class="col-md-6">
+                                    <label class="form-label required-field">
+                                        <i class="bi bi-flag me-1"></i>Priority Level
+                                    </label>
+                                    <div id="priorityOptions">
+                                        {% for value, label in form.priority.field.choices %}
+                                        <div class="priority-option {{ value|lower }} {% if form.priority.value == value %}selected{% endif %}" 
+                                             data-value="{{ value }}">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="{{ form.priority.name }}" 
+                                                       value="{{ value }}" 
+                                                       id="priority_{{ value }}"
+                                                       {% if form.priority.value == value %}checked{% endif %}>
+                                                <label class="form-check-label fw-bold" for="priority_{{ value }}">
+                                                    {{ label }}
+                                                </label>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="mb-4">
-                                            <label for="is_active" class="form-label fw-semibold">Status</label>
-                                            <select class="form-select" id="is_active" name="is_active">
-                                                <option value="true" {% if announcement.is_active %}selected{% endif %}>Active</option>
-                                                <option value="false" {% if not announcement.is_active %}selected{% endif %}>Inactive</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="mb-4">
-                                            <label for="end_date" class="form-label fw-semibold">Expiry Date</label>
-                                            <input type="datetime-local" class="form-control" id="end_date" name="end_date" 
-                                                   value="{{ announcement.end_date|date:'Y-m-d\\TH:i' }}">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Target Audience -->
-                                <div class="mb-4">
-                                    <label for="target_audience" class="form-label fw-semibold">Target Audience</label>
-                                    <select class="form-select" id="target_audience" name="target_audience" multiple>
-                                        <option value="">All Users (School-wide)</option>
-                                        {% for class_level in class_levels %}
-                                        <option value="{{ class_level.id }}" 
-                                                {% if class_level in announcement.target_audience.all %}selected{% endif %}>
-                                            {{ class_level.name }}
-                                        </option>
                                         {% endfor %}
-                                    </select>
-                                    <div class="form-text">Hold Ctrl/Cmd to select multiple classes</div>
+                                    </div>
+                                    {% if form.priority.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {% for error in form.priority.errors %}
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Scheduling -->
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.start_date.id_for_label }}" class="form-label required-field">
+                                            <i class="bi bi-play-circle me-1"></i>Start Date
+                                        </label>
+                                        {{ form.start_date|add_class:"form-control"|attr:"type:datetime-local" }}
+                                        {% if form.start_date.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {% for error in form.start_date.errors %}
+                                            <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.end_date.id_for_label }}" class="form-label">
+                                            <i class="bi bi-clock me-1"></i>End Date (Optional)
+                                        </label>
+                                        {{ form.end_date|add_class:"form-control"|attr:"type:datetime-local" }}
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="noEndDate" 
+                                                   {% if not form.end_date.value %}checked{% endif %}>
+                                            <label class="form-check-label" for="noEndDate">
+                                                No end date
+                                            </label>
+                                        </div>
+                                        {% if form.end_date.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {% for error in form.end_date.errors %}
+                                            <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- TARGET ROLES SECTION - FIXED -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-person-badge me-2"></i>Target Roles</h6>
                             
-                            <!-- Right Column - Actions -->
-                            <div class="col-lg-4">
-                                <div class="sticky-top" style="top: 100px;">
-                                    <!-- Action Buttons -->
-                                    <div class="card">
-                                        <div class="card-header bg-light">
-                                            <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Actions</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="d-grid gap-2">
-                                                <button type="submit" class="btn btn-primary">
-                                                    <i class="bi bi-check-circle me-2"></i>Update Announcement
-                                                </button>
-                                                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
-                                                    <i class="bi bi-x-circle me-2"></i>Cancel
-                                                </button>
-                                            </div>
-                                            
-                                            <!-- Danger Zone -->
-                                            <div class="mt-4 pt-3 border-top">
-                                                <h6 class="text-danger mb-2">Danger Zone</h6>
-                                                <a href="{% url 'delete_announcement' announcement.pk %}" 
-                                                   class="btn btn-outline-danger btn-sm w-100"
-                                                   onclick="return confirm('Are you sure you want to delete this announcement? This action cannot be undone.')">
-                                                    <i class="bi bi-trash me-2"></i>Delete Announcement
-                                                </a>
-                                            </div>
+                            <div class="mb-3">
+                                <label class="form-label required-field">
+                                    <i class="bi bi-people me-1"></i>Select Target Roles
+                                </label>
+                                <div class="help-text mb-3">Choose which user roles should see this announcement</div>
+                                
+                                <!-- Quick Selection Buttons -->
+                                <div class="quick-selection-buttons">
+                                    <button type="button" class="btn btn-outline-primary btn-sm quick-selection-btn" onclick="announcementUpdateHandler.selectAllRoles()">
+                                        <i class="bi bi-check-all me-1"></i>Select All
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm quick-selection-btn" onclick="announcementUpdateHandler.clearAllRoles()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+                                
+                                <!-- Role Selection Grid -->
+                                <div class="selection-grid" id="rolesGrid">
+                                    {% for value, label in form.target_roles.field.choices %}
+                                    {% if value %}
+                                    <div class="selection-card">
+                                        <input type="checkbox" name="target_roles" value="{{ value }}" 
+                                               id="role_{{ value }}" class="selection-checkbox"
+                                               {% if value in form.target_roles.value %}checked{% endif %}>
+                                        <label for="role_{{ value }}" class="selection-label">
+                                            <span class="selection-icon">
+                                                {% if value == 'STUDENT' %}
+                                                <i class="bi bi-person"></i>
+                                                {% elif value == 'TEACHER' %}
+                                                <i class="bi bi-person-badge"></i>
+                                                {% elif value == 'PARENT' %}
+                                                <i class="bi bi-people"></i>
+                                                {% elif value == 'STAFF' %}
+                                                <i class="bi bi-gear"></i>
+                                                {% else %}
+                                                <i class="bi bi-person"></i>
+                                                {% endif %}
+                                            </span>
+                                            <span class="selection-name">{{ label }}</span>
+                                        </label>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Selection Summary -->
+                                <div class="selection-summary card bg-light" id="roleSelectionSummary">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted" id="roleSelectionSummaryText">
+                                                No roles selected
+                                            </small>
+                                            <small class="text-muted" id="selectedRoleCount">0 selected</small>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Last Updated -->
-                                    <div class="card mt-3">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-2">Update History</h6>
-                                            <div class="small text-muted">
-                                                <div><strong>Created:</strong> {{ announcement.created_at|date:"M d, Y H:i" }}</div>
-                                                <div><strong>Last Updated:</strong> {{ announcement.updated_at|date:"M d, Y H:i" }}</div>
-                                                <div><strong>By:</strong> {{ announcement.created_by.get_full_name }}</div>
-                                            </div>
+                                </div>
+                                
+                                {% if form.target_roles.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.target_roles.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Target Class Levels Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-people me-2"></i>Target Class Levels (Optional)</h6>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-bullseye me-1"></i>Select Class Levels
+                                </label>
+                                <div class="help-text mb-3">Select specific class levels or leave empty for all classes</div>
+                                
+                                <!-- Quick Selection Buttons -->
+                                <div class="quick-selection-buttons">
+                                    <button type="button" class="btn btn-outline-primary btn-sm quick-selection-btn" onclick="announcementUpdateHandler.selectAllClasses()">
+                                        <i class="bi bi-check-all me-1"></i>Select All
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm quick-selection-btn" onclick="announcementUpdateHandler.clearAllClasses()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+                                
+                                <!-- Class Level Selection Grid -->
+                                <div class="selection-grid">
+                                    {% for value, label in class_levels %}
+                                    <div class="selection-card">
+                                        <input type="checkbox" name="target_class_levels" value="{{ value }}" 
+                                               id="class_{{ value }}" class="selection-checkbox"
+                                               {% if value in form.target_class_levels.value %}checked{% endif %}>
+                                        <label for="class_{{ value }}" class="selection-label">
+                                            <span class="selection-icon">
+                                                {% if 'P' in value %}
+                                                <i class="bi bi-person"></i>
+                                                {% else %}
+                                                <i class="bi bi-mortarboard"></i>
+                                                {% endif %}
+                                            </span>
+                                            <span class="selection-name">{{ label }}</span>
+                                            <span class="selection-badge">{{ value }}</span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Selection Summary -->
+                                <div class="selection-summary card bg-light" id="classSelectionSummary">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted" id="classSelectionSummaryText">
+                                                No classes selected (All classes)
+                                            </small>
+                                            <small class="text-muted" id="selectedClassCount">0 selected</small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </form>
+
+                        <!-- Status Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-toggle-on me-2"></i>Status</h6>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    {{ form.is_active|add_class:"form-check-input" }}
+                                    <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">
+                                        Active Announcement
+                                    </label>
+                                </div>
+                                <div class="help-text">
+                                    When active, the announcement will be visible to targeted users.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="card-footer bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <button type="button" class="btn btn-outline-danger" onclick="announcementUpdateHandler.confirmReset()">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Reset Changes
+                                </button>
+                            </div>
+                            <div class="btn-group">
+                                <a href="{% url 'announcement_detail' announcement.pk %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-warning">
+                                    <i class="bi bi-check-circle me-2"></i>Update Announcement
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Change History -->
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Update History
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">Announcement Created</h6>
+                                <p class="text-muted mb-1">By {{ announcement.created_by.get_full_name }}</p>
+                                <small class="text-muted">{{ announcement.created_at|date:"F j, Y g:i A" }}</small>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">Last Updated</h6>
+                                <p class="text-muted mb-1">By {{ user.get_full_name }}</p>
+                                <small class="text-muted">{{ announcement.updated_at|date:"F j, Y g:i A" }}</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -242,73 +630,353 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const titleInput = document.getElementById('title');
-        const messageInput = document.getElementById('message');
-        const titleCount = document.getElementById('titleCount');
-        const messageCount = document.getElementById('messageCount');
+const announcementUpdateHandler = {
+    init: function() {
+        this.initSelectionHandlers();
+        this.initPrioritySelection();
+        this.initDateHandling();
+        this.initFormTracking();
+        this.autoDismissMessages();
         
-        // Character counting
-        function updateCharacterCount(input, countElement, maxLength = null) {
-            const length = input.value.length;
-            countElement.textContent = length;
-            
-            if (maxLength) {
-                const percentage = (length / maxLength) * 100;
-                if (percentage > 90) {
-                    countElement.classList.add('text-danger');
-                } else if (percentage > 75) {
-                    countElement.classList.add('text-warning');
+        this.updateRoleSelectionSummary();
+        this.updateClassSelectionSummary();
+        this.validateRoleSelection();
+    },
+
+    autoDismissMessages: function() {
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    },
+
+    initSelectionHandlers: function() {
+        // Role selection handlers
+        document.querySelectorAll('#rolesGrid .selection-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = card.querySelector('.selection-checkbox');
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
                 }
-            }
+            });
+        });
+
+        // Class selection handlers
+        document.querySelectorAll('.selection-grid:not(#rolesGrid) .selection-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = card.querySelector('.selection-checkbox');
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // Change handlers
+        document.querySelectorAll('.selection-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                this.updateSelectionDisplay(checkbox);
+                if (checkbox.name === 'target_roles') {
+                    this.updateRoleSelectionSummary();
+                    this.validateRoleSelection();
+                } else {
+                    this.updateClassSelectionSummary();
+                }
+            });
+            this.updateSelectionDisplay(checkbox);
+        });
+    },
+
+    updateSelectionDisplay: function(checkbox) {
+        const card = checkbox.closest('.selection-card');
+        const label = card.querySelector('.selection-label');
+        
+        if (checkbox.checked) {
+            label.classList.add('selected');
+            card.classList.remove('field-error');
+        } else {
+            label.classList.remove('selected');
         }
+    },
+
+    initPrioritySelection: function() {
+        document.querySelectorAll('.priority-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                document.querySelectorAll('.priority-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                this.classList.add('selected');
+            });
+        });
+    },
+
+    initDateHandling: function() {
+        document.getElementById('noEndDate').addEventListener('change', function() {
+            const endDateField = document.getElementById('{{ form.end_date.id_for_label }}');
+            endDateField.disabled = this.checked;
+            if (this.checked) {
+                endDateField.value = '';
+            }
+        });
+
+        // Initialize end date state
+        const endDateField = document.getElementById('{{ form.end_date.id_for_label }}');
+        const noEndDateCheckbox = document.getElementById('noEndDate');
+        if (!endDateField.value) {
+            noEndDateCheckbox.checked = true;
+            endDateField.disabled = true;
+        }
+    },
+
+    initFormTracking: function() {
+        let originalFormData = new FormData(document.getElementById('announcementForm'));
+        let hasChanges = false;
+
+        const form = document.getElementById('announcementForm');
+        const changesIndicator = document.getElementById('changesIndicator');
         
-        // Event listeners
-        titleInput.addEventListener('input', function() {
-            updateCharacterCount(this, titleCount, 200);
+        form.addEventListener('change', () => {
+            this.checkForChanges(originalFormData, changesIndicator);
         });
         
-        messageInput.addEventListener('input', function() {
-            updateCharacterCount(this, messageCount);
+        form.addEventListener('input', () => {
+            this.checkForChanges(originalFormData, changesIndicator);
         });
-        
+
         // Form validation
-        document.getElementById('announcementForm').addEventListener('submit', function(e) {
-            const title = titleInput.value.trim();
-            const message = messageInput.value.trim();
-            
-            if (!title) {
+        form.addEventListener('submit', (e) => {
+            if (!this.validateForm()) {
                 e.preventDefault();
-                showAlert('Please enter an announcement title.', 'danger');
-                titleInput.focus();
-                return;
+                this.showToast('Please fix the errors in the form before submitting.', 'error');
             }
-            
-            if (!message) {
-                e.preventDefault();
-                showAlert('Please enter announcement content.', 'danger');
-                messageInput.focus();
-                return;
-            }
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Updating...';
-            submitBtn.disabled = true;
         });
+    },
+
+    checkForChanges: function(originalFormData, changesIndicator) {
+        const currentFormData = new FormData(document.getElementById('announcementForm'));
+        let hasChanges = false;
         
-        function showAlert(message, type) {
-            // Remove existing alerts
-            document.querySelectorAll('.alert').forEach(alert => alert.remove());
-            
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.querySelector('.form-header').after(alertDiv);
+        for (let [key, value] of currentFormData.entries()) {
+            const originalValue = originalFormData.get(key);
+            if (value !== originalValue) {
+                hasChanges = true;
+                break;
+            }
         }
-    });
+        
+        if (hasChanges) {
+            changesIndicator.style.display = 'block';
+        } else {
+            changesIndicator.style.display = 'none';
+        }
+    },
+
+    // Role selection functions
+    selectAllRoles: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = true;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('All roles selected', 'success');
+    },
+
+    clearAllRoles: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = false;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('All roles cleared', 'info');
+    },
+
+    updateRoleSelectionSummary: function() {
+        const selectedRoles = Array.from(document.querySelectorAll('input[name="target_roles"]:checked'));
+        const selectedCount = selectedRoles.length;
+        const summaryCard = document.getElementById('roleSelectionSummary');
+        const summaryText = document.getElementById('roleSelectionSummaryText');
+        const countElement = document.getElementById('selectedRoleCount');
+        
+        countElement.textContent = `${selectedCount} selected`;
+        
+        if (selectedCount === 0) {
+            summaryText.textContent = 'No roles selected';
+            summaryCard.classList.remove('has-selection');
+        } else {
+            const roleNames = selectedRoles.map(checkbox => {
+                const label = checkbox.closest('.selection-card').querySelector('.selection-name');
+                return label.textContent;
+            }).join(', ');
+            
+            summaryText.textContent = `Selected: ${roleNames}`;
+            summaryCard.classList.add('has-selection');
+        }
+    },
+
+    validateRoleSelection: function() {
+        const selectedRoles = Array.from(document.querySelectorAll('input[name="target_roles"]:checked'));
+        const rolesGrid = document.getElementById('rolesGrid');
+        
+        if (selectedRoles.length === 0) {
+            rolesGrid.classList.add('field-error');
+            return false;
+        } else {
+            rolesGrid.classList.remove('field-error');
+            return true;
+        }
+    },
+
+    // Class selection functions
+    selectAllClasses: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = true;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('All classes selected', 'success');
+    },
+
+    clearAllClasses: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = false;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('All classes cleared', 'info');
+    },
+
+    updateClassSelectionSummary: function() {
+        const selectedClasses = Array.from(document.querySelectorAll('input[name="target_class_levels"]:checked'));
+        const selectedCount = selectedClasses.length;
+        const summaryCard = document.getElementById('classSelectionSummary');
+        const summaryText = document.getElementById('classSelectionSummaryText');
+        const countElement = document.getElementById('selectedClassCount');
+        
+        countElement.textContent = `${selectedCount} selected`;
+        
+        if (selectedCount === 0) {
+            summaryText.textContent = 'No classes selected (All classes)';
+            summaryCard.classList.remove('has-selection');
+        } else {
+            const classNames = selectedClasses.map(checkbox => {
+                const label = checkbox.closest('.selection-card').querySelector('.selection-name');
+                return label.textContent;
+            }).join(', ');
+            
+            summaryText.textContent = `Selected: ${classNames}`;
+            summaryCard.classList.add('has-selection');
+        }
+    },
+
+    validateForm: function() {
+        let isValid = true;
+        
+        // Title validation
+        const titleField = document.getElementById('{{ form.title.id_for_label }}');
+        if (!titleField.value.trim()) {
+            this.markFieldInvalid(titleField, 'Title is required');
+            isValid = false;
+        }
+        
+        // Message validation
+        const messageField = document.getElementById('{{ form.message.id_for_label }}');
+        if (!messageField.value.trim()) {
+            this.markFieldInvalid(messageField, 'Message is required');
+            isValid = false;
+        }
+        
+        // Start date validation
+        const startDateField = document.getElementById('{{ form.start_date.id_for_label }}');
+        if (!startDateField.value) {
+            this.markFieldInvalid(startDateField, 'Start date is required');
+            isValid = false;
+        }
+        
+        // Role validation
+        if (!this.validateRoleSelection()) {
+            this.showToast('Please select at least one target role', 'error');
+            isValid = false;
+        }
+        
+        return isValid;
+    },
+
+    markFieldInvalid: function(field, message) {
+        field.classList.add('is-invalid');
+        
+        const existingFeedback = field.parentNode.querySelector('.invalid-feedback');
+        if (existingFeedback) {
+            existingFeedback.remove();
+        }
+        
+        const feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i>${message}`;
+        field.parentNode.appendChild(feedback);
+    },
+
+    confirmReset: function() {
+        if (confirm('Are you sure you want to reset all changes? All unsaved changes will be lost.')) {
+            window.location.reload();
+        }
+    },
+
+    showToast: function(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.appendChild(toast);
+        
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    announcementUpdateHandler.init();
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', function(e) {
+    const changesIndicator = document.getElementById('changesIndicator');
+    if (changesIndicator.style.display === 'block') {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+window.announcementUpdateHandler = announcementUpdateHandler;
 </script>
 {% endblock %}

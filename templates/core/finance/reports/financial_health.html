@@ -8,67 +8,122 @@
     <div class="row mb-4">
         <div class="col-md-12">
             <h2>Financial Health Overview</h2>
-            <p class="text-muted">Current fiscal year data</p>
+            <p class="text-muted">Current fiscal year data - {{ current_year }}</p>
+        </div>
+    </div>
+
+    <!-- Financial Health Score -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="card-title">Financial Health Score</h5>
+                            <p class="card-text">Overall assessment of your institution's financial position</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="display-4 {% if health_score >= 80 %}text-success{% elif health_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ health_score }}/100
+                            </div>
+                            <span class="health-indicator {% if health_score >= 80 %}health-good{% elif health_score >= 60 %}health-fair{% else %}health-poor{% endif %}">
+                                {% if health_score >= 80 %}Excellent{% elif health_score >= 60 %}Fair{% else %}Needs Attention{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Key Metrics -->
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card">
+            <div class="card financial-metric metric-positive">
                 <div class="card-body">
                     <h5 class="card-title">Income</h5>
                     <h3 class="card-text text-success">GH₵ {{ income|intcomma }}</h3>
+                    <small class="text-muted">YTD Collections</small>
+                    <div class="mt-2">
+                        <span class="badge bg-success">+{{ income_growth|floatformat:1 }}%</span>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card">
+            <div class="card financial-metric metric-negative">
                 <div class="card-body">
                     <h5 class="card-title">Expenses</h5>
                     <h3 class="card-text text-danger">GH₵ {{ expenses|intcomma }}</h3>
+                    <small class="text-muted">YTD Expenditure</small>
+                    <div class="mt-2">
+                        <span class="badge {% if expense_growth > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                            {% if expense_growth > 0 %}+{% endif %}{{ expense_growth|floatformat:1 }}%
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card">
+            <div class="card financial-metric {% if net_profit < 0 %}metric-negative{% else %}metric-positive{% endif %}">
                 <div class="card-body">
                     <h5 class="card-title">Net Profit/Loss</h5>
                     <h3 class="card-text {% if net_profit < 0 %}text-danger{% else %}text-success{% endif %}">
                         GH₵ {{ net_profit|intcomma }}
                     </h3>
+                    <small class="text-muted">
+                        {% if net_profit < 0 %}
+                        <span class="health-indicator health-poor">Operating at Loss</span>
+                        {% else %}
+                        <span class="health-indicator health-good">Profitable</span>
+                        {% endif %}
+                    </small>
+                    <div class="mt-2">
+                        <span class="badge {% if profit_margin >= 20 %}bg-success{% elif profit_margin >= 10 %}bg-warning{% else %}bg-danger{% endif %}">
+                            {{ profit_margin|floatformat:1 }}% Margin
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card">
+            <div class="card financial-metric metric-warning">
                 <div class="card-body">
                     <h5 class="card-title">Receivables</h5>
                     <h3 class="card-text text-warning">GH₵ {{ receivables|intcomma }}</h3>
+                    <small class="text-muted">Outstanding Fees</small>
+                    <div class="mt-2">
+                        <span class="badge {% if receivables_ratio > 30 %}bg-danger{% elif receivables_ratio > 20 %}bg-warning{% else %}bg-success{% endif %}">
+                            {{ receivables_ratio|floatformat:1 }}% of Income
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Cash Flow -->
+    <!-- Cash Flow & Liabilities -->
     <div class="row mb-4">
         <div class="col-md-8">
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">Cash Flow (Last 90 Days)</h5>
-                    <div id="cashFlowChart" style="height: 300px;"></div>
+                    <div class="chart-container">
+                        <canvas id="cashFlowChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title">Liabilities</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Liabilities</h5>
+                    <span class="badge bg-danger">GH₵ {{ total_liabilities|intcomma }}</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
                                 <tr>
                                     <th>Name</th>
                                     <th>Amount</th>
@@ -78,7 +133,7 @@
                             <tbody>
                                 {% for debt in debts %}
                                 <tr>
-                                    <td>{{ debt.name }}</td>
+                                    <td class="{% if not debt.paid %}fw-bold{% endif %}">{{ debt.name }}</td>
                                     <td>GH₵ {{ debt.amount|intcomma }}</td>
                                     <td>
                                         <span class="badge {% if debt.paid %}bg-success{% else %}bg-warning{% endif %}">
@@ -88,7 +143,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="3" class="text-center">No outstanding debts</td>
+                                    <td colspan="3" class="text-center py-3 text-muted">No outstanding liabilities</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -96,52 +151,283 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Quick Stats -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">Quick Stats</h6>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <div class="h5 text-primary mb-1">{{ collection_rate|floatformat:1 }}%</div>
+                                <small class="text-muted">Collection Rate</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="h5 {% if expense_ratio > 80 %}text-danger{% elif expense_ratio > 70 %}text-warning{% else %}text-success{% endif %} mb-1">
+                                {{ expense_ratio|floatformat:1 }}%
+                            </div>
+                            <small class="text-muted">Expense Ratio</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Metrics -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Revenue Trends</h5>
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="h6 text-success">This Month</div>
+                            <div class="h4">GH₵ {{ current_month_income|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="h6 text-primary">Last Month</div>
+                            <div class="h4">GH₵ {{ last_month_income|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="h6 text-info">Monthly Avg</div>
+                            <div class="h4">GH₵ {{ monthly_avg_income|intcomma }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Payment Methods</h5>
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="h6 text-primary">Cash</div>
+                            <div class="h5">{{ cash_percentage|floatformat:1 }}%</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h6 text-success">Mobile Money</div>
+                            <div class="h5">{{ momo_percentage|floatformat:1 }}%</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h6 text-info">Bank Transfer</div>
+                            <div class="h5">{{ bank_percentage|floatformat:1 }}%</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h6 text-warning">Other</div>
+                            <div class="h5">{{ other_percentage|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<style>
+.financial-metric {
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+    height: 100%;
+}
+
+.financial-metric:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.metric-positive {
+    border-left-color: #28a745;
+}
+
+.metric-negative {
+    border-left-color: #dc3545;
+}
+
+.metric-warning {
+    border-left-color: #ffc107;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+.health-indicator {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-weight: 500;
+}
+
+.health-good {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.health-fair {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.health-poor {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Cash Flow Chart
-    const cashFlowCtx = document.getElementById('cashFlowChart').getContext('2d');
-    const cashFlowChart = new Chart(cashFlowCtx, {
-        type: 'line',
-        data: {
-            labels: [{% for flow in cash_flow %}"{{ flow.payment_date|date:'M d' }}"{% if not forloop.last %},{% endif %}{% endfor %}],
-            datasets: [{
-                label: 'Income',
-                data: [{% for flow in cash_flow %}{{ flow.income }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                borderColor: 'rgba(75, 192, 192, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return 'GH₵' + context.raw.toFixed(2);
+document.addEventListener('DOMContentLoaded', function() {
+    // Cash Flow Chart with better error handling
+    const cashFlowCtx = document.getElementById('cashFlowChart');
+    
+    if (cashFlowCtx) {
+        try {
+            const cashFlowData = JSON.parse('{{ cash_flow_json|escapejs }}');
+            
+            if (cashFlowData && cashFlowData.length > 0) {
+                const labels = cashFlowData.map(item => {
+                    const date = new Date(item.payment_date);
+                    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                });
+                const incomeData = cashFlowData.map(item => parseFloat(item.income || 0));
+                
+                const cashFlowChart = new Chart(cashFlowCtx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Daily Revenue',
+                            data: incomeData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleFont: { size: 14 },
+                                bodyFont: { size: 13 },
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'GH₵ ' + context.raw.toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'GH₵ ' + value.toLocaleString();
+                                    },
+                                    font: {
+                                        size: 11
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'GH₵' + value;
-                        }
-                    }
-                }
+                });
+            } else {
+                cashFlowCtx.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-chart-line fa-3x mb-3"></i>
+                        <p>No cash flow data available for the selected period</p>
+                    </div>
+                `;
             }
+        } catch (error) {
+            console.error('Error initializing cash flow chart:', error);
+            cashFlowCtx.innerHTML = `
+                <div class="text-center py-5 text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                    <p>Error loading chart data</p>
+                    <small>Please refresh the page or try again later</small>
+                </div>
+            `;
         }
+    }
+    
+    // Add metric cards animation
+    const metricCards = document.querySelectorAll('.financial-metric');
+    metricCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
     });
+    
+    // Add loading states for better UX
+    const cards = document.querySelectorAll('.card');
+    cards.forEach(card => {
+        card.addEventListener('click', function() {
+            this.style.transform = 'scale(0.98)';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 150);
+        });
+    });
+});
 </script>
 {% endblock %}

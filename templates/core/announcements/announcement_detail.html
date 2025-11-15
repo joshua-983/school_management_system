@@ -47,9 +47,8 @@
 
 .meta-item {
     display: flex;
-    justify-content: between;
     align-items: center;
-    padding: 0.5rem 0;
+    padding: 0.75rem 0;
     border-bottom: 1px solid #e9ecef;
 }
 
@@ -98,6 +97,7 @@
     border: 2px dashed #dee2e6;
     border-radius: 10px;
     transition: all 0.3s ease;
+    padding: 1rem;
 }
 
 .attachment-card:hover {
@@ -111,11 +111,145 @@
     border-radius: 10px;
     padding: 1rem;
 }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    border-left: 4px solid #3a7bd5;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #3a7bd5;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.view-timeline {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.timeline-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e9ecef;
+    border-left: 3px solid #007bff;
+    background: #f8f9fa;
+    margin-bottom: 0.5rem;
+    border-radius: 0 8px 8px 0;
+}
+
+.timeline-item:last-child {
+    border-bottom: none;
+}
+
+/* Alert container */
+.alert-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 300px;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Print styles */
+@media print {
+    .action-buttons,
+    .announcement-actions {
+        display: none !important;
+    }
+    
+    .announcement-header {
+        background: #f8f9fa !important;
+        color: #000 !important;
+    }
+    
+    .alert-container {
+        display: none !important;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .announcement-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .meta-item {
+        flex-direction: column;
+        align-items: start;
+        text-align: left;
+    }
+    
+    .meta-icon {
+        margin-bottom: 0.5rem;
+        margin-right: 0;
+    }
+    
+    .alert-container {
+        left: 10px;
+        right: 10px;
+        top: 70px;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
+    <!-- Messages Display -->
+    <div class="alert-container">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            <i class="bi 
+                {% if message.tags == 'success' %}bi-check-circle 
+                {% elif message.tags == 'error' %}bi-exclamation-circle 
+                {% else %}bi-info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+
     <div class="row justify-content-center">
         <div class="col-lg-10 col-xl-8">
             <!-- Back Button -->
@@ -131,7 +265,7 @@
                 <div class="announcement-header">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
-                            <h1 class="h3 mb-3">{{ announcement.title }}</h1>
+                            <h1 class="h3 mb-3" id="announcementTitle">{{ announcement.title }}</h1>
                             
                             <!-- Priority and Status Badges -->
                             <div class="d-flex flex-wrap gap-2 mb-3">
@@ -152,23 +286,28 @@
                             </div>
                             
                             <!-- Author and Date -->
-                            <div class="d-flex align-items-center text-white-50">
-                                <i class="bi bi-person me-2"></i>
-                                <span class="me-3">By {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}</span>
+                            <div class="d-flex align-items-center text-white-50 flex-wrap gap-3">
+                                <span class="d-flex align-items-center">
+                                    <i class="bi bi-person me-2"></i>
+                                    By {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
+                                </span>
                                 
-                                <i class="bi bi-calendar me-2"></i>
-                                <span>{{ announcement.created_at|date:"F j, Y" }}</span>
+                                <span class="d-flex align-items-center">
+                                    <i class="bi bi-calendar me-2"></i>
+                                    {{ announcement.created_at|date:"F j, Y" }}
+                                </span>
                             </div>
                         </div>
                         
                         <!-- Action Buttons -->
-                        {% if user.is_staff or user.is_teacher or user == announcement.created_by %}
-                        <div class="dropdown">
+                        {% if user.is_staff or user.teacher or user == announcement.created_by %}
+                        <div class="dropdown announcement-actions">
                             <button class="btn btn-light dropdown-toggle" type="button" 
-                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    aria-label="Announcement actions">
                                 <i class="bi bi-three-dots-vertical"></i>
                             </button>
-                            <ul class="dropdown-menu">
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
                                 <li>
                                     <a class="dropdown-item" href="{% url 'update_announcement' announcement.pk %}">
                                         <i class="bi bi-pencil me-2"></i>Edit Announcement
@@ -176,25 +315,49 @@
                                 </li>
                                 <li>
                                     {% if announcement.is_active %}
-                                    <a class="dropdown-item text-warning" href="#" 
-                                       onclick="toggleAnnouncementStatus({{ announcement.pk }}, false)">
+                                    <button class="dropdown-item text-warning toggle-status" 
+                                            onclick="announcementDetail.toggleStatus({{ announcement.pk }}, false)">
                                         <i class="bi bi-pause-circle me-2"></i>Deactivate
-                                    </a>
+                                    </button>
                                     {% else %}
-                                    <a class="dropdown-item text-success" href="#" 
-                                       onclick="toggleAnnouncementStatus({{ announcement.pk }}, true)">
+                                    <button class="dropdown-item text-success toggle-status" 
+                                            onclick="announcementDetail.toggleStatus({{ announcement.pk }}, true)">
                                         <i class="bi bi-play-circle me-2"></i>Activate
-                                    </a>
+                                    </button>
                                     {% endif %}
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
-                                    <a class="dropdown-item text-danger" 
-                                       href="{% url 'delete_announcement' announcement.pk %}">
+                                    <button class="dropdown-item text-danger" 
+                                           onclick="announcementDetail.confirmDelete({{ announcement.pk }})">
                                         <i class="bi bi-trash me-2"></i>Delete
-                                    </a>
+                                    </button>
                                 </li>
                             </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="px-4 pt-3">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-number">{{ views_count|default:0 }}</span>
+                            <span class="stat-label">Total Views</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number">{{ announcement.created_at|date:"M d, Y" }}</span>
+                            <span class="stat-label">Created Date</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number">{{ announcement.created_by.get_full_name }}</span>
+                            <span class="stat-label">Created By</span>
+                        </div>
+                        {% if announcement.end_date %}
+                        <div class="stat-card">
+                            <span class="stat-number">{{ announcement.end_date|date:"M d, Y" }}</span>
+                            <span class="stat-label">Expiry Date</span>
                         </div>
                         {% endif %}
                     </div>
@@ -206,12 +369,12 @@
                         <!-- Main Content -->
                         <div class="col-lg-8">
                             <!-- Announcement Message -->
-                            <div class="announcement-content mb-4">
+                            <div class="announcement-content mb-4" id="announcementMessage">
                                 {{ announcement.message }}
                             </div>
 
                             <!-- Expiry Warning -->
-                            {% if announcement.end_date and announcement.end_date < now %}
+                            {% if announcement.end_date and announcement.is_expired %}
                             <div class="expiry-warning mb-4">
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
@@ -263,16 +426,20 @@
                             <!-- Action Buttons -->
                             <div class="d-flex flex-wrap gap-2 action-buttons mt-4">
                                 {% if user != announcement.created_by and announcement.is_active %}
-                                <button class="btn btn-outline-warning" onclick="dismissAnnouncement({{ announcement.pk }})">
+                                <button class="btn btn-outline-warning" onclick="announcementDetail.dismiss({{ announcement.pk }})">
                                     <i class="bi bi-eye-slash me-2"></i>Dismiss
                                 </button>
                                 {% endif %}
                                 
-                                <button class="btn btn-outline-primary" onclick="copyAnnouncementLink()">
+                                <button class="btn btn-outline-primary" onclick="announcementDetail.copyLink()">
                                     <i class="bi bi-link-45deg me-2"></i>Copy Link
                                 </button>
                                 
-                                {% if user.is_staff or user.is_teacher %}
+                                <button class="btn btn-outline-secondary" onclick="window.print()">
+                                    <i class="bi bi-printer me-2"></i>Print
+                                </button>
+                                
+                                {% if user.is_staff or user.teacher %}
                                 <a href="{% url 'create_announcement' %}" class="btn btn-primary">
                                     <i class="bi bi-plus-circle me-2"></i>Create New
                                 </a>
@@ -339,7 +506,7 @@
                                     <div class="meta-content">
                                         <strong>Views</strong>
                                         <div class="text-muted">
-                                            {{ announcement.userannouncementview_set.count }} views
+                                            {{ views_count }} views
                                         </div>
                                     </div>
                                 </div>
@@ -362,7 +529,7 @@
                                 <div class="row text-center">
                                     <div class="col-6">
                                         <div class="p-3 bg-light rounded">
-                                            <div class="h5 mb-1 text-primary">{{ announcement.userannouncementview_set.count }}</div>
+                                            <div class="h5 mb-1 text-primary">{{ views_count }}</div>
                                             <small class="text-muted">Total Views</small>
                                         </div>
                                     </div>
@@ -376,13 +543,37 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Recent Views -->
+                            {% if user.is_staff or user.teacher %}
+                            <div class="mt-4">
+                                <h6 class="text-muted mb-3">Recent Views</h6>
+                                <div class="view-timeline">
+                                    {% for view in announcement.userannouncementview_set.all|slice:":5" %}
+                                    <div class="timeline-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="fw-semibold">{{ view.user.get_full_name|default:view.user.username }}</small>
+                                            <small class="text-muted">{{ view.viewed_at|timesince }} ago</small>
+                                        </div>
+                                        {% if view.dismissed %}
+                                        <small class="text-warning">
+                                            <i class="bi bi-eye-slash me-1"></i>Dismissed
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                    {% empty %}
+                                    <p class="text-muted small text-center py-2">No views yet</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Related Actions Card -->
-            {% if user.is_staff or user.is_teacher %}
+            {% if user.is_staff or user.teacher %}
             <div class="card mt-4">
                 <div class="card-body">
                     <h6 class="text-muted mb-3">Management Actions</h6>
@@ -407,136 +598,208 @@
 
 {% block extra_js %}
 <script>
-// Copy announcement link to clipboard
-function copyAnnouncementLink() {
-    const link = window.location.href;
-    
-    navigator.clipboard.writeText(link).then(() => {
-        showToast('Announcement link copied to clipboard!', 'success');
-    }).catch(() => {
-        showToast('Failed to copy link', 'error');
-    });
-}
+// Enhanced announcement detail page functionality
+const announcementDetail = {
+    // Copy announcement link to clipboard
+    copyLink: function() {
+        const link = window.location.href;
+        
+        navigator.clipboard.writeText(link).then(() => {
+            this.showToast('Announcement link copied to clipboard!', 'success');
+        }).catch(() => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = link;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            this.showToast('Announcement link copied to clipboard!', 'success');
+        });
+    },
 
-// Dismiss announcement
-function dismissAnnouncement(announcementId) {
-    if (!confirm('Are you sure you want to dismiss this announcement? You can always find it in the announcements list.')) {
-        return;
-    }
-    
-    fetch(`/announcements/${announcementId}/dismiss/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json',
+    // Dismiss announcement
+    dismiss: function(announcementId) {
+        if (!confirm('Are you sure you want to dismiss this announcement? You can always find it in the announcements list.')) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast('Announcement dismissed', 'success');
-            // Redirect to announcements list after a delay
-            setTimeout(() => {
-                window.location.href = "{% url 'announcement_list' %}";
-            }, 1500);
-        } else {
-            showToast('Failed to dismiss announcement', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error dismissing announcement:', error);
-        showToast('Failed to dismiss announcement', 'error');
-    });
-}
+        
+        this.setLoading(true);
+        
+        fetch(`/announcements/${announcementId}/dismiss/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': this.getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            this.setLoading(false);
+            if (data.status === 'success') {
+                this.showToast('Announcement dismissed', 'success');
+                setTimeout(() => window.location.href = "{% url 'announcement_list' %}", 1000);
+            } else {
+                this.showToast('Failed to dismiss announcement', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error dismissing announcement:', error);
+            this.setLoading(false);
+            this.showToast('Failed to dismiss announcement', 'error');
+        });
+    },
 
-// Toggle announcement status
-function toggleAnnouncementStatus(announcementId, activate) {
-    const action = activate ? 'activate' : 'deactivate';
-    
-    if (!confirm(`Are you sure you want to ${action} this announcement?`)) {
-        return;
-    }
-    
-    fetch(`/announcements/${announcementId}/toggle-status/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json',
+    // Toggle announcement status
+    toggleStatus: function(announcementId, activate) {
+        const action = activate ? 'activate' : 'deactivate';
+        
+        if (!confirm(`Are you sure you want to ${action} this announcement?`)) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast(`Announcement ${action}d successfully`, 'success');
-            // Reload to reflect changes
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            showToast(`Failed to ${action} announcement`, 'error');
+        
+        this.setLoading(true);
+        
+        fetch(`/announcements/${announcementId}/toggle-status/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': this.getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            this.setLoading(false);
+            if (data.status === 'success') {
+                this.showToast(`Announcement ${action}d successfully`, 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                this.showToast(`Failed to ${action} announcement: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling announcement status:', error);
+            this.setLoading(false);
+            this.showToast(`Failed to ${action} announcement`, 'error');
+        });
+    },
+
+    // Confirm delete action
+    confirmDelete: function(announcementId) {
+        if (confirm('Are you sure you want to delete this announcement? This action cannot be undone.')) {
+            window.location.href = `{% url 'delete_announcement' 0 %}`.replace('0', announcementId);
         }
-    })
-    .catch(error => {
-        console.error('Error toggling announcement status:', error);
-        showToast(`Failed to ${action} announcement`, 'error');
-    });
-}
+    },
 
-// Utility functions
-function showToast(message, type) {
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-bg-${type} border-0`;
-    toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-                ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-    `;
-    
-    // Add to toast container
-    let toastContainer = document.getElementById('toastContainer');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toastContainer';
-        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-        document.body.appendChild(toastContainer);
-    }
-    
-    toastContainer.appendChild(toast);
-    
-    // Initialize and show toast
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    
-    // Remove toast after hidden
-    toast.addEventListener('hidden.bs.toast', () => {
-        toast.remove();
-    });
-}
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
+    // Set loading state
+    setLoading: function(isLoading) {
+        const card = document.querySelector('.announcement-detail-card');
+        if (card) {
+            if (isLoading) {
+                card.classList.add('loading');
+            } else {
+                card.classList.remove('loading');
             }
         }
-    }
-    return cookieValue;
-}
+    },
 
-// Initialize tooltips
+    // Show toast notification
+    showToast: function(message, type) {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        // Add to toast container
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.appendChild(toast);
+        
+        // Initialize and show toast
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        // Remove toast after hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    },
+
+    // Get CSRF token
+    getCookie: function(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    },
+
+    // Initialize page functionality
+    init: function() {
+        // Initialize tooltips
+        this.initTooltips();
+        this.autoDismissMessages();
+    },
+
+    // Auto-dismiss messages after 5 seconds
+    autoDismissMessages: function() {
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    },
+
+    // Initialize tooltips
+    initTooltips: function() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+};
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    announcementDetail.init();
 });
+
+// Export for global access
+window.announcementDetail = announcementDetail;
 </script>
 {% endblock %}

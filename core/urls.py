@@ -1,4 +1,4 @@
-# core/urls.py - FIXED VERSION
+# core/urls.py - UPDATED VERSION (FIXED)
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
@@ -31,10 +31,9 @@ from .views.fee_views import (
     FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
     FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView,
     FeeStatusReportView, BillPaymentCreateView, GenerateTermFeesView,
-    BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView
-)
-from .views.fee_views import (
-    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView, BudgetManagementView
+    BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView,
+    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView, BudgetManagementView,
+    PaymentSummaryView, RefreshPaymentDataView, BudgetCreateView
 )
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
@@ -70,7 +69,15 @@ from .views.grade_views import (
     grade_delete
 )
 
-from .views.reportcard_views import ReportCardDashboardView, CreateReportCardView, ReportCardView, ReportCardPDFView, SaveReportCardView
+# ==============================
+# REPORT CARD VIEWS IMPORTS - FIXED: Import the new Quick View classes
+# ==============================
+from .views.reportcard_views import (
+    ReportCardDashboardView, CreateReportCardView, ReportCardView, 
+    ReportCardPDFView, SaveReportCardView,
+    QuickViewReportCardView, QuickViewReportCardPDFView  # ADD THESE
+)
+
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
 
 from .views.audit_views import (
@@ -97,8 +104,21 @@ from .views.timetable_views import (
     TimetableListView, TimetableCreateView, TimetableDetailView, TimetableManageView, TimetableDeleteView,
     StudentTimetableView, TeacherTimetableView, get_timetable_entries, generate_weekly_timetable
 )
-from .views.misc import NotificationListView, mark_notification_read, mark_all_notifications_read, notification_count
-from .views.bill_views import BillListView, BillDetailView, BillGenerateView
+from .views.notifications_views import (
+    NotificationListView, 
+    mark_notification_read, 
+    mark_all_notifications_read,
+    get_unread_count
+)
+
+# ==============================
+# BILL VIEWS IMPORTS - FIXED: Import all bill views directly
+# ==============================
+from .views.bill_views import (
+    BillListView, BillDetailView, BillGenerateView, BillPaymentView, BillCancelView,
+    BulkSendRemindersView, BulkExportBillsView, BulkMarkPaidView, BulkDeleteBillsView
+)
+
 
 # ==============================
 # ANNOUNCEMENT VIEWS IMPORTS
@@ -106,12 +126,14 @@ from .views.bill_views import BillListView, BillDetailView, BillGenerateView
 from .views.announcement_views import (
     AnnouncementListView, CreateAnnouncementView, UpdateAnnouncementView, 
     DeleteAnnouncementView, get_active_announcements, dismiss_announcement, 
-    dismiss_all_announcements, announcement_detail, toggle_announcement_status
+    dismiss_all_announcements, announcement_detail, toggle_announcement_status,
+    bulk_action_announcements, AnnouncementStatsView
 )
 
 # Import API views
 from .api import FeeCategoryViewSet
 from .views.api import fee_category_detail
+
 
 router = DefaultRouter()
 router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
@@ -166,15 +188,27 @@ urlpatterns = [
     path('fees/<int:pk>/delete/', FeeDeleteView.as_view(), name='fee_delete'),
     path('students/<int:student_id>/fees/add/', FeeCreateView.as_view(), name='fee_create'),
     
+    # ==============================
+    # BILL MANAGEMENT URLS - FIXED: Use direct imports instead of bill_views.
+    # ==============================
+    path('bills/', BillListView.as_view(), name='bill_list'),
+    path('bills/<int:pk>/', BillDetailView.as_view(), name='bill_detail'),
+    path('bills/generate/', BillGenerateView.as_view(), name='bill_generate'),
+    path('bills/<int:pk>/payment/', BillPaymentView.as_view(), name='bill_payment'),
+    path('bills/<int:pk>/cancel/', BillCancelView.as_view(), name='bill_cancel'),
+    
+    # Bulk action URLs
+    path('bills/bulk/send-reminders/', BulkSendRemindersView.as_view(), name='bulk_send_reminders'),
+    path('bills/bulk/export/', BulkExportBillsView.as_view(), name='bulk_export_bills'),
+    path('bills/bulk/mark-paid/', BulkMarkPaidView.as_view(), name='bulk_mark_paid'),
+    path('bills/bulk/delete/', BulkDeleteBillsView.as_view(), name='bulk_delete_bills'),
+    
     # Fee Payment URLs
     path('fees/<int:fee_id>/payments/add/', FeePaymentCreateView.as_view(), name='fee_payment_create'),
     path('payments/<int:pk>/delete/', FeePaymentDeleteView.as_view(), name='fee_payment_delete'),
     
     # Bill Payment URLs
     path('bills/<int:bill_id>/payments/add/', BillPaymentCreateView.as_view(), name='bill_payment_create'),
-    
-    # Fee Generation & Automation - FIXED: Only one entry for bill_generate
-    path('bills/generate/', GenerateTermFeesView.as_view(), name='bill_generate'),
     
     # Fee Generation & Automation
     path('fees/generate-term-fees/', GenerateTermFeesView.as_view(), name='generate_term_fees'),
@@ -189,9 +223,12 @@ urlpatterns = [
     # Finance Dashboard URLs
     path('finance/dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
     path('finance/revenue-analytics/', RevenueAnalyticsView.as_view(), name='revenue_analytics'),
-    path('finance/financial-health/', FinancialHealthView.as_view(), name='financial_health'),
+    path('finance/financial-health/', FinancialHealthView.as_view(), name='financial_health'),  # SINGLE INSTANCE - REMOVED DUPLICATE
     path('finance/budget-management/', BudgetManagementView.as_view(), name='budget_management'),
-    
+    path('finance/payment-summary/', PaymentSummaryView.as_view(), name='payment_summary'),
+    path('finance/payment-summary/refresh/', RefreshPaymentDataView.as_view(), name='refresh_payment_data'),
+    # Add this to your core/urls.py
+    path('finance/budget/create/', BudgetCreateView.as_view(), name='budget_create'),
     # ==============================
     # SUBJECT URLS
     # ==============================
@@ -276,7 +313,7 @@ urlpatterns = [
     path('api/students-by-class/', get_students_by_class, name='api_students_by_class'),
     
     # ==============================
-    # REPORT CARD URLS
+    # REPORT CARD URLS - FIXED: Use direct imports
     # ==============================
     path('report-cards/create/', CreateReportCardView.as_view(), name='create_report_card'),
     path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'), 
@@ -286,12 +323,17 @@ urlpatterns = [
     path('report-card/pdf/<int:student_id>/<int:report_card_id>/', ReportCardPDFView.as_view(), name='report_card_pdf_detail'),
     path('report-card/save/<int:student_id>/', SaveReportCardView.as_view(), name='save_report_card'),
     
+    # Quick View Report Card URLs - FIXED: Use direct imports
+    path('quick-view/', QuickViewReportCardView.as_view(), name='quick_view_report_card'),
+    path('quick-view/pdf/', QuickViewReportCardPDFView.as_view(), name='quick_view_report_card_pdf'),
+    
     # ==============================
     # PROGRESS & ANALYTICS URLS
     # ==============================
     path('students/<int:student_id>/progress-chart/', student_progress_chart, name='student_progress_chart'),
     path('class/<str:class_level>/performance-chart/', class_performance_chart, name='class_performance_chart'),
     path('analytics/', ComprehensiveAnalyticsDashboardView.as_view(), name='analytics_dashboard'),
+    
     # ==============================
     # ENHANCED AUDIT LOG URLS
     # ==============================
@@ -342,10 +384,10 @@ urlpatterns = [
     # NOTIFICATION URLS
     # ==============================
     path('notifications/', NotificationListView.as_view(), name='notification_list'),
-    path('notifications/mark-all-read/', mark_all_notifications_read, name='mark_all_notifications_read'),
-    path('notifications/<int:pk>/mark-read/', mark_notification_read, name='mark_notification_read'),
-    path('api/notifications/count/', notification_count, name='notification_count'),
-    path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_mark_notification_read'),
+path('notifications/mark-all-read/', mark_all_notifications_read, name='mark_all_notifications_read'),
+path('notifications/<int:pk>/mark-read/', mark_notification_read, name='mark_notification_read'),
+path('api/notifications/count/', get_unread_count, name='get_unread_count'),
+path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_mark_notification_read'),
     
     # ==============================
     # ATTENDANCE URLS
@@ -421,4 +463,6 @@ urlpatterns = [
     path('announcements/active/', get_active_announcements, name='active_announcements'),
     path('announcements/<int:pk>/dismiss/', dismiss_announcement, name='dismiss_announcement'),
     path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),
+    path('announcements/bulk-action/', bulk_action_announcements, name='bulk_action_announcements'),
+    path('announcements/stats/', AnnouncementStatsView.as_view(), name='announcement_stats'),
 ]

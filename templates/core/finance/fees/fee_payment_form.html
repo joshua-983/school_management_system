@@ -581,19 +581,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
 
-    // Fix payment mode field if it's disabled
-    function fixPaymentModeField() {
-        const paymentModeField = document.getElementById('{{ form.payment_mode.id_for_label }}');
-        if (paymentModeField && paymentModeField.disabled) {
-            console.log('Payment mode field is disabled, enabling it...');
-            paymentModeField.disabled = false;
-            paymentModeField.classList.remove('is-invalid');
-        }
-        
-        // Ensure the field has proper styling
-        if (paymentModeField) {
-            paymentModeField.classList.add('form-select');
-        }
+    // Fix payment mode field immediately on load
+    const paymentModeField = document.getElementById('{{ form.payment_mode.id_for_label }}');
+    if (paymentModeField) {
+        console.log('Payment mode field found, ensuring it is enabled...');
+        paymentModeField.disabled = false;
+        paymentModeField.readOnly = false;
+        paymentModeField.classList.add('form-select');
+        paymentModeField.classList.remove('is-invalid');
     }
 
     // Initialize datepicker
@@ -661,9 +656,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize balance display
     updateBalanceAfterPayment();
-
-    // Fix payment mode field on load
-    setTimeout(fixPaymentModeField, 100);
 
     // Enhanced form validation
     $('#payment-form').submit(function(e) {

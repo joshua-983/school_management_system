@@ -13,6 +13,7 @@
         --light: #f8f9fa;
         --dark: #212529;
         --success: #198754;
+        --warning: #ffc107;
         --danger: #dc3545;
         --border-radius: 10px;
         --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
@@ -100,6 +101,61 @@
         color: var(--secondary);
     }
     
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        margin: 1rem 0;
+    }
+    
+    .form-check-input {
+        width: 1.2em;
+        height: 1.2em;
+        margin: 0;
+    }
+    
+    .form-check-label {
+        font-weight: 500;
+        color: var(--dark);
+        flex: 1;
+    }
+    
+    .qualification-warning {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin: 1.5rem 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .qualification-warning i {
+        color: var(--warning);
+        font-size: 1.5rem;
+        margin-top: 0.1rem;
+    }
+    
+    .qualification-warning-content {
+        flex: 1;
+    }
+    
+    .qualification-warning strong {
+        color: #856404;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .qualification-warning p {
+        margin: 0;
+        color: #856404;
+    }
+    
     .form-info {
         background: #e8f4ff;
         border-radius: 8px;
@@ -176,6 +232,57 @@
         gap: 0.4rem;
     }
     
+    .teacher-qualifications {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid var(--primary);
+    }
+    
+    .teacher-qualifications h6 {
+        margin: 0 0 0.5rem 0;
+        color: var(--primary-dark);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .qualification-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .qualification-badge {
+        background: var(--primary);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .qualification-badge.missing {
+        background: var(--warning);
+        color: var(--dark);
+    }
+    
+    .current-subject-badge {
+        background: var(--success);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border: 2px solid var(--success);
+    }
+    
     @media (max-width: 768px) {
         .form-grid {
             grid-template-columns: 1fr;
@@ -188,6 +295,11 @@
         
         .btn {
             width: 100%;
+        }
+        
+        .qualification-warning {
+            flex-direction: column;
+            gap: 0.75rem;
         }
     }
 </style>
@@ -206,6 +318,24 @@
         <div class="form-body">
             <form method="post" novalidate id="assignment-form">
                 {% csrf_token %}
+                
+                <!-- Qualification Warning Alert -->
+                {% if form.qualification_warning %}
+                <div class="qualification-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div class="qualification-warning-content">
+                        <strong>Qualification Notice</strong>
+                        <p>
+                            {{ form.unqualified_teacher.get_full_name }} is not currently qualified to teach {{ form.unqualified_subject.name }}.
+                            {% if is_admin %}
+                            You can add this subject to their qualifications using the checkbox below.
+                            {% else %}
+                            Please contact an administrator to add this subject to their qualifications.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
                 
                 {% if form.non_field_errors %}
                     <div class="error-message">
@@ -243,6 +373,22 @@
                             </div>
                         {% endif %}
                         <span class="form-hint">Select the subject or course</span>
+                        
+                        <!-- Show current subject selection -->
+                        {% if form.subject.value %}
+                            {% for subject_obj in form.subject.field.queryset %}
+                                {% if subject_obj.id == form.subject.value %}
+                                <div class="teacher-qualifications">
+                                    <h6><i class="bi bi-bookmark-check"></i> Selected Subject</h6>
+                                    <div class="qualification-list">
+                                        <span class="current-subject-badge">
+                                            <i class="bi bi-book"></i>{{ subject_obj.name }}
+                                        </span>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
                     </div>
                     
                     <div class="form-group">
@@ -257,6 +403,28 @@
                             </div>
                         {% endif %}
                         <span class="form-hint">Teacher responsible for this class</span>
+                        
+                        <!-- Show teacher's current qualifications - FIXED VERSION -->
+                        {% if form.teacher.value %}
+                            {% with selected_teacher_id=form.teacher.value %}
+                                {% for teacher_obj in form.teacher.field.queryset %}
+                                    {% if teacher_obj.id == selected_teacher_id %}
+                                    <div class="teacher-qualifications">
+                                        <h6><i class="bi bi-award"></i> Current Qualifications</h6>
+                                        <div class="qualification-list">
+                                            {% for subject in teacher_obj.subjects.all %}
+                                                <span class="qualification-badge">
+                                                    <i class="bi bi-check-lg"></i>{{ subject.name }}
+                                                </span>
+                                            {% empty %}
+                                                <span class="text-muted">No subjects qualified</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endwith %}
+                        {% endif %}
                     </div>
                     
                     <div class="form-group">
@@ -270,8 +438,36 @@
                                 <i class="bi bi-x-circle"></i>{{ form.academic_year.errors.as_text }}
                             </div>
                         {% endif %}
-                        <span class="form-hint">Format: YYYY-YYYY (e.g., 2023-2024)</span>
+                        <span class="form-hint">Format: YYYY/YYYY (e.g., 2023/2024)</span>
                     </div>
+                </div>
+                
+                <!-- Qualification Checkbox (Admin Only) -->
+                {% if is_admin and not form.teacher.field.disabled %}
+                <div class="form-check">
+                    {{ form.add_qualification }}
+                    <label for="{{ form.add_qualification.id_for_label }}" class="form-check-label">
+                        <i class="bi bi-check-circle"></i>
+                        Add subject to teacher's qualifications automatically
+                    </label>
+                </div>
+                <div class="form-hint">
+                    When checked, this subject will be automatically added to the teacher's qualified subjects list.
+                </div>
+                {% else %}
+                    {{ form.add_qualification.as_hidden }}
+                {% endif %}
+                
+                <!-- Active Status Field -->
+                <div class="form-group">
+                    <div class="form-check">
+                        {{ form.is_active }}
+                        <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+                            <i class="bi bi-toggle-on"></i>
+                            Active Assignment
+                        </label>
+                    </div>
+                    <span class="form-hint">Uncheck to deactivate this assignment</span>
                 </div>
                 
                 <div class="form-info">
@@ -279,6 +475,7 @@
                     <div class="form-info-content">
                         <strong>What is a Class Assignment?</strong> 
                         This assigns a specific teacher to teach a particular subject to a class for an academic year.
+                        The system will warn you if a teacher is not qualified for a subject, but will allow the assignment to proceed.
                     </div>
                 </div>
                 
@@ -314,13 +511,61 @@
             });
         });
         
+        // Teacher change handler - update qualifications display
+        const teacherSelect = document.getElementById('{{ form.teacher.id_for_label }}');
+        if (teacherSelect) {
+            teacherSelect.addEventListener('change', function() {
+                // In a real implementation, you would fetch teacher qualifications via AJAX
+                // For now, we'll just show a loading state and reload the page to update qualifications
+                const qualificationsDiv = document.querySelector('.teacher-qualifications');
+                if (qualificationsDiv) {
+                    qualificationsDiv.innerHTML = '<p><i class="bi bi-hourglass-split"></i> Loading qualifications...</p>';
+                }
+                
+                // Simple approach: submit form to refresh with new teacher data
+                // In production, you'd use AJAX to fetch qualifications
+                console.log('Teacher changed to:', this.value);
+            });
+        }
+        
+        // Subject change handler - check for qualification conflicts
+        const subjectSelect = document.getElementById('{{ form.subject.id_for_label }}');
+        if (subjectSelect && teacherSelect) {
+            subjectSelect.addEventListener('change', function() {
+                // This would typically make an AJAX call to check if the selected teacher
+                // is qualified for the selected subject
+                console.log('Subject changed to:', this.value);
+                
+                // Highlight if there might be a qualification issue
+                const selectedSubject = this.options[this.selectedIndex].text;
+                console.log('Selected subject:', selectedSubject);
+            });
+        }
+        
         // Form submission handling
         form.addEventListener('submit', function(e) {
             // Show loading state on button
             const submitBtn = document.getElementById('submit-btn');
             if (submitBtn) {
-                submitBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Processing...';
+                submitBtn.innerHTML = '<i class="bi bi-arrow-repeat spinner"></i> Processing...';
                 submitBtn.disabled = true;
+            }
+            
+            // Check for qualification warnings and confirm if needed
+            const qualificationWarning = document.querySelector('.qualification-warning');
+            const addQualificationCheckbox = document.getElementById('{{ form.add_qualification.id_for_label }}');
+            
+            if (qualificationWarning && (!addQualificationCheckbox || !addQualificationCheckbox.checked)) {
+                const confirmed = confirm(
+                    'This teacher is not qualified for the selected subject. Are you sure you want to proceed with this assignment?'
+                );
+                if (!confirmed) {
+                    e.preventDefault();
+                    if (submitBtn) {
+                        submitBtn.innerHTML = '<i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment';
+                        submitBtn.disabled = false;
+                    }
+                }
             }
         });
         
@@ -328,9 +573,9 @@
         const academicYearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
         if (academicYearInput) {
             academicYearInput.addEventListener('blur', function() {
-                const pattern = /^\d{4}-\d{4}$/;
+                const pattern = /^\d{4}\/\d{4}$/;
                 if (this.value && !pattern.test(this.value)) {
-                    this.setCustomValidity('Please use format: YYYY-YYYY (e.g., 2023-2024)');
+                    this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
                     this.style.borderColor = '#dc3545';
                 } else {
                     this.setCustomValidity('');
@@ -339,8 +584,21 @@
             });
             
             // Add placeholder text
-            academicYearInput.placeholder = "2023-2024";
+            academicYearInput.placeholder = "2023/2024";
         }
+        
+        // Add spinner animation
+        const style = document.createElement('style');
+        style.textContent = `
+            .spinner {
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
     });
 </script>
 {% endblock %}

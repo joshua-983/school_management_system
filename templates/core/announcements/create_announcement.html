@@ -1,290 +1,688 @@
+<!-- templates/core/announcements/create_announcement.html -->
 {% extends 'base.html' %}
 {% load static %}
+{% load widget_tweaks %}
 
-{% block title %}Create Announcement - School Management{% endblock %}
+{% block title %}Create Announcement - School Management System{% endblock %}
 
 {% block extra_css %}
 <style>
-.announcement-form-container {
-    background: white;
+.create-announcement-card {
+    border: none;
     border-radius: 15px;
     box-shadow: 0 5px 25px rgba(0,0,0,0.1);
-    overflow: hidden;
 }
 
-.form-header {
-    background: linear-gradient(135deg, #3a7bd5, #00d2ff);
-    color: white;
-    padding: 2rem;
+.form-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #007bff;
 }
 
-.priority-indicator {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-}
-
-.priority-LOW { background-color: #6c757d; }
-.priority-NORMAL { background-color: #17a2b8; }
-.priority-HIGH { background-color: #fd7e14; }
-.priority-URGENT { background-color: #dc3545; }
-
-.character-count {
-    font-size: 0.875rem;
-    color: #6c757d;
-}
-
-.character-count.warning {
-    color: #fd7e14;
-}
-
-.character-count.danger {
-    color: #dc3545;
-}
-
-.class-level-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-}
-
-.class-tag {
-    background: #e9ecef;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.875rem;
+.form-section h6 {
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
     display: flex;
     align-items: center;
-    gap: 8px;
-    cursor: pointer;
+}
+
+.alert-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1050;
+    min-width: 300px;
+}
+
+/* Selection Styles */
+.selection-container {
+    margin-top: 1rem;
+}
+
+.quick-selection-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.quick-selection-btn {
+    border-radius: 20px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
     transition: all 0.3s ease;
 }
 
-.class-tag:hover {
-    background: #dee2e6;
+.selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
 }
 
-.class-tag.selected {
-    background: #3a7bd5;
+.selection-card {
+    position: relative;
+}
+
+.selection-checkbox {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.selection-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0.5rem;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 80px;
+    user-select: none;
+}
+
+.selection-label:hover {
+    border-color: #007bff;
+    background: #f8f9ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.selection-checkbox:checked + .selection-label {
+    border-color: #007bff;
+    background: #007bff;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+}
+
+.selection-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.selection-checkbox:checked + .selection-label .selection-icon {
+    transform: scale(1.1);
     color: white;
 }
 
-.class-tag .remove-tag {
-    opacity: 0.7;
-    font-size: 0.75rem;
+.selection-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
 }
 
-.class-tag .remove-tag:hover {
-    opacity: 1;
+.selection-badge {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    background: rgba(255,255,255,0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.selection-checkbox:not(:checked) + .selection-label .selection-badge {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.selection-summary {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.selection-summary.has-selection {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+/* Priority Options */
+.priority-options {
+    display: grid;
+    gap: 1rem;
+}
+
+.priority-option {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 0;
+}
+
+.priority-option:hover {
+    border-color: #007bff;
+    background: #f8f9ff;
+    transform: translateY(-1px);
+}
+
+.priority-option.selected {
+    border-color: #007bff;
+    background: #007bff;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+}
+
+.priority-option.urgent {
+    border-left: 4px solid #dc3545;
+}
+
+.priority-option.high {
+    border-left: 4px solid #fd7e14;
+}
+
+.priority-option.normal {
+    border-left: 4px solid #17a2b8;
+}
+
+.priority-option.low {
+    border-left: 4px solid #6c757d;
 }
 
 .preview-card {
     border: 2px dashed #dee2e6;
     border-radius: 10px;
+    padding: 1.5rem;
+    background: #f8f9fa;
     transition: all 0.3s ease;
 }
 
-.preview-card.has-content {
-    border-color: #17a2b8;
-    border-style: solid;
+.char-count {
+    font-size: 0.875rem;
+    color: #6c757d;
+    transition: color 0.3s ease;
+}
+
+.char-count.warning {
+    color: #fd7e14;
+    font-weight: 500;
+}
+
+.char-count.danger {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.required-field::after {
+    content: " *";
+    color: #dc3545;
+}
+
+.help-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.is-invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.invalid-feedback {
+    display: block;
+}
+
+.field-error {
+    border-color: #dc3545 !important;
+    background: #fff5f5 !important;
+}
+
+/* Smart selection styles */
+.smart-selection-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.smart-selection-btn {
+    border-radius: 20px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+}
+
+.selection-group {
+    margin-bottom: 1.5rem;
+}
+
+.selection-group-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+@media (max-width: 768px) {
+    .form-section {
+        padding: 1rem;
+    }
+    
+    .selection-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .selection-label {
+        padding: 0.75rem 0.25rem;
+        min-height: 70px;
+    }
+    
+    .alert-container {
+        left: 10px;
+        right: 10px;
+        top: 70px;
+    }
+    
+    .smart-selection-options {
+        justify-content: center;
+    }
 }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <div class="announcement-form-container">
-                <!-- Header -->
-                <div class="form-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h2 class="mb-1"><i class="bi bi-megaphone me-2"></i>Create New Announcement</h2>
-                            <p class="mb-0">Broadcast important messages to students, parents, and staff</p>
-                        </div>
-                        <a href="{% url 'announcement_list' %}" class="btn btn-light btn-sm">
-                            <i class="bi bi-arrow-left me-1"></i>Back to List
-                        </a>
-                    </div>
+    <!-- Messages Display -->
+    <div class="alert-container">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            <i class="bi 
+                {% if message.tags == 'success' %}bi-check-circle 
+                {% elif message.tags == 'error' %}bi-exclamation-circle 
+                {% else %}bi-info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-2 text-dark">Create New Announcement</h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-decoration-none">Home</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'announcement_list' %}" class="text-decoration-none">Announcements</a></li>
+                            <li class="breadcrumb-item active text-muted">Create Announcement</li>
+                        </ol>
+                    </nav>
+                </div>
+                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to List
+                </a>
+            </div>
+
+            <!-- Main Form -->
+            <div class="card create-announcement-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-megaphone me-2"></i>New Announcement Details
+                    </h5>
                 </div>
                 
-                <!-- Form Content -->
-                <div class="p-4">
-                    <form method="post" id="announcementForm" novalidate>
-                        {% csrf_token %}
-                        
-                        {% if form.errors %}
-                        <div class="alert alert-danger">
-                            <h6 class="alert-heading">Please fix the following errors:</h6>
-                            <ul class="mb-0">
-                                {% for field, errors in form.errors.items %}
-                                    {% for error in errors %}
-                                        <li>{{ error }}</li>
+                <form method="post" id="announcementForm" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="card-body">
+                        <!-- Basic Information Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-info-circle me-2"></i>Basic Information</h6>
+                            
+                            <!-- Title -->
+                            <div class="mb-3">
+                                <label for="{{ form.title.id_for_label }}" class="form-label required-field">
+                                    <i class="bi bi-type me-1"></i>Announcement Title
+                                </label>
+                                {{ form.title|add_class:"form-control"|attr:"placeholder:Enter a clear and descriptive title" }}
+                                {% if form.title.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.title.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
                                     {% endfor %}
-                                {% endfor %}
-                            </ul>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Message -->
+                            <div class="mb-3">
+                                <label for="{{ form.message.id_for_label }}" class="form-label required-field">
+                                    <i class="bi bi-chat-text me-1"></i>Announcement Message
+                                </label>
+                                {{ form.message|add_class:"form-control"|attr:"rows:6"|attr:"placeholder:Enter the full announcement message here..." }}
+                                {% if form.message.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.message.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="char-count" id="charCount">0 characters</div>
+                            </div>
                         </div>
-                        {% endif %}
-                        
-                        <div class="row">
-                            <!-- Left Column - Form Fields -->
-                            <div class="col-lg-8">
-                                <!-- Title -->
-                                <div class="mb-4">
-                                    <label for="{{ form.title.id_for_label }}" class="form-label fw-semibold">
-                                        Announcement Title *
+
+                        <!-- Priority and Scheduling Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-clock me-2"></i>Priority & Scheduling</h6>
+                            
+                            <div class="row">
+                                <!-- Priority -->
+                                <div class="col-md-6">
+                                    <label class="form-label required-field">
+                                        <i class="bi bi-flag me-1"></i>Priority Level
                                     </label>
-                                    {{ form.title }}
-                                    <div class="character-count mt-1">
-                                        <span id="titleCount">0</span>/200 characters
-                                    </div>
-                                    {% if form.title.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {{ form.title.errors.0 }}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                
-                                <!-- Message -->
-                                <div class="mb-4">
-                                    <label for="{{ form.message.id_for_label }}" class="form-label fw-semibold">
-                                        Message Content *
-                                    </label>
-                                    {{ form.message }}
-                                    <div class="character-count mt-1">
-                                        <span id="messageCount">0</span> characters
-                                    </div>
-                                    {% if form.message.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {{ form.message.errors.0 }}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                
-                                <!-- Priority & Settings -->
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-4">
-                                            <label for="{{ form.priority.id_for_label }}" class="form-label fw-semibold">
-                                                Priority Level
-                                            </label>
-                                            {{ form.priority }}
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-4">
-                                            <label for="{{ form.target_roles.id_for_label }}" class="form-label fw-semibold">
-                                                Target Audience Type
-                                            </label>
-                                            {{ form.target_roles }}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Class Level Selection -->
-                                <div class="mb-4" id="classLevelsSection">
-                                    <label class="form-label fw-semibold">
-                                        Target Class Levels
-                                        <small class="text-muted">(Optional - leave empty for all classes)</small>
-                                    </label>
-                                    
-                                    <div class="class-level-tags" id="classLevelTags">
-                                        {% for value, label in class_levels %}
-                                        <div class="class-tag" data-value="{{ value }}">
-                                            <span>{{ label }}</span>
-                                            <i class="bi bi-x remove-tag"></i>
+                                    <div class="priority-options" id="priorityOptions">
+                                        {% for value, label in form.priority.field.choices %}
+                                        <div class="priority-option {{ value|lower }} {% if form.priority.value == value or not form.priority.value and value == 'NORMAL' %}selected{% endif %}" 
+                                             data-value="{{ value }}">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="{{ form.priority.name }}" 
+                                                       value="{{ value }}" 
+                                                       id="priority_{{ value }}"
+                                                       {% if form.priority.value == value or not form.priority.value and value == 'NORMAL' %}checked{% endif %}>
+                                                <label class="form-check-label fw-bold" for="priority_{{ value }}">
+                                                    {{ label }}
+                                                </label>
+                                            </div>
                                         </div>
                                         {% endfor %}
                                     </div>
-                                    
-                                    <!-- Hidden input to store selected class levels -->
-                                    <input type="hidden" name="target_class_levels" id="selectedClassLevels" value="">
-                                    
-                                    <div class="form-text">
-                                        Click class levels to select/deselect. Selected classes will be highlighted.
+                                    {% if form.priority.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.priority.errors %}
+                                        <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                        {% endfor %}
                                     </div>
+                                    {% endif %}
                                 </div>
-                                
-                                <!-- End Date & Status -->
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-4">
-                                            <label for="{{ form.end_date.id_for_label }}" class="form-label fw-semibold">
-                                                Expiry Date
-                                            </label>
-                                            {{ form.end_date }}
-                                            <div class="form-text">
-                                                Leave empty if the announcement should not expire
-                                            </div>
+
+                                <!-- Scheduling -->
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.start_date.id_for_label }}" class="form-label required-field">
+                                            <i class="bi bi-play-circle me-1"></i>Start Date & Time
+                                        </label>
+                                        {{ form.start_date|add_class:"form-control"|attr:"type:datetime-local" }}
+                                        {% if form.start_date.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.start_date.errors %}
+                                            <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
                                         </div>
+                                        {% endif %}
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-4">
-                                            <label for="{{ form.is_active.id_for_label }}" class="form-label fw-semibold">
-                                                Status
+
+                                    <div class="mb-3">
+                                        <label for="{{ form.end_date.id_for_label }}" class="form-label">
+                                            <i class="bi bi-clock me-1"></i>End Date & Time (Optional)
+                                        </label>
+                                        {{ form.end_date|add_class:"form-control"|attr:"type:datetime-local" }}
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="noEndDate">
+                                            <label class="form-check-label" for="noEndDate">
+                                                No end date
                                             </label>
-                                            <div class="form-check form-switch">
-                                                {{ form.is_active }}
-                                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-                                                    Active Announcement
-                                                </label>
-                                            </div>
-                                            <div class="form-text">
-                                                Inactive announcements won't be visible to users
-                                            </div>
                                         </div>
+                                        {% if form.end_date.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.end_date.errors %}
+                                                <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- TARGET ROLES SECTION - FIXED -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-person-badge me-2"></i>Target Audience</h6>
                             
-                            <!-- Right Column - Preview & Actions -->
-                            <div class="col-lg-4">
-                                <div class="sticky-top" style="top: 100px;">
-                                    <!-- Preview Card -->
-                                    <div class="card preview-card mb-4" id="previewCard">
-                                        <div class="card-header bg-light">
-                                            <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Live Preview</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="previewContent" class="text-muted">
-                                                <p class="mb-2"><small>Start typing to see preview...</small></p>
-                                            </div>
+                            <div class="mb-3">
+                                <label class="form-label required-field">
+                                    <i class="bi bi-people me-1"></i>Select Target Roles
+                                </label>
+                                <div class="help-text mb-3">Choose which user roles should see this announcement. Select specific roles or use smart selection options.</div>
+                                
+                                <!-- Smart Selection Options -->
+                                <div class="smart-selection-options">
+                                    <button type="button" class="btn btn-outline-primary btn-sm smart-selection-btn" onclick="announcementFormHandler.selectAllRoles()">
+                                        <i class="bi bi-check-all me-1"></i>All Roles
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectStudentsOnly()">
+                                        <i class="bi bi-person me-1"></i>Students Only
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectTeachersOnly()">
+                                        <i class="bi bi-person-badge me-1"></i>Teachers Only
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectParentsOnly()">
+                                        <i class="bi bi-people me-1"></i>Parents Only
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm smart-selection-btn" onclick="announcementFormHandler.clearAllRoles()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+                                
+                                <!-- Role Selection Grid -->
+                                <div class="selection-grid" id="rolesGrid">
+                                    {% for value, label in form.target_roles.field.choices %}
+                                    {% if value %}
+                                    <div class="selection-card">
+                                        <input type="checkbox" name="target_roles" value="{{ value }}" 
+                                               id="role_{{ value }}" class="selection-checkbox"
+                                               {% if value in form.target_roles.value %}checked{% endif %}>
+                                        <label for="role_{{ value }}" class="selection-label">
+                                            <span class="selection-icon">
+                                                {% if value == 'STUDENT' %}
+                                                <i class="bi bi-person"></i>
+                                                {% elif value == 'TEACHER' %}
+                                                <i class="bi bi-person-badge"></i>
+                                                {% elif value == 'PARENT' %}
+                                                <i class="bi bi-people"></i>
+                                                {% elif value == 'STAFF' %}
+                                                <i class="bi bi-gear"></i>
+                                                {% else %}
+                                                <i class="bi bi-person"></i>
+                                                {% endif %}
+                                            </span>
+                                            <span class="selection-name">{{ label }}</span>
+                                        </label>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Selection Summary -->
+                                <div class="selection-summary card bg-light" id="roleSelectionSummary">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted" id="roleSelectionSummaryText">
+                                                No roles selected
+                                            </small>
+                                            <small class="text-muted" id="selectedRoleCount">0 selected</small>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Action Buttons -->
-                                    <div class="card">
-                                        <div class="card-body">
-                                            <div class="d-grid gap-2">
-                                                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
-                                                    <i class="bi bi-send me-2"></i>Publish Announcement
-                                                </button>
-                                                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
-                                                    <i class="bi bi-x-circle me-2"></i>Cancel
-                                                </a>
-                                            </div>
-                                            
-                                            <!-- Quick Tips -->
-                                            <div class="mt-4">
-                                                <h6 class="text-muted mb-2">Quick Tips:</h6>
-                                                <ul class="list-unstyled small text-muted">
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Keep titles clear and concise</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Use URGENT for time-sensitive information</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Select specific classes when needed</li>
-                                                    <li><i class="bi bi-check-circle text-success me-1"></i>Set expiry dates for temporary announcements</li>
-                                                </ul>
-                                            </div>
+                                </div>
+                                
+                                {% if form.target_roles.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.target_roles.errors %}
+                                    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Target Class Levels Section - FIXED -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-people me-2"></i>Target Class Levels</h6>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-bullseye me-1"></i>Select Class Levels
+                                </label>
+                                <div class="help-text mb-3">Select specific class levels or leave empty for all classes. Use smart selection for common groupings.</div>
+                                
+                                <!-- Smart Selection Options -->
+                                <div class="smart-selection-options">
+                                    <button type="button" class="btn btn-outline-primary btn-sm smart-selection-btn" onclick="announcementFormHandler.selectAllClasses()">
+                                        <i class="bi bi-check-all me-1"></i>All Classes
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectPrimaryOnly()">
+                                        <i class="bi bi-person me-1"></i>Primary Only
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectJHSOnly()">
+                                        <i class="bi bi-mortarboard me-1"></i>JHS Only
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectLowerPrimary()">
+                                        <i class="bi bi-people me-1"></i>Lower Primary (P1-P3)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info btn-sm smart-selection-btn" onclick="announcementFormHandler.selectUpperPrimary()">
+                                        <i class="bi bi-people-fill me-1"></i>Upper Primary (P4-P6)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm smart-selection-btn" onclick="announcementFormHandler.clearAllClasses()">
+                                        <i class="bi bi-x-circle me-1"></i>Clear All
+                                    </button>
+                                </div>
+                                
+                                <!-- Class Level Selection Grid with Grouping -->
+                                <div class="selection-group">
+                                    <div class="selection-group-title">
+                                        <i class="bi bi-person me-1"></i>Primary Classes
+                                    </div>
+                                    <div class="selection-grid">
+                                        {% for value, label in class_levels %}
+                                        {% if 'P' in value %}
+                                        <div class="selection-card">
+                                            <input type="checkbox" name="target_class_levels" value="{{ value }}" 
+                                                   id="class_{{ value }}" class="selection-checkbox"
+                                                   {% if value in form.target_class_levels.value %}checked{% endif %}>
+                                            <label for="class_{{ value }}" class="selection-label">
+                                                <span class="selection-icon">
+                                                    <i class="bi bi-person"></i>
+                                                </span>
+                                                <span class="selection-name">{{ label }}</span>
+                                                <span class="selection-badge">{{ value }}</span>
+                                            </label>
+                                        </div>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                
+                                <div class="selection-group">
+                                    <div class="selection-group-title">
+                                        <i class="bi bi-mortarboard me-1"></i>JHS Classes
+                                    </div>
+                                    <div class="selection-grid">
+                                        {% for value, label in class_levels %}
+                                        {% if 'J' in value %}
+                                        <div class="selection-card">
+                                            <input type="checkbox" name="target_class_levels" value="{{ value }}" 
+                                                   id="class_{{ value }}" class="selection-checkbox"
+                                                   {% if value in form.target_class_levels.value %}checked{% endif %}>
+                                            <label for="class_{{ value }}" class="selection-label">
+                                                <span class="selection-icon">
+                                                    <i class="bi bi-mortarboard"></i>
+                                                </span>
+                                                <span class="selection-name">{{ label }}</span>
+                                                <span class="selection-badge">{{ value }}</span>
+                                            </label>
+                                        </div>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                
+                                <!-- Selection Summary -->
+                                <div class="selection-summary card bg-light" id="classSelectionSummary">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted" id="classSelectionSummaryText">
+                                                No classes selected (All classes)
+                                            </small>
+                                            <small class="text-muted" id="selectedClassCount">0 selected</small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </form>
-                </div>
+
+                        <!-- Status Section -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-toggle-on me-2"></i>Status</h6>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    {{ form.is_active|add_class:"form-check-input" }}
+                                    <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">
+                                        Active Announcement
+                                    </label>
+                                </div>
+                                <div class="help-text">
+                                    When active, the announcement will be visible to targeted users.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live Preview -->
+                        <div class="form-section">
+                            <h6><i class="bi bi-eye me-2"></i>Live Preview</h6>
+                            <div class="preview-card">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 id="previewTitle" class="card-title text-muted">Announcement Title</h5>
+                                        <h6 class="card-subtitle mb-2 text-muted">
+                                            <span id="previewPriority" class="badge bg-secondary">Priority</span>
+                                            <span id="previewStatus" class="badge bg-success">Active</span>
+                                        </h6>
+                                        <p id="previewMessage" class="card-text text-muted">Announcement message will appear here...</p>
+                                        <div class="mt-3">
+                                            <small class="text-muted" id="previewAudience">Audience: All Users</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="card-footer bg-light">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary" onclick="announcementFormHandler.resetForm()">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Reset Form
+                                </button>
+                            </div>
+                            <div class="btn-group">
+                                <button type="submit" class="btn btn-primary" id="submitButton">
+                                    <i class="bi bi-send me-2"></i>Publish Announcement
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -293,231 +691,533 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const titleInput = document.getElementById('{{ form.title.id_for_label }}');
-    const messageInput = document.getElementById('{{ form.message.id_for_label }}');
-    const titleCount = document.getElementById('titleCount');
-    const messageCount = document.getElementById('messageCount');
-    const previewContent = document.getElementById('previewContent');
-    const previewCard = document.getElementById('previewCard');
-    const prioritySelect = document.getElementById('{{ form.priority.id_for_label }}');
-    const targetRolesSelect = document.getElementById('{{ form.target_roles.id_for_label }}');
-    const classLevelTags = document.querySelectorAll('.class-tag');
-    const selectedClassLevelsInput = document.getElementById('selectedClassLevels');
-    const classLevelsSection = document.getElementById('classLevelsSection');
-    const submitBtn = document.getElementById('submitBtn');
-    
-    let selectedClassLevels = [];
-    
-    // Initialize form
-    function initializeForm() {
-        updateCharacterCount(titleInput, titleCount, 200);
-        updateCharacterCount(messageInput, messageCount);
-        updatePreview();
-        setupClassLevelSelection();
-        setupTargetRolesListener();
-    }
-    
-    // Character counting
-    function updateCharacterCount(input, countElement, maxLength = null) {
-        const length = input.value.length;
-        countElement.textContent = length;
+// Announcement form handler
+const announcementFormHandler = {
+    init: function() {
+        this.initCharacterCount();
+        this.initPrioritySelection();
+        this.initSelectionHandlers();
+        this.initDateHandling();
+        this.initFormValidation();
+        this.initPreview();
+        this.autoDismissMessages();
+        this.setDefaultStartDate();
         
-        if (maxLength) {
-            const percentage = (length / maxLength) * 100;
-            countElement.className = 'character-count';
-            
-            if (percentage > 90) {
-                countElement.classList.add('danger');
-            } else if (percentage > 75) {
-                countElement.classList.add('warning');
-            }
-        }
-    }
-    
-    // Update preview
-    function updatePreview() {
-        const title = titleInput.value.trim();
-        const message = messageInput.value.trim();
-        const priority = prioritySelect.value;
+        // Update selection summaries
+        this.updateRoleSelectionSummary();
+        this.updateClassSelectionSummary();
         
-        if (!title && !message) {
-            previewContent.innerHTML = '<p class="mb-2"><small>Start typing to see preview...</small></p>';
-            previewCard.classList.remove('has-content');
-            return;
-        }
+        // Check for duplicate titles
+        this.initDuplicateCheck();
+    },
+
+    autoDismissMessages: function() {
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+    },
+
+    initCharacterCount: function() {
+        const messageField = document.getElementById('{{ form.message.id_for_label }}');
+        const charCount = document.getElementById('charCount');
         
-        let previewHTML = '';
+        messageField.addEventListener('input', () => {
+            this.updateCharacterCount(messageField, charCount);
+            this.updatePreview();
+        });
         
-        if (title) {
-            previewHTML += `<h6 class="text-${getPriorityColor(priority)} mb-2">${escapeHtml(title)}</h6>`;
-        }
-        
-        if (message) {
-            const formattedMessage = escapeHtml(message).replace(/\n/g, '<br>');
-            previewHTML += `<div class="small">${formattedMessage}</div>`;
-        }
-        
-        // Add target info
-        if (selectedClassLevels.length > 0) {
-            previewHTML += `<div class="mt-2"><small class="text-muted"><i class="bi bi-people me-1"></i>Targeted classes: ${selectedClassLevels.join(', ')}</small></div>`;
-        } else {
-            previewHTML += `<div class="mt-2"><small class="text-muted"><i class="bi bi-globe me-1"></i>School-wide announcement</small></div>`;
-        }
-        
-        previewContent.innerHTML = previewHTML;
-        previewCard.classList.add('has-content');
-    }
-    
-    function getPriorityColor(priority) {
-        const colors = {
-            'LOW': 'secondary',
-            'NORMAL': 'info',
-            'HIGH': 'warning',
-            'URGENT': 'danger'
-        };
-        return colors[priority] || 'info';
-    }
-    
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // Class level selection
-    function setupClassLevelSelection() {
-        classLevelTags.forEach(tag => {
-            tag.addEventListener('click', function() {
-                const value = this.getAttribute('data-value');
-                const label = this.querySelector('span').textContent;
+        this.updateCharacterCount(messageField, charCount);
+    },
+
+    updateCharacterCount: function(field, countElement) {
+        const count = field.value.length;
+        countElement.textContent = `${count} characters`;
+        countElement.className = 'char-count';
+        if (count > 1000) countElement.classList.add('warning');
+        if (count > 2000) countElement.classList.add('danger');
+    },
+
+    initPrioritySelection: function() {
+        document.querySelectorAll('.priority-option').forEach(option => {
+            option.addEventListener('click', () => {
+                const radio = option.querySelector('input[type="radio"]');
+                radio.checked = true;
                 
-                if (this.classList.contains('selected')) {
-                    // Remove from selection
-                    this.classList.remove('selected');
-                    selectedClassLevels = selectedClassLevels.filter(cls => cls !== value);
-                } else {
-                    // Add to selection
-                    this.classList.add('selected');
-                    selectedClassLevels.push(value);
-                }
-                
-                updateSelectedClassLevelsInput();
-                updatePreview();
+                document.querySelectorAll('.priority-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                option.classList.add('selected');
+                this.updatePreview();
             });
         });
-    }
-    
-    function updateSelectedClassLevelsInput() {
-        selectedClassLevelsInput.value = selectedClassLevels.join(',');
-    }
-    
-    // Target roles listener
-    function setupTargetRolesListener() {
-        targetRolesSelect.addEventListener('change', function() {
-            if (this.value === 'CLASS') {
-                classLevelsSection.style.display = 'block';
-            } else {
-                classLevelsSection.style.display = 'none';
-                // Clear class selections
-                classLevelTags.forEach(tag => tag.classList.remove('selected'));
-                selectedClassLevels = [];
-                updateSelectedClassLevelsInput();
-                updatePreview();
+    },
+
+    initSelectionHandlers: function() {
+        // Role selection handlers
+        document.querySelectorAll('#rolesGrid .selection-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = card.querySelector('.selection-checkbox');
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // Class selection handlers
+        document.querySelectorAll('.selection-grid .selection-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = card.querySelector('.selection-checkbox');
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // Change handlers
+        document.querySelectorAll('.selection-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                this.updateSelectionDisplay(checkbox);
+                if (checkbox.name === 'target_roles') {
+                    this.updateRoleSelectionSummary();
+                    this.validateRoleSelection();
+                } else {
+                    this.updateClassSelectionSummary();
+                }
+                this.updatePreview();
+            });
+            this.updateSelectionDisplay(checkbox);
+        });
+    },
+
+    updateSelectionDisplay: function(checkbox) {
+        const card = checkbox.closest('.selection-card');
+        const label = card.querySelector('.selection-label');
+        
+        if (checkbox.checked) {
+            label.classList.add('selected');
+            card.classList.remove('field-error');
+        } else {
+            label.classList.remove('selected');
+        }
+    },
+
+    // Role selection functions - ENHANCED
+    selectAllRoles: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = true;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('All roles selected', 'success');
+    },
+
+    selectStudentsOnly: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = (checkbox.value === 'STUDENT');
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('Students only selected', 'success');
+    },
+
+    selectTeachersOnly: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = (checkbox.value === 'TEACHER');
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('Teachers only selected', 'success');
+    },
+
+    selectParentsOnly: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = (checkbox.value === 'PARENT');
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('Parents only selected', 'success');
+    },
+
+    clearAllRoles: function() {
+        document.querySelectorAll('input[name="target_roles"]').forEach(checkbox => {
+            checkbox.checked = false;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateRoleSelectionSummary();
+        this.validateRoleSelection();
+        this.showToast('All roles cleared', 'info');
+    },
+
+    updateRoleSelectionSummary: function() {
+        const selectedRoles = Array.from(document.querySelectorAll('input[name="target_roles"]:checked'));
+        const selectedCount = selectedRoles.length;
+        const summaryCard = document.getElementById('roleSelectionSummary');
+        const summaryText = document.getElementById('roleSelectionSummaryText');
+        const countElement = document.getElementById('selectedRoleCount');
+        
+        countElement.textContent = `${selectedCount} selected`;
+        
+        if (selectedCount === 0) {
+            summaryText.textContent = 'No roles selected';
+            summaryCard.classList.remove('has-selection');
+        } else if (selectedCount === document.querySelectorAll('input[name="target_roles"]').length) {
+            summaryText.textContent = 'All user roles selected';
+            summaryCard.classList.add('has-selection');
+        } else {
+            const roleNames = selectedRoles.map(checkbox => {
+                const label = checkbox.closest('.selection-card').querySelector('.selection-name');
+                return label.textContent;
+            }).join(', ');
+            
+            summaryText.textContent = `Selected: ${roleNames}`;
+            summaryCard.classList.add('has-selection');
+        }
+    },
+
+    validateRoleSelection: function() {
+        const selectedRoles = Array.from(document.querySelectorAll('input[name="target_roles"]:checked'));
+        const rolesGrid = document.getElementById('rolesGrid');
+        
+        if (selectedRoles.length === 0) {
+            rolesGrid.classList.add('field-error');
+            return false;
+        } else {
+            rolesGrid.classList.remove('field-error');
+            return true;
+        }
+    },
+
+    // Class selection functions - ENHANCED
+    selectAllClasses: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = true;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('All classes selected', 'success');
+    },
+
+    selectPrimaryOnly: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = checkbox.value.includes('P');
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('Primary classes selected', 'success');
+    },
+
+    selectJHSOnly: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = checkbox.value.includes('J');
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('JHS classes selected', 'success');
+    },
+
+    selectLowerPrimary: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = ['P1', 'P2', 'P3'].includes(checkbox.value);
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('Lower Primary (P1-P3) selected', 'success');
+    },
+
+    selectUpperPrimary: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = ['P4', 'P5', 'P6'].includes(checkbox.value);
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('Upper Primary (P4-P6) selected', 'success');
+    },
+
+    clearAllClasses: function() {
+        document.querySelectorAll('input[name="target_class_levels"]').forEach(checkbox => {
+            checkbox.checked = false;
+            this.updateSelectionDisplay(checkbox);
+        });
+        this.updateClassSelectionSummary();
+        this.showToast('All classes cleared', 'info');
+    },
+
+    updateClassSelectionSummary: function() {
+        const selectedClasses = Array.from(document.querySelectorAll('input[name="target_class_levels"]:checked'));
+        const selectedCount = selectedClasses.length;
+        const summaryCard = document.getElementById('classSelectionSummary');
+        const summaryText = document.getElementById('classSelectionSummaryText');
+        const countElement = document.getElementById('selectedClassCount');
+        
+        countElement.textContent = `${selectedCount} selected`;
+        
+        if (selectedCount === 0) {
+            summaryText.textContent = 'No classes selected (All classes)';
+            summaryCard.classList.remove('has-selection');
+        } else if (selectedCount === document.querySelectorAll('input[name="target_class_levels"]').length) {
+            summaryText.textContent = 'All classes selected';
+            summaryCard.classList.add('has-selection');
+        } else {
+            const classNames = selectedClasses.map(checkbox => {
+                const label = checkbox.closest('.selection-card').querySelector('.selection-name');
+                return label.textContent;
+            }).join(', ');
+            
+            summaryText.textContent = `Selected: ${classNames}`;
+            summaryCard.classList.add('has-selection');
+        }
+    },
+
+    initDateHandling: function() {
+        document.getElementById('noEndDate').addEventListener('change', (e) => {
+            const endDateField = document.getElementById('{{ form.end_date.id_for_label }}');
+            endDateField.disabled = e.target.checked;
+            if (e.target.checked) {
+                endDateField.value = '';
             }
         });
-        
-        // Initial state
-        if (targetRolesSelect.value !== 'CLASS') {
-            classLevelsSection.style.display = 'none';
-        }
-    }
-    
-    // Form validation
-    document.getElementById('announcementForm').addEventListener('submit', function(e) {
-        const title = titleInput.value.trim();
-        const message = messageInput.value.trim();
-        const targetRoles = targetRolesSelect.value;
-        
-        if (!title) {
-            e.preventDefault();
-            showAlert('Please enter an announcement title.', 'danger');
-            titleInput.focus();
-            return;
-        }
-        
-        if (!message) {
-            e.preventDefault();
-            showAlert('Please enter announcement content.', 'danger');
-            messageInput.focus();
-            return;
-        }
-        
-        if (targetRoles === 'CLASS' && selectedClassLevels.length === 0) {
-            e.preventDefault();
-            showAlert('Please select at least one class level when targeting specific classes.', 'danger');
-            return;
-        }
-        
-        // Validate end date
-        const endDateInput = document.getElementById('{{ form.end_date.id_for_label }}');
-        if (endDateInput.value) {
-            const endDate = new Date(endDateInput.value);
+    },
+
+    setDefaultStartDate: function() {
+        const startDateField = document.getElementById('{{ form.start_date.id_for_label }}');
+        if (!startDateField.value) {
             const now = new Date();
-            
-            if (endDate < now) {
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            startDateField.value = now.toISOString().slice(0, 16);
+        }
+    },
+
+    initDuplicateCheck: function() {
+        const titleField = document.getElementById('{{ form.title.id_for_label }}');
+        let duplicateCheckTimeout;
+        
+        titleField.addEventListener('input', () => {
+            clearTimeout(duplicateCheckTimeout);
+            duplicateCheckTimeout = setTimeout(() => {
+                this.checkDuplicateTitle(titleField.value);
+            }, 500);
+        });
+    },
+
+    checkDuplicateTitle: function(title) {
+        if (!title || title.length < 3) return;
+        
+        fetch(`/announcements/check-duplicate/?title=${encodeURIComponent(title)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.exists) {
+                    this.showToast('An announcement with a similar title already exists. Consider using a different title.', 'warning');
+                }
+            })
+            .catch(error => console.error('Error checking duplicate:', error));
+    },
+
+    initFormValidation: function() {
+        const form = document.getElementById('announcementForm');
+        
+        form.addEventListener('submit', (e) => {
+            if (!this.validateForm()) {
                 e.preventDefault();
-                showAlert('End date cannot be in the past.', 'danger');
-                endDateInput.focus();
-                return;
+                this.showToast('Please fix the errors in the form before submitting.', 'error');
             }
+        });
+    },
+
+    validateForm: function() {
+        let isValid = true;
+        
+        // Title validation
+        const titleField = document.getElementById('{{ form.title.id_for_label }}');
+        if (!titleField.value.trim()) {
+            this.markFieldInvalid(titleField, 'Title is required');
+            isValid = false;
+        } else {
+            this.markFieldValid(titleField);
         }
         
-        // Show loading state
-        submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Publishing...';
-        submitBtn.disabled = true;
-    });
-    
-    function showAlert(message, type) {
-        // Remove existing alerts
-        const existingAlert = document.querySelector('.alert.alert-danger');
-        if (existingAlert) {
-            existingAlert.remove();
+        // Message validation
+        const messageField = document.getElementById('{{ form.message.id_for_label }}');
+        if (!messageField.value.trim()) {
+            this.markFieldInvalid(messageField, 'Message is required');
+            isValid = false;
+        } else {
+            this.markFieldValid(messageField);
         }
         
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
-        alertDiv.innerHTML = `
-            <i class="bi bi-exclamation-triangle me-2"></i>${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        // Start date validation
+        const startDateField = document.getElementById('{{ form.start_date.id_for_label }}');
+        if (!startDateField.value) {
+            this.markFieldInvalid(startDateField, 'Start date is required');
+            isValid = false;
+        } else {
+            this.markFieldValid(startDateField);
+        }
+        
+        // Role validation
+        if (!this.validateRoleSelection()) {
+            this.showToast('Please select at least one target role', 'error');
+            isValid = false;
+        }
+        
+        return isValid;
+    },
+
+    markFieldInvalid: function(field, message) {
+        field.classList.add('is-invalid');
+        field.classList.remove('is-valid');
+        
+        const existingFeedback = field.parentNode.querySelector('.invalid-feedback');
+        if (existingFeedback) {
+            existingFeedback.remove();
+        }
+        
+        const feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i>${message}`;
+        field.parentNode.appendChild(feedback);
+    },
+
+    markFieldValid: function(field) {
+        field.classList.remove('is-invalid');
+        field.classList.add('is-valid');
+        
+        const feedback = field.parentNode.querySelector('.invalid-feedback');
+        if (feedback) {
+            feedback.remove();
+        }
+    },
+
+    initPreview: function() {
+        document.getElementById('{{ form.title.id_for_label }}').addEventListener('input', () => this.updatePreview());
+        document.getElementById('{{ form.message.id_for_label }}').addEventListener('input', () => this.updatePreview());
+        document.getElementById('{{ form.is_active.id_for_label }}').addEventListener('change', () => this.updatePreview());
+        this.updatePreview();
+    },
+
+    updatePreview: function() {
+        // Title
+        const title = document.getElementById('{{ form.title.id_for_label }}').value || 'Announcement Title';
+        document.getElementById('previewTitle').textContent = title;
+
+        // Message
+        const message = document.getElementById('{{ form.message.id_for_label }}').value || 'Announcement message will appear here...';
+        document.getElementById('previewMessage').textContent = message.length > 150 ? message.substring(0, 150) + '...' : message;
+
+        // Priority
+        const selectedPriority = document.querySelector('input[name="{{ form.priority.name }}"]:checked');
+        if (selectedPriority) {
+            const priority = selectedPriority.value;
+            const priorityBadge = document.getElementById('previewPriority');
+            priorityBadge.textContent = priority;
+            priorityBadge.className = 'badge bg-' + (priority === 'URGENT' ? 'danger' : 
+                                                    priority === 'HIGH' ? 'warning' : 
+                                                    priority === 'NORMAL' ? 'info' : 'secondary');
+        }
+
+        // Status
+        const isActive = document.getElementById('{{ form.is_active.id_for_label }}').checked;
+        document.getElementById('previewStatus').textContent = isActive ? 'Active' : 'Inactive';
+        document.getElementById('previewStatus').className = 'badge ' + (isActive ? 'bg-success' : 'bg-secondary');
+
+        // Audience
+        const selectedRoles = Array.from(document.querySelectorAll('input[name="target_roles"]:checked'))
+            .map(cb => cb.value);
+        const selectedClasses = Array.from(document.querySelectorAll('input[name="target_class_levels"]:checked'))
+            .map(cb => cb.value);
+        
+        const audienceElement = document.getElementById('previewAudience');
+        let audienceText = 'Audience: ';
+        
+        if (selectedRoles.length > 0) {
+            if (selectedRoles.length === document.querySelectorAll('input[name="target_roles"]').length) {
+                audienceText += 'All User Roles';
+            } else {
+                audienceText += `${selectedRoles.length} role(s)`;
+            }
+            
+            if (selectedClasses.length > 0) {
+                if (selectedClasses.length === document.querySelectorAll('input[name="target_class_levels"]').length) {
+                    audienceText += ', All Classes';
+                } else {
+                    audienceText += `, ${selectedClasses.length} class(es)`;
+                }
+            } else {
+                audienceText += ', All Classes';
+            }
+        } else {
+            audienceText += 'All Users';
+        }
+        
+        audienceElement.textContent = audienceText;
+    },
+
+    resetForm: function() {
+        if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
+            document.getElementById('announcementForm').reset();
+            document.querySelectorAll('.selection-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+                this.updateSelectionDisplay(checkbox);
+            });
+            document.querySelectorAll('.priority-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            document.querySelector('.priority-option[data-value="NORMAL"]').classList.add('selected');
+            this.setDefaultStartDate();
+            this.updateRoleSelectionSummary();
+            this.updateClassSelectionSummary();
+            this.updatePreview();
+            this.showToast('Form reset successfully', 'info');
+        }
+    },
+
+    showToast: function(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
         `;
         
-        const formHeader = document.querySelector('.form-header');
-        formHeader.parentNode.insertBefore(alertDiv, formHeader.nextSibling);
+        let toastContainer = document.getElementById('toastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
         
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
+        toastContainer.appendChild(toast);
+        
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
     }
-    
-    // Event listeners
-    titleInput.addEventListener('input', function() {
-        updateCharacterCount(this, titleCount, 200);
-        updatePreview();
-    });
-    
-    messageInput.addEventListener('input', function() {
-        updateCharacterCount(this, messageCount);
-        updatePreview();
-    });
-    
-    prioritySelect.addEventListener('change', updatePreview);
-    
-    // Initialize the form
-    initializeForm();
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    announcementFormHandler.init();
 });
+
+window.announcementFormHandler = announcementFormHandler;
 </script>
 {% endblock %}

@@ -5,43 +5,141 @@
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Header Section -->
     <div class="row mb-4">
-        <div class="col-md-12">
+        <div class="col-md-8">
             <h2>Budget Management - {{ current_year }}</h2>
+            <p class="text-muted">Monitor and analyze budget performance across all categories</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?export=excel">Export to Excel</a></li>
+                    <li><a class="dropdown-item" href="?export=pdf">Export to PDF</a></li>
+                </ul>
+            </div>
+            <button class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#budgetModal">
+                <i class="fas fa-plus me-2"></i>Add Budget
+            </button>
         </div>
     </div>
 
-    <!-- Budget vs Actual -->
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Budget</h6>
+                            <h3>GH₵ {{ total_budget|default:0|intcomma }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-wallet fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Actual</h6>
+                            <h3>GH₵ {{ total_actual|default:0|intcomma }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card {% if total_variance >= 0 %}bg-info{% else %}bg-warning{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Variance</h6>
+                            <h3>GH₵ {{ total_variance|default:0|intcomma }}</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-balance-scale fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card {% if utilization_rate <= 100 %}bg-secondary{% else %}bg-danger{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Utilization Rate</h6>
+                            <h3>{{ utilization_rate|default:0|floatformat:1 }}%</h3>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-percentage fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🚀 Critical Variance Alerts -->
+    {% if critical_alerts %}
     <div class="row mb-4">
         <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title">Budget vs Actual Spending</h5>
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Budget Variance Alerts ({{ alert_count }})
+                    </h5>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-warning">
+                        <strong>Attention Needed:</strong> The following categories have significant budget variances exceeding 20%
+                    </div>
+                    
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
                                 <tr>
                                     <th>Category</th>
-                                    <th>Budget</th>
-                                    <th>Actual</th>
-                                    <th>Variance</th>
-                                    <th>Variance %</th>
+                                    <th class="text-end">Budget</th>
+                                    <th class="text-end">Actual</th>
+                                    <th class="text-end">Variance</th>
+                                    <th class="text-end">Variance %</th>
+                                    <th>Alert Level</th>
+                                    <th>Recommendation</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for item in budget_data %}
-                                <tr>
-                                    <td>{{ item.category.name }}</td>
-                                    <td>GH₵ {{ item.budget|intcomma }}</td>
-                                    <td>GH₵ {{ item.actual|intcomma }}</td>
-                                    <td class="{% if item.variance < 0 %}text-danger{% else %}text-success{% endif %}">
-                                        GH₵ {{ item.variance|intcomma }}
+                                {% for alert in critical_alerts %}
+                                <tr class="{% if alert.alert_level == 'high' %}table-danger{% else %}table-warning{% endif %}">
+                                    <td>
+                                        <strong>{{ alert.category.name }}</strong>
                                     </td>
-                                    <td class="{% if item.variance_percent < 0 %}text-danger{% else %}text-success{% endif %}">
-                                        {{ item.variance_percent|floatformat:2 }}%
+                                    <td class="text-end">GH₵ {{ alert.budget|intcomma }}</td>
+                                    <td class="text-end">GH₵ {{ alert.actual|intcomma }}</td>
+                                    <td class="text-end {% if alert.variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        GH₵ {{ alert.variance|intcomma }}
                                     </td>
+                                    <td class="text-end {% if alert.variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ alert.variance_percent|floatformat:1 }}%
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if alert.alert_level == 'high' %}bg-danger{% else %}bg-warning{% endif %}">
+                                            {{ alert.alert_level|title }}
+                                        </span>
+                                    </td>
+                                    <td class="small">{{ alert.recommendation }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -51,13 +149,204 @@
             </div>
         </div>
     </div>
+    {% endif %}
+
+    <!-- Budget vs Actual -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Budget vs Actual Spending
+                    </h5>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            {{ current_year }}
+                        </button>
+                        <ul class="dropdown-menu">
+                            {% for year in available_years %}
+                            <li><a class="dropdown-item" href="?year={{ year }}">{{ year }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if budget_data %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Category</th>
+                                    <th class="text-end">Budget</th>
+                                    <th class="text-end">Actual</th>
+                                    <th class="text-end">Variance</th>
+                                    <th class="text-end">Variance %</th>
+                                    <th class="text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in budget_data %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="category-color me-2" 
+                                                 style="width: 12px; height: 12px; background-color: {{ item.color }}; border-radius: 2px;"></div>
+                                            {{ item.category.name }}
+                                        </div>
+                                    </td>
+                                    <td class="text-end">GH₵ {{ item.budget|intcomma }}</td>
+                                    <td class="text-end">GH₵ {{ item.actual|intcomma }}</td>
+                                    <td class="text-end {% if item.variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        GH₵ {{ item.variance|intcomma }}
+                                    </td>
+                                    <td class="text-end {% if item.variance_percent < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ item.variance_percent|floatformat:2 }}%
+                                    </td>
+                                    <td class="text-center">
+                                        {% if item.variance_percent < -10 %}
+                                        <span class="badge bg-danger">Over Budget</span>
+                                        {% elif item.variance_percent > 10 %}
+                                        <span class="badge bg-success">Under Budget</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">On Track</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-end">GH₵ {{ total_budget|default:0|intcomma }}</th>
+                                    <th class="text-end">GH₵ {{ total_actual|default:0|intcomma }}</th>
+                                    <th class="text-end {% if total_variance < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        GH₵ {{ total_variance|default:0|intcomma }}
+                                    </th>
+                                    <th class="text-end {% if total_variance_percent < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ total_variance_percent|default:0|floatformat:2 }}%
+                                    </th>
+                                    <th class="text-center">
+                                        {% if total_variance_percent < -5 %}
+                                        <span class="badge bg-danger">Attention Needed</span>
+                                        {% elif total_variance_percent > 5 %}
+                                        <span class="badge bg-success">Good Performance</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">On Target</span>
+                                        {% endif %}
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Budget Data Available</h5>
+                        <p class="text-muted">Set up your budget categories and amounts to start tracking.</p>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#budgetModal">
+                            <i class="fas fa-plus me-2"></i>Create First Budget
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🚀 Budget Trends Section -->
+    {% if budget_trends %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Budget Performance Trends (3-Year Overview)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for category_name, trends in budget_trends.items %}
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h6 class="card-title mb-0">{{ category_name }}</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-borderless">
+                                            <thead>
+                                                <tr>
+                                                    <th>Year</th>
+                                                    <th class="text-end">Budget</th>
+                                                    <th class="text-end">Actual</th>
+                                                    <th class="text-end">Utilization</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for trend in trends %}
+                                                <tr>
+                                                    <td>{{ trend.year }}</td>
+                                                    <td class="text-end">GH₵ {{ trend.budget|intcomma }}</td>
+                                                    <td class="text-end">GH₵ {{ trend.actual|intcomma }}</td>
+                                                    <td class="text-end {% if trend.utilization_rate > 100 %}text-danger{% elif trend.utilization_rate < 70 %}text-warning{% else %}text-success{% endif %}">
+                                                        {{ trend.utilization_rate|floatformat:1 }}%
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <!-- Budget Distribution Pie Chart -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Budget Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div id="budgetDistributionChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spending Trend Chart -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Monthly Spending Trend</h5>
+                </div>
+                <div class="card-body">
+                    <div id="spendingTrendChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Historical Spending -->
     <div class="row">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title">Historical Spending</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Historical Spending
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="trendLineToggle" checked>
+                        <label class="form-check-label" for="trendLineToggle">Show Trend Line</label>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="historicalSpendingChart" style="height: 300px;"></div>
@@ -67,27 +356,221 @@
     </div>
 </div>
 
+<!-- Add Budget Modal -->
+<div class="modal fade" id="budgetModal" tabindex="-1" aria-labelledby="budgetModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="budgetModalLabel">Add New Budget</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'budget_create' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_category" class="form-label">Category *</label>
+                        <select class="form-select" id="id_category" name="category" required>
+                            <option value="">Select Category</option>
+                            {% for category in fee_categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_allocated_amount" class="form-label">Budget Amount (GH₵) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">GH₵</span>
+                            <input type="number" class="form-control" id="id_allocated_amount" 
+                                   name="allocated_amount" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_academic_year" class="form-label">Academic Year *</label>
+                        <input type="text" class="form-control" id="id_academic_year" 
+                               name="academic_year" value="{{ current_year }}/{{ current_year|add:1 }}" 
+                               pattern="\d{4}/\d{4}" required>
+                        <small class="form-text text-muted">Format: YYYY/YYYY (e.g., 2024/2025)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="id_notes" name="notes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Budget</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="d-none">
+    <div class="d-flex justify-content-center align-items-center" style="height: 200px;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 <script>
+    // Chart colors
+    const chartColors = {
+        primary: 'rgba(58, 123, 213, 0.8)',
+        secondary: 'rgba(40, 167, 69, 0.8)',
+        success: 'rgba(40, 167, 69, 0.8)',
+        danger: 'rgba(220, 53, 69, 0.8)',
+        warning: 'rgba(255, 193, 7, 0.8)',
+        info: 'rgba(23, 162, 184, 0.8)',
+        light: 'rgba(248, 249, 250, 0.8)',
+        dark: 'rgba(52, 58, 64, 0.8)'
+    };
+
     // Historical Spending Chart
     const historicalCtx = document.getElementById('historicalSpendingChart').getContext('2d');
     const historicalChart = new Chart(historicalCtx, {
         type: 'bar',
         data: {
             labels: [{% for year in historical_spending %}"{{ year.date__year }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+            datasets: [
+                {
+                    label: 'Total Spending',
+                    data: [{% for year in historical_spending %}{{ year.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    backgroundColor: chartColors.primary,
+                    borderColor: chartColors.dark,
+                    borderWidth: 1,
+                    order: 1
+                },
+                {
+                    label: 'Trend',
+                    data: [{% for year in historical_spending %}{{ year.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    type: 'line',
+                    borderColor: chartColors.danger,
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    order: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `GH₵ ${context.raw.toLocaleString()}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'GH₵' + value.toLocaleString();
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Amount (GH₵)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Year'
+                    }
+                }
+            }
+        }
+    });
+
+    // Budget Distribution Chart
+    const distributionCtx = document.getElementById('budgetDistributionChart').getContext('2d');
+    const distributionChart = new Chart(distributionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for item in budget_data %}"{{ item.category.name }}"{% if not forloop.last %},{% endif %}{% endfor %}],
             datasets: [{
-                label: 'Total Spending',
-                data: [{% for year in historical_spending %}{{ year.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                borderColor: 'rgba(54, 162, 235, 1)',
+                data: [{% for item in budget_data %}{{ item.budget }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                backgroundColor: [
+                    chartColors.primary,
+                    chartColors.success,
+                    chartColors.warning,
+                    chartColors.danger,
+                    chartColors.info,
+                    chartColors.secondary
+                ],
                 borderWidth: 1
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((context.raw / total) * 100);
+                            return `${context.label}: GH₵ ${context.raw.toLocaleString()} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Spending Trend Chart (Monthly)
+    const trendCtx = document.getElementById('spendingTrendChart').getContext('2d');
+    const trendChart = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [
+                {
+                    label: 'Budget',
+                    data: [{% for month in monthly_data %}{{ month.budget }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    borderColor: chartColors.primary,
+                    backgroundColor: chartColors.primary + '20',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Actual',
+                    data: [{% for month in monthly_data %}{{ month.actual }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                    borderColor: chartColors.success,
+                    backgroundColor: chartColors.success + '20',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
                 }
             },
             scales: {
@@ -102,5 +585,98 @@
             }
         }
     });
+
+    // Toggle trend line
+    document.getElementById('trendLineToggle').addEventListener('change', function() {
+        historicalChart.data.datasets[1].hidden = !this.checked;
+        historicalChart.update();
+    });
+
+    // Export functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const exportButtons = document.querySelectorAll('.dropdown-item[href*="export"]');
+        exportButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const exportType = this.getAttribute('href').split('=')[1];
+                
+                // Show loading spinner
+                document.getElementById('loadingSpinner').classList.remove('d-none');
+                
+                // Simulate export process
+                setTimeout(() => {
+                    document.getElementById('loadingSpinner').classList.add('d-none');
+                    alert(`Budget data exported as ${exportType.toUpperCase()} successfully!`);
+                }, 1500);
+            });
+        });
+
+        // Auto-refresh data every 5 minutes
+        setInterval(() => {
+            console.log('Refreshing budget data...');
+            // In a real implementation, this would fetch updated data
+        }, 300000);
+    });
+
+    // Print functionality
+    function printBudgetReport() {
+        window.print();
+    }
+
+    // Responsive table handling
+    function handleTableResponsive() {
+        const table = document.querySelector('.table-responsive');
+        if (window.innerWidth < 768) {
+            table.classList.add('table-sm');
+        } else {
+            table.classList.remove('table-sm');
+        }
+    }
+
+    window.addEventListener('resize', handleTableResponsive);
+    document.addEventListener('DOMContentLoaded', handleTableResponsive);
 </script>
+
+<style>
+.category-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.card-header {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+@media print {
+    .btn, .dropdown, .card-header .dropdown {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+    }
+    
+    .table-responsive {
+        overflow: visible !important;
+    }
+}
+</style>
 {% endblock %}

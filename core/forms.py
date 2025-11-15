@@ -486,6 +486,14 @@ class TeacherRegistrationForm(forms.ModelForm):
 
 
 class ClassAssignmentForm(forms.ModelForm):
+    # Add a field for qualification handling
+    add_qualification = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Add subject to teacher's qualifications if needed",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
     class Meta:
         model = ClassAssignment
         fields = ['class_level', 'subject', 'teacher', 'academic_year', 'is_active']
@@ -499,18 +507,7 @@ class ClassAssignmentForm(forms.ModelForm):
             'teacher': forms.Select(attrs={'class': 'form-select'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
-        labels = {
-            'class_level': 'Class Level',
-            'subject': 'Subject',
-            'teacher': 'Teacher',
-            'academic_year': 'Academic Year',
-            'is_active': 'Is Active'
-        }
-        help_texts = {
-            'academic_year': 'Format: YYYY/YYYY (e.g., 2024/2025)',
-            'is_active': 'Uncheck to deactivate this assignment'
-        }
-    
+
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
@@ -525,27 +522,18 @@ class ClassAssignmentForm(forms.ModelForm):
         if not self.instance.pk:
             current_year = timezone.now().year
             self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
-    
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data.get('academic_year')
-        if academic_year:
-            # Validate format
-            if not re.match(r'^\d{4}/\d{4}$', academic_year):
-                raise forms.ValidationError("Academic year must be in format YYYY/YYYY")
             
-            # Validate consecutive years
-            year1, year2 = map(int, academic_year.split('/'))
-            if year2 != year1 + 1:
-                raise forms.ValidationError("The second year should be exactly one year after the first year")
-        
-        return academic_year
-    
+        # Hide add_qualification field for teachers (admins only)
+        if self.request and hasattr(self.request.user, 'teacher'):
+            self.fields['add_qualification'].widget = forms.HiddenInput()
+
     def clean(self):
         cleaned_data = super().clean()
         class_level = cleaned_data.get('class_level')
         subject = cleaned_data.get('subject')
         teacher = cleaned_data.get('teacher')
         academic_year = cleaned_data.get('academic_year')
+        add_qualification = cleaned_data.get('add_qualification', False)
         
         # Check for duplicate assignments
         if class_level and subject and teacher and academic_year:
@@ -561,14 +549,23 @@ class ClassAssignmentForm(forms.ModelForm):
                     "This teacher is already assigned to teach this subject for this class level and academic year"
                 )
         
-        # Validate that teacher can teach the subject
+        # Check if teacher is qualified for the subject - but don't block, just warn
         if teacher and subject:
             if subject not in teacher.subjects.all():
-                raise forms.ValidationError(
-                    f"{teacher.get_full_name()} is not qualified to teach {subject.name}"
-                )
+                # Instead of raising an error, we'll handle this in the form with warnings
+                # We'll add a flag to be used in the view/template
+                self.qualification_warning = True
+                self.unqualified_subject = subject
+                self.unqualified_teacher = teacher
+                
+                # If add_qualification is checked, automatically add the subject
+                if add_qualification:
+                    teacher.subjects.add(subject)
+                    teacher.save()
+                    self.qualification_warning = False  # Warning resolved
         
         return cleaned_data
+
 
 
 # ===== PARENT FORMS =====
@@ -2271,7 +2268,7 @@ class FeeForm(forms.ModelForm):
     class Meta:
         model = Fee
         fields = ['student', 'category', 'academic_year', 'term', 
-                 'amount_payable', 'amount_paid', 'due_date', 'notes']
+                 'amount_payable', 'amount_paid', 'payment_mode', 'payment_date', 'due_date', 'notes']  # ADDED payment_mode and payment_date
         widgets = {
             'category': forms.Select(attrs={
                 'class': 'form-control'
@@ -2295,6 +2292,13 @@ class FeeForm(forms.ModelForm):
                 'step': '0.01',
                 'min': '0'
             }),
+            'payment_mode': forms.Select(attrs={  # ADDED payment_mode widget
+                'class': 'form-control'
+            }),
+            'payment_date': forms.DateInput(attrs={  # ADDED payment_date widget
+                'class': 'form-control',
+                'type': 'date'
+            }),
             'due_date': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'date'
@@ -2308,6 +2312,8 @@ class FeeForm(forms.ModelForm):
         labels = {
             'amount_payable': 'Amount Payable (GH₵)',
             'amount_paid': 'Amount Paid (GH₵)',
+            'payment_mode': 'Payment Method',  # ADDED label
+            'payment_date': 'Payment Date',    # ADDED label
         }
 
     def __init__(self, *args, **kwargs):
@@ -2321,6 +2327,9 @@ class FeeForm(forms.ModelForm):
         
         # Filter categories to active ones only
         self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True)
+        
+        # Set current date as default for payment_date
+        self.fields['payment_date'].initial = timezone.now().date()
         
         # If student_id is provided, set the student field and make it read-only
         if self.student_id:
@@ -2361,6 +2370,12 @@ class FeeForm(forms.ModelForm):
             
         return amount_paid
 
+    def clean_payment_date(self):
+        payment_date = self.cleaned_data.get('payment_date')
+        if payment_date and payment_date > timezone.now().date():
+            raise ValidationError("Payment date cannot be in the future")
+        return payment_date
+
     def clean_due_date(self):
         due_date = self.cleaned_data.get('due_date')
         if due_date and due_date < timezone.now().date():
@@ -2374,6 +2389,9 @@ class FeeForm(forms.ModelForm):
         category = cleaned_data.get('category')
         academic_year = cleaned_data.get('academic_year')
         term = cleaned_data.get('term')
+        amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
+        payment_mode = cleaned_data.get('payment_mode')
+        payment_date = cleaned_data.get('payment_date')
 
         # Check for duplicate fee records
         if student and category and academic_year and term:
@@ -2390,8 +2408,18 @@ class FeeForm(forms.ModelForm):
                     f"for {academic_year} Term {term}"
                 )
 
-        return cleaned_data
+        # Validate payment details if amount is paid
+        if amount_paid and amount_paid > Decimal('0.00'):
+            if not payment_mode:
+                raise ValidationError({
+                    'payment_mode': 'Payment method is required when an amount is paid'
+                })
+            if not payment_date:
+                raise ValidationError({
+                    'payment_date': 'Payment date is required when an amount is paid'
+                })
 
+        return cleaned_data
 
 # ===== FEE PAYMENT FORMS =====
 
@@ -2487,68 +2515,6 @@ class FeePaymentForm(forms.ModelForm):
 
         return cleaned_data
 
-
-# ===== BILL PAYMENT FORM =====
-
-class BillPaymentForm(forms.ModelForm):
-    class Meta:
-        model = BillPayment
-        fields = ['amount', 'payment_mode', 'payment_date', 'notes']
-        widgets = {
-            'amount': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': '0.00',
-                'step': '0.01',
-                'min': '0.01'
-            }),
-            'payment_mode': forms.Select(attrs={
-                'class': 'form-control'
-            }),
-            'payment_date': forms.DateInput(attrs={
-                'class': 'form-control',
-                'type': 'date'
-            }),
-            'notes': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 2,
-                'placeholder': 'Payment notes...'
-            }),
-        }
-        labels = {
-            'amount': 'Payment Amount (GH₵)',
-        }
-
-    def __init__(self, *args, **kwargs):
-        self.bill_id = kwargs.pop('bill_id', None)
-        super().__init__(*args, **kwargs)
-        
-        # Set current date as default
-        self.fields['payment_date'].initial = timezone.now().date()
-
-    def clean_amount(self):
-        amount = self.cleaned_data.get('amount')
-        if amount and amount < Decimal('0.01'):
-            raise ValidationError("Payment amount must be at least GH₵0.01")
-        return amount
-
-    def clean(self):
-        cleaned_data = super().clean()
-        amount = cleaned_data.get('amount')
-        
-        if self.bill_id and amount:
-            try:
-                bill = Bill.objects.get(pk=self.bill_id)
-                
-                # Check if payment exceeds bill balance
-                if amount > bill.balance:
-                    raise ValidationError(
-                        f"Payment amount (GH₵{amount:.2f}) exceeds bill balance (GH₵{bill.balance:.2f})"
-                    )
-                    
-            except Bill.DoesNotExist:
-                raise ValidationError("Invalid bill selected")
-
-        return cleaned_data
 
 
 # ===== FEE DISCOUNT FORM =====
@@ -2841,6 +2807,285 @@ class BulkFeeGenerationForm(forms.Form):
         return due_date
 
 
+# ===== BILL FORMS =====
+
+class BillGenerationForm(forms.Form):
+    academic_year = forms.CharField(
+        max_length=9,
+        required=True,
+        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'e.g., 2024/2025',
+            'pattern': r'\d{4}/\d{4}',
+            'title': 'Format: YYYY/YYYY'
+        })
+    )
+    
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    class_levels = forms.MultipleChoiceField(
+        choices=CLASS_LEVEL_CHOICES,
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '6'}),
+        help_text="Select specific class levels (leave blank for all)"
+    )
+    
+    due_date = forms.DateField(
+        required=True,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        help_text="Due date for the generated bills"
+    )
+    
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 2, 
+            'class': 'form-control', 
+            'placeholder': 'Optional notes for the bills'
+        }),
+        help_text="Optional notes that will be added to all generated bills"
+    )
+    
+    skip_existing = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Skip students who already have bills for this term"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+        
+        default_due_date = timezone.now().date() + timedelta(days=30)
+        self.fields['due_date'].initial = default_due_date
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data['academic_year']
+        try:
+            year1, year2 = map(int, academic_year.split('/'))
+            if year2 != year1 + 1:
+                raise forms.ValidationError("The second year should be exactly one year after the first year")
+        except (ValueError, IndexError):
+            raise forms.ValidationError("Invalid academic year format. Use YYYY/YYYY")
+        
+        return academic_year
+    
+    def clean_due_date(self):
+        due_date = self.cleaned_data['due_date']
+        if due_date < timezone.now().date():
+            raise forms.ValidationError("Due date cannot be in the past")
+        return due_date
+
+
+class BillPaymentForm(forms.ModelForm):
+    class Meta:
+        model = BillPayment
+        fields = ['amount', 'payment_mode', 'payment_date', 'reference_number', 'notes']
+        widgets = {
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'payment_mode': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'payment_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'reference_number': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Optional transaction reference'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Payment notes...'
+            }),
+        }
+        labels = {
+            'amount': 'Payment Amount (GH₵)',
+            'reference_number': 'Reference Number',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        self.bill = kwargs.pop('bill', None)
+        super().__init__(*args, **kwargs)
+        
+        # Set current date as default
+        self.fields['payment_date'].initial = timezone.now().date()
+        
+        if self.bill:
+            balance_due = self.bill.get_balance_due
+            self.fields['amount'].widget.attrs.update({
+                'max': float(balance_due) if balance_due else None
+            })
+            self.fields['amount'].help_text = f'Maximum: GH₵{balance_due:.2f}'
+    
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if self.bill:
+            if amount > self.bill.get_balance_due:
+                raise forms.ValidationError(
+                    f"Payment amount cannot exceed balance due of GH₵{self.bill.get_balance_due:.2f}"
+                )
+            if amount <= 0:
+                raise forms.ValidationError("Payment amount must be greater than zero")
+        return amount
+
+    def clean_payment_date(self):
+        payment_date = self.cleaned_data.get('payment_date')
+        if payment_date and payment_date > timezone.now().date():
+            raise forms.ValidationError("Payment date cannot be in the future")
+        return payment_date
+
+
+class BillFilterForm(forms.Form):
+    """Form for filtering bills in the bill list view"""
+    STATUS_CHOICES = [
+        ('', 'All Statuses'),
+        ('issued', 'Issued'),
+        ('paid', 'Paid'),
+        ('partial', 'Partially Paid'),
+        ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    academic_year = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    
+    term = forms.ChoiceField(
+        choices=[('', 'All Terms')] + [(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    student = forms.ModelChoiceField(
+        queryset=Student.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Students",
+        widget=forms.Select(attrs={
+            'class': 'form-control select2',
+            'data-placeholder': 'Select student...'
+        })
+    )
+    
+    class_level = forms.ChoiceField(
+        choices=[('', 'All Classes')] + CLASS_LEVEL_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set current academic year as default
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+
+
+class BillUpdateForm(forms.ModelForm):
+    """Form for updating existing bills (admin only)"""
+    class Meta:
+        model = Bill
+        fields = ['due_date', 'notes', 'status']
+        widgets = {
+            'due_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Bill notes...'
+            }),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+        }
+        labels = {
+            'due_date': 'Due Date',
+            'notes': 'Notes',
+            'status': 'Status',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Don't allow changing status to paid if there's still balance
+        if self.instance and self.instance.balance > 0:
+            self.fields['status'].choices = [
+                ('issued', 'Issued'),
+                ('partial', 'Partially Paid'),
+                ('overdue', 'Overdue'),
+                ('cancelled', 'Cancelled'),
+            ]
+    
+    def clean_status(self):
+        status = self.cleaned_data.get('status')
+        if status == 'paid' and self.instance.balance > 0:
+            raise forms.ValidationError(
+                "Cannot mark bill as paid when there is an outstanding balance"
+            )
+        return status
+    
+    def clean_due_date(self):
+        due_date = self.cleaned_data.get('due_date')
+        if due_date and due_date < timezone.now().date():
+            raise forms.ValidationError("Due date cannot be in the past")
+        return due_date
+
+
+class BulkBillActionForm(forms.Form):
+    """Form for bulk actions on bills"""
+    ACTION_CHOICES = [
+        ('', 'Select Action'),
+        ('send_reminders', 'Send Payment Reminders'),
+        ('mark_overdue', 'Mark Selected as Overdue'),
+        ('cancel', 'Cancel Selected Bills'),
+        ('export', 'Export Selected Bills'),
+    ]
+    
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    bill_ids = forms.CharField(
+        widget=forms.HiddenInput(),
+        required=False
+    )
+    
+    def clean_bill_ids(self):
+        bill_ids = self.cleaned_data.get('bill_ids', '')
+        if bill_ids:
+            try:
+                # Convert comma-separated string to list of integers
+                bill_id_list = [int(id.strip()) for id in bill_ids.split(',') if id.strip()]
+                return bill_id_list
+            except ValueError:
+                raise forms.ValidationError("Invalid bill IDs provided")
+        return []
+
+
+
 # ===== DATE RANGE FILTER FORM =====
 
 class DateRangeForm(forms.Form):
@@ -2978,11 +3223,21 @@ class AnnouncementForm(forms.ModelForm):
         help_text="Select specific class levels (hold Ctrl/Cmd to select multiple)"
     )
     
+    # Make target_roles required with proper validation
+    target_roles = forms.ChoiceField(
+        choices=Announcement.TARGET_CHOICES,
+        required=True,
+        widget=forms.Select(attrs={
+            'class': 'form-control'
+        }),
+        help_text="Select which user roles should see this announcement"
+    )
+    
     class Meta:
         model = Announcement
         fields = [
             'title', 'message', 'priority', 'target_roles', 
-            'target_class_levels', 'is_active', 'end_date'
+            'is_active', 'start_date', 'end_date', 'attachment'
         ]
         widgets = {
             'title': forms.TextInput(attrs={
@@ -3000,11 +3255,16 @@ class AnnouncementForm(forms.ModelForm):
             'target_roles': forms.Select(attrs={
                 'class': 'form-control'
             }),
+            'start_date': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            }),
             'end_date': forms.DateTimeInput(attrs={
                 'class': 'form-control',
                 'type': 'datetime-local'
             }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'attachment': forms.FileInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'target_class_levels': 'Target Class Levels',
@@ -3016,28 +3276,50 @@ class AnnouncementForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
         # Set initial values for target_class_levels from the instance
-        if self.instance and self.instance.pk:
-            if self.instance.target_class_levels:
-                self.initial['target_class_levels'] = self.instance.get_target_class_levels()
+        if self.instance and self.instance.pk and self.instance.target_class_levels:
+            self.initial['target_class_levels'] = self.instance.get_target_class_levels()
+        
+        # Set default start date to current time if not set
+        if not self.instance.pk and not self.data.get('start_date'):
+            self.initial['start_date'] = timezone.now().strftime('%Y-%m-%dT%H:%M')
+        
+        # Set default target_roles if not set
+        if not self.instance.pk and not self.data.get('target_roles'):
+            self.initial['target_roles'] = 'ALL'
         
         # Make end_date not required
         self.fields['end_date'].required = False
         
+        # Ensure target_roles is marked as required in the template
+        self.fields['target_roles'].required = True
+        
+    def clean_target_roles(self):
+        """Clean and validate target_roles field"""
+        target_roles = self.cleaned_data.get('target_roles')
+        if not target_roles:
+            raise ValidationError("This field is required.")
+        return target_roles
+        
     def clean_target_class_levels(self):
         """Clean and validate target class levels"""
         class_levels = self.cleaned_data.get('target_class_levels', [])
-        if class_levels:
-            # Convert list to comma-separated string
-            return ','.join(class_levels)
-        return ''
+        # Return as list, we'll handle the conversion in save()
+        return class_levels
     
     def clean(self):
         cleaned_data = super().clean()
         target_roles = cleaned_data.get('target_roles')
         target_class_levels = cleaned_data.get('target_class_levels')
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        
+        # Ensure target_roles is present
+        if not target_roles:
+            self.add_error('target_roles', 'This field is required.')
         
         # If targeting specific classes, ensure class levels are selected
         if target_roles == 'CLASS' and not target_class_levels:
@@ -3046,13 +3328,33 @@ class AnnouncementForm(forms.ModelForm):
             })
         
         # Validate end date is after start date
-        end_date = cleaned_data.get('end_date')
+        if start_date and end_date and end_date <= start_date:
+            raise forms.ValidationError({
+                'end_date': 'End date must be after start date.'
+            })
+        
+        # Validate end date is not in the past
         if end_date and end_date < timezone.now():
             raise forms.ValidationError({
                 'end_date': 'End date cannot be in the past.'
             })
         
         return cleaned_data
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Handle target class levels - convert list to comma-separated string
+        target_class_levels = self.cleaned_data.get('target_class_levels', [])
+        if target_class_levels:
+            instance.target_class_levels = ','.join(target_class_levels)
+        else:
+            instance.target_class_levels = ''
+        
+        if commit:
+            instance.save()
+        
+        return instance
 
 
 # ===== FILTER FORMS =====
@@ -3540,72 +3842,6 @@ class ParentAttendanceFilterForm(forms.Form):
                 parents__user=user
             )
 
-# ===== BILL FORMS =====
-
-class BillGenerationForm(forms.Form):
-    academic_year = forms.CharField(
-        max_length=9,
-        required=True,
-        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., 2024/2025'})
-    )
-    
-    term = forms.ChoiceField(
-        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
-        required=True,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    class_levels = forms.MultipleChoiceField(
-        choices=CLASS_LEVEL_CHOICES,
-        required=False,
-        widget=forms.SelectMultiple(attrs={'class': 'form-control', 'size': 6}),
-        help_text="Select specific class levels (leave blank for all)"
-    )
-    
-    due_date = forms.DateField(
-        required=True,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-        help_text="Due date for the generated bills"
-    )
-    
-    notes = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={'rows': 2, 'class': 'form-control', 'placeholder': 'Optional notes for the bills'}),
-        help_text="Optional notes that will be added to all generated bills"
-    )
-    
-    skip_existing = forms.BooleanField(
-        required=False,
-        initial=True,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        help_text="Skip students who already have bills for this term"
-    )
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        current_year = timezone.now().year
-        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
-        
-        default_due_date = timezone.now().date() + timedelta(days=30)
-        self.fields['due_date'].initial = default_due_date
-    
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data['academic_year']
-        try:
-            year1, year2 = map(int, academic_year.split('/'))
-            if year2 != year1 + 1:
-                raise forms.ValidationError("The second year should be exactly one year after the first year")
-        except (ValueError, IndexError):
-            raise forms.ValidationError("Invalid academic year format. Use YYYY/YYYY")
-        
-        return academic_year
-    
-    def clean_due_date(self):
-        due_date = self.cleaned_data['due_date']
-        if due_date < timezone.now().date():
-            raise forms.ValidationError("Due date cannot be in the past")
-        return due_date
 
 # ===== TIMETABLE FORMS =====
 
@@ -3799,3 +4035,50 @@ class SchoolConfigurationForm(forms.ModelForm):
                 raise forms.ValidationError("Invalid academic year format")
         
         return academic_year
+
+
+class BudgetForm(forms.ModelForm):
+    class Meta:
+        model = Budget
+        fields = ['category', 'allocated_amount', 'academic_year', 'notes']
+        widgets = {
+            'academic_year': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'YYYY/YYYY'
+            }),
+            'allocated_amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'category': forms.Select(attrs={'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Budget notes...'
+            }),
+        }
+        labels = {
+            'allocated_amount': 'Budget Amount (GH₵)',
+            'academic_year': 'Academic Year',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set current academic year as default
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+        self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True)
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if not re.match(r'^\d{4}/\d{4}$', academic_year):
+            raise ValidationError("Academic year must be in format YYYY/YYYY (e.g., 2024/2025)")
+        return academic_year
+    
+    def clean_allocated_amount(self):
+        amount = self.cleaned_data.get('allocated_amount')
+        if amount and amount < Decimal('0.01'):
+            raise ValidationError("Budget amount must be at least GH₵0.01")
+        return amount
+

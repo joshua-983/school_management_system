@@ -576,7 +576,7 @@
     </div>
 </div>
 
-    <!-- Quick Actions -->
+<!-- Quick Actions -->
 {% if is_teacher or is_admin %}
 <div class="row mb-4">
     <div class="col-12">
@@ -604,23 +604,103 @@
                     </a>
                 </div>
                 <div class="col-xl-2 col-md-4 col-6">
+                    <button class="quick-action-btn" id="viewReportCardBtn" data-bs-toggle="modal" data-bs-target="#viewReportCardModal">
+                        <i class="fas fa-eye text-warning"></i>
+                        <span class="btn-text">View Report Card</span>
+                    </button>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
                     <button class="quick-action-btn" id="exportBtn">
-                        <i class="fas fa-download text-warning"></i>
+                        <i class="fas fa-download text-danger"></i>
                         <span class="btn-text">Export Data</span>
                     </button>
                 </div>
                 <div class="col-xl-2 col-md-4 col-6">
                     <a href="{% url 'analytics_dashboard' %}" class="quick-action-btn">
-                        <i class="fas fa-chart-bar text-danger"></i>
+                        <i class="fas fa-chart-bar text-secondary"></i>
                         <span class="btn-text">Analytics</span>
                     </a>
                 </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <button class="quick-action-btn" id="printAllBtn">
-                        <i class="fas fa-print text-secondary"></i>
-                        <span class="btn-text">Print All</span>
-                    </button>
-                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Report Card Modal -->
+<div class="modal fade" id="viewReportCardModal" tabindex="-1" aria-labelledby="viewReportCardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewReportCardModalLabel">
+                    <i class="fas fa-eye me-2"></i>View Report Card
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="viewReportCardForm" method="get">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="student_select" class="form-label">Select Student *</label>
+                            <select name="student_id" id="student_select" class="form-select" required>
+                                <option value="">Choose a student...</option>
+                                {% if is_teacher %}
+                                    {% for student in teacher_students %}
+                                    <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
+                                    {% endfor %}
+                                {% elif is_admin %}
+                                    {% for student in all_students %}
+                                    <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="academic_year_select" class="form-label">Academic Year *</label>
+                            <select name="academic_year" id="academic_year_select" class="form-select" required>
+                                <option value="">Select academic year...</option>
+                                <option value="2023/2024">2023/2024</option>
+                                <option value="2024/2025">2024/2025</option>
+                                <option value="2025/2026">2025/2026</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="term_select" class="form-label">Term *</label>
+                            <select name="term" id="term_select" class="form-select" required>
+                                <option value="">Select term...</option>
+                                <option value="1">Term 1</option>
+                                <option value="2">Term 2</option>
+                                <option value="3">Term 3</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">View As *</label>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="view_type" id="view_web" value="web" checked>
+                                <label class="form-check-label" for="view_web">
+                                    <i class="fas fa-globe me-1"></i> Web View
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="view_type" id="view_pdf" value="pdf">
+                                <label class="form-check-label" for="view_pdf">
+                                    <i class="fas fa-file-pdf me-1"></i> PDF Download
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Select a student, academic year, and term to quickly view their report card.
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitViewForm">
+                    <i class="fas fa-eye me-2"></i>View Report Card
+                </button>
             </div>
         </div>
     </div>
@@ -1131,6 +1211,57 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // View Report Card functionality
+    const viewReportCardBtn = document.getElementById('viewReportCardBtn');
+    const viewReportCardForm = document.getElementById('viewReportCardForm');
+    const submitViewForm = document.getElementById('submitViewForm');
+    
+    if (submitViewForm) {
+        submitViewForm.addEventListener('click', function() {
+            const studentId = document.getElementById('student_select').value;
+            const academicYear = document.getElementById('academic_year_select').value;
+            const term = document.getElementById('term_select').value;
+            const viewType = document.querySelector('input[name="view_type"]:checked').value;
+            
+            if (!studentId || !academicYear || !term) {
+                // Show error message
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Please fill in all required fields (student, academic year, and term).
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('#viewReportCardModal .modal-body').insertBefore(alert, viewReportCardForm);
+                
+                // Auto-remove alert after 5 seconds
+                setTimeout(() => {
+                    alert.remove();
+                }, 5000);
+                return;
+            }
+            
+            // Close modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('viewReportCardModal'));
+            modal.hide();
+            
+            // Show loading overlay
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.style.display = 'flex';
+            
+            // Redirect based on view type
+            setTimeout(() => {
+                if (viewType === 'web') {
+                    // Redirect to web view
+                    window.location.href = `{% url 'quick_view_report_card' %}?student_id=${studentId}&academic_year=${academicYear}&term=${term}`;
+                } else {
+                    // Redirect to PDF view
+                    window.location.href = `{% url 'quick_view_report_card_pdf' %}?student_id=${studentId}&academic_year=${academicYear}&term=${term}`;
+                }
+            }, 500);
+        });
+    }
+    
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
         // Ctrl + F to focus search
@@ -1145,7 +1276,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Ctrl + R to refresh
         if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
-            refreshBtn.click();
+            if (refreshBtn) refreshBtn.click();
         }
         
         // Ctrl + N to create new
@@ -1154,6 +1285,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const createBtn = document.querySelector('a[href*="create_report_card"]');
             if (createBtn) {
                 createBtn.click();
+            }
+        }
+        
+        // Ctrl + V to open view report card modal
+        if (e.ctrlKey && e.key === 'v') {
+            e.preventDefault();
+            if (viewReportCardBtn) {
+                viewReportCardBtn.click();
             }
         }
     });

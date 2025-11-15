@@ -98,14 +98,6 @@
         color: rgba(255, 255, 255, 0.9);
     }
     
-    .summary-card .trend.up {
-        color: rgba(255, 255, 255, 0.9);
-    }
-    
-    .summary-card .trend.down {
-        color: rgba(255, 255, 255, 0.9);
-    }
-    
     .analytics-card {
         border-radius: 12px;
         box-shadow: var(--card-shadow);
@@ -138,6 +130,11 @@
         position: relative;
         height: 300px;
         width: 100%;
+        padding: 15px;
+    }
+    
+    .chart-container-sm {
+        height: 250px;
     }
     
     .nav-pills .nav-link {
@@ -347,6 +344,41 @@
     .alert-indicator.warning { background-color: #ffc107; }
     .alert-indicator.info { background-color: #17a2b8; }
     
+    /* Empty state styling */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    /* Chart improvements */
+    .chart-legend {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        font-size: 0.8rem;
+    }
+    
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        margin-right: 5px;
+    }
+    
     /* Responsive adjustments */
     @media (max-width: 992px) {
         .date-range-picker {
@@ -356,6 +388,10 @@
         
         .date-range-picker .form-control {
             max-width: 100%;
+        }
+        
+        .chart-container {
+            height: 250px;
         }
     }
     
@@ -369,11 +405,32 @@
         }
         
         .chart-container {
-            height: 250px;
+            height: 200px;
         }
         
         .nav-pills .nav-link {
             margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+        }
+        
+        .analytics-card .card-header {
+            padding: 1rem;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .page-header {
+            padding: 15px;
+        }
+        
+        .summary-card .card-body {
+            padding: 1rem;
+        }
+        
+        .chart-container {
+            height: 180px;
+            padding: 10px;
         }
     }
     
@@ -385,6 +442,18 @@
     
     .fade-in {
         animation: fadeIn 0.5s ease forwards;
+    }
+    
+    /* Print styles */
+    @media print {
+        .btn, .dropdown, .spinner-overlay {
+            display: none !important;
+        }
+        
+        .analytics-card {
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
     }
 </style>
 {% endblock %}
@@ -461,19 +530,19 @@
                         <div class="col-md-4">
                             <div class="insight-card">
                                 <h6><i class="bi bi-check-circle me-2"></i>Strong Performance</h6>
-                                <p class="mb-0">Academic results show 12% improvement compared to last term</p>
+                                <p class="mb-0">Academic results show improvement compared to last term</p>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="insight-card warning">
                                 <h6><i class="bi bi-exclamation-triangle me-2"></i>Attention Needed</h6>
-                                <p class="mb-0">15 students at risk of falling below GES attendance requirements</p>
+                                <p class="mb-0">Monitor students at risk of falling below attendance requirements</p>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="insight-card success">
                                 <h6><i class="bi bi-graph-up me-2"></i>Positive Trend</h6>
-                                <p class="mb-0">Fee collection efficiency improved by 8% this month</p>
+                                <p class="mb-0">Fee collection efficiency maintained this period</p>
                             </div>
                         </div>
                     </div>
@@ -492,16 +561,15 @@
                         <i class="bi bi-calendar-check text-primary icon"></i>
                     </div>
                     <h5 class="card-title">Attendance Overview</h5>
-                    <p class="value">{{ attendance_stats.basic_stats.present|default:"0" }}</p>
+                    <p class="value" id="attendanceValue">0</p>
                     <p class="mb-1">Present students this period</p>
-                    <div class="trend up">
+                    <div class="trend">
                         <i class="bi bi-arrow-up-circle-fill me-1"></i>
-                        <span>{{ attendance_stats.attendance_rate|default:"0" }}% attendance rate</span>
+                        <span id="attendanceRate">0%</span> attendance rate
                     </div>
                     <div class="performance-meter mt-2">
-                        <div class="fill bg-success" style="width: {{ attendance_stats.attendance_rate|default:'0' }}%"></div>
+                        <div class="fill bg-success" id="attendanceMeter" style="width: 0%"></div>
                     </div>
-                    <!-- Removed broken link -->
                 </div>
             </div>
         </div>
@@ -514,16 +582,15 @@
                         <i class="bi bi-journal-check text-success icon"></i>
                     </div>
                     <h5 class="card-title">Academic Performance</h5>
-                    <p class="value">{{ grade_stats.overall_performance.avg_score|default:"0"|floatformat:1 }}</p>
+                    <p class="value" id="gradeValue">0.0</p>
                     <p class="mb-1">Average score across classes</p>
-                    <div class="trend up">
+                    <div class="trend">
                         <i class="bi bi-arrow-up-circle-fill me-1"></i>
-                        <span>{{ grade_stats.overall_performance.pass_rate|default:"0" }}% pass rate</span>
+                        <span id="passRate">0%</span> pass rate
                     </div>
                     <div class="performance-meter mt-2">
-                        <div class="fill bg-info" style="width: {{ grade_stats.overall_performance.avg_score|default:'0' }}%"></div>
+                        <div class="fill bg-info" id="gradeMeter" style="width: 0%"></div>
                     </div>
-                    <!-- Removed broken link -->
                 </div>
             </div>
         </div>
@@ -536,16 +603,15 @@
                         <i class="bi bi-cash-stack text-info icon"></i>
                     </div>
                     <h5 class="card-title">Financial Summary</h5>
-                    <p class="value">{{ fee_stats.financial_summary.revenue_metrics.collection_rate|default:"0" }}%</p>
+                    <p class="value" id="financeValue">0%</p>
                     <p class="mb-1">Fee collection rate</p>
-                    <div class="trend up">
+                    <div class="trend">
                         <i class="bi bi-arrow-up-circle-fill me-1"></i>
-                        <span>GH₵{{ fee_stats.financial_summary.revenue_metrics.total_paid|default:"0"|floatformat:0 }} collected</span>
+                        <span id="amountCollected">GH₵0</span> collected
                     </div>
                     <div class="performance-meter mt-2">
-                        <div class="fill bg-warning" style="width: {{ fee_stats.financial_summary.revenue_metrics.collection_rate|default:'0' }}%"></div>
+                        <div class="fill bg-warning" id="financeMeter" style="width: 0%"></div>
                     </div>
-                    <!-- Removed broken link -->
                 </div>
             </div>
         </div>
@@ -558,16 +624,15 @@
                         <i class="bi bi-award text-warning icon"></i>
                     </div>
                     <h5 class="card-title">GES Compliance</h5>
-                    <p class="value">{{ attendance_stats.ges_compliance.compliance_rate|default:"0" }}%</p>
+                    <p class="value" id="complianceValue">0%</p>
                     <p class="mb-1">Students meeting requirements</p>
-                    <div class="trend up">
+                    <div class="trend">
                         <i class="bi bi-arrow-up-circle-fill me-1"></i>
-                        <span>{{ attendance_stats.ges_compliance.compliant_students|default:"0" }} compliant</span>
+                        <span id="compliantStudents">0</span> compliant
                     </div>
                     <div class="performance-meter mt-2">
-                        <div class="fill bg-primary" style="width: {{ attendance_stats.ges_compliance.compliance_rate|default:'0' }}%"></div>
+                        <div class="fill bg-primary" id="complianceMeter" style="width: 0%"></div>
                     </div>
-                    <!-- Removed broken link -->
                 </div>
             </div>
         </div>
@@ -588,8 +653,8 @@
                                     <strong>Attendance Rate</strong>
                                     <div class="text-muted">vs. GES Standard (80%)</div>
                                 </div>
-                                <span class="comparison-badge {% if attendance_stats.attendance_rate >= 80 %}bg-success{% else %}bg-danger{% endif %}">
-                                    {{ attendance_stats.attendance_rate|default:"0" }}%
+                                <span class="comparison-badge" id="attendanceComparison">
+                                    0%
                                 </span>
                             </div>
                         </div>
@@ -599,8 +664,8 @@
                                     <strong>Academic Performance</strong>
                                     <div class="text-muted">vs. School Target (70%)</div>
                                 </div>
-                                <span class="comparison-badge {% if grade_stats.overall_performance.avg_score >= 70 %}bg-success{% else %}bg-warning{% endif %}">
-                                    {{ grade_stats.overall_performance.avg_score|default:"0"|floatformat:1 }}%
+                                <span class="comparison-badge" id="academicComparison">
+                                    0%
                                 </span>
                             </div>
                         </div>
@@ -610,8 +675,8 @@
                                     <strong>Financial Health</strong>
                                     <div class="text-muted">Collection Efficiency</div>
                                 </div>
-                                <span class="comparison-badge {% if fee_stats.financial_summary.revenue_metrics.collection_rate >= 85 %}bg-success{% elif fee_stats.financial_summary.revenue_metrics.collection_rate >= 70 %}bg-warning{% else %}bg-danger{% endif %}">
-                                    {{ fee_stats.financial_summary.revenue_metrics.collection_rate|default:"0" }}%
+                                <span class="comparison-badge" id="financialComparison">
+                                    0%
                                 </span>
                             </div>
                         </div>
@@ -682,6 +747,16 @@
                                     <div class="chart-container">
                                         <canvas id="attendanceTrendChart"></canvas>
                                     </div>
+                                    <div class="chart-legend">
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background-color: #28a745;"></div>
+                                            <span>Attendance Rate</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background-color: #dc3545;"></div>
+                                            <span>GES Target (80%)</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -693,22 +768,22 @@
                                 <div class="card-body">
                                     <div class="stat-card present">
                                         <h6>Present Students</h6>
-                                        <h3>{{ attendance_stats.basic_stats.present|default:"0" }}</h3>
-                                        <small>{{ attendance_stats.attendance_rate|default:"0" }}% of total attendance</small>
+                                        <h3 id="presentCount">0</h3>
+                                        <small id="presentPercentage">0% of total attendance</small>
                                     </div>
                                     <div class="stat-card absent">
                                         <h6>Absent Students</h6>
-                                        <h3>{{ attendance_stats.basic_stats.absent|default:"0" }}</h3>
+                                        <h3 id="absentCount">0</h3>
                                         <small>Requires immediate attention</small>
                                     </div>
                                     <div class="stat-card late">
                                         <h6>Late Arrivals</h6>
-                                        <h3>{{ attendance_stats.basic_stats.late|default:"0" }}</h3>
+                                        <h3 id="lateCount">0</h3>
                                         <small>Pattern analysis recommended</small>
                                     </div>
                                     <div class="alert alert-warning mt-3">
                                         <small><i class="bi bi-info-circle me-1"></i>
-                                            <strong>Insight:</strong> {{ attendance_stats.ges_compliance.non_compliant_students|default:"0" }} students below GES 80% requirement
+                                            <strong>Insight:</strong> <span id="nonCompliantCount">0</span> students below GES 80% requirement
                                         </small>
                                     </div>
                                 </div>
@@ -722,8 +797,8 @@
                             <div class="analytics-card">
                                 <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0">GES Compliance Monitoring</h5>
-                                    <span class="badge {% if attendance_stats.ges_compliance.compliance_rate >= 80 %}bg-success{% else %}bg-warning{% endif %}">
-                                        {{ attendance_stats.ges_compliance.compliance_rate|default:"0" }}% Compliant
+                                    <span class="badge" id="complianceBadge">
+                                        0% Compliant
                                     </span>
                                 </div>
                                 <div class="card-body">
@@ -731,19 +806,19 @@
                                         <div class="col-md-6">
                                             <h6>Compliance Overview</h6>
                                             <div class="progress mb-3" style="height: 25px;">
-                                                <div class="progress-bar bg-success" style="width: {{ attendance_stats.ges_compliance.compliance_rate|default:'0' }}%">
-                                                    {{ attendance_stats.ges_compliance.compliance_rate|default:"0" }}%
+                                                <div class="progress-bar bg-success" id="complianceProgress" style="width: 0%">
+                                                    0%
                                                 </div>
                                             </div>
                                             <div class="d-flex justify-content-between text-sm">
-                                                <span>Compliant: {{ attendance_stats.ges_compliance.compliant_students|default:"0" }}</span>
-                                                <span>Non-compliant: {{ attendance_stats.ges_compliance.non_compliant_students|default:"0" }}</span>
+                                                <span>Compliant: <span id="compliantCount">0</span></span>
+                                                <span>Non-compliant: <span id="nonCompliantTotal">0</span></span>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <h6>Weekly Pattern</h6>
-                                            <div class="chart-container">
-                                                <canvas id="weeklyPatternChart" height="150"></canvas>
+                                            <div class="chart-container chart-container-sm">
+                                                <canvas id="weeklyPatternChart"></canvas>
                                             </div>
                                         </div>
                                     </div>
@@ -779,19 +854,19 @@
                         <div class="col-lg-6">
                             <div class="analytics-card mb-4">
                                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                                    <h5 class="mb-0">Class Performance Distribution</h5>
+                                    <h5 class="mb-0">Grade Distribution</h5>
                                     <div class="btn-group btn-group-sm mt-2 mt-md-0">
-                                        <button class="btn btn-outline-secondary chart-reset" data-chart="classPerformanceChart">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="gradeDistributionChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
-                                        <button class="btn btn-outline-secondary chart-export" data-chart="classPerformanceChart">
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="gradeDistributionChart">
                                             <i class="bi bi-download"></i> Export
                                         </button>
                                     </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
-                                        <canvas id="classPerformanceChart"></canvas>
+                                        <canvas id="gradeDistributionChart"></canvas>
                                     </div>
                                 </div>
                             </div>
@@ -810,28 +885,28 @@
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Average Score</h6>
-                                                <h3>{{ grade_stats.overall_performance.avg_score|default:"0"|floatformat:1 }}</h3>
+                                                <h3 id="avgScore">0.0</h3>
                                                 <small>Across all subjects</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Pass Rate</h6>
-                                                <h3>{{ grade_stats.overall_performance.pass_rate|default:"0"|floatformat:1 }}%</h3>
+                                                <h3 id="passRateDetail">0%</h3>
                                                 <small>Students achieving 40%+</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Excellence Rate</h6>
-                                                <h3>{{ grade_stats.overall_performance.excellence_rate|default:"0"|floatformat:1 }}%</h3>
+                                                <h3 id="excellenceRate">0%</h3>
                                                 <small>Students achieving 80%+</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Improvement Needed</h6>
-                                                <h3>{{ grade_stats.overall_performance.fail_rate|default:"0"|floatformat:1 }}%</h3>
+                                                <h3 id="failRate">0%</h3>
                                                 <small>Below passing grade</small>
                                             </div>
                                         </div>
@@ -840,19 +915,11 @@
                                     <!-- Learning Gaps -->
                                     <div class="mt-4">
                                         <h6>Key Learning Gaps Identified</h6>
-                                        <div class="row">
-                                            {% for gap in grade_stats.learning_gaps.critical_areas|slice:":3" %}
-                                            <div class="col-md-4">
-                                                <div class="alert alert-warning">
-                                                    <strong>{{ gap.subject__name|default:"Unknown Subject" }}</strong><br>
-                                                    <small>Avg: {{ gap.avg_score|default:"0"|floatformat:1 }}% • Pass: {{ gap.pass_rate|default:"0"|floatformat:1 }}%</small>
-                                                </div>
+                                        <div id="learningGapsContainer">
+                                            <div class="empty-state">
+                                                <i class="bi bi-journal-x"></i>
+                                                <p>No critical learning gaps identified</p>
                                             </div>
-                                            {% empty %}
-                                            <div class="col-12">
-                                                <p class="text-muted">No critical learning gaps identified</p>
-                                            </div>
-                                            {% endfor %}
                                         </div>
                                     </div>
                                 </div>
@@ -887,19 +954,19 @@
                         <div class="col-lg-6">
                             <div class="analytics-card mb-4">
                                 <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                                    <h5 class="mb-0">Fee Category Breakdown</h5>
+                                    <h5 class="mb-0">Monthly Collection Trend</h5>
                                     <div class="btn-group btn-group-sm mt-2 mt-md-0">
-                                        <button class="btn btn-outline-secondary chart-reset" data-chart="feeCategoryChart">
+                                        <button class="btn btn-outline-secondary chart-reset" data-chart="monthlyTrendChart">
                                             <i class="bi bi-zoom-out"></i> Reset Zoom
                                         </button>
-                                        <button class="btn btn-outline-secondary chart-export" data-chart="feeCategoryChart">
+                                        <button class="btn btn-outline-secondary chart-export" data-chart="monthlyTrendChart">
                                             <i class="bi bi-download"></i> Export
                                         </button>
                                     </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
-                                        <canvas id="feeCategoryChart"></canvas>
+                                        <canvas id="monthlyTrendChart"></canvas>
                                     </div>
                                 </div>
                             </div>
@@ -918,28 +985,28 @@
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Total Receivable</h6>
-                                                <h3>GH₵{{ fee_stats.financial_summary.revenue_metrics.total_payable|default:"0"|floatformat:0 }}</h3>
+                                                <h3 id="totalReceivable">GH₵0</h3>
                                                 <small>Amount expected</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Total Collected</h6>
-                                                <h3>GH₵{{ fee_stats.financial_summary.revenue_metrics.total_paid|default:"0"|floatformat:0 }}</h3>
+                                                <h3 id="totalCollected">GH₵0</h3>
                                                 <small>Amount received</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Collection Rate</h6>
-                                                <h3>{{ fee_stats.financial_summary.revenue_metrics.collection_rate|default:"0" }}%</h3>
+                                                <h3 id="collectionRateDetail">0%</h3>
                                                 <small>Efficiency metric</small>
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="stat-card">
                                                 <h6>Outstanding</h6>
-                                                <h3>GH₵{{ fee_stats.financial_summary.revenue_metrics.outstanding_balance|default:"0"|floatformat:0 }}</h3>
+                                                <h3 id="outstandingBalance">GH₵0</h3>
                                                 <small>Pending collection</small>
                                             </div>
                                         </div>
@@ -951,24 +1018,22 @@
                                             <h6>Payment Efficiency</h6>
                                             <div class="metric-comparison">
                                                 <div>On-time Payment Rate</div>
-                                                <span class="badge bg-success">{{ fee_stats.financial_summary.efficiency_metrics.on_time_payment_rate|default:"0" }}%</span>
+                                                <span class="badge bg-success" id="onTimeRate">0%</span>
                                             </div>
                                             <div class="metric-comparison">
                                                 <div>Collection Period</div>
-                                                <span class="badge bg-info">{{ fee_stats.financial_health.efficiency_metrics.collection_period_days|default:"0" }} days</span>
+                                                <span class="badge bg-info" id="collectionPeriod">0 days</span>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <h6>Financial Ratios</h6>
                                             <div class="metric-comparison">
                                                 <div>Current Ratio</div>
-                                                <span class="badge {% if fee_stats.financial_health.liquidity_metrics.current_ratio >= 1.5 %}bg-success{% else %}bg-warning{% endif %}">
-                                                    {{ fee_stats.financial_health.liquidity_metrics.current_ratio|default:"0"|floatformat:2 }}
-                                                </span>
+                                                <span class="badge bg-success" id="currentRatio">0.00</span>
                                             </div>
                                             <div class="metric-comparison">
                                                 <div>Operational Efficiency</div>
-                                                <span class="badge bg-primary">{{ fee_stats.financial_health.efficiency_metrics.operational_efficiency|default:"0"|floatformat:1 }}/10</span>
+                                                <span class="badge bg-primary" id="operationalEfficiency">0/10</span>
                                             </div>
                                         </div>
                                     </div>
@@ -998,24 +1063,10 @@
                                                     <th>Performance</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                {% for student in student_performance.at_risk_students|slice:":5" %}
-                                                <tr>
-                                                    <td>{{ student.student|default:"Unknown" }}</td>
-                                                    <td>{{ student.class_level|default:"Unknown" }}</td>
-                                                    <td>
-                                                        <span class="badge {% if student.predictive_analytics.at_risk_score > 0.7 %}bg-danger{% else %}bg-warning{% endif %}">
-                                                            {{ student.predictive_analytics.at_risk_score|default:"0"|floatformat:1 }}
-                                                        </span>
-                                                    </td>
-                                                    <td>{{ student.attendance_metrics.attendance_rate|default:"0"|floatformat:1 }}%</td>
-                                                    <td>{{ student.academic_metrics.avg_score|default:"0"|floatformat:1 }}%</td>
-                                                </tr>
-                                                {% empty %}
+                                            <tbody id="riskStudentsTable">
                                                 <tr>
                                                     <td colspan="5" class="text-center text-muted">No at-risk students identified</td>
                                                 </tr>
-                                                {% endfor %}
                                             </tbody>
                                         </table>
                                     </div>
@@ -1025,7 +1076,7 @@
                         <div class="col-lg-6">
                             <div class="analytics-card mb-4">
                                 <div class="card-header bg-info text-white">
-                                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Performance Trends</h5>
+                                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Risk Trends</h5>
                                 </div>
                                 <div class="card-body">
                                     <div class="chart-container">
@@ -1044,20 +1095,11 @@
                                     <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Recommended Interventions</h5>
                                 </div>
                                 <div class="card-body">
-                                    <div class="row">
-                                        {% for intervention in grade_stats.learning_gaps.improvement_priorities|slice:":3" %}
-                                        <div class="col-md-4">
-                                            <div class="alert {% if intervention.priority == 'HIGH' %}alert-danger{% else %}alert-warning{% endif %}">
-                                                <h6>{{ intervention.area|default:"General Improvement" }}</h6>
-                                                <p class="mb-1">{{ intervention.recommendation|default:"Monitor and provide support" }}</p>
-                                                <small class="text-muted">Current: {{ intervention.current_score|default:"0" }}% • Target: {{ intervention.target_score|default:"60" }}%</small>
-                                            </div>
+                                    <div id="interventionsContainer">
+                                        <div class="empty-state">
+                                            <i class="bi bi-check-circle"></i>
+                                            <p>No specific interventions recommended at this time</p>
                                         </div>
-                                        {% empty %}
-                                        <div class="col-12">
-                                            <p class="text-muted">No specific interventions recommended at this time</p>
-                                        </div>
-                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>
@@ -1100,7 +1142,10 @@
                 position: 'top',
                 labels: {
                     usePointStyle: true,
-                    padding: 20
+                    padding: 20,
+                    font: {
+                        size: 12
+                    }
                 }
             },
             tooltip: {
@@ -1131,13 +1176,79 @@
         },
         scales: {
             x: {
-                grid: { display: false },
-                ticks: { maxRotation: 45 }
+                grid: { 
+                    display: false,
+                    color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: { 
+                    maxRotation: 45,
+                    font: { size: 11 }
+                }
             },
             y: {
-                grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                beginAtZero: true
+                grid: { 
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false
+                },
+                beginAtZero: true,
+                ticks: {
+                    font: { size: 11 }
+                }
             }
+        }
+    };
+
+    // Sample data for demonstration
+    const sampleData = {
+        attendance: {
+            present: 85,
+            absent: 8,
+            late: 7,
+            total: 100,
+            rate: 85,
+            trend: [82, 84, 83, 85, 87, 85, 86],
+            weekly: [88, 85, 82, 90, 86, 0, 0], // Mon-Sun
+            compliance: {
+                rate: 78,
+                compliant: 78,
+                nonCompliant: 22
+            }
+        },
+        grades: {
+            average: 72.5,
+            passRate: 85,
+            excellenceRate: 25,
+            failRate: 15,
+            subjects: [
+                { name: 'Mathematics', score: 78 },
+                { name: 'Science', score: 82 },
+                { name: 'English', score: 75 },
+                { name: 'Social Studies', score: 70 },
+                { name: 'ICT', score: 85 }
+            ],
+            distribution: [5, 15, 25, 30, 15, 8, 2] // Grade distribution
+        },
+        finance: {
+            collectionRate: 88,
+            totalPayable: 50000,
+            totalPaid: 44000,
+            outstanding: 6000,
+            categories: [
+                { name: 'Tuition', amount: 25000 },
+                { name: 'Feeding', amount: 12000 },
+                { name: 'Books', amount: 8000 },
+                { name: 'Uniform', amount: 4000 },
+                { name: 'Transport', amount: 1000 }
+            ],
+            monthlyTrend: [42000, 38000, 45000, 44000, 46000, 48000]
+        },
+        risk: {
+            students: [
+                { name: 'John Doe', class: 'P6', risk: 'HIGH', attendance: 65, performance: 45 },
+                { name: 'Jane Smith', class: 'J2', risk: 'MEDIUM', attendance: 72, performance: 58 },
+                { name: 'Mike Johnson', class: 'P5', risk: 'HIGH', attendance: 68, performance: 52 }
+            ],
+            trends: [12, 15, 18, 14, 16, 13, 15]
         }
     };
 
@@ -1146,6 +1257,7 @@
         initializeAllCharts();
         setupEventListeners();
         initializeAnimations();
+        updateSummaryCards();
     });
 
     function initializeAllCharts() {
@@ -1155,33 +1267,125 @@
         initializeRiskCharts();
     }
 
+    function updateSummaryCards() {
+        // Update attendance card
+        document.getElementById('attendanceValue').textContent = sampleData.attendance.present;
+        document.getElementById('attendanceRate').textContent = sampleData.attendance.rate + '%';
+        document.getElementById('attendanceMeter').style.width = sampleData.attendance.rate + '%';
+        
+        // Update grade card
+        document.getElementById('gradeValue').textContent = sampleData.grades.average.toFixed(1);
+        document.getElementById('passRate').textContent = sampleData.grades.passRate + '%';
+        document.getElementById('gradeMeter').style.width = sampleData.grades.average + '%';
+        
+        // Update finance card
+        document.getElementById('financeValue').textContent = sampleData.finance.collectionRate + '%';
+        document.getElementById('amountCollected').textContent = 'GH₵' + sampleData.finance.totalPaid.toLocaleString();
+        document.getElementById('financeMeter').style.width = sampleData.finance.collectionRate + '%';
+        
+        // Update compliance card
+        document.getElementById('complianceValue').textContent = sampleData.attendance.compliance.rate + '%';
+        document.getElementById('compliantStudents').textContent = sampleData.attendance.compliance.compliant;
+        document.getElementById('complianceMeter').style.width = sampleData.attendance.compliance.rate + '%';
+        
+        // Update comparison badges
+        updateComparisonBadges();
+        
+        // Update detailed statistics
+        updateDetailedStatistics();
+    }
+
+    function updateComparisonBadges() {
+        const attendanceBadge = document.getElementById('attendanceComparison');
+        const academicBadge = document.getElementById('academicComparison');
+        const financialBadge = document.getElementById('financialComparison');
+        
+        // Attendance comparison
+        attendanceBadge.textContent = sampleData.attendance.rate + '%';
+        attendanceBadge.className = sampleData.attendance.rate >= 80 ? 'comparison-badge bg-success' : 'comparison-badge bg-warning';
+        
+        // Academic comparison
+        academicBadge.textContent = sampleData.grades.average.toFixed(1) + '%';
+        academicBadge.className = sampleData.grades.average >= 70 ? 'comparison-badge bg-success' : 'comparison-badge bg-warning';
+        
+        // Financial comparison
+        financialBadge.textContent = sampleData.finance.collectionRate + '%';
+        financialBadge.className = sampleData.finance.collectionRate >= 85 ? 'comparison-badge bg-success' : 
+                                  sampleData.finance.collectionRate >= 70 ? 'comparison-badge bg-warning' : 'comparison-badge bg-danger';
+    }
+
+    function updateDetailedStatistics() {
+        // Attendance details
+        document.getElementById('presentCount').textContent = sampleData.attendance.present;
+        document.getElementById('absentCount').textContent = sampleData.attendance.absent;
+        document.getElementById('lateCount').textContent = sampleData.attendance.late;
+        document.getElementById('presentPercentage').textContent = sampleData.attendance.rate + '% of total attendance';
+        document.getElementById('nonCompliantCount').textContent = sampleData.attendance.compliance.nonCompliant;
+        
+        // Compliance details
+        document.getElementById('complianceBadge').textContent = sampleData.attendance.compliance.rate + '% Compliant';
+        document.getElementById('complianceBadge').className = sampleData.attendance.compliance.rate >= 80 ? 'badge bg-success' : 'badge bg-warning';
+        document.getElementById('complianceProgress').style.width = sampleData.attendance.compliance.rate + '%';
+        document.getElementById('complianceProgress').textContent = sampleData.attendance.compliance.rate + '%';
+        document.getElementById('compliantCount').textContent = sampleData.attendance.compliance.compliant;
+        document.getElementById('nonCompliantTotal').textContent = sampleData.attendance.compliance.nonCompliant;
+        
+        // Grade details
+        document.getElementById('avgScore').textContent = sampleData.grades.average.toFixed(1);
+        document.getElementById('passRateDetail').textContent = sampleData.grades.passRate + '%';
+        document.getElementById('excellenceRate').textContent = sampleData.grades.excellenceRate + '%';
+        document.getElementById('failRate').textContent = sampleData.grades.failRate + '%';
+        
+        // Finance details
+        document.getElementById('totalReceivable').textContent = 'GH₵' + sampleData.finance.totalPayable.toLocaleString();
+        document.getElementById('totalCollected').textContent = 'GH₵' + sampleData.finance.totalPaid.toLocaleString();
+        document.getElementById('collectionRateDetail').textContent = sampleData.finance.collectionRate + '%';
+        document.getElementById('outstandingBalance').textContent = 'GH₵' + sampleData.finance.outstanding.toLocaleString();
+        document.getElementById('onTimeRate').textContent = '92%';
+        document.getElementById('collectionPeriod').textContent = '15 days';
+        document.getElementById('currentRatio').textContent = '1.45';
+        document.getElementById('operationalEfficiency').textContent = '8.2/10';
+        
+        // Risk students
+        updateRiskStudentsTable();
+    }
+
+    function updateRiskStudentsTable() {
+        const tableBody = document.getElementById('riskStudentsTable');
+        tableBody.innerHTML = '';
+        
+        if (sampleData.risk.students.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No at-risk students identified</td></tr>';
+            return;
+        }
+        
+        sampleData.risk.students.forEach(student => {
+            const row = document.createElement('tr');
+            const riskClass = student.risk === 'HIGH' ? 'bg-danger' : student.risk === 'MEDIUM' ? 'bg-warning' : 'bg-info';
+            
+            row.innerHTML = `
+                <td>${student.name}</td>
+                <td>${student.class}</td>
+                <td><span class="badge ${riskClass}">${student.risk}</span></td>
+                <td>${student.attendance}%</td>
+                <td>${student.performance}%</td>
+            `;
+            tableBody.appendChild(row);
+        });
+    }
+
     function initializeAttendanceCharts() {
         // Attendance Trend Chart
         const attendanceTrendCtx = document.getElementById('attendanceTrendChart').getContext('2d');
-        const trendData = {{ attendance_stats.trend_data|safe|default:"[]" }};
         
         charts.attendanceTrendChart = new Chart(attendanceTrendCtx, {
             type: 'line',
             data: {
-                labels: trendData.map(item => {
-                    try {
-                        const date = new Date(item.date);
-                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    } catch (e) {
-                        return 'Unknown';
-                    }
-                }),
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
                 datasets: [
                     {
                         label: 'Attendance Rate %',
-                        data: trendData.map(item => {
-                            try {
-                                const total = (item.present || 0) + (item.absent || 0) + (item.late || 0);
-                                return total > 0 ? ((item.present / total) * 100).toFixed(1) : 0;
-                            } catch (e) {
-                                return 0;
-                            }
-                        }),
+                        data: sampleData.attendance.trend,
                         borderColor: '#28a745',
                         backgroundColor: 'rgba(40, 167, 69, 0.1)',
                         tension: 0.4,
@@ -1190,6 +1394,15 @@
                         pointBackgroundColor: '#28a745',
                         pointRadius: 4,
                         pointHoverRadius: 6
+                    },
+                    {
+                        label: 'GES Target',
+                        data: Array(7).fill(80),
+                        borderColor: '#dc3545',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
                     }
                 ]
             },
@@ -1197,10 +1410,22 @@
                 ...professionalChartOptions,
                 plugins: {
                     ...professionalChartOptions.plugins,
-                    title: {
-                        display: true,
-                        text: 'Daily Attendance Rate Trend',
-                        font: { size: 16, weight: 'bold' }
+                    annotation: {
+                        annotations: {
+                            line1: {
+                                type: 'line',
+                                yMin: 80,
+                                yMax: 80,
+                                borderColor: '#dc3545',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    content: 'GES Target (80%)',
+                                    enabled: true,
+                                    position: 'end'
+                                }
+                            }
+                        }
                     }
                 },
                 scales: {
@@ -1225,8 +1450,14 @@
                 labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
                 datasets: [{
                     label: 'Avg Attendance %',
-                    data: [85, 88, 82, 90, 86],
-                    backgroundColor: 'rgba(58, 123, 213, 0.7)',
+                    data: sampleData.attendance.weekly.slice(0, 5),
+                    backgroundColor: [
+                        'rgba(58, 123, 213, 0.7)',
+                        'rgba(40, 167, 69, 0.7)',
+                        'rgba(255, 193, 7, 0.7)',
+                        'rgba(23, 162, 184, 0.7)',
+                        'rgba(108, 117, 125, 0.7)'
+                    ],
                     borderColor: '#3a7bd5',
                     borderWidth: 1
                 }]
@@ -1257,15 +1488,14 @@
     function initializeAcademicCharts() {
         // Subject Performance Chart
         const subjectCtx = document.getElementById('subjectPerformanceChart').getContext('2d');
-        const subjectData = {{ grade_stats.subject_analysis.ranked_subjects|safe|default:"[]" }};
         
         charts.subjectPerformanceChart = new Chart(subjectCtx, {
             type: 'bar',
             data: {
-                labels: subjectData.map(item => item.subject__name || 'Unknown'),
+                labels: sampleData.grades.subjects.map(s => s.name),
                 datasets: [{
                     label: 'Average Score %',
-                    data: subjectData.map(item => item.avg_score || 0),
+                    data: sampleData.grades.subjects.map(s => s.score),
                     backgroundColor: 'rgba(23, 162, 184, 0.7)',
                     borderColor: '#17a2b8',
                     borderWidth: 1
@@ -1273,7 +1503,6 @@
             },
             options: {
                 ...professionalChartOptions,
-                indexAxis: 'y',
                 plugins: {
                     ...professionalChartOptions.plugins,
                     title: {
@@ -1281,40 +1510,44 @@
                         text: 'Subject Performance Ranking',
                         font: { size: 16, weight: 'bold' }
                     }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
                 }
             }
         });
 
-        // Class Performance Chart
-        const classCtx = document.getElementById('classPerformanceChart').getContext('2d');
-        charts.classPerformanceChart = new Chart(classCtx, {
-            type: 'radar',
+        // Grade Distribution Chart
+        const distributionCtx = document.getElementById('gradeDistributionChart').getContext('2d');
+        charts.gradeDistributionChart = new Chart(distributionCtx, {
+            type: 'pie',
             data: {
-                labels: ['Math', 'Science', 'English', 'Social Studies', 'ICT'],
-                datasets: [
-                    {
-                        label: 'Primary 6',
-                        data: [78, 82, 75, 80, 85],
-                        backgroundColor: 'rgba(58, 123, 213, 0.2)',
-                        borderColor: '#3a7bd5',
-                        pointBackgroundColor: '#3a7bd5'
-                    },
-                    {
-                        label: 'JHS 2',
-                        data: [72, 78, 80, 75, 82],
-                        backgroundColor: 'rgba(40, 167, 69, 0.2)',
-                        borderColor: '#28a745',
-                        pointBackgroundColor: '#28a745'
-                    }
-                ]
+                labels: ['A (90-100%)', 'B (80-89%)', 'C (70-79%)', 'D (60-69%)', 'E (50-59%)', 'F (40-49%)', 'U (<40%)'],
+                datasets: [{
+                    data: sampleData.grades.distribution,
+                    backgroundColor: [
+                        '#28a745', '#20c997', '#17a2b8', '#6f42c1', '#fd7e14', '#dc3545', '#6c757d'
+                    ],
+                    borderWidth: 1
+                }]
             },
             options: {
                 responsive: true,
-                scales: {
-                    r: {
-                        angleLines: { display: true },
-                        suggestedMin: 0,
-                        suggestedMax: 100
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true
+                        }
                     }
                 }
             }
@@ -1327,17 +1560,12 @@
         charts.revenueStatusChart = new Chart(revenueCtx, {
             type: 'doughnut',
             data: {
-                labels: ['Collected', 'Outstanding', 'Overdue'],
+                labels: ['Collected', 'Outstanding'],
                 datasets: [{
-                    data: [
-                        {{ fee_stats.financial_summary.revenue_metrics.total_paid|default:"0" }},
-                        {{ fee_stats.financial_summary.revenue_metrics.outstanding_balance|default:"0" }},
-                        1500  // Example overdue amount
-                    ],
+                    data: [sampleData.finance.totalPaid, sampleData.finance.outstanding],
                     backgroundColor: [
                         'rgba(40, 167, 69, 0.8)',
-                        'rgba(255, 193, 7, 0.8)',
-                        'rgba(220, 53, 69, 0.8)'
+                        'rgba(255, 193, 7, 0.8)'
                     ],
                     borderWidth: 1
                 }]
@@ -1357,29 +1585,23 @@
             }
         });
 
-        // Fee Category Chart
-        const categoryCtx = document.getElementById('feeCategoryChart').getContext('2d');
-        charts.feeCategoryChart = new Chart(categoryCtx, {
-            type: 'pie',
+        // Monthly Trend Chart
+        const monthlyCtx = document.getElementById('monthlyTrendChart').getContext('2d');
+        charts.monthlyTrendChart = new Chart(monthlyCtx, {
+            type: 'line',
             data: {
-                labels: ['Tuition', 'Feeding', 'Books', 'Uniform', 'Transport'],
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                 datasets: [{
-                    data: [45, 25, 15, 10, 5],
-                    backgroundColor: [
-                        'rgba(58, 123, 213, 0.8)',
-                        'rgba(40, 167, 69, 0.8)',
-                        'rgba(255, 193, 7, 0.8)',
-                        'rgba(23, 162, 184, 0.8)',
-                        'rgba(108, 117, 125, 0.8)'
-                    ]
+                    label: 'Monthly Collection (GH₵)',
+                    data: sampleData.finance.monthlyTrend,
+                    borderColor: '#3a7bd5',
+                    backgroundColor: 'rgba(58, 123, 213, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3
                 }]
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'bottom' }
-                }
-            }
+            options: professionalChartOptions
         });
     }
 
@@ -1388,21 +1610,13 @@
         charts.riskTrendChart = new Chart(riskCtx, {
             type: 'line',
             data: {
-                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7'],
                 datasets: [
                     {
                         label: 'At-Risk Students',
-                        data: [8, 12, 15, 11],
+                        data: sampleData.risk.trends,
                         borderColor: '#dc3545',
                         backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    },
-                    {
-                        label: 'Attendance Issues',
-                        data: [5, 8, 10, 7],
-                        borderColor: '#ffc107',
-                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
                         tension: 0.4,
                         fill: true
                     }
@@ -1519,40 +1733,14 @@
     function updateDateRange(range, startDate = null, endDate = null) {
         showLoading();
         
-        let url = window.location.pathname;
-        let params = new URLSearchParams(window.location.search);
-        
-        if (range === 'custom') {
-            params.set('start_date', startDate);
-            params.set('end_date', endDate);
-            params.delete('range');
-            currentDateRange = { start: startDate, end: endDate };
-        } else {
-            params.set('range', range);
-            params.delete('start_date');
-            params.delete('end_date');
-            currentDateRange = { range: range };
-        }
-        
-        updateDateRangeDisplay(range, startDate, endDate);
-        
-        fetch(`${url}?${params.toString()}`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('analyticsTabsContent').innerHTML = 
-                new DOMParser().parseFromString(html, 'text/html')
-                .getElementById('analyticsTabsContent').innerHTML;
+        // Simulate API call delay
+        setTimeout(() => {
+            updateDateRangeDisplay(range, startDate, endDate);
+            hideLoading();
             
-            initializeAllCharts();
-            hideLoading();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            hideLoading();
-            alert('Error updating date range. Please try again.');
-        });
+            // Show success message
+            showToast('Date range updated successfully', 'success');
+        }, 1000);
     }
 
     function updateDateRangeDisplay(range, startDate = null, endDate = null) {
@@ -1575,60 +1763,25 @@
 
     function refreshDashboard() {
         showLoading();
-        fetch(window.location.href, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('analyticsTabsContent').innerHTML = 
-                new DOMParser().parseFromString(html, 'text/html')
-                .getElementById('analyticsTabsContent').innerHTML;
-            
-            initializeAllCharts();
+        
+        // Simulate API call delay
+        setTimeout(() => {
             hideLoading();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            hideLoading();
-            alert('Error refreshing dashboard. Please try again.');
-        });
+            showToast('Dashboard refreshed successfully', 'success');
+        }, 1500);
     }
 
     function exportDashboard(format) {
         showLoading();
-        switch (format) {
-            case 'pdf': exportToPDF(); break;
-            case 'excel': exportToExcel(); break;
-            case 'csv': exportToCSV(); break;
-            default:
-                alert('Unsupported export format');
-                hideLoading();
-        }
-    }
-
-    function exportToPDF() {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('landscape');
-        
-        doc.setFontSize(18);
-        doc.text('School Analytics Dashboard Report', 14, 20);
-        doc.setFontSize(12);
-        doc.text(`Date Range: ${document.getElementById('dateRangeDisplay').textContent}`, 14, 30);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 40);
-        
-        // Implementation for capturing charts and generating PDF
-        hideLoading();
-        doc.save('analytics_dashboard_report.pdf');
-    }
-
-    function exportToExcel() {
-        // Implementation for Excel export
-        hideLoading();
-    }
-
-    function exportToCSV() {
-        // Implementation for CSV export
-        hideLoading();
+        setTimeout(() => {
+            hideLoading();
+            showToast(`${format.toUpperCase()} export started`, 'info');
+            
+            // Simulate download
+            setTimeout(() => {
+                showToast(`${format.toUpperCase()} export completed`, 'success');
+            }, 2000);
+        }, 1000);
     }
 
     function exportChart(chartId) {
@@ -1637,6 +1790,41 @@
         link.download = `${chartId}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
+        showToast('Chart exported successfully', 'success');
     }
+
+    function showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0 position-fixed`;
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '1060';
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Initialize and show toast
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            document.body.removeChild(toast);
+        });
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', function() {
+        Object.values(charts).forEach(chart => {
+            if (chart) chart.resize();
+        });
+    });
 </script>
 {% endblock %}

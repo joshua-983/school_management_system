@@ -45,6 +45,18 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
         return kwargs
     
     def form_valid(self, form):
+        # Check if there's a qualification warning
+        if hasattr(form, 'qualification_warning') and form.qualification_warning:
+            # Add a warning message but still allow the assignment
+            messages.warning(
+                self.request,
+                f"Teacher {form.unqualified_teacher.get_full_name()} was assigned to teach {form.unqualified_subject.name} "
+                f"even though they are not currently qualified for this subject. "
+                f"Consider adding this subject to their qualifications."
+            )
+        else:
+            messages.success(self.request, 'Class assignment created successfully!')
+        
         # Always set the teacher - either from the form or from the current user
         if not form.instance.teacher:
             if is_teacher(self.request.user):
@@ -55,7 +67,6 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
                 form.add_error(None, "Teacher is required")
                 return self.form_invalid(form)
         
-        messages.success(self.request, 'Class assignment created successfully!')
         return super().form_valid(form)
     
     def form_invalid(self, form):
@@ -66,7 +77,7 @@ class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateV
     model = ClassAssignment
     form_class = ClassAssignmentForm
     template_name = 'core/academics/classes/class_assignment_form.html'
-    success_url = reverse_lazy('class_assignment_list')  # ADD THIS
+    success_url = reverse_lazy('class_assignment_list')
     
     def test_func(self):
         if is_admin(self.request.user):
@@ -81,8 +92,17 @@ class ClassAssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateV
         return kwargs
     
     def form_valid(self, form):
-        messages.success(self.request, 'Class assignment updated successfully!')
+        # Check if there's a qualification warning
+        if hasattr(form, 'qualification_warning') and form.qualification_warning:
+            messages.warning(
+                self.request,
+                f"Teacher {form.unqualified_teacher.get_full_name()} was assigned to teach {form.unqualified_subject.name} "
+                f"even though they are not currently qualified for this subject."
+            )
+        else:
+            messages.success(self.request, 'Class assignment updated successfully!')
         return super().form_valid(form)
+
 
 class ClassAssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = ClassAssignment
@@ -95,3 +115,19 @@ class ClassAssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteV
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Class assignment deleted successfully')
         return super().delete(request, *args, **kwargs)
+
+
+
+# Teacher Qualification Update View
+class TeacherQualificationUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = Teacher
+    fields = ['subjects']
+    template_name = 'core/academics/classes/teacher_qualification_form.html'
+    success_url = reverse_lazy('teacher_list')
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Teacher qualifications updated successfully!')
+        return super().form_valid(form)

@@ -2490,14 +2490,18 @@ class Bill(models.Model):
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
-    # FIXED: Use lowercase statuses consistently
-    status = models.CharField(max_length=10, choices=[
-        ('issued', 'Issued'),
-        ('paid', 'Paid'),
-        ('partial', 'Partially Paid'),
-        ('overdue', 'Overdue'),
-        ('cancelled', 'Cancelled')
-    ], default='issued')
+    # FIXED: Consistent lowercase statuses
+    status = models.CharField(
+        max_length=10, 
+        choices=[
+            ('issued', 'Issued'),
+            ('paid', 'Paid'),
+            ('partial', 'Partially Paid'),
+            ('overdue', 'Overdue'),
+            ('cancelled', 'Cancelled')
+        ], 
+        default='issued'
+    )
     
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -2511,6 +2515,11 @@ class Bill(models.Model):
         ordering = ['-issue_date']
         verbose_name = 'Bill'
         verbose_name_plural = 'Bills'
+        indexes = [
+            models.Index(fields=['student', 'academic_year', 'term']),
+            models.Index(fields=['status']),
+            models.Index(fields=['due_date']),
+        ]
     
     def __str__(self):
         return f"Bill #{self.bill_number} - {self.student.get_full_name()}"
@@ -2533,26 +2542,46 @@ class Bill(models.Model):
         
         # Calculate balance
         self.balance = self.total_amount - self.amount_paid
+        
+        # Auto-update status based on payments and due date
+        if self.amount_paid >= self.total_amount:
+            self.status = 'paid'
+        elif self.amount_paid > 0:
+            self.status = 'partial'
+        elif timezone.now().date() > self.due_date:
+            self.status = 'overdue'
+        
         super().save(*args, **kwargs)
     
+    @property
+    def get_balance_due(self):
+        """Get remaining balance due"""
+        return self.total_amount - self.amount_paid
+    
     def update_status(self):
-        """Update bill status based on payments"""
-        # Calculate total payments
-        total_payments = sum(payment.amount for payment in self.bill_payments.all())
-        self.amount_paid = total_payments
+        """Update bill status based on payments and due date"""
+        total_payments = self.bill_payments.aggregate(
+            total=Sum('amount')
+        )['total'] or Decimal('0.00')
         
-        if total_payments >= self.total_amount:
+        self.amount_paid = total_payments
+        self.balance = self.total_amount - self.amount_paid
+        
+        # Don't update status if cancelled
+        if self.status == 'cancelled':
+            return
+        
+        # Determine new status
+        if self.amount_paid >= self.total_amount:
             self.status = 'paid'
-        elif total_payments > 0:
+        elif self.amount_paid > 0:
             self.status = 'partial'
         elif timezone.now().date() > self.due_date:
             self.status = 'overdue'
         else:
             self.status = 'issued'
         
-        # Recalculate balance
-        self.balance = self.total_amount - self.amount_paid
-        self.save(update_fields=['status', 'amount_paid', 'balance'])
+        self.save(update_fields=['status', 'amount_paid', 'balance', 'updated_at'])
     
     def get_payment_progress(self):
         """Get payment progress percentage"""
@@ -2576,6 +2605,11 @@ class Bill(models.Model):
     def is_overdue(self):
         """Check if bill is overdue"""
         return self.status == 'overdue' or (self.due_date < timezone.now().date() and self.status != 'paid')
+    
+    def can_accept_payment(self):
+        """Check if bill can accept additional payments"""
+        return self.balance > 0 and self.status != 'cancelled'
+
 
 class BillItem(models.Model):
     """Individual fee items on a bill"""
@@ -2597,7 +2631,7 @@ class BillPayment(models.Model):
         ('cash', 'Cash'),
         ('bank_transfer', 'Bank Transfer'),
         ('mobile_money', 'Mobile Money'),
-        ('check', 'Check'),
+        ('cheque', 'Cheque'),
         ('other', 'Other'),
     ]
     
@@ -2605,6 +2639,7 @@ class BillPayment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_mode = models.CharField(max_length=20, choices=PAYMENT_MODES, default='cash')
     payment_date = models.DateField(default=timezone.now)
+    reference_number = models.CharField(max_length=50, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2614,14 +2649,19 @@ class BillPayment(models.Model):
         ordering = ['-payment_date']
         verbose_name = 'Bill Payment'
         verbose_name_plural = 'Bill Payments'
+        indexes = [
+            models.Index(fields=['bill', 'payment_date']),
+        ]
 
     def __str__(self):
-        return f"Payment of GH₵{self.amount} for Bill #{self.bill.bill_number}"
+        return f"Payment of GH₵{self.amount:.2f} for Bill #{self.bill.bill_number}"
 
     def save(self, *args, **kwargs):
         # Update the bill's paid amount when a payment is saved
         super().save(*args, **kwargs)
         self.bill.update_status()
+
+
 
 class Fee(models.Model):
     # FIXED: Use lowercase statuses consistently
@@ -2989,6 +3029,8 @@ class ReportCard(models.Model):
 
 # ===== NOTIFICATION SYSTEM =====
 
+# In core/models.py - Update the Notification class
+
 class Notification(models.Model):
     NOTIFICATION_TYPES = [
         ('GRADE', 'Grade Update'),
@@ -2996,6 +3038,9 @@ class Notification(models.Model):
         ('ASSIGNMENT', 'Assignment'),
         ('ATTENDANCE', 'Attendance'),
         ('GENERAL', 'General'),
+        ('ANNOUNCEMENT', 'Announcement'),
+        ('SYSTEM', 'System'),
+        ('SECURITY', 'Security'),
     ]
     
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
@@ -3042,18 +3087,18 @@ class Notification(models.Model):
         if not self.is_read:
             self.is_read = True
             self.save(update_fields=['is_read'])
-            self.send_ws_update()
+            self.send_websocket_update()
             return True
         return False
     
-    def send_ws_update(self):
+    def send_websocket_update(self):
         """Send WebSocket update for this notification"""
         try:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
             
             channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_sync)(
+            async_to_sync(channel_layer.group_send)(
                 f'notifications_{self.recipient.id}',
                 {
                     'type': 'notification_update',
@@ -3064,6 +3109,31 @@ class Notification(models.Model):
             )
         except Exception as e:
             logger.error(f"WebSocket update failed for notification {self.id}: {str(e)}")
+    
+    def send_new_notification_ws(self):
+        """Send WebSocket notification when a new notification is created"""
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{self.recipient.id}',
+                {
+                    'type': 'new_notification',
+                    'notification': {
+                        'id': self.id,
+                        'title': self.title,
+                        'message': self.message,
+                        'notification_type': self.notification_type,
+                        'created_at': self.created_at.isoformat(),
+                        'is_read': self.is_read,
+                    },
+                    'unread_count': self.get_unread_count_for_user()
+                }
+            )
+        except Exception as e:
+            logger.error(f"WebSocket new notification failed: {str(e)}")
     
     @classmethod
     def get_unread_count_for_user(cls, user):
@@ -3090,13 +3160,24 @@ class Notification(models.Model):
                 notification.related_content_type = related_object._meta.model_name
                 notification.save()
             
+            # Send WebSocket notification
             notification.send_new_notification_ws()
             
+            logger.info(f"Notification created successfully for {recipient.username}: {title}")
             return notification
             
         except Exception as e:
             logger.error(f"Failed to create notification: {str(e)}")
             return None
+    
+    def save(self, *args, **kwargs):
+        """Override save to handle WebSocket notifications"""
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        # Send WebSocket notification for new notifications
+        if is_new:
+            self.send_new_notification_ws()
 
 # ===== TIMETABLE MANAGEMENT =====
 
@@ -3180,6 +3261,8 @@ class TimetableEntry(models.Model):
 
 # ===== ANNOUNCEMENTS =====
 
+# ===== ANNOUNCEMENTS =====
+
 class Announcement(models.Model):
     PRIORITY_CHOICES = [
         ('LOW', 'Low'),
@@ -3252,6 +3335,182 @@ class Announcement(models.Model):
             'LOW': 'secondary'
         }
         return colors.get(self.priority, 'secondary')
+    
+    # NEW PROPERTIES AND METHODS ADDED:
+    
+    @property
+    def views_count(self):
+        """Get the number of views for this announcement"""
+        return self.userannouncementview_set.count()
+    
+    @property
+    def is_expired_property(self):
+        """Property version of is_expired for template usage"""
+        return self.is_expired()
+    
+    @property
+    def is_active_now_property(self):
+        """Property version of is_active_now for template usage"""
+        return self.is_active_now()
+    
+    def get_days_remaining(self):
+        """Get number of days remaining until expiry"""
+        if self.end_date and not self.is_expired():
+            remaining = self.end_date - timezone.now()
+            return max(0, remaining.days)
+        return None
+    
+    def get_status_display(self):
+        """Get human-readable status"""
+        if not self.is_active:
+            return "Inactive"
+        elif self.is_expired():
+            return "Expired"
+        elif self.start_date > timezone.now():
+            return "Scheduled"
+        else:
+            return "Active"
+    
+    def get_status_color(self):
+        """Get Bootstrap color for status"""
+        if not self.is_active:
+            return "secondary"
+        elif self.is_expired():
+            return "warning"
+        elif self.start_date > timezone.now():
+            return "info"
+        else:
+            return "success"
+    
+    def get_audience_display(self):
+        """Get human-readable audience description"""
+        target_classes = self.get_target_class_levels()
+        if self.target_roles == 'CLASS' and target_classes:
+            class_names = []
+            for class_level in target_classes:
+                # Map class level codes to display names
+                class_display_map = dict(CLASS_LEVEL_CHOICES)
+                class_names.append(class_display_map.get(class_level, class_level))
+            return f"Classes: {', '.join(class_names)}"
+        else:
+            return self.get_target_roles_display()
+    
+    def can_user_access(self, user):
+        """Check if user has permission to view this announcement"""
+        # Staff and teachers can see all announcements
+        if user.is_staff or hasattr(user, 'teacher'):
+            return True
+        
+        # Check if announcement is active and not expired
+        if not self.is_active_now():
+            return False
+        
+        # Check target roles
+        if self.target_roles == 'STUDENTS' and not hasattr(user, 'student'):
+            return False
+        elif self.target_roles == 'TEACHERS' and not (hasattr(user, 'teacher') or user.is_staff):
+            return False
+        elif self.target_roles == 'ADMINS' and not user.is_staff:
+            return False
+        elif self.target_roles == 'CLASS':
+            target_classes = self.get_target_class_levels()
+            if hasattr(user, 'student') and user.student.class_level in target_classes:
+                return True
+            elif hasattr(user, 'parentguardian'):
+                # Parents can see announcements for their children's classes
+                children_classes = user.parentguardian.students.values_list('class_level', flat=True)
+                if any(cls in target_classes for cls in children_classes):
+                    return True
+            return False
+        
+        # ALL role or passed other checks
+        return True
+    
+    def mark_as_viewed(self, user):
+        """Mark announcement as viewed by a user"""
+        UserAnnouncementView.objects.get_or_create(
+            user=user,
+            announcement=self,
+            defaults={'viewed_at': timezone.now()}
+        )
+    
+    def get_view_stats(self):
+        """Get viewing statistics for this announcement"""
+        views = self.userannouncementview_set.all()
+        total_views = views.count()
+        unique_viewers = views.values('user').distinct().count()
+        dismissed_count = views.filter(dismissed=True).count()
+        
+        return {
+            'total_views': total_views,
+            'unique_viewers': unique_viewers,
+            'dismissed_count': dismissed_count,
+            'engagement_rate': round((unique_viewers / max(1, self.get_target_user_count())) * 100, 1)
+        }
+    
+    def get_target_user_count(self):
+        """Estimate number of target users for this announcement"""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        target_classes = self.get_target_class_levels()
+        user_query = Q(is_active=True)
+        
+        if self.target_roles == 'STUDENTS':
+            user_query &= Q(student__isnull=False)
+            if target_classes:
+                user_query &= Q(student__class_level__in=target_classes)
+        elif self.target_roles == 'TEACHERS':
+            user_query &= (Q(teacher__isnull=False) | Q(is_staff=True))
+        elif self.target_roles == 'ADMINS':
+            user_query &= Q(is_staff=True)
+        elif self.target_roles == 'CLASS' and target_classes:
+            user_query &= (
+                Q(student__class_level__in=target_classes) |
+                Q(parentguardian__students__class_level__in=target_classes) |
+                Q(teacher__isnull=False) |
+                Q(is_staff=True)
+            )
+        # ALL role includes all active users
+        
+        return User.objects.filter(user_query).distinct().count()
+    
+    def duplicate(self, new_title=None):
+        """Create a duplicate of this announcement"""
+        duplicate = Announcement.objects.get(pk=self.pk)
+        duplicate.pk = None
+        duplicate.title = new_title or f"Copy of {self.title}"
+        duplicate.created_at = timezone.now()
+        duplicate.updated_at = timezone.now()
+        duplicate.is_active = False  # Keep duplicate inactive by default
+        duplicate.save()
+        return duplicate
+    
+    def extend_expiry(self, days=7):
+        """Extend the expiry date by specified number of days"""
+        if self.end_date:
+            self.end_date += timezone.timedelta(days=days)
+        else:
+            self.end_date = timezone.now() + timezone.timedelta(days=days)
+        self.save()
+    
+    def get_time_until_expiry(self):
+        """Get human-readable time until expiry"""
+        if not self.end_date or self.is_expired():
+            return "No expiry" if not self.end_date else "Expired"
+        
+        delta = self.end_date - timezone.now()
+        
+        if delta.days > 0:
+            return f"{delta.days} day{'s' if delta.days != 1 else ''}"
+        elif delta.seconds // 3600 > 0:
+            hours = delta.seconds // 3600
+            return f"{hours} hour{'s' if hours != 1 else ''}"
+        else:
+            minutes = (delta.seconds % 3600) // 60
+            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+
+
 
 class UserAnnouncementView(models.Model):
     """Track which users have seen/dismissed which announcements"""
@@ -3264,9 +3523,31 @@ class UserAnnouncementView(models.Model):
         unique_together = ('user', 'announcement')
         verbose_name = 'User Announcement View'
         verbose_name_plural = 'User Announcement Views'
+        ordering = ['-viewed_at']
     
     def __str__(self):
         return f"{self.user.username} - {self.announcement.title} ({'Dismissed' if self.dismissed else 'Viewed'})"
+    
+    @classmethod
+    def get_user_unread_count(cls, user):
+        """Get count of unread announcements for a user"""
+        from .announcement_views import should_user_see_announcement
+        
+        active_announcements = Announcement.objects.filter(
+            is_active=True,
+            start_date__lte=timezone.now(),
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=timezone.now())
+        )
+        
+        unread_count = 0
+        for announcement in active_announcements:
+            if (should_user_see_announcement(user, announcement) and 
+                not cls.objects.filter(user=user, announcement=announcement).exists()):
+                unread_count += 1
+        
+        return unread_count
+
 
 # ===== AUDIT AND SECURITY =====
 
@@ -3523,25 +3804,93 @@ class Holiday(models.Model):
 
 # Add to your models.py
 class Budget(models.Model):
+    """Model for budget planning and tracking"""
     academic_year = models.CharField(max_length=9)
-    category = models.CharField(max_length=100)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True, null=True)
+    category = models.ForeignKey(FeeCategory, on_delete=models.CASCADE)
+    allocated_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    actual_spent = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         unique_together = ('academic_year', 'category')
+        verbose_name = 'Budget'
+        verbose_name_plural = 'Budgets'
+        ordering = ['academic_year', 'category']
+    
+    def __str__(self):
+        return f"{self.category.name} - {self.academic_year}"
+    
+    @property
+    def remaining_budget(self):
+        return self.allocated_amount - self.actual_spent
+    
+    @property
+    def utilization_percentage(self):
+        if self.allocated_amount > 0:
+            return (self.actual_spent / self.allocated_amount) * 100
+        return 0
+
 
 class Expense(models.Model):
-    category = models.CharField(max_length=100)
+    """Model for tracking expenses"""
+    EXPENSE_CATEGORIES = [
+        ('SALARIES', 'Salaries & Wages'),
+        ('UTILITIES', 'Utilities'),
+        ('MAINTENANCE', 'Maintenance & Repairs'),
+        ('SUPPLIES', 'Teaching Supplies'),
+        ('EQUIPMENT', 'Equipment & Furniture'),
+        ('TRANSPORT', 'Transportation'),
+        ('PROFESSIONAL', 'Professional Development'),
+        ('OTHER', 'Other Expenses'),
+    ]
+    
+    category = models.CharField(max_length=20, choices=EXPENSE_CATEGORIES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateField()
     description = models.TextField()
+    receipt_number = models.CharField(max_length=50, blank=True)
     recorded_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ['-date']
-
-
-
+        verbose_name = 'Expense'
+        verbose_name_plural = 'Expenses'
+        indexes = [
+            models.Index(fields=['date', 'category']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_category_display()} - GH₵{self.amount} - {self.date}"
+    
+    def save(self, *args, **kwargs):
+        # Update related budget if exists
+        super().save(*args, **kwargs)
+        self.update_budget_tracking()
+    
+    def update_budget_tracking(self):
+        """Update budget tracking for this expense category"""
+        try:
+            budget_year = f"{self.date.year}/{self.date.year + 1}"
+            budget, created = Budget.objects.get_or_create(
+                academic_year=budget_year,
+                category=self.get_category_display(),
+                defaults={'allocated_amount': Decimal('0.00')}
+            )
+            
+            # Recalculate actual spent for this budget category
+            total_spent = Expense.objects.filter(
+                category=self.category,
+                date__year=self.date.year
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            
+            budget.actual_spent = total_spent
+            budget.save()
+            
+        except Exception as e:
+            logger.error(f"Error updating budget tracking: {e}")
 
 

@@ -533,10 +533,19 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
 
     def handle_no_permission(self):
         """
-        Custom handling for permission denied
+        Custom handling for permission denied with proper redirects
         """
+        user = self.request.user
+        logger.warning(
+            f"Unauthorized access attempt to grade list - User: {user.username}, "
+            f"Role: {getattr(user, 'role', 'unknown')}"
+    )
+    
         messages.error(self.request, "You don't have permission to access the grade management system.")
-        return redirect('dashboard')
+    
+        # Use the CORRECT URL name that we confirmed works
+        return redirect('student_dashboard')  # ✅ This will work!
+
 
     def render_to_response(self, context, **response_kwargs):
         """

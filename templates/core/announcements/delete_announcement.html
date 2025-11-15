@@ -1,157 +1,293 @@
+<!-- templates/core/announcements/delete_announcement.html -->
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Delete Announcement - School Management{% endblock %}
+{% block title %}Delete Announcement - School Management System{% endblock %}
 
 {% block extra_css %}
 <style>
-    .delete-container {
-        max-width: 600px;
-        margin: 0 auto;
-    }
-    
-    .announcement-preview {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 1.5rem;
-        border-left: 4px solid #dc3545;
-    }
-    
-    .priority-badge {
-        font-size: 0.8rem;
-        padding: 4px 12px;
-        border-radius: 20px;
-    }
-    
-    .impact-list {
-        list-style: none;
-        padding-left: 0;
-    }
-    
-    .impact-list li {
-        padding: 8px 0;
-        border-bottom: 1px solid #dee2e6;
-    }
-    
-    .impact-list li:last-child {
-        border-bottom: none;
-    }
-    
-    .impact-list .bi {
-        width: 20px;
-    }
+.delete-confirmation-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+    border-left: 5px solid #dc3545;
+}
+
+.warning-section {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.announcement-preview {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.consequences-list {
+    background: #f8d7da;
+    border-radius: 10px;
+    padding: 1.5rem;
+}
+
+.consequences-list ul {
+    margin-bottom: 0;
+}
+
+.stat-badge {
+    background: #e9ecef;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -2rem;
+    top: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #6c757d;
+}
+
+.timeline-content {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="delete-container">
-                <!-- Warning Header -->
-                <div class="card border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <h4 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Delete Announcement</h4>
-                    </div>
-                    <div class="card-body">
-                        <!-- Announcement Preview -->
-                        <div class="announcement-preview mb-4">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h5 class="text-danger">{{ announcement.title }}</h5>
-                                <span class="priority-badge bg-{{ announcement.priority|lower }}">
-                                    {{ announcement.priority }}
-                                </span>
-                            </div>
-                            <p class="text-muted mb-2">{{ announcement.message|truncatewords:30 }}</p>
-                            <div class="small text-muted">
-                                <div>Created: {{ announcement.created_at|date:"M d, Y H:i" }}</div>
-                                <div>By: {{ announcement.created_by.get_full_name }}</div>
-                                {% if announcement.end_date %}
-                                <div>Expires: {{ announcement.end_date|date:"M d, Y H:i" }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <!-- Impact Warning -->
-                        <div class="alert alert-warning">
-                            <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Please Read Carefully</h6>
-                            <p class="mb-0">You are about to permanently delete this announcement. This action cannot be undone.</p>
-                        </div>
-                        
-                        <!-- Impact Details -->
-                        <div class="mb-4">
-                            <h6 class="text-muted mb-3">What will be affected:</h6>
-                            <ul class="impact-list">
-                                <li>
-                                    <i class="bi bi-eye-slash text-danger"></i>
-                                    <strong>Immediate removal</strong> from all user dashboards and views
-                                </li>
-                                <li>
-                                    <i class="bi bi-clock-history text-danger"></i>
-                                    <strong>Permanent deletion</strong> of announcement record and statistics
-                                </li>
-                                <li>
-                                    <i class="bi bi-arrow-return-left text-danger"></i>
-                                    <strong>No recovery</strong> - This action cannot be reversed
-                                </li>
-                                {% if announcement.is_active %}
-                                <li>
-                                    <i class="bi bi-bell text-danger"></i>
-                                    <strong>Active users</strong> will immediately lose access to this announcement
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                        
-                        <!-- Confirmation Form -->
-                        <form method="post">
-                            {% csrf_token %}
-                            
-                            <!-- Safety Check -->
-                            <div class="mb-4">
-                                <label for="confirmationText" class="form-label fw-semibold">
-                                    Type "DELETE" to confirm
-                                </label>
-                                <input type="text" class="form-control" id="confirmationText" 
-                                       placeholder="Type DELETE here..." required
-                                       pattern="DELETE">
-                                <div class="form-text text-danger">
-                                    <i class="bi bi-shield-exclamation me-1"></i>
-                                    This is a safety measure to prevent accidental deletion
-                                </div>
-                            </div>
-                            
-                            <!-- Action Buttons -->
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary me-md-2">
-                                    <i class="bi bi-arrow-left me-2"></i>Cancel
-                                </a>
-                                <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
-                                    <i class="bi bi-trash me-2"></i>Permanently Delete
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+        <div class="col-lg-8 col-xl-6">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h1 class="h3 mb-2 text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Delete Announcement
+                </h1>
+                <p class="text-muted">You are about to permanently delete an announcement</p>
+            </div>
+
+            <!-- Main Confirmation Card -->
+            <div class="card delete-confirmation-card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-trash me-2"></i>Confirm Deletion
+                    </h5>
                 </div>
                 
-                <!-- Alternative Options -->
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <h6 class="text-muted mb-3">Consider These Alternatives:</h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <a href="{% url 'update_announcement' announcement.pk %}" class="btn btn-outline-primary btn-sm w-100 mb-2">
-                                    <i class="bi bi-pencil me-2"></i>Edit Instead
-                                </a>
+                <div class="card-body">
+                    <!-- Warning Section -->
+                    <div class="warning-section">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-3 fs-2"></i>
+                            <div>
+                                <h5 class="text-warning mb-2">Warning: This action cannot be undone</h5>
+                                <p class="mb-0">You are about to permanently delete this announcement. This action is irreversible and will remove all associated data.</p>
                             </div>
-                            <div class="col-md-6">
-                                <form method="post" action="{% url 'update_announcement' announcement.pk %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="is_active" value="false">
-                                    <button type="submit" class="btn btn-outline-warning btn-sm w-100">
-                                        <i class="bi bi-pause-circle me-2"></i>Deactivate Instead
+                        </div>
+                    </div>
+
+                    <!-- Announcement Preview -->
+                    <div class="announcement-preview">
+                        <h6 class="text-muted mb-3">Announcement to be deleted:</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ announcement.title }}</h5>
+                                <div class="mb-3">
+                                    <span class="stat-badge">
+                                        <i class="bi bi-flag me-1"></i>{{ announcement.priority }} Priority
+                                    </span>
+                                    <span class="stat-badge">
+                                        <i class="bi bi-clock me-1"></i>Created {{ announcement.created_at|date:"M j, Y" }}
+                                    </span>
+                                    <span class="stat-badge">
+                                        <i class="bi bi-eye me-1"></i>{{ views_count }} views
+                                    </span>
+                                    <span class="stat-badge {% if announcement.is_active %}bg-success text-white{% endif %}">
+                                        <i class="bi bi-{% if announcement.is_active %}check-circle{% else %}pause-circle{% endif %} me-1"></i>
+                                        {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
+                                    </span>
+                                </div>
+                                <p class="card-text text-muted">{{ announcement.message|truncatewords:50 }}</p>
+                                
+                                {% with target_classes=announcement.get_target_class_levels %}
+                                {% if target_classes %}
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-people me-1"></i>
+                                        Target: {{ target_classes|join:", " }}
+                                    </small>
+                                </div>
+                                {% else %}
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-globe me-1"></i>
+                                        Audience: All Users
+                                    </small>
+                                </div>
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Consequences -->
+                    <div class="consequences-list">
+                        <h6 class="text-danger mb-3">
+                            <i class="bi bi-x-circle me-2"></i>What will be deleted:
+                        </h6>
+                        <ul class="text-danger">
+                            <li>The announcement content and all its data</li>
+                            <li>All view history and user engagement data</li>
+                            <li>Any associated notifications sent to users</li>
+                            <li>All targeting information and scheduling data</li>
+                        </ul>
+                    </div>
+
+                    <!-- Impact Analysis -->
+                    <div class="mt-4">
+                        <h6 class="text-muted mb-3">Impact Analysis</h6>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="h5 mb-1 text-primary">{{ views_count }}</div>
+                                    <small class="text-muted">Total Views</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="h5 mb-1 text-info">
+                                        {{ announcement.created_at|timesince }}
+                                    </div>
+                                    <small class="text-muted">Time Active</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded">
+                                    <div class="h5 mb-1 {% if announcement.is_active %}text-success{% else %}text-secondary{% endif %}">
+                                        {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
+                                    </div>
+                                    <small class="text-muted">Current Status</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Alternative Actions -->
+                    <div class="mt-4">
+                        <h6 class="text-muted mb-3">Consider Alternatives</h6>
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-lightbulb me-3 fs-4"></i>
+                                <div>
+                                    <strong>Instead of deleting, you could:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li><a href="{% url 'update_announcement' announcement.pk %}" class="alert-link">Edit the announcement</a> to update its content</li>
+                                        <li><a href="#" class="alert-link" onclick="deactivateInstead()">Deactivate the announcement</a> to hide it from users</li>
+                                        <li>Update the end date to automatically expire the announcement</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Confirmation Actions -->
+                <div class="card-footer bg-light">
+                    <form method="post" id="deleteForm">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                                    <label class="form-check-label text-danger fw-bold" for="confirmDelete">
+                                        I understand that this action cannot be undone and I accept full responsibility for this deletion.
+                                    </label>
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="confirmBackup" required>
+                                    <label class="form-check-label text-danger fw-bold" for="confirmBackup">
+                                        I have ensured that no critical information will be lost and have made necessary backups if required.
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'announcement_detail' announcement.pk %}" class="btn btn-success">
+                                        <i class="bi bi-arrow-left me-2"></i>Cancel
+                                    </a>
+                                    <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
+                                        <i class="bi bi-trash me-2"></i>Permanently Delete
                                     </button>
-                                </form>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Deletion History -->
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Deletion Safety Check
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">Created</h6>
+                                <p class="text-muted mb-1">By {{ announcement.created_by.get_full_name }}</p>
+                                <small class="text-muted">{{ announcement.created_at|date:"F j, Y g:i A" }}</small>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-warning"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">Last Updated</h6>
+                                <p class="text-muted mb-1">By {{ user.get_full_name }}</p>
+                                <small class="text-muted">{{ announcement.updated_at|date:"F j, Y g:i A" }}</small>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-danger"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">Deletion Requested</h6>
+                                <p class="text-muted mb-1">By {{ user.get_full_name }}</p>
+                                <small class="text-muted">{% now "F j, Y g:i A" %}</small>
                             </div>
                         </div>
                     </div>
@@ -164,44 +300,39 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const confirmationInput = document.getElementById('confirmationText');
-        const deleteButton = document.getElementById('deleteButton');
-        const form = document.querySelector('form');
-        
-        // Enable/disable delete button based on confirmation
-        confirmationInput.addEventListener('input', function() {
-            const isConfirmed = this.value.toUpperCase() === 'DELETE';
-            deleteButton.disabled = !isConfirmed;
-            
-            if (isConfirmed) {
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-            } else {
-                this.classList.remove('is-valid');
-                if (this.value) {
-                    this.classList.add('is-invalid');
-                }
-            }
-        });
-        
-        // Additional confirmation on submit
-        form.addEventListener('submit', function(e) {
-            if (confirmationInput.value.toUpperCase() !== 'DELETE') {
-                e.preventDefault();
-                return;
-            }
-            
-            // Show final warning
-            if (!confirm('FINAL WARNING: This will permanently delete the announcement. Are you absolutely sure?')) {
-                e.preventDefault();
-                return;
-            }
-            
-            // Show loading state
-            deleteButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Deleting...';
-            deleteButton.disabled = true;
-        });
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmDelete = document.getElementById('confirmDelete');
+    const confirmBackup = document.getElementById('confirmBackup');
+    const deleteButton = document.getElementById('deleteButton');
+    
+    function updateDeleteButton() {
+        deleteButton.disabled = !(confirmDelete.checked && confirmBackup.checked);
+    }
+    
+    confirmDelete.addEventListener('change', updateDeleteButton);
+    confirmBackup.addEventListener('change', updateDeleteButton);
+    
+    // Add confirmation for final deletion
+    deleteButton.addEventListener('click', function(e) {
+        if (!confirm('FINAL WARNING: This will permanently delete the announcement. This action cannot be undone. Are you absolutely sure?')) {
+            e.preventDefault();
+        }
     });
+});
+
+function deactivateInstead() {
+    if (confirm('Would you like to deactivate this announcement instead? It will be hidden from users but preserved in the system.')) {
+        window.location.href = "{% url 'update_announcement' announcement.pk %}";
+    }
+}
+
+// Prevent accidental navigation
+window.addEventListener('beforeunload', function(e) {
+    const deleteButton = document.getElementById('deleteButton');
+    if (!deleteButton.disabled) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved deletion confirmation. Are you sure you want to leave?';
+    }
+});
 </script>
 {% endblock %}

@@ -1,87 +1,113 @@
 {% load static %}
 {% load humanize %}
 
-<div class="announcement-card card card-hover border-0 shadow-sm mb-3 position-relative">
+<div class="announcement-card card card-hover border-0 shadow-sm mb-3 position-relative announcement-{{ announcement.priority|lower }}" 
+     data-announcement-id="{{ announcement.id }}"
+     data-priority="{{ announcement.priority|lower }}"
+     data-status="{% if announcement.is_active %}active{% else %}inactive{% endif %}">
+    
     <!-- Selection Checkbox (for staff/teachers only) -->
-    {% if user.is_staff or user.is_teacher %}
-    <div class="form-check announcement-checkbox-container" style="position: absolute; top: 15px; left: 15px; z-index: 1;">
+    {% if user.is_staff or user.teacher %}
+    <div class="form-check announcement-checkbox-container position-absolute top-0 start-0 mt-2 ms-2" style="z-index: 2;">
         <input class="form-check-input announcement-checkbox" type="checkbox" 
                value="{{ announcement.id }}" 
-               onchange="toggleAnnouncementSelection({{ announcement.id }})"
-               id="announcement_{{ announcement.id }}">
+               id="announcement_{{ announcement.id }}"
+               data-announcement-id="{{ announcement.id }}">
+        <label class="form-check-label visually-hidden" for="announcement_{{ announcement.id }}">
+            Select {{ announcement.title }}
+        </label>
     </div>
     {% endif %}
     
     <div class="card-header bg-transparent border-0 pb-0 position-relative">
         <div class="d-flex justify-content-between align-items-start">
-            <div class="flex-grow-1" style="margin-left: {% if user.is_staff or user.is_teacher %}30px{% else %}0{% endif %};">
+            <div class="flex-grow-1" style="margin-left: {% if user.is_staff or user.teacher %}30px{% else %}0{% endif %};">
                 <!-- Priority Badge and Title -->
-                <div class="d-flex align-items-center mb-2">
-                    <span class="priority-indicator priority-{{ announcement.priority }} me-2"></span>
-                    <h5 class="card-title mb-0 me-3">
-                        <a href="#" class="text-decoration-none text-dark stretched-link" 
-                           data-bs-toggle="modal" data-bs-target="#announcementModal{{ announcement.id }}"
-                           onclick="trackAnnouncementView({{ announcement.id }})">
+                <div class="d-flex align-items-center mb-2 flex-wrap">
+                    <span class="priority-indicator priority-{{ announcement.priority|lower }} me-2 flex-shrink-0"></span>
+                    <h5 class="card-title mb-0 me-3 flex-grow-1">
+                        <a href="{% url 'announcement_detail' announcement.pk %}" 
+                           class="text-decoration-none text-dark stretched-link announcement-title-link">
                             {{ announcement.title }}
                         </a>
                     </h5>
+                    
+                    <!-- Status Badges -->
+                    <div class="d-flex gap-1 flex-shrink-0">
+                        {% if announcement.is_expired %}
+                        <span class="badge bg-warning badge-sm">
+                            <i class="bi bi-clock me-1"></i>Expired
+                        </span>
+                        {% endif %}
+                        
+                        {% if announcement.start_date > now %}
+                        <span class="badge bg-info badge-sm">
+                            <i class="bi bi-calendar-plus me-1"></i>Upcoming
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
                 
                 <!-- Meta Information -->
-                <div class="d-flex flex-wrap align-items-center text-muted small">
-                    <span class="me-3">
+                <div class="d-flex flex-wrap align-items-center text-muted small gap-2">
+                    <span class="d-flex align-items-center">
                         <i class="bi bi-person me-1"></i>
                         {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
                     </span>
-                    <span class="me-3">
+                    <span class="d-flex align-items-center">
                         <i class="bi bi-clock me-1"></i>
-                        {{ announcement.created_at|naturaltime }}
+                        <span class="announcement-time" data-timestamp="{{ announcement.created_at|date:'c' }}">
+                            {{ announcement.created_at|naturaltime }}
+                        </span>
                     </span>
-                    {% if announcement.target_audience.exists %}
-                    <span class="me-3">
+                    
+                    <!-- Target Classes -->
+                    {% with target_classes=announcement.get_target_class_levels %}
+                    {% if target_classes %}
+                    <span class="d-flex align-items-center">
                         <i class="bi bi-people me-1"></i>
-                        {{ announcement.target_audience.count }} class{{ announcement.target_audience.count|pluralize:"es" }}
+                        {{ target_classes|length }} class{{ target_classes|length|pluralize:"es" }}
                     </span>
                     {% else %}
-                    <span class="me-3">
+                    <span class="d-flex align-items-center">
                         <i class="bi bi-globe me-1"></i>
                         School-wide
                     </span>
                     {% endif %}
+                    {% endwith %}
                     
                     <!-- View Count -->
-                    <span class="me-3">
+                    <span class="d-flex align-items-center">
                         <i class="bi bi-eye me-1"></i>
-                        <span id="viewCount{{ announcement.id }}">
-                            {{ announcement.userviews.count|default:0 }}
+                        <span class="view-count" id="viewCount{{ announcement.id }}">
+                            {{ announcement.views_count|default:0 }}
                         </span> views
                     </span>
                 </div>
             </div>
             
             <!-- Status and Actions -->
-            <div class="dropdown announcement-actions">
-                <button class="btn btn-sm btn-outline-secondary border-0" type="button" 
-                        data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="dropdown announcement-actions flex-shrink-0">
+                <button class="btn btn-sm btn-outline-secondary border-0 dropdown-toggle" type="button" 
+                        data-bs-toggle="dropdown" aria-expanded="false"
+                        aria-label="Announcement actions">
                     <i class="bi bi-three-dots-vertical"></i>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
+                <ul class="dropdown-menu dropdown-menu-end shadow">
                     <li>
-                        <a class="dropdown-item" href="#" data-bs-toggle="modal" 
-                           data-bs-target="#announcementModal{{ announcement.id }}"
-                           onclick="trackAnnouncementView({{ announcement.id }})">
+                        <a class="dropdown-item view-details" href="{% url 'announcement_detail' announcement.pk %}">
                             <i class="bi bi-eye me-2"></i>View Details
                         </a>
                     </li>
                     
                     <!-- Quick Actions -->
                     <li>
-                        <a class="dropdown-item" href="#" onclick="copyAnnouncementLink({{ announcement.id }})">
+                        <button class="dropdown-item copy-link" onclick="announcementCard.copyLink({{ announcement.id }})">
                             <i class="bi bi-link-45deg me-2"></i>Copy Link
-                        </a>
+                        </button>
                     </li>
                     
-                    {% if user.is_staff or user.is_teacher %}
+                    {% if user.is_staff or user.teacher or user == announcement.created_by %}
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <a class="dropdown-item" href="{% url 'update_announcement' announcement.id %}">
@@ -90,15 +116,15 @@
                     </li>
                     <li>
                         {% if announcement.is_active %}
-                        <a class="dropdown-item text-warning" href="#" 
-                           onclick="toggleAnnouncementStatus({{ announcement.id }}, false)">
+                        <button class="dropdown-item text-warning toggle-status" 
+                                onclick="announcementCard.toggleStatus({{ announcement.id }}, false)">
                             <i class="bi bi-pause-circle me-2"></i>Deactivate
-                        </a>
+                        </button>
                         {% else %}
-                        <a class="dropdown-item text-success" href="#" 
-                           onclick="toggleAnnouncementStatus({{ announcement.id }}, true)">
+                        <button class="dropdown-item text-success toggle-status" 
+                                onclick="announcementCard.toggleStatus({{ announcement.id }}, true)">
                             <i class="bi bi-play-circle me-2"></i>Activate
-                        </a>
+                        </button>
                         {% endif %}
                     </li>
                     <li><hr class="dropdown-divider"></li>
@@ -116,209 +142,81 @@
     
     <div class="card-body pt-2">
         <!-- Message Preview -->
-        <p class="card-text text-muted mb-3 announcement-preview">
-            {{ announcement.message|truncatewords:25 }}
-            {% if announcement.message|wordcount > 25 %}
-            <a href="#" class="text-primary text-decoration-none small" 
-               data-bs-toggle="modal" data-bs-target="#announcementModal{{ announcement.id }}"
-               onclick="trackAnnouncementView({{ announcement.id }})">
-                Read more
-            </a>
-            {% endif %}
-        </p>
-        
-        <!-- Footer Stats -->
-        <div class="d-flex justify-content-between align-items-center">
-            <div class="d-flex gap-3 text-muted small">
-                <!-- Status Badge -->
-                {% if announcement.is_active %}
-                <span class="badge bg-success">
-                    <i class="bi bi-check-circle me-1"></i>Active
-                </span>
-                {% else %}
-                <span class="badge bg-secondary">
-                    <i class="bi bi-pause-circle me-1"></i>Inactive
-                </span>
+        <div class="announcement-preview-container">
+            <p class="card-text text-muted mb-3 announcement-preview">
+                {{ announcement.message|truncatewords:30 }}
+                {% if announcement.message|wordcount > 30 %}
+                <a href="{% url 'announcement_detail' announcement.pk %}" class="text-primary text-decoration-none small read-more">
+                    Read more
+                </a>
                 {% endif %}
-                
-                <!-- Priority Badge -->
-                <span class="badge bg-{{ announcement.priority|lower }}">
-                    <i class="bi bi-flag me-1"></i>{{ announcement.priority }}
-                </span>
-                
-                <!-- Expiry Info -->
-                {% if announcement.end_date %}
-                <span class="{% if announcement.end_date < now %}text-danger{% else %}text-muted{% endif %}">
-                    <i class="bi bi-calendar-x me-1"></i>
-                    {% if announcement.end_date < now %}
-                    Expired {{ announcement.end_date|naturaltime }}
-                    {% else %}
-                    Expires {{ announcement.end_date|naturaltime }}
+            </p>
+        </div>
+        
+        <!-- Priority and Status Badges -->
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge priority-badge bg-{{ announcement.priority|lower }}">
+                <i class="bi bi-flag me-1"></i>{{ announcement.priority }}
+            </span>
+            
+            <span class="badge status-badge {% if announcement.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                {% if announcement.is_active %}
+                <i class="bi bi-check-circle me-1"></i>Active
+                {% else %}
+                <i class="bi bi-pause-circle me-1"></i>Inactive
+                {% endif %}
+            </span>
+            
+            {% if announcement.end_date %}
+            <span class="badge expiry-badge {% if announcement.is_expired %}bg-warning{% else %}bg-info{% endif %}">
+                <i class="bi bi-clock me-1"></i>
+                {% if announcement.is_expired %}
+                Expired
+                {% else %}
+                Expires {{ announcement.end_date|naturaltime }}
+                {% endif %}
+            </span>
+            {% endif %}
+        </div>
+        
+        <!-- Footer Actions -->
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex gap-2 text-muted small flex-wrap">
+                <!-- Schedule Info -->
+                {% if announcement.start_date or announcement.end_date %}
+                <span class="schedule-info">
+                    <i class="bi bi-calendar-event me-1"></i>
+                    {% if announcement.start_date %}
+                    {{ announcement.start_date|date:"M j" }}
+                    {% endif %}
+                    {% if announcement.end_date %}
+                    - {{ announcement.end_date|date:"M j" }}
                     {% endif %}
                 </span>
                 {% endif %}
             </div>
             
             <!-- Quick Actions -->
-            <div class="d-flex gap-1">
-                {% if announcement.is_active %}
-                <button class="btn btn-sm btn-outline-secondary" 
-                        onclick="copyAnnouncementLink({{ announcement.id }})"
-                        data-bs-toggle="tooltip" data-bs-title="Copy link">
+            <div class="d-flex gap-1 quick-actions">
+                <button class="btn btn-sm btn-outline-secondary copy-link-btn" 
+                        onclick="announcementCard.copyLink({{ announcement.id }})"
+                        data-bs-toggle="tooltip" data-bs-title="Copy link" data-bs-placement="top">
                     <i class="bi bi-link-45deg"></i>
                 </button>
                 
                 <!-- Dismiss Button (for non-creators) -->
-                {% if user != announcement.created_by %}
-                <button class="btn btn-sm btn-outline-warning" 
-                        onclick="dismissAnnouncement({{ announcement.id }})"
-                        data-bs-toggle="tooltip" data-bs-title="Dismiss announcement">
+                {% if user != announcement.created_by and announcement.is_active %}
+                <button class="btn btn-sm btn-outline-warning dismiss-btn" 
+                        onclick="announcementCard.dismiss({{ announcement.id }})"
+                        data-bs-toggle="tooltip" data-bs-title="Dismiss announcement" data-bs-placement="top">
                     <i class="bi bi-eye-slash"></i>
                 </button>
                 {% endif %}
-                {% endif %}
                 
-                <button class="btn btn-sm btn-outline-primary" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#announcementModal{{ announcement.id }}"
-                        onclick="trackAnnouncementView({{ announcement.id }})">
+                <a href="{% url 'announcement_detail' announcement.pk %}" class="btn btn-sm btn-outline-primary view-details-btn"
+                   data-bs-toggle="tooltip" data-bs-title="View details" data-bs-placement="top">
                     <i class="bi bi-arrow-right"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Progress Bar for Expiry (if applicable) -->
-        {% if announcement.end_date and announcement.is_active %}
-        {% with days_remaining=announcement.end_date|timeuntil:now %}
-        <div class="mt-2">
-            <div class="progress" style="height: 4px;">
-                <div class="progress-bar bg-{% if announcement.priority == 'URGENT' %}danger{% else %}warning{% endif %}" 
-                     role="progressbar" 
-                     style="width: {{ days_remaining }}%">
-                </div>
-            </div>
-            <small class="text-muted">
-                {% if announcement.end_date > now %}
-                {{ days_remaining }} days remaining
-                {% else %}
-                Expired
-                {% endif %}
-            </small>
-        </div>
-        {% endwith %}
-        {% endif %}
-    </div>
-</div>
-
-<!-- Announcement Modal -->
-<div class="modal fade" id="announcementModal{{ announcement.id }}" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="d-flex align-items-center">
-                    <span class="priority-indicator priority-{{ announcement.priority }} me-2"></span>
-                    <h5 class="modal-title">{{ announcement.title }}</h5>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Message Content -->
-                <div class="mb-4">
-                    <p class="lead">{{ announcement.message|linebreaksbr }}</p>
-                </div>
-                
-                <!-- Meta Information -->
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-2">Details</h6>
-                        <ul class="list-unstyled small">
-                            <li class="mb-1">
-                                <i class="bi bi-person text-primary me-2"></i>
-                                <strong>Created by:</strong> {{ announcement.created_by.get_full_name }}
-                            </li>
-                            <li class="mb-1">
-                                <i class="bi bi-calendar text-primary me-2"></i>
-                                <strong>Created:</strong> {{ announcement.created_at|date:"M d, Y H:i" }}
-                            </li>
-                            <li class="mb-1">
-                                <i class="bi bi-flag text-primary me-2"></i>
-                                <strong>Priority:</strong> 
-                                <span class="badge bg-{{ announcement.priority|lower }}">
-                                    {{ announcement.priority }}
-                                </span>
-                            </li>
-                            <li class="mb-1">
-                                <i class="bi bi-eye text-primary me-2"></i>
-                                <strong>Views:</strong> 
-                                <span id="modalViewCount{{ announcement.id }}">
-                                    {{ announcement.userviews.count|default:0 }}
-                                </span>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-2">Audience & Status</h6>
-                        <ul class="list-unstyled small">
-                            <li class="mb-1">
-                                <i class="bi bi-people text-primary me-2"></i>
-                                <strong>Target:</strong> 
-                                {% if announcement.target_audience.exists %}
-                                    {{ announcement.target_audience.count }} class{{ announcement.target_audience.count|pluralize:"es" }}
-                                {% else %}
-                                    School-wide
-                                {% endif %}
-                            </li>
-                            <li class="mb-1">
-                                <i class="bi bi-circle-fill text-primary me-2"></i>
-                                <strong>Status:</strong> 
-                                <span class="badge bg-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
-                                    {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
-                                </span>
-                            </li>
-                            {% if announcement.end_date %}
-                            <li class="mb-1">
-                                <i class="bi bi-clock text-primary me-2"></i>
-                                <strong>Expires:</strong> {{ announcement.end_date|date:"M d, Y H:i" }}
-                            </li>
-                            {% endif %}
-                            <li class="mb-1">
-                                <i class="bi bi-arrow-clockwise text-primary me-2"></i>
-                                <strong>Last Updated:</strong> {{ announcement.updated_at|date:"M d, Y H:i" }}
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <!-- Target Audience Details -->
-                {% if announcement.target_audience.exists %}
-                <div class="mt-4">
-                    <h6 class="text-muted mb-2">Targeted Classes</h6>
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for class_level in announcement.target_audience.all %}
-                        <span class="badge bg-light text-dark border">
-                            {{ class_level.name }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                
-                <!-- Dismiss Button for non-creators -->
-                {% if user != announcement.created_by and announcement.is_active %}
-                <button type="button" class="btn btn-outline-warning" 
-                        onclick="dismissAnnouncement({{ announcement.id }})">
-                    <i class="bi bi-eye-slash me-2"></i>Dismiss
-                </button>
-                {% endif %}
-                
-                {% if user.is_staff or user.is_teacher %}
-                <a href="{% url 'update_announcement' announcement.id %}" class="btn btn-primary">
-                    <i class="bi bi-pencil me-2"></i>Edit Announcement
                 </a>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -326,47 +224,61 @@
 
 <style>
 .announcement-card {
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-left: 4px solid transparent;
+    opacity: 1;
+    transform: translateY(0);
 }
 
-.announcement-card.priority-URGENT {
-    border-left-color: #dc3545;
+.announcement-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
 }
 
-.announcement-card.priority-HIGH {
-    border-left-color: #fd7e14;
+.announcement-card.animate-out {
+    opacity: 0;
+    transform: translateX(-100%);
+    transition: all 0.3s ease-in-out;
 }
 
-.announcement-card.priority-NORMAL {
-    border-left-color: #17a2b8;
-}
-
-.announcement-card.priority-LOW {
-    border-left-color: #6c757d;
-}
-
+/* Priority Indicators */
 .priority-indicator {
     width: 12px;
     height: 12px;
     border-radius: 50%;
     display: inline-block;
+    flex-shrink: 0;
 }
 
-.priority-URGENT { background-color: #dc3545; }
-.priority-HIGH { background-color: #fd7e14; }
-.priority-NORMAL { background-color: #17a2b8; }
-.priority-LOW { background-color: #6c757d; }
-
-.announcement-actions .dropdown-toggle::after {
-    display: none;
+.priority-urgent { 
+    background-color: #dc3545;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
+}
+.priority-high { 
+    background-color: #fd7e14;
+    box-shadow: 0 0 0 2px rgba(253, 126, 20, 0.2);
+}
+.priority-normal { 
+    background-color: #17a2b8;
+    box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.2);
+}
+.priority-low { 
+    background-color: #6c757d;
+    box-shadow: 0 0 0 2px rgba(108, 117, 125, 0.2);
 }
 
-.card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
-}
+/* Priority-specific card borders */
+.announcement-urgent { border-left-color: #dc3545; }
+.announcement-high { border-left-color: #fd7e14; }
+.announcement-normal { border-left-color: #17a2b8; }
+.announcement-low { border-left-color: #6c757d; }
 
+/* Badge styles */
+.priority-badge { font-size: 0.75rem; }
+.status-badge { font-size: 0.75rem; }
+.expiry-badge { font-size: 0.75rem; }
+
+/* Checkbox container */
 .announcement-checkbox-container {
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -376,197 +288,282 @@
     opacity: 1;
 }
 
+/* Preview text */
 .announcement-preview {
     line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-/* Selection state */
-.announcement-card.selected {
-    border-color: #3a7bd5;
-    background-color: #f8f9ff;
+/* Quick actions */
+.quick-actions .btn {
+    border-radius: 6px;
+    transition: all 0.2s ease;
 }
 
-.announcement-checkbox:checked ~ .announcement-card {
-    border-color: #3a7bd5;
-    background-color: #f8f9ff;
+.quick-actions .btn:hover {
+    transform: scale(1.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .announcement-card .card-header .d-flex {
+        flex-direction: column;
+        align-items: start !important;
+    }
+    
+    .announcement-actions {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+    }
+    
+    .announcement-checkbox-container {
+        opacity: 1; /* Always show on mobile */
+    }
+}
+
+/* Animation for new announcements */
+@keyframes highlightNew {
+    0% { background-color: rgba(40, 167, 69, 0.1); }
+    100% { background-color: transparent; }
+}
+
+.announcement-card.new-highlight {
+    animation: highlightNew 2s ease-in-out;
+}
+
+/* Loading state */
+.announcement-card.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.announcement-card.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+}
+
+.announcement-card.loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 </style>
 
 <script>
-// Global functions for announcement interactions
-function toggleAnnouncementSelection(announcementId) {
-    if (typeof window.toggleAnnouncementSelection === 'function') {
-        window.toggleAnnouncementSelection(announcementId);
-    }
-}
-
-function copyAnnouncementLink(announcementId) {
-    const link = `${window.location.origin}/announcements/${announcementId}/`;
-    
-    navigator.clipboard.writeText(link).then(() => {
-        showToast('Link copied to clipboard!', 'success');
-    }).catch(() => {
-        showToast('Failed to copy link', 'error');
-    });
-}
-
-function trackAnnouncementView(announcementId) {
-    // Send analytics tracking
-    fetch(`/announcements/${announcementId}/track-view/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        // Update view count in real-time
-        const viewCountElement = document.getElementById(`viewCount${announcementId}`);
-        const modalViewCountElement = document.getElementById(`modalViewCount${announcementId}`);
+// Namespaced announcement card functionality
+const announcementCard = {
+    // Copy announcement link
+    copyLink: function(announcementId) {
+        const link = `${window.location.origin}{% url 'announcement_detail' 0 %}`.replace('/0/', `/${announcementId}/`);
         
-        if (viewCountElement && data.views !== undefined) {
-            viewCountElement.textContent = data.views;
-        }
-        if (modalViewCountElement && data.views !== undefined) {
-            modalViewCountElement.textContent = data.views;
-        }
-    })
-    .catch(error => {
-        console.error('Error tracking view:', error);
-    });
-}
+        navigator.clipboard.writeText(link).then(() => {
+            this.showToast('Link copied to clipboard!', 'success');
+        }).catch(() => {
+            this.showToast('Failed to copy link', 'error');
+        });
+    },
 
-function dismissAnnouncement(announcementId) {
-    if (!confirm('Are you sure you want to dismiss this announcement? You can always find it in the announcements list.')) {
-        return;
-    }
-    
-    fetch(`/announcements/${announcementId}/dismiss/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json',
+    // Dismiss announcement
+    dismiss: function(announcementId) {
+        if (!confirm('Are you sure you want to dismiss this announcement? You can always find it in the announcements list.')) {
+            return;
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast('Announcement dismissed', 'success');
-            
-            // Close modal if open
-            const modal = bootstrap.Modal.getInstance(document.getElementById(`announcementModal${announcementId}`));
-            if (modal) {
-                modal.hide();
+        
+        const card = this.getCardElement(announcementId);
+        this.setLoading(card, true);
+        
+        fetch(`/announcements/${announcementId}/dismiss/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': this.getCookie('csrftoken'),
+                'Content-Type': 'application/json',
             }
-            
-            // Remove card from view after a delay
-            setTimeout(() => {
-                const card = document.querySelector(`[data-announcement-id="${announcementId}"]`);
-                if (card) {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateX(-100%)';
-                    setTimeout(() => card.remove(), 300);
-                }
-            }, 1000);
-        } else {
-            showToast('Failed to dismiss announcement', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error dismissing announcement:', error);
-        showToast('Failed to dismiss announcement', 'error');
-    });
-}
-
-function toggleAnnouncementStatus(announcementId, activate) {
-    const action = activate ? 'activate' : 'deactivate';
-    
-    if (!confirm(`Are you sure you want to ${action} this announcement?`)) {
-        return;
-    }
-    
-    fetch(`/announcements/${announcementId}/toggle-status/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            is_active: activate
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showToast(`Announcement ${action}d successfully`, 'success');
-            // Reload to reflect changes
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            showToast(`Failed to ${action} announcement`, 'error');
+        .then(response => response.json())
+        .then(data => {
+            this.setLoading(card, false);
+            if (data.status === 'success') {
+                this.showToast('Announcement dismissed', 'success');
+                this.animateRemove(card);
+            } else {
+                this.showToast('Failed to dismiss announcement', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error dismissing announcement:', error);
+            this.setLoading(card, false);
+            this.showToast('Failed to dismiss announcement', 'error');
+        });
+    },
+
+    // Toggle announcement status
+    toggleStatus: function(announcementId, activate) {
+        const action = activate ? 'activate' : 'deactivate';
+        
+        if (!confirm(`Are you sure you want to ${action} this announcement?`)) {
+            return;
         }
-    })
-    .catch(error => {
-        console.error('Error toggling announcement status:', error);
-        showToast(`Failed to ${action} announcement`, 'error');
-    });
-}
+        
+        const card = this.getCardElement(announcementId);
+        this.setLoading(card, true);
+        
+        fetch(`/announcements/${announcementId}/toggle-status/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': this.getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            this.setLoading(card, false);
+            if (data.status === 'success') {
+                this.showToast(`Announcement ${action}d successfully`, 'success');
+                // Reload to reflect changes
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                this.showToast(`Failed to ${action} announcement`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling announcement status:', error);
+            this.setLoading(card, false);
+            this.showToast(`Failed to ${action} announcement`, 'error');
+        });
+    },
 
-function showToast(message, type) {
-    // Create toast element
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-bg-${type} border-0`;
-    toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">
-                <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-                ${message}
+    // Utility functions
+    getCardElement: function(announcementId) {
+        return document.querySelector(`[data-announcement-id="${announcementId}"]`);
+    },
+
+    setLoading: function(card, isLoading) {
+        if (isLoading) {
+            card.classList.add('loading');
+        } else {
+            card.classList.remove('loading');
+        }
+    },
+
+    animateRemove: function(card) {
+        card.classList.add('animate-out');
+        setTimeout(() => {
+            if (card.parentNode) {
+                card.parentNode.removeChild(card);
+            }
+        }, 300);
+    },
+
+    showToast: function(message, type) {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-    `;
-    
-    // Add to toast container
-    let toastContainer = document.getElementById('toastContainer');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toastContainer';
-        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-        document.body.appendChild(toastContainer);
-    }
-    
-    toastContainer.appendChild(toast);
-    
-    // Initialize and show toast
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    
-    // Remove toast after hidden
-    toast.addEventListener('hidden.bs.toast', () => {
-        toast.remove();
-    });
-}
+        `;
+        
+        // Add to toast container
+        let toastContainer = document.getElementById('announcementToastContainer');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'announcementToastContainer';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.appendChild(toast);
+        
+        // Initialize and show toast
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        // Remove toast after hidden
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    },
 
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
+    getCookie: function(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
             }
         }
-    }
-    return cookieValue;
-}
+        return cookieValue;
+    },
 
-// Initialize tooltips when card is loaded
+    // Initialize card functionality
+    init: function() {
+        // Add highlight animation for new announcements
+        document.querySelectorAll('.announcement-card').forEach(card => {
+            const timeElement = card.querySelector('.announcement-time');
+            if (timeElement) {
+                const timestamp = timeElement.getAttribute('data-timestamp');
+                const announcementTime = new Date(timestamp);
+                const now = new Date();
+                const diffHours = (now - announcementTime) / (1000 * 60 * 60);
+                
+                if (diffHours < 24) { // Highlight announcements from last 24 hours
+                    card.classList.add('new-highlight');
+                }
+            }
+        });
+
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+};
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    announcementCard.init();
 });
+
+// Export for use in other scripts
+window.announcementCard = announcementCard;
 </script>

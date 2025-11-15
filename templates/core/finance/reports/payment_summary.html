@@ -1,0 +1,719 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Payment Summary - School Management System{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Debug Information (remove after testing) -->
+    <div class="alert alert-info d-print-none">
+        <h6><i class="fas fa-bug me-2"></i>Debug Information</h6>
+        <small>
+            <strong>Date Range:</strong> {{ start_date|date:"M j, Y" }} to {{ end_date|date:"M j, Y" }}<br>
+            <strong>Total Collected:</strong> GH₵{{ total_collected|floatformat:2|intcomma }}<br>
+            <strong>Total Transactions:</strong> {{ total_transactions }}<br>
+            {% for method, data in summary_by_method.items %}
+            <strong>{{ data.display_name }}:</strong> {{ data.count }} transactions ({{ data.fee_count }} fees, {{ data.bill_count }} bills), GH₵{{ data.total_amount|floatformat:2|intcomma }}<br>
+            {% endfor %}
+        </small>
+        <form method="post" action="{% url 'refresh_payment_data' %}" class="mt-2">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-warning">
+                <i class="fas fa-sync-alt me-1"></i>Refresh Payment Data
+            </button>
+        </form>
+    </div>
+
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0">
+                <i class="fas fa-chart-pie me-2"></i>Payment Summary
+            </h1>
+            <p class="text-muted">Breakdown of payments by payment method</p>
+        </div>
+        <div class="col-auto">
+            <div class="dropdown">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-download me-2"></i>Export
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?export=excel&{{ request.GET.urlencode }}">Excel Sheet</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Filter Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3" id="dateFilterForm">
+                <div class="col-md-4">
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" 
+                           value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" 
+                           value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-filter me-2"></i>Apply Filter
+                        </button>
+                        <a href="{% url 'payment_summary' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-refresh me-2"></i>Reset
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Collected
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                GH₵{{ total_collected|floatformat:2|intcomma }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-money-bill-wave fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total Transactions
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ total_transactions }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-receipt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Period
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ start_date|date:"M j" }} - {{ end_date|date:"M j, Y" }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Avg. Transaction
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% if total_transactions > 0 %}
+                                    GH₵{{ average_transaction|floatformat:2|intcomma }}
+                                {% else %}
+                                    GH₵0.00
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Method Breakdown -->
+    <div class="row">
+        <!-- Pie Chart -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie me-2"></i>Payment Method Distribution
+                    </h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item chart-action" href="#" data-action="doughnut">Doughnut Chart</a></li>
+                            <li><a class="dropdown-item chart-action" href="#" data-action="pie">Pie Chart</a></li>
+                            <li><a class="dropdown-item chart-action" href="#" data-action="bar">Bar Chart</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4 pb-2">
+                        <canvas id="paymentMethodChart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small">
+                        {% for method, data in summary_by_method.items %}
+                        <span class="mr-3">
+                            <i class="fas fa-circle text-{{ method }}"></i> {{ data.display_name }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Method Details -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-list me-2"></i>Payment Method Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Payment Method</th>
+                                    <th>Amount</th>
+                                    <th>Transactions</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for method, data in summary_by_method.items %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-{% if method == 'cash' %}money-bill{% elif method == 'mobile_money' %}mobile-alt{% elif method == 'bank_transfer' %}university{% elif method == 'check' %}file-invoice{% else %}ellipsis-h{% endif %} me-2 text-{{ method }}"></i>
+                                        {{ data.display_name }}
+                                        <br>
+                                        <small class="text-muted">
+                                            ({{ data.fee_count }} fees, {{ data.bill_count }} bills)
+                                        </small>
+                                    </td>
+                                    <td class="font-weight-bold">GH₵{{ data.total_amount|floatformat:2|intcomma }}</td>
+                                    <td>{{ data.count }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar {{ method }}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ data.percentage }}%"
+                                                 aria-valuenow="{{ data.percentage }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ data.percentage }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th>Total</th>
+                                    <th>GH₵{{ total_collected|floatformat:2|intcomma }}</th>
+                                    <th>{{ total_transactions }}</th>
+                                    <th>100%</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Trends -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-line me-2"></i>Daily Payment Trends
+                    </h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item chart-action" href="#" data-action="line">Line Chart</a></li>
+                            <li><a class="dropdown-item chart-action" href="#" data-action="bar">Bar Chart</a></li>
+                            <li><a class="dropdown-item chart-action" href="#" data-action="area">Area Chart</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="dailyTrendsChart" width="400" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Payments -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-history me-2"></i>Recent Payments
+                    </h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" id="showAllPayments">Show All</a></li>
+                            <li><a class="dropdown-item" href="#" id="showFeePayments">Fee Payments Only</a></li>
+                            <li><a class="dropdown-item" href="#" id="showBillPayments">Bill Payments Only</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="recentPaymentsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Student</th>
+                                    <th>Type</th>
+                                    <th>Method</th>
+                                    <th>Amount</th>
+                                    <th>Receipt No.</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in recent_payments %}
+                                <tr class="payment-row" data-type="{{ payment.type }}">
+                                    <td>{{ payment.date|date:"M j, Y" }}</td>
+                                    <td>
+                                        {% if payment.student %}
+                                            {{ payment.student.get_full_name }}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if payment.type == 'fee' %}bg-info{% else %}bg-success{% endif %}">
+                                            {{ payment.type|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ payment.method }}">
+                                            {{ payment.method|title }}
+                                        </span>
+                                    </td>
+                                    <td class="font-weight-bold">GH₵{{ payment.amount|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        {% if payment.receipt_number %}
+                                            <code>{{ payment.receipt_number }}</code>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>Confirmed
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="fas fa-search fa-2x mb-3"></i><br>
+                                        No payments found for the selected period
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Global chart variables
+let paymentMethodChart;
+let dailyTrendsChart;
+
+// Initialize charts when document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    setupEventListeners();
+});
+
+function initializeCharts() {
+    // Payment Method Pie Chart
+    const paymentMethodCtx = document.getElementById('paymentMethodChart').getContext('2d');
+    paymentMethodChart = new Chart(paymentMethodCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                {% for method, data in summary_by_method.items %}
+                    '{{ data.display_name }}'{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for method, data in summary_by_method.items %}
+                        {{ data.total_amount|floatformat:2 }}{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'
+                ],
+                hoverBackgroundColor: [
+                    '#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#be2617'
+                ],
+                hoverBorderColor: "rgba(234, 236, 244, 1)",
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': GH₵' + context.raw.toLocaleString();
+                        }
+                    }
+                }
+            },
+            cutout: '70%',
+        },
+    });
+
+    // Daily Trends Chart
+    const dailyTrendsCtx = document.getElementById('dailyTrendsChart').getContext('2d');
+    dailyTrendsChart = new Chart(dailyTrendsCtx, {
+        type: 'line',
+        data: {
+            labels: [
+                {% for day in daily_breakdown %}
+                    '{{ day.display_date }}'{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Daily Collections',
+                lineTension: 0.3,
+                backgroundColor: "rgba(78, 115, 223, 0.05)",
+                borderColor: "rgba(78, 115, 223, 1)",
+                pointRadius: 3,
+                pointBackgroundColor: "rgba(78, 115, 223, 1)",
+                pointBorderColor: "rgba(78, 115, 223, 1)",
+                pointHoverRadius: 3,
+                pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
+                pointHoverBorderColor: "rgba(78, 115, 223, 1)",
+                pointHitRadius: 10,
+                pointBorderWidth: 2,
+                data: [
+                    {% for day in daily_breakdown %}
+                        {{ day.total|floatformat:2 }}{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return 'GH₵' + value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'GH₵' + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            }
+        },
+    });
+}
+
+function setupEventListeners() {
+    // Date validation
+    const dateFilterForm = document.getElementById('dateFilterForm');
+    if (dateFilterForm) {
+        dateFilterForm.addEventListener('submit', function(e) {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            if (startDate && endDate && startDate > endDate) {
+                e.preventDefault();
+                alert('Start date cannot be after end date');
+                return false;
+            }
+        });
+    }
+
+    // Chart type toggles
+    const chartActions = document.querySelectorAll('.chart-action');
+    chartActions.forEach(action => {
+        action.addEventListener('click', function(e) {
+            e.preventDefault();
+            const chartType = this.getAttribute('data-action');
+            const card = this.closest('.card');
+            const chartId = card.querySelector('canvas').id;
+            
+            if (chartId === 'paymentMethodChart') {
+                changeChartType(paymentMethodChart, chartType);
+            } else if (chartId === 'dailyTrendsChart') {
+                changeChartType(dailyTrendsChart, chartType);
+            }
+        });
+    });
+
+    // Payment filtering
+    document.getElementById('showAllPayments').addEventListener('click', function(e) {
+        e.preventDefault();
+        filterPayments('all');
+    });
+
+    document.getElementById('showFeePayments').addEventListener('click', function(e) {
+        e.preventDefault();
+        filterPayments('fee');
+    });
+
+    document.getElementById('showBillPayments').addEventListener('click', function(e) {
+        e.preventDefault();
+        filterPayments('bill');
+    });
+
+    // Auto-refresh data every 5 minutes
+    setInterval(refreshData, 300000);
+}
+
+function changeChartType(chart, type) {
+    chart.config.type = type;
+    
+    // Adjust options based on chart type
+    if (type === 'bar') {
+        chart.options.scales.x.grid.display = true;
+    } else if (type === 'line' || type === 'area') {
+        chart.options.scales.x.grid.display = false;
+    }
+    
+    chart.update();
+}
+
+function filterPayments(type) {
+    const rows = document.querySelectorAll('#recentPaymentsTable .payment-row');
+    
+    rows.forEach(row => {
+        if (type === 'all' || row.getAttribute('data-type') === type) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function refreshData() {
+    // Show loading indicator
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center';
+    loadingIndicator.style.backgroundColor = 'rgba(255,255,255,0.7)';
+    loadingIndicator.style.zIndex = '9999';
+    loadingIndicator.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+    document.body.appendChild(loadingIndicator);
+    
+    // Get current filter values
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    
+    // Build URL with current filters
+    let url = window.location.pathname + '?';
+    if (startDate) url += 'start_date=' + startDate + '&';
+    if (endDate) url += 'end_date=' + endDate + '&';
+    
+    // Fetch updated data
+    fetch(url)
+        .then(response => response.text())
+        .then(html => {
+            // Create a temporary DOM to extract the data we need
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Update charts with new data
+            updateChartsWithNewData(doc);
+            
+            // Remove loading indicator
+            document.body.removeChild(loadingIndicator);
+        })
+        .catch(error => {
+            console.error('Error refreshing data:', error);
+            document.body.removeChild(loadingIndicator);
+        });
+}
+
+function updateChartsWithNewData(doc) {
+    // This is a simplified example - in a real implementation,
+    // you would extract the data from the response and update the charts
+    console.log('Data refreshed at ' + new Date().toLocaleTimeString());
+    
+    // For a full implementation, you would need to:
+    // 1. Extract the new chart data from the response
+    // 2. Update the chart datasets
+    // 3. Update the summary cards
+    // 4. Update the recent payments table
+}
+
+// Print functionality
+function printReport() {
+    window.print();
+}
+
+// Export functionality (additional to the existing Excel export)
+function exportChart(chartId, format) {
+    const chartCanvas = document.getElementById(chartId);
+    const link = document.createElement('a');
+    
+    if (format === 'png') {
+        link.download = chartId + '.png';
+        link.href = chartCanvas.toDataURL('image/png');
+    } else if (format === 'jpg') {
+        link.download = chartId + '.jpg';
+        link.href = chartCanvas.toDataURL('image/jpeg');
+    }
+    
+    link.click();
+}
+</script>
+
+<style>
+/* Custom styles for payment summary */
+.progress-bar.cash { background-color: #4e73df !important; }
+.progress-bar.mobile_money { background-color: #1cc88a !important; }
+.progress-bar.bank_transfer { background-color: #36b9cc !important; }
+.progress-bar.check { background-color: #f6c23e !important; }
+.progress-bar.other { background-color: #e74a3b !important; }
+
+.badge.cash { background-color: #4e73df !important; }
+.badge.mobile_money { background-color: #1cc88a !important; }
+.badge.bank_transfer { background-color: #36b9cc !important; }
+.badge.check { background-color: #f6c23e !important; }
+.badge.other { background-color: #e74a3b !important; }
+
+.text-cash { color: #4e73df !important; }
+.text-mobile_money { color: #1cc88a !important; }
+.text-bank_transfer { color: #36b9cc !important; }
+.text-check { color: #f6c23e !important; }
+.text-other { color: #e74a3b !important; }
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* Table row hover effects */
+.table-hover tbody tr:hover {
+    background-color: rgba(0,0,0,0.03);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .chart-pie, .chart-area {
+        height: 300px !important;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .alert .btn {
+        margin-top: 0.5rem;
+    }
+}
+
+/* Loading animation */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+/* Print styles */
+@media print {
+    .btn, .dropdown, .card-header .dropdown, .alert {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+    }
+    
+    .table {
+        font-size: 12px;
+    }
+}
+</style>
+{% endblock %}

@@ -1,13 +1,13 @@
 from django.db.models import Avg, Count, Q  # ADDED Q import
 from django.views.generic import TemplateView, CreateView, View
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, JsonResponse
 import re
 import logging
 from reportlab.pdfgen import canvas
@@ -50,9 +50,21 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
             report_cards = ReportCard.objects.filter(
                 student__class_level__in=teacher_classes
             ).select_related('student').order_by('-academic_year', '-term')
+            
+            # Add teacher's students for quick view modal
+            context['teacher_students'] = Student.objects.filter(
+                class_level__in=teacher_classes,
+                is_active=True
+            ).order_by('class_level', 'last_name', 'first_name')
+        
         else:
             # Admin or other users see all report cards
             report_cards = ReportCard.objects.all().select_related('student').order_by('-academic_year', '-term')
+            
+            # Add all students for quick view modal
+            context['all_students'] = Student.objects.filter(
+                is_active=True
+            ).order_by('class_level', 'last_name', 'first_name')
         
         # Apply filters from GET parameters
         academic_year = self.request.GET.get('academic_year')
@@ -151,6 +163,102 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
         })
         
         return context
+
+
+class QuickViewReportCardView(LoginRequiredMixin, View):
+    """Quick view report card - redirects to the detailed view"""
+    
+    def get(self, request):
+        student_id = request.GET.get('student_id')
+        academic_year = request.GET.get('academic_year')
+        term = request.GET.get('term')
+        
+        if not all([student_id, academic_year, term]):
+            messages.error(request, 'Please select student, academic year, and term')
+            return redirect('report_card_dashboard')
+        
+        try:
+            student = Student.objects.get(pk=student_id)
+            
+            # Check permissions
+            if is_student(request.user) and request.user.student != student:
+                raise PermissionDenied("You can only view your own report cards")
+            elif is_teacher(request.user):
+                if not ClassAssignment.objects.filter(
+                    class_level=student.class_level,
+                    teacher=request.user.teacher
+                ).exists():
+                    raise PermissionDenied("You can only view report cards for your assigned classes")
+            
+            # Try to find existing report card
+            report_card = ReportCard.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term
+            ).first()
+            
+            if report_card:
+                # Redirect to existing report card detail view
+                return redirect('report_card_detail', student_id=student_id, report_card_id=report_card.id)
+            else:
+                # Redirect to report card view with parameters
+                return redirect(f'{reverse("report_card", kwargs={"student_id": student_id})}?academic_year={academic_year}&term={term}')
+                
+        except Student.DoesNotExist:
+            messages.error(request, 'Student not found')
+            return redirect('report_card_dashboard')
+        except Exception as e:
+            logger.error(f"Quick view error: {str(e)}")
+            messages.error(request, f'Error viewing report card: {str(e)}')
+            return redirect('report_card_dashboard')
+
+
+class QuickViewReportCardPDFView(LoginRequiredMixin, View):
+    """Quick view report card as PDF download"""
+    
+    def get(self, request):
+        student_id = request.GET.get('student_id')
+        academic_year = request.GET.get('academic_year')
+        term = request.GET.get('term')
+        
+        if not all([student_id, academic_year, term]):
+            messages.error(request, 'Please select student, academic year, and term')
+            return redirect('report_card_dashboard')
+        
+        try:
+            student = Student.objects.get(pk=student_id)
+            
+            # Check permissions
+            if is_student(request.user) and request.user.student != student:
+                raise PermissionDenied("You can only view your own report cards")
+            elif is_teacher(request.user):
+                if not ClassAssignment.objects.filter(
+                    class_level=student.class_level,
+                    teacher=request.user.teacher
+                ).exists():
+                    raise PermissionDenied("You can only view report cards for your assigned classes")
+            
+            # Try to find existing report card
+            report_card = ReportCard.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term
+            ).first()
+            
+            if report_card:
+                # Generate PDF for existing report card
+                return redirect('report_card_pdf_detail', student_id=student_id, report_card_id=report_card.id)
+            else:
+                # Generate PDF directly from grades
+                return redirect(f'{reverse("report_card_pdf", kwargs={"student_id": student_id})}?academic_year={academic_year}&term={term}')
+                
+        except Student.DoesNotExist:
+            messages.error(request, 'Student not found')
+            return redirect('report_card_dashboard')
+        except Exception as e:
+            logger.error(f"Quick view PDF error: {str(e)}")
+            messages.error(request, f'Error generating PDF: {str(e)}')
+            return redirect('report_card_dashboard')
 
 
 class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, CreateView):

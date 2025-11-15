@@ -3,39 +3,125 @@
 
 {% block title %}Revenue Analytics{% endblock %}
 
+{% block extra_css %}
+<style>
+    .summary-card {
+        border-left: 4px solid;
+        transition: transform 0.2s;
+    }
+    .summary-card:hover {
+        transform: translateY(-2px);
+    }
+    .card-collected { border-left-color: #28a745; }
+    .card-expected { border-left-color: #ffc107; }
+    .card-rate { border-left-color: #17a2b8; }
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    .date-filter-form .form-control {
+        max-width: 200px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
+    <!-- Header with Date Filter -->
     <div class="row mb-4">
-        <div class="col-md-12">
-            <h2>Revenue Analytics</h2>
+        <div class="col-md-8">
+            <h2><i class="bi bi-graph-up me-2"></i>Revenue Analytics</h2>
             <p class="text-muted">Showing data from {{ start_date }} to {{ end_date }}</p>
+        </div>
+        <div class="col-md-4">
+            <form method="get" class="date-filter-form">
+                <div class="row g-2">
+                    <div class="col-md-5">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" 
+                               value="{{ start_date|date:'Y-m-d' }}" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">End Date</label>
+                        <input type="date" name="end_date" class="form-control" 
+                               value="{{ end_date|date:'Y-m-d' }}" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-filter"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 
     <!-- Summary Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card">
+            <div class="card summary-card card-collected">
                 <div class="card-body">
-                    <h5 class="card-title">Total Collected</h5>
-                    <h3 class="card-text">GH₵ {{ total_collected|intcomma }}</h3>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted">Total Collected</h5>
+                            <h3 class="card-text text-success">GH₵ {{ total_collected|intcomma }}</h3>
+                        </div>
+                        <i class="bi bi-cash-coin display-6 text-success"></i>
+                    </div>
+                    <small class="text-muted">Actual revenue received</small>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card">
+            <div class="card summary-card card-expected">
                 <div class="card-body">
-                    <h5 class="card-title">Total Expected</h5>
-                    <h3 class="card-text">GH₵ {{ total_expected|intcomma }}</h3>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted">Total Expected</h5>
+                            <h3 class="card-text text-warning">GH₵ {{ total_expected|intcomma }}</h3>
+                        </div>
+                        <i class="bi bi-receipt display-6 text-warning"></i>
+                    </div>
+                    <small class="text-muted">Expected revenue from fees</small>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card">
+            <div class="card summary-card card-rate">
                 <div class="card-body">
-                    <h5 class="card-title">Collection Rate</h5>
-                    <h3 class="card-text">{{ collection_rate|floatformat:2 }}%</h3>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title text-muted">Collection Rate</h5>
+                            <h3 class="card-text text-info">{{ collection_rate|floatformat:1 }}%</h3>
+                        </div>
+                        <i class="bi bi-percent display-6 text-info"></i>
+                    </div>
+                    <div class="progress mt-2" style="height: 6px;">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ collection_rate }}%"
+                             aria-valuenow="{{ collection_rate }}" aria-valuemin="0" aria-valuemax="100">
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'finance_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+                </a>
+                <a href="{% url 'payment_summary' %}?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}" 
+                   class="btn btn-outline-primary">
+                    <i class="bi bi-credit-card me-1"></i>Payment Details
+                </a>
+                <button class="btn btn-success" onclick="exportRevenueData()">
+                    <i class="bi bi-download me-1"></i>Export Report
+                </button>
             </div>
         </div>
     </div>
@@ -44,68 +130,90 @@
     <div class="row mb-4">
         <div class="col-md-8">
             <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>Daily Revenue Trend
+                    </h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="cumulativeToggle">
+                        <label class="form-check-label" for="cumulativeToggle">Cumulative</label>
+                    </div>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title">Daily Revenue Trend</h5>
-                    <div id="revenueChart" style="height: 300px;"></div>
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pie-chart me-2"></i>Payment Methods
+                    </h5>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title">Payment Methods</h5>
-                    <div id="paymentMethodsChart" style="height: 300px;"></div>
+                    <div class="chart-container">
+                        <canvas id="paymentMethodsChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Outstanding Payments -->
-    <div class="row">
+    <!-- Payment Methods Breakdown -->
+    <div class="row mb-4">
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title">Top Outstanding Payments</h5>
+                    <h5 class="card-title mb-0">Payment Methods Breakdown</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Student</th>
-                                    <th>Fee Category</th>
-                                    <th>Amount Due</th>
-                                    <th>Amount Paid</th>
-                                    <th>Balance/Credit</th>
-                                    <th>Status</th>
-                                    <th>Due Date</th>
+                                    <th>Payment Method</th>
+                                    <th>Amount</th>
+                                    <th>Percentage</th>
+                                    <th>Transactions</th>
+                                    <th>Average Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for fee in outstanding_payments %}
+                                {% for method in payment_methods %}
                                 <tr>
-                                    <td>{{ fee.student.get_full_name }}</td>
-                                    <td>{{ fee.category.name }}</td>
-                                    <td>GH₵ {{ fee.amount_payable|intcomma }}</td>
-                                    <td>GH₵ {{ fee.amount_paid|intcomma }}</td>
-                                    <td class="{% if fee.balance < 0 %}text-success{% elif fee.balance > 0 %}text-danger{% endif %}">
-                                        {% if fee.balance < 0 %}
-                                            GH₵ {{ fee.overpayment_amount|intcomma }} Credit
-                                        {% else %}
-                                            GH₵ {{ fee.balance|intcomma }}
-                                        {% endif %}
-                                    </td>
                                     <td>
-                                        <span class="badge {% if fee.payment_status == 'paid' %}{% if fee.has_overpayment %}bg-info{% else %}bg-success{% endif %}{% elif fee.payment_status == 'partial' %}bg-warning{% else %}bg-danger{% endif %}">
-                                            {{ fee.get_payment_status_display }}
-                                            {% if fee.has_overpayment %} (Credit){% endif %}
-                                        </span>
+                                        <i class="bi 
+                                            {% if method.payment_mode == 'cash' %}bi-cash
+                                            {% elif method.payment_mode == 'mobile_money' %}bi-phone
+                                            {% elif method.payment_mode == 'bank_transfer' %}bi-bank
+                                            {% elif method.payment_mode == 'check' %}bi-check-square
+                                            {% else %}bi-credit-card{% endif %}
+                                            me-2"></i>
+                                        {{ method.display_name }}
                                     </td>
-                                    <td>{{ fee.due_date }}</td>
+                                    <td class="fw-bold">GH₵ {{ method.total|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                                                <div class="progress-bar" 
+                                                     style="width: {{ method.percentage }}%; background-color: {{ method.color }};">
+                                                </div>
+                                            </div>
+                                            <span>{{ method.percentage|floatformat:1 }}%</span>
+                                        </div>
+                                    </td>
+                                    <td>{{ method.count }}</td>
+                                    <td>GH₵ {{ method.average|floatformat:2 }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center">No outstanding payments</td>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-info-circle display-4 d-block mb-2"></i>
+                                        No payment data available for the selected period
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -115,86 +223,245 @@
             </div>
         </div>
     </div>
-</div>
 
-<!-- Include Chart.js -->
+    <!-- Outstanding Payments -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Outstanding Payments</h5>
+                    <span class="badge bg-danger">{{ outstanding_payments|length }} pending</span>
+                </div>
+                <div class="card-body">
+                    {% if outstanding_payments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th>Fee Category</th>
+                                    <th class="text-end">Amount Due</th>
+                                    <th class="text-end">Amount Paid</th>
+                                    <th class="text-end">Balance</th>
+                                    <th>Status</th>
+                                    <th>Due Date</th>
+                                    <th>Days Overdue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fee in outstanding_payments %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-circle me-2 text-muted"></i>
+                                            <div>
+                                                <div class="fw-medium">{{ fee.student.get_full_name }}</div>
+                                                <small class="text-muted">{{ fee.student.student_id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ fee.student.get_class_level_display }}</td>
+                                    <td>{{ fee.category.get_name_display }}</td>
+                                    <td class="text-end fw-bold">GH₵ {{ fee.amount_payable|floatformat:2 }}</td>
+                                    <td class="text-end">GH₵ {{ fee.amount_paid|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold {% if fee.balance < 0 %}text-success{% elif fee.balance > 0 %}text-danger{% else %}text-muted{% endif %}">
+                                        {% if fee.balance < 0 %}
+                                            GH₵ {{ fee.overpayment_amount|floatformat:2 }} Credit
+                                        {% else %}
+                                            GH₵ {{ fee.balance|floatformat:2 }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if fee.payment_status == 'paid' %}{% if fee.has_overpayment %}bg-info{% else %}bg-success{% endif %}{% elif fee.payment_status == 'partial' %}bg-warning{% elif fee.payment_status == 'overdue' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                            {{ fee.get_payment_status_display }}
+                                            {% if fee.has_overpayment %} (Credit){% endif %}
+                                        </span>
+                                    </td>
+                                    <td>{{ fee.due_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% if fee.payment_status == 'overdue' %}
+                                            <span class="badge bg-danger">
+                                                {{ fee.due_date|timeuntil:today }} overdue
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-check-circle display-1 text-success"></i>
+                        <h5 class="text-success mt-3">All Payments Collected!</h5>
+                        <p class="text-muted">No outstanding payments for the selected period.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 <script>
-    // Daily Revenue Chart
-    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-    const revenueChart = new Chart(revenueCtx, {
-        type: 'line',
-        data: {
+    // Chart colors from Django context
+    const chartColors = {{ chart_colors_json|safe }};
+    
+    // Payment method colors from Django context
+    const methodColors = {{ method_colors_json|safe }};
+
+    // Initialize charts when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeRevenueChart();
+        initializePaymentMethodsChart();
+    });
+
+    function initializeRevenueChart() {
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        
+        // Prepare chart data
+        const chartData = {
             labels: [{% for day in daily_revenue %}"{{ day.payment_date|date:'M d' }}"{% if not forloop.last %},{% endif %}{% endfor %}],
             datasets: [{
                 label: 'Daily Revenue',
-                data: [{% for day in daily_revenue %}{{ day.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                borderColor: 'rgba(75, 192, 192, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.1,
+                data: [{% for day in daily_revenue %}{{ day.total|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}],
+                borderColor: chartColors.primary,
+                backgroundColor: 'rgba(58, 123, 213, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
                 fill: true
             }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return 'GH₵' + context.raw.toFixed(2);
+        };
+
+        const revenueChart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `GH₵${context.raw.toFixed(2)}`;
+                            }
                         }
                     }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'GH₵' + value;
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'GH₵' + value.toLocaleString();
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Amount (GH₵)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date'
                         }
                     }
                 }
             }
-        }
-    });
+        });
 
-    // Payment Methods Chart
-    const methodsCtx = document.getElementById('paymentMethodsChart').getContext('2d');
-    const methodsChart = new Chart(methodsCtx, {
-        type: 'doughnut',
-        data: {
-            labels: [{% for method in payment_methods %}"{{ method.payment_method }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+        // Cumulative toggle functionality
+        document.getElementById('cumulativeToggle').addEventListener('change', function() {
+            const isCumulative = this.checked;
+            const originalData = [{% for day in daily_revenue %}{{ day.total|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}];
+            
+            let newData;
+            if (isCumulative) {
+                newData = [];
+                let cumulative = 0;
+                originalData.forEach(value => {
+                    cumulative += value;
+                    newData.push(cumulative);
+                });
+                revenueChart.data.datasets[0].label = 'Cumulative Revenue';
+            } else {
+                newData = originalData;
+                revenueChart.data.datasets[0].label = 'Daily Revenue';
+            }
+            
+            revenueChart.data.datasets[0].data = newData;
+            revenueChart.update();
+        });
+    }
+
+    function initializePaymentMethodsChart() {
+        const ctx = document.getElementById('paymentMethodsChart').getContext('2d');
+        
+        // Prepare payment method data with colors
+        const paymentLabels = [{% for method in payment_methods %}"{{ method.display_name }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+        const paymentData = [{% for method in payment_methods %}{{ method.total|default:0 }}{% if not forloop.last %},{% endif %}{% endfor %}];
+        const paymentColors = [{% for method in payment_methods %}'{{ method.color }}'{% if not forloop.last %},{% endif %}{% endfor %}];
+        
+        const paymentChartData = {
+            labels: paymentLabels,
             datasets: [{
-                data: [{% for method in payment_methods %}{{ method.total }}{% if not forloop.last %},{% endif %}{% endfor %}],
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.7)',
-                    'rgba(54, 162, 235, 0.7)',
-                    'rgba(255, 206, 86, 0.7)',
-                    'rgba(75, 192, 192, 0.7)',
-                    'rgba(153, 102, 255, 0.7)'
-                ],
+                data: paymentData,
+                backgroundColor: paymentColors,
                 borderWidth: 1
             }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.label + ': GH₵' + context.raw.toFixed(2);
+        };
+
+        const methodsChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: paymentChartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((context.raw / total) * 100).toFixed(1);
+                                return `${context.label}: GH₵${context.raw.toFixed(2)} (${percentage}%)`;
+                            }
                         }
                     }
-                }
+                },
+                cutout: '60%'
             }
+        });
+    }
+
+    function exportRevenueData() {
+        // Create export URL with current filters
+        const exportUrl = `{% url 'revenue_analytics' %}?export=excel&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}`;
+        window.location.href = exportUrl;
+    }
+
+    // Auto-refresh data every 5 minutes
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            window.location.reload();
         }
-    });
+    }, 300000); // 5 minutes
 </script>
 {% endblock %}
