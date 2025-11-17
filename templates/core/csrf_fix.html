@@ -1,0 +1,61 @@
+<script>
+// Ultimate CSRF Token Handler for Django
+(function() {
+    'use strict';
+    
+    console.log('🔧 CSRF: Initializing ultimate token handler...');
+    
+    function getCSRFToken() {
+        // Method 1: Get from cookie
+        try {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrftoken='))
+                ?.split('=')[1];
+            
+            if (cookieValue && cookieValue !== 'null' && cookieValue !== 'undefined' && cookieValue.length === 64) {
+                console.log('🔧 CSRF: Got valid token from cookie');
+                return cookieValue;
+            }
+        } catch (e) {
+            console.warn('🔧 CSRF: Error reading cookie:', e);
+        }
+        
+        // Method 2: Get from meta tag
+        try {
+            const metaTag = document.querySelector('meta[name="csrfmiddlewaretoken"]');
+            if (metaTag) {
+                const metaValue = metaTag.getAttribute('content');
+                if (metaValue && metaValue !== 'null' && metaValue.length === 64) {
+                    console.log('🔧 CSRF: Got valid token from meta tag');
+                    return metaValue;
+                }
+            }
+        } catch (e) {
+            console.warn('🔧 CSRF: Error reading meta tag:', e);
+        }
+        
+        console.error('🔧 CSRF: No valid token found');
+        return null;
+    }
+    
+    // Override fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(resource, options = {}) {
+        const url = typeof resource === 'string' ? resource : resource.url;
+        
+        if (url && url.startsWith('/') && options.method && options.method.toUpperCase() === 'POST') {
+            const csrfToken = getCSRFToken();
+            if (csrfToken) {
+                options.headers = options.headers || {};
+                options.headers['X-CSRFToken'] = csrfToken;
+                console.log('🔧 CSRF: Added token to fetch request');
+            }
+        }
+        
+        return originalFetch.call(this, resource, options);
+    };
+    
+    console.log('🔧 CSRF: Ultimate token handler ready');
+})();
+</script>

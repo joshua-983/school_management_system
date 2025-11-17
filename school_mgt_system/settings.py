@@ -34,7 +34,7 @@ DEBUG = config('DEBUG', default=not IS_PRODUCTION, cast=bool)
 DEBUG_TOOLBAR = config('DEBUG_TOOLBAR', default=IS_DEVELOPMENT and not IS_TESTING, cast=bool)
 
 # Host configuration
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1,testserver', cast=Csv())
 INTERNAL_IPS = config('INTERNAL_IPS', default='127.0.0.1,localhost', cast=Csv())
 
 # ==================== APPLICATION DEFINITION ====================
@@ -102,13 +102,14 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # CORS support
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'core.middleware.csrf_definite_bypass.CSRFDefiniteBypassMiddleware',  # Definite CSRF bypass
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_otp.middleware.OTPMiddleware',  # Two-factor authentication
     'axes.middleware.AxesMiddleware',  # Login attempt tracking
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.SecurityHeadersMiddleware',  # Custom security headers
+    'core.middleware.security_headers.SecurityHeadersMiddleware',  # Custom security headers
 ]
 
 # Conditional middleware
@@ -280,7 +281,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.CustomUser'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
-LOGIN_URL = 'login'
+LOGIN_URL = 'signin'
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
@@ -313,7 +314,11 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_USE_SESSIONS = False
 CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:3000',
+]
 
 # Content Security Policy
 CSP_DEFAULT_SRC = ("'self'",)

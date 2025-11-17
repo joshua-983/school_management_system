@@ -408,11 +408,17 @@ def generate_custom_report(request):
                 'error': f'Unsupported report type: {report_type}'
             })
         
-        return JsonResponse({
-            'success': True,
-            'report_id': report.id,
-            'message': f'{report_type.lower().title()} report generated successfully'
-        })
+        if report:
+            return JsonResponse({
+                'success': True,
+                'report_id': report.id,
+                'message': f'{report_type.lower().title()} report generated successfully'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Failed to generate {report_type.lower()} report'
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid parameters format'})

@@ -1,0 +1,2547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Management | {% block title %}{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js for Security Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #3a7bd5;
+            --secondary-color: #00d2ff;
+            --sidebar-width: 250px;
+            --topbar-height: 70px;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Announcement Banner Styles */
+        .announcement-container {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            z-index: 9999;
+            transition: left 0.3s ease;
+        }
+        
+        .announcement-alert {
+            padding: 12px 20px;
+            margin: 0;
+            border-radius: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideDown 0.5s ease-out;
+        }
+        
+        .announcement-alert[data-priority="URGENT"] {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border-left: 4px solid #ff6b6b;
+        }
+        
+        .announcement-alert[data-priority="HIGH"] {
+            background: linear-gradient(135deg, #fd7e14, #e55a00);
+            color: white;
+            border-left: 4px solid #ffa94d;
+        }
+        
+        .announcement-alert[data-priority="NORMAL"] {
+            background: linear-gradient(135deg, #17a2b8, #138496);
+            color: white;
+            border-left: 4px solid #66d9e8;
+        }
+        
+        .announcement-alert[data-priority="LOW"] {
+            background: linear-gradient(135deg, #6c757d, #495057);
+            color: white;
+            border-left: 4px solid #adb5bd;
+        }
+        
+        .alert-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert-icon {
+            font-size: 1.2em;
+        }
+        
+        .alert-title {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .btn-dismiss {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 5px;
+            opacity: 0.7;
+        }
+        
+        .btn-dismiss:hover {
+            opacity: 1;
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Security Alert Container */
+        #security-alerts-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 1060;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .security-alert {
+            border-left: 4px solid;
+            animation: slideInRight 0.3s ease-out;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .security-alert.alert-danger {
+            border-left-color: #dc3545;
+        }
+        
+        .security-alert.alert-warning {
+            border-left-color: #ffc107;
+        }
+        
+        .security-alert.alert-info {
+            border-left-color: #0dcaf0;
+        }
+        
+        .security-alert.alert-secondary {
+            border-left-color: #6c757d;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Threat level indicators */
+        .threat-level-critical {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .threat-level-high {
+            background: linear-gradient(135deg, #fd7e14, #e55a00);
+            color: white;
+        }
+        
+        .threat-level-medium {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+            color: black;
+        }
+        
+        .threat-level-low {
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+            color: white;
+        }
+        
+        /* Security activity items */
+        .activity-item.critical {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        
+        .activity-item.high {
+            border-left-color: #fd7e14;
+            background-color: #fff3cd;
+        }
+        
+        .activity-item.medium {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        
+        .activity-item.low {
+            border-left-color: #20c997;
+            background-color: #d1ecf1;
+        }
+        
+        /* Security status badges */
+        .security-status-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .security-status-online {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .security-status-warning {
+            background-color: #ffc107;
+            color: black;
+        }
+        
+        .security-status-offline {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        /* Real-time monitoring pulse */
+        .pulse-warning {
+            animation: pulse-warning 2s infinite;
+        }
+        
+        @keyframes pulse-warning {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+            }
+        }
+        
+        .pulse-danger {
+            animation: pulse-danger 2s infinite;
+        }
+        
+        @keyframes pulse-danger {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+            }
+        }
+        
+        /* Top Navigation */
+        .top-navbar {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: var(--topbar-height);
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            z-index: 1000;
+            transition: left 0.3s ease;
+        }
+        
+        /* Side Navigation */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            z-index: 1001;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-brand {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+        
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+        
+        .nav-item {
+            margin-bottom: 0.2rem;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 0.75rem 1rem;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            color: white;
+            background: rgba(255,255,255,0.1);
+            border-left-color: var(--primary-color);
+        }
+        
+        .nav-link i {
+            width: 24px;
+            margin-right: 0.75rem;
+        }
+        
+        .sub-menu {
+            padding-left: 2.5rem;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .sub-menu.show {
+            max-height: 500px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--topbar-height);
+            padding: 2rem;
+            min-height: calc(100vh - var(--topbar-height));
+            transition: margin-left 0.3s ease;
+            flex: 1;
+        }
+        
+        /* Collapsed State */
+        .sidebar-collapsed .sidebar {
+            transform: translateX(-var(--sidebar-width));
+        }
+        
+        .sidebar-collapsed .top-navbar {
+            left: 0;
+        }
+        
+        .sidebar-collapsed .main-content {
+            margin-left: 0;
+        }
+        
+        .sidebar-collapsed .announcement-container {
+            left: 0;
+        }
+        
+        /* Toggle Button */
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        
+        /* Status badges */
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .status-paid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-unpaid {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-overdue {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* Card hover effects */
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        /* Security Dashboard Specific Styles */
+        .severity-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .severity-critical { background-color: #dc3545; }
+        .severity-high { background-color: #fd7e14; }
+        .severity-medium { background-color: #ffc107; color: #000; }
+        .severity-low { background-color: #20c997; }
+        
+        .threat-indicators .indicator-item {
+            margin-bottom: 1rem;
+        }
+        
+        .health-item, .status-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .health-item:last-child, .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .activity-item {
+            padding: 0.5rem;
+            border-left: 3px solid #007bff;
+            margin-bottom: 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .activity-item.critical { border-left-color: #dc3545; background-color: #f8d7da; }
+        .activity-item.high { border-left-color: #fd7e14; background-color: #fff3cd; }
+        .activity-item.medium { border-left-color: #ffc107; background-color: #fff3cd; }
+        .activity-item.low { border-left-color: #20c997; background-color: #d1ecf1; }
+        
+        .event-row:hover {
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
+        
+        .bg-purple {
+            background-color: #6f42c1 !important;
+        }
+        
+        .quick-action-btn {
+            transition: all 0.3s ease;
+        }
+        
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .progress {
+            height: 8px;
+        }
+        
+        .progress-bar {
+            font-size: 0.7rem;
+            line-height: 8px;
+        }
+        
+        /* Pulse animation for real-time updates */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .pulse {
+            animation: pulse 1s infinite;
+        }
+        
+        /* Custom scrollbar for activity monitor */
+        .activity-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .activity-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .activity-list::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .activity-list::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* Alert positioning for security dashboard */
+        .alert-dashboard {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        }
+        
+        /* Security Dashboard Layout */
+        .security-dashboard {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .security-stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid;
+            height: 100%;
+        }
+        
+        .security-stat-card.critical {
+            border-left-color: #dc3545;
+        }
+        
+        .security-stat-card.high {
+            border-left-color: #fd7e14;
+        }
+        
+        .security-stat-card.medium {
+            border-left-color: #ffc107;
+        }
+        
+        .security-stat-card.low {
+            border-left-color: #20c997;
+        }
+        
+        .security-quick-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .real-time-monitor {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            background: #f8f9fa;
+        }
+        
+        .security-chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 100%;
+        }
+        
+        /* Enhanced Footer Styles */
+        .site-footer {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: #ecf0f1;
+            padding: 3rem 0 1rem;
+            margin-top: auto;
+            position: relative;
+            z-index: 100;
+            margin-left: var(--sidebar-width);
+            transition: margin-left 0.3s ease;
+            width: calc(100% - var(--sidebar-width));
+        }
+        
+        .sidebar-collapsed .site-footer {
+            margin-left: 0;
+            width: 100%;
+        }
+        
+        .footer-section {
+            margin-bottom: 2rem;
+        }
+        
+        .footer-heading {
+            color: #3498db;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            font-size: 1.1rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .footer-heading::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 40px;
+            height: 2px;
+            background: #3498db;
+        }
+        
+        .footer-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .footer-links li {
+            margin-bottom: 0.6rem;
+        }
+        
+        .footer-links a {
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        .footer-links a:hover {
+            color: #3498db;
+            transform: translateX(5px);
+        }
+        
+        .footer-links a i {
+            margin-right: 8px;
+            font-size: 0.9rem;
+            width: 16px;
+            text-align: center;
+        }
+        
+        .contact-info {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .contact-info li {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .contact-info i {
+            color: #3498db;
+            margin-right: 10px;
+            margin-top: 3px;
+            font-size: 1rem;
+            width: 16px;
+            text-align: center;
+        }
+        
+        .social-links {
+            display: flex;
+            gap: 12px;
+            margin-top: 1rem;
+        }
+        
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: rgba(52, 152, 219, 0.1);
+            color: #3498db;
+            border-radius: 50%;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .social-links a:hover {
+            background: #3498db;
+            color: white;
+            transform: translateY(-3px);
+        }
+        
+        .newsletter-form {
+            display: flex;
+            margin-top: 1rem;
+        }
+        
+        .newsletter-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px 0 0 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .newsletter-input::placeholder {
+            color: #bdc3c7;
+        }
+        
+        .newsletter-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .newsletter-btn:hover {
+            background: #2980b9;
+        }
+        
+        .footer-bottom {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .copyright {
+            text-align: center;
+            color: #95a5a6;
+            margin-bottom: 0;
+        }
+        
+        .footer-badges {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 1rem;
+        }
+        
+        .badge-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #bdc3c7;
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .top-navbar {
+                left: 0;
+            }
+            
+            .announcement-container {
+                left: 0;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .site-footer {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .sidebar-mobile-visible .sidebar {
+                transform: translateX(0);
+            }
+            
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+                display: none;
+            }
+            
+            .sidebar-mobile-visible .sidebar-overlay {
+                display: block;
+            }
+            
+            #security-alerts-container {
+                top: 70px;
+                right: 10px;
+                max-width: 300px;
+            }
+            
+            .security-quick-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            /* Responsive Footer */
+            .footer-section {
+                text-align: center;
+            }
+            
+            .footer-heading::after {
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            
+            .social-links {
+                justify-content: center;
+            }
+            
+            .newsletter-form {
+                max-width: 300px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+        
+        /* Notification badge */
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 0.7rem;
+        }
+
+        /* Fix notification dropdown links */
+        .dropdown-notifications .dropdown-item {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-notifications .dropdown-item:hover {
+            background-color: #f8f9fa;
+            transform: translateX(2px);
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Announcement Banner -->
+    <div id="announcement-banner" class="announcement-container">
+        <div class="announcement-ticker">
+            <div class="announcement-alert" data-priority="URGENT" style="display: none;">
+                <div class="alert-content">
+                    <span class="alert-icon">📢</span>
+                    <strong class="alert-title"></strong>
+                    <span class="alert-message"></span>
+                </div>
+                <button class="btn-dismiss" onclick="dismissAnnouncement(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Alerts Container -->
+    <div id="security-alerts-container"></div>
+
+    <!-- Side Navigation -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <h5 class="mb-0">
+                <i class="bi bi-book me-2"></i>
+                <span class="brand-text">JUDITH'S SCHOOL</span>
+            </h5>
+        </div>
+        
+        <ul class="sidebar-nav">
+            {% if user.is_authenticated %}
+            <!-- Dashboard -->
+            <li class="nav-item">
+                {% if user.is_superuser %}
+                    <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                {% elif user.teacher %}
+                    <a class="nav-link" href="{% url 'teacher_dashboard' %}">
+                {% elif user.student %}
+                    <a class="nav-link" href="{% url 'student_dashboard' %}">
+                {% elif user.parentguardian %}
+                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
+                {% else %}
+                    <a class="nav-link" href="{% url 'home' %}">
+                {% endif %}
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            
+            <!-- Parent Portal - ONLY for Parents -->
+            {% if user.parentguardian %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#parentPortalMenu">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Parent Portal</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="parentPortalMenu">
+                    <a class="nav-link" href="{% url 'parent_dashboard' %}">
+                        <i class="bi bi-speedometer"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_children_list' %}">
+                        <i class="bi bi-people"></i>
+                        <span>My Children</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_attendance_list' %}">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Attendance</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                        <i class="bi bi-card-checklist"></i>
+                        <span>Report Cards</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_messages' %}">
+                        <i class="bi bi-chat-dots"></i>
+                        <span>Messages</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_announcements' %}">
+                        <i class="bi bi-megaphone"></i>
+                        <span>Announcements</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_calendar' %}">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Calendar</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+            
+            <!-- Academics Section -->
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#academicsMenu">
+                    <i class="bi bi-journal-bookmark"></i>
+                    <span>Academics</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="academicsMenu">
+                    <!-- Assignments - Show to students, parents, teachers and admin -->
+                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
+                    <a class="nav-link" href="{% url 'assignment_list' %}">
+                        <i class="bi bi-journal-text"></i>
+                        <span>Assignments</span>
+                    </a>
+                    {% endif %}
+                    
+                    <a class="nav-link" href="{% url 'assignment_calendar' %}">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Assignment Calendar</span>
+                    </a>
+                    
+                    <!-- Attendance - Show to admin, teachers, and parents -->
+                    {% if user.is_superuser or user.teacher or user.parentguardian %}
+                    <a class="nav-link" href="{% url 'attendance_dashboard' %}">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Attendance</span>
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Classes - Show to admin and teachers -->
+                    {% if user.is_superuser or user.teacher %}
+                    <a class="nav-link" href="{% url 'class_assignment_list' %}">
+                        <i class="bi bi-people"></i>
+                        <span>Classes</span>
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Grades - Show to students, parents, teachers and admin -->
+                    {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
+                    <a class="nav-link" href="{% url 'grade_list' %}">
+                        <i class="bi bi-clipboard-data"></i>
+                        <span>Grades</span>
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Report Cards -->
+                    {% if user.is_authenticated %}
+                        {% if user.student %}
+                            <a class="nav-link" href="{% url 'report_card' student_id=user.student.pk %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>My Report Card</span>
+                            </a>
+                        {% elif user.is_superuser or user.teacher %}
+                            <a class="nav-link" href="{% url 'report_card_dashboard' %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>Report Cards</span>
+                            </a>
+                        {% elif user.parentguardian %}
+                            <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                                <i class="bi bi-card-checklist"></i>
+                                <span>Report Cards</span>
+                            </a>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <!-- Subjects - Show to admin and teachers -->
+                    {% if user.is_superuser or user.teacher %}
+                    <a class="nav-link" href="{% url 'subject_list' %}">
+                        <i class="bi bi-journal-bookmark"></i>
+                        <span>Subjects</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </li>
+
+            <!-- Timetable Menu -->
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#timetableMenu">
+                    <i class="bi bi-calendar-week"></i>
+                    <span>Timetable</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="timetableMenu">
+                    {% if user.is_superuser or user.teacher %}
+                    <a class="nav-link" href="{% url 'timetable_list' %}">
+                        <i class="bi bi-gear"></i>
+                        <span>Manage Timetables</span>
+                    </a>
+                    {% endif %}
+                    {% if user.teacher %}
+                    <a class="nav-link" href="{% url 'teacher_timetable' %}">
+                        <i class="bi bi-person"></i>
+                        <span>My Schedule</span>
+                    </a>
+                    {% endif %}
+                    {% if user.student %}
+                    <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <i class="bi bi-calendar"></i>
+                        <span>Class Timetable</span>
+                    </a>
+                    {% endif %}
+                    {% if user.parentguardian %}
+                    <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <i class="bi bi-calendar"></i>
+                        <span>Children's Timetable</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </li>
+
+            <!-- Announcements Menu - For Admin/Teachers -->
+            {% if user.is_superuser or user.teacher %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#announcementMenu">
+                    <i class="bi bi-megaphone"></i>
+                    <span>Announcements</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="announcementMenu">
+                    <a class="nav-link" href="{% url 'announcement_list' %}">
+                        <i class="bi bi-list"></i>
+                        <span>All Announcements</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'create_announcement' %}">
+                        <i class="bi bi-plus-circle"></i>
+                        <span>Create Announcement</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+
+            <!-- Parent Management - ONLY for Admin/Teachers -->
+            {% if user.is_superuser or user.teacher %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#parentManagementMenu">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Parent Management</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="parentManagementMenu">
+                    <a class="nav-link" href="{% url 'parent_directory' %}">
+                        <i class="bi bi-people"></i>
+                        <span>Parent Directory</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'bulk_parent_message' %}">
+                        <i class="bi bi-envelope"></i>
+                        <span>Bulk Messaging</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_communication_log' %}">
+                        <i class="bi bi-chat-left-text"></i>
+                        <span>Communication Log</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'parent_engagement_dashboard' %}">
+                        <i class="bi bi-graph-up"></i>
+                        <span>Engagement Dashboard</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+            
+            <!-- Student-specific menu items -->
+            {% if user.student %}
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_grades' %}">
+                    <i class="bi bi-clipboard-data"></i>
+                    <span>My Grades</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_attendance' %}">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>My Attendance</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'student_fees' %}">
+                    <i class="bi bi-credit-card"></i>
+                    <span>My Fees</span>
+                </a>
+            </li>
+            {% endif %}
+            
+            <!-- HR Management (Admin Only) -->
+            {% if user.is_superuser %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#hrMenu">
+                    <i class="bi bi-people"></i>
+                    <span>Human Resources</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="hrMenu">
+                    <a class="nav-link" href="{% url 'student_list' %}">
+                        <i class="bi bi-person"></i>
+                        <span>Students</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'teacher_list' %}">
+                        <i class="bi bi-person-badge"></i>
+                        <span>Teachers</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+            
+            <!-- Finance Menu -->
+{% if user.is_superuser or user.teacher or user.parentguardian %}
+<li class="nav-item">
+    <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
+        <i class="bi bi-cash-stack"></i>
+        <span>Finance</span>
+        <i class="bi bi-chevron-down float-end"></i>
+    </a>
+    <div class="sub-menu collapse" id="financeMenu">
+        {% if user.is_superuser %}
+        <!-- Dashboard & Overview -->
+        <a class="nav-link" href="{% url 'finance_dashboard' %}">
+            <i class="bi bi-speedometer2"></i>
+            <span>Finance Dashboard</span>
+        </a>
+        <a class="nav-link" href="{% url 'payment_summary' %}">
+            <i class="bi bi-pie-chart"></i>
+            <span>Payment Summary</span>
+        </a>
+        
+        <!-- Fee Management -->
+        <a class="nav-link" href="{% url 'fee_list' %}">
+            <i class="bi bi-credit-card"></i>
+            <span>Fee Management</span>
+        </a>
+        <a class="nav-link" href="{% url 'bill_list' %}">
+            <i class="bi bi-file-invoice"></i>
+            <span>Bill Management</span>
+        </a>
+        
+        <!-- Analytics & Reports -->
+        <a class="nav-link" href="{% url 'revenue_analytics' %}">
+            <i class="bi bi-graph-up"></i>
+            <span>Revenue Analytics</span>
+        </a>
+        <a class="nav-link" href="{% url 'financial_health' %}">
+            <i class="bi bi-heart-pulse"></i>
+            <span>Financial Health</span>
+        </a>
+        <a class="nav-link" href="{% url 'budget_management' %}">
+            <i class="bi bi-clipboard-data"></i>
+            <span>Budget Management</span>
+        </a>
+        <a class="nav-link" href="{% url 'fee_analytics' %}">
+            <i class="bi bi-bar-chart"></i>
+            <span>Fee Analytics</span>
+        </a>
+        
+        <!-- Reports -->
+        <a class="nav-link" href="{% url 'fee_report' %}">
+            <i class="bi bi-file-earmark-text"></i>
+            <span>Financial Reports</span>
+        </a>
+        
+        {% elif user.teacher %}
+        <!-- Teacher Finance Access -->
+        <a class="nav-link" href="{% url 'payment_summary' %}">
+            <i class="bi bi-pie-chart"></i>
+            <span>Payment Summary</span>
+        </a>
+        <a class="nav-link" href="{% url 'fee_list' %}">
+            <i class="bi bi-credit-card"></i>
+            <span>Class Fees</span>
+        </a>
+        <a class="nav-link" href="{% url 'fee_report' %}">
+            <i class="bi bi-file-earmark-text"></i>
+            <span>Fee Reports</span>
+        </a>
+        
+        {% elif user.parentguardian %}
+        <!-- Parent Finance Access -->
+        <a class="nav-link" href="{% url 'parent_fee_list' %}">
+            <i class="bi bi-credit-card"></i>
+            <span>Fee Payments</span>
+        </a>
+        {% endif %}
+    </div>
+</li>
+{% endif %}
+
+            <!-- Audit & Security Menu - For Admin Only -->
+            {% if user.is_superuser %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#auditMenu">
+                    <i class="bi bi-shield-check"></i>
+                    <span>Audit & Security</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="auditMenu">
+                    <!-- Security Dashboard - Integrated into Audit & Security -->
+                    <a class="nav-link" href="{% url 'security_dashboard' %}">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Security Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_dashboard' %}">
+                        <i class="bi bi-graph-up"></i>
+                        <span>Audit Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_log_list' %}">
+                        <i class="bi bi-list-check"></i>
+                        <span>Audit Logs</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'security_events' %}">
+                        <i class="bi bi-shield-exclamation"></i>
+                        <span>Security Events</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'alert_rule_list' %}">
+                        <i class="bi bi-bell"></i>
+                        <span>Alert Rules</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'advanced_analytics' %}">
+                        <i class="bi bi-graph-up-arrow"></i>
+                        <span>Advanced Analytics</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'audit_reports' %}">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <span>Audit Reports</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'retention_policies' %}">
+                        <i class="bi bi-archive"></i>
+                        <span>Retention Policies</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'system_health_check' %}">
+                        <i class="bi bi-heart-pulse"></i>
+                        <span>System Health</span>
+                    </a>
+                </div>
+            </li>
+            {% endif %}
+            
+            <!-- Analytics (for admin/teachers) -->
+            {% if user.is_superuser or user.teacher %}
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'analytics_dashboard' %}">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Analytics</span>
+                </a>
+            </li>
+            {% endif %}
+
+            {% else %}
+            <!-- Show these menu items for non-authenticated users -->
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'signin' %}">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    <span>Sign In</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'signup' %}">
+                    <i class="bi bi-person-plus me-2"></i>
+                    <span>Sign Up</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <!-- Top Navigation -->
+    <nav class="top-navbar navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <button class="sidebar-toggle me-3" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            
+            <a class="navbar-brand d-none d-lg-block" href="{% url 'home' %}">
+                Judith's International School
+            </a>
+            
+            <div class="navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    {% if user.is_authenticated %}
+                    <!-- Security Status Indicator (Admin Only) -->
+                    {% if user.is_superuser %}
+                    <li class="nav-item me-2">
+                        <div class="nav-link position-relative" id="securityStatusIndicator">
+                            <i class="bi bi-shield-check fs-6 text-success" id="securityStatusIcon"></i>
+                            <span class="security-status-badge security-status-online ms-1" id="securityStatusBadge">Secure</span>
+                        </div>
+                    </li>
+                    {% endif %}
+                    
+                    <!-- Notifications -->
+                    <li class="nav-item dropdown me-3">
+                        <a class="nav-link position-relative" href="#" id="notificationsMenu" data-bs-toggle="dropdown">
+                            <i class="bi bi-bell fs-5"></i>
+                            {% if unread_notifications_count > 0 %}
+                            <span class="notification-badge badge bg-danger">
+                                {{ unread_notifications_count }}
+                            </span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-notifications">
+                            <li><h6 class="dropdown-header">Notifications</h6></li>
+                            {% for notification in recent_notifications %}
+                            <li>
+                                <a class="dropdown-item {% if not notification.is_read %}fw-bold{% endif %}" 
+                                   href="{{ notification.link|default:'#' }}"
+                                   onclick="handleNotificationClick(this, event)">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <span>{{ notification.title }}</span>
+                                        <small class="text-muted">{{ notification.created_at|timesince }} ago</small>
+                                    </div>
+                                    <small class="text-muted">{{ notification.message|truncatechars:50 }}</small>
+                                </a>
+                            </li>
+                            {% empty %}
+                            <li><a class="dropdown-item text-muted" href="#">No notifications</a></li>
+                            {% endfor %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-center" href="{% url 'notification_list' %}">View All</a></li>
+                        </ul>
+                    </li>
+                    
+                    <!-- User Menu -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userMenu" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i>
+                            {% if user.teacher %}{{ user.teacher.get_full_name }}
+                            {% elif user.student %}{{ user.student.get_full_name }}
+                            {% elif user.parentguardian %}{{ user.parentguardian.get_user_full_name }}
+                            {% else %}{{ user.username }}
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% if user.is_superuser %}
+                            <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                                <i class="bi bi-gear me-1"></i>Admin Panel
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="#">
+                                <i class="bi bi-person me-1"></i>Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'notification_list' %}">
+                                <i class="bi bi-bell me-1"></i>Notifications
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'signout' %}">
+                                <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+                            </a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'signin' %}">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'signup' %}">
+                            <i class="bi bi-person-plus me-1"></i>Sign Up
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                <div class="d-flex align-items-center">
+                    <i class="bi 
+                        {% if message.tags == 'success' %}bi-check-circle-fill
+                        {% elif message.tags == 'error' or message.tags == 'danger' %}bi-exclamation-circle-fill
+                        {% elif message.tags == 'warning' %}bi-exclamation-triangle-fill
+                        {% else %}bi-info-circle-fill{% endif %} 
+                        me-2"></i>
+                    <div>{{ message }}</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Enhanced Footer - Only shows on public pages by default -->
+    {% block footer %}
+    <!-- Footer will only show on pages that don't override this block -->
+    <footer class="site-footer">
+        <div class="container-fluid">
+            <div class="row">
+                <!-- School Information -->
+                <div class="col-lg-3 col-md-6 footer-section">
+                    <h5 class="footer-heading">About Our School</h5>
+                    <p class="mb-3" style="color: #bdc3c7; line-height: 1.6;">
+                        Judith's International School has been providing quality education since 2005, 
+                        nurturing young minds to become global citizens and future leaders.
+                    </p>
+                    <div class="social-links">
+                        <a href="#" title="Facebook"><i class="bi bi-facebook"></i></a>
+                        <a href="#" title="Twitter"><i class="bi bi-twitter"></i></a>
+                        <a href="#" title="Instagram"><i class="bi bi-instagram"></i></a>
+                        <a href="#" title="LinkedIn"><i class="bi bi-linkedin"></i></a>
+                        <a href="#" title="YouTube"><i class="bi bi-youtube"></i></a>
+                    </div>
+                </div>
+                
+                <!-- Quick Links -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Quick Links</h5>
+                    <ul class="footer-links">
+                        <li><a href="{% url 'home' %}"><i class="bi bi-house-door"></i> Home</a></li>
+                        {% if user.is_authenticated %}
+                            <li><a href="{% if user.parentguardian %}{% url 'parent_attendance_list' %}{% else %}{% url 'attendance_dashboard' %}{% endif %}"><i class="bi bi-calendar-check"></i> Attendance</a></li>
+                            <li><a href="{% url 'grade_list' %}"><i class="bi bi-clipboard-data"></i> Grades</a></li>
+                            <li><a href="{% url 'assignment_list' %}"><i class="bi bi-journal-text"></i> Assignments</a></li>
+                        {% else %}
+                            <li><a href="{% url 'signin' %}"><i class="bi bi-box-arrow-in-right"></i> Sign In</a></li>
+                            <li><a href="{% url 'signup' %}"><i class="bi bi-person-plus"></i> Sign Up</a></li>
+                        {% endif %}
+                        <li><a href="#"><i class="bi bi-info-circle"></i> About Us</a></li>
+                        <li><a href="#"><i class="bi bi-telephone"></i> Contact</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Academic Resources -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Resources</h5>
+                    <ul class="footer-links">
+                        <li><a href="#"><i class="bi bi-download"></i> Downloads</a></li>
+                        <li><a href="#"><i class="bi bi-book"></i> Library</a></li>
+                        <li><a href="#"><i class="bi bi-calendar-event"></i> Events</a></li>
+                        <li><a href="#"><i class="bi bi-newspaper"></i> News</a></li>
+                        <li><a href="#"><i class="bi bi-question-circle"></i> Support</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Contact Information -->
+                <div class="col-lg-3 col-md-6 footer-section">
+                    <h5 class="footer-heading">Contact Us</h5>
+                    <ul class="contact-info">
+                        <li>
+                            <i class="bi bi-geo-alt"></i>
+                            <div>
+                                <strong>Main Campus</strong><br>
+                                123 Education Street<br>
+                                Academic City, AC 12345
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-telephone"></i>
+                            <div>
+                                <strong>Phone:</strong><br>
+                                +233 054 134 5564
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-envelope"></i>
+                            <div>
+                                <strong>Email:</strong><br>
+                                mensahbedijosh983@gmail.com
+                            </div>
+                        </li>
+                        <li>
+                            <i class="bi bi-clock"></i>
+                            <div>
+                                <strong>Office Hours:</strong><br>
+                                Mon-Fri: 8:00 AM - 4:00 PM
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Newsletter -->
+                <div class="col-lg-2 col-md-6 footer-section">
+                    <h5 class="footer-heading">Newsletter</h5>
+                    <p style="color: #bdc3c7; font-size: 0.9rem;">
+                        Subscribe to our newsletter for updates on school events and important announcements.
+                    </p>
+                    <form class="newsletter-form">
+                        <input type="email" class="newsletter-input" placeholder="Your email" required>
+                        <button type="submit" class="newsletter-btn">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Footer Bottom -->
+            <div class="footer-bottom">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <p class="copyright">
+                            &copy; {% now "Y" %} Judith's International School. All rights reserved.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="footer-badges">
+                            <span class="badge-item">Accredited</span>
+                            <span class="badge-item">ISO Certified</span>
+                            <span class="badge-item">Safe School</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery (optional) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <script>
+        // Security Dashboard Integration
+        class SecurityDashboardManager {
+            constructor() {
+                this.isSecurityPage = window.location.pathname.includes('security-dashboard') || 
+                                    window.location.pathname.includes('security-events') ||
+                                    window.location.pathname.includes('audit-dashboard');
+                this.init();
+            }
+
+            init() {
+                if (this.isSecurityPage) {
+                    this.initializeSecurityDashboard();
+                    this.startSecurityMonitoring();
+                }
+                
+                // Always initialize security notifications and status
+                this.initializeSecurityNotifications();
+                this.initializeSecurityStatus();
+            }
+
+            initializeSecurityDashboard() {
+                console.log('Initializing Security Dashboard...');
+                
+                // Load real-time security data
+                this.loadSecurityStats();
+                
+                // Initialize WebSocket connection for real-time updates
+                this.initSecurityWebSocket();
+                
+                // Set up auto-refresh
+                this.setupAutoRefresh();
+            }
+
+            async loadSecurityStats() {
+                try {
+                    const response = await fetch('/api/security/stats/');
+                    const data = await response.json();
+                    
+                    this.updateSecurityStats(data);
+                } catch (error) {
+                    console.error('Error loading security stats:', error);
+                }
+            }
+
+            updateSecurityStats(stats) {
+                // Update security overview cards
+                if (document.getElementById('totalEvents')) {
+                    document.getElementById('totalEvents').textContent = stats.total_events || 0;
+                }
+                if (document.getElementById('criticalEvents')) {
+                    document.getElementById('criticalEvents').textContent = stats.critical_events || 0;
+                }
+                if (document.getElementById('activeRules')) {
+                    document.getElementById('activeRules').textContent = stats.active_rules || 0;
+                }
+                
+                // Update threat level
+                if (document.getElementById('threatLevel')) {
+                    document.getElementById('threatLevel').textContent = stats.threat_level || 'Medium';
+                    document.getElementById('threatLevel').className = `badge threat-level-${stats.threat_level?.toLowerCase() || 'medium'}`;
+                }
+            }
+
+            initSecurityWebSocket() {
+                // WebSocket implementation for real-time security updates
+                try {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws/security/`;
+                    
+                    this.socket = new WebSocket(wsUrl);
+                    
+                    this.socket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleSecurityUpdate(data);
+                    };
+                    
+                    this.socket.onclose = () => {
+                        console.log('Security WebSocket disconnected. Reconnecting...');
+                        setTimeout(() => this.initSecurityWebSocket(), 5000);
+                    };
+                    
+                } catch (error) {
+                    console.warn('WebSocket not available:', error);
+                }
+            }
+
+            handleSecurityUpdate(data) {
+                switch (data.type) {
+                    case 'security_event':
+                        this.handleNewSecurityEvent(data.event);
+                        break;
+                    case 'threat_level_update':
+                        this.updateThreatLevel(data.level);
+                        break;
+                    case 'system_status':
+                        this.updateSystemStatus(data.status);
+                        break;
+                }
+            }
+
+            handleNewSecurityEvent(event) {
+                // Show notification for new security events
+                this.showSecurityAlert(event);
+                
+                // Update activity monitor
+                this.addSecurityActivity(event);
+                
+                // Refresh stats if on security dashboard
+                if (this.isSecurityPage) {
+                    this.loadSecurityStats();
+                }
+            }
+
+            showSecurityAlert(event) {
+                const alertLevel = this.getAlertLevel(event.severity);
+                
+                const alertHTML = `
+                    <div class="alert alert-${alertLevel} alert-dismissible fade show security-alert" role="alert">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-exclamation me-2"></i>
+                            <div>
+                                <strong>Security Alert: ${event.title}</strong>
+                                <div class="small">${event.description}</div>
+                                <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                // Add to security alerts container
+                const alertContainer = document.getElementById('security-alerts-container');
+                if (alertContainer) {
+                    alertContainer.insertAdjacentHTML('afterbegin', alertHTML);
+                    
+                    // Auto-remove after 10 seconds
+                    setTimeout(() => {
+                        const alertElement = alertContainer.querySelector('.security-alert');
+                        if (alertElement) {
+                            alertElement.remove();
+                        }
+                    }, 10000);
+                }
+            }
+
+            getAlertLevel(severity) {
+                const levels = {
+                    'CRITICAL': 'danger',
+                    'HIGH': 'warning',
+                    'MEDIUM': 'info',
+                    'LOW': 'secondary'
+                };
+                return levels[severity] || 'info';
+            }
+
+            addSecurityActivity(event) {
+                const activityList = document.getElementById('activityList');
+                if (!activityList) return;
+                
+                const activityItem = document.createElement('div');
+                activityItem.className = `activity-item ${event.severity.toLowerCase()}`;
+                activityItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong>${event.user || 'System'}</strong>
+                            <small class="d-block text-muted">${event.description}</small>
+                        </div>
+                        <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                    </div>
+                `;
+                
+                activityList.insertBefore(activityItem, activityList.firstChild);
+                
+                // Limit activities
+                if (activityList.children.length > 10) {
+                    activityList.removeChild(activityList.lastChild);
+                }
+            }
+
+            updateThreatLevel(level) {
+                const threatLevelElement = document.getElementById('threatLevel');
+                if (threatLevelElement) {
+                    threatLevelElement.textContent = level;
+                    threatLevelElement.className = `badge threat-level-${level.toLowerCase()}`;
+                }
+                
+                // Update security status indicator
+                this.updateSecurityStatusIndicator(level);
+            }
+
+            updateSystemStatus(status) {
+                // Update system status indicators
+                console.log('System status update:', status);
+            }
+
+            setupAutoRefresh() {
+                // Auto-refresh security data every 30 seconds
+                setInterval(() => {
+                    if (this.isSecurityPage && document.visibilityState === 'visible') {
+                        this.loadSecurityStats();
+                    }
+                }, 30000);
+            }
+
+            startSecurityMonitoring() {
+                // Monitor for security-related activities
+                this.monitorUserActivity();
+                this.monitorNetworkRequests();
+            }
+
+            monitorUserActivity() {
+                // Track user activity for security analysis
+                let lastActivity = Date.now();
+                
+                document.addEventListener('click', () => {
+                    lastActivity = Date.now();
+                });
+                
+                document.addEventListener('keypress', () => {
+                    lastActivity = Date.now();
+                });
+                
+                // Check for inactivity
+                setInterval(() => {
+                    const inactiveTime = Date.now() - lastActivity;
+                    if (inactiveTime > 300000) { // 5 minutes
+                        console.log('User inactive for 5 minutes');
+                    }
+                }, 60000);
+            }
+
+            monitorNetworkRequests() {
+                // Monitor AJAX requests for suspicious activity
+                const originalFetch = window.fetch;
+                
+                window.fetch = function(...args) {
+                    const startTime = Date.now();
+                    
+                    return originalFetch.apply(this, args).then(response => {
+                        const duration = Date.now() - startTime;
+                        
+                        // Log suspiciously long requests
+                        if (duration > 10000) { // 10 seconds
+                            console.warn('Long network request detected:', args[0], duration);
+                        }
+                        
+                        return response;
+                    });
+                };
+            }
+
+            initializeSecurityNotifications() {
+                // Check for security notifications on page load
+                this.checkSecurityNotifications();
+                
+/*
+                // Set up periodic security checks
+                setInterval(() => this.checkSecurityNotifications(), 60000); // Every minute
+            }
+
+            async checkSecurityNotifications() {
+                try {
+                    const response = await fetch('/api/security/notifications/');
+                    const notifications = await response.json();
+                    
+                    notifications.forEach(notification => {
+                        if (!notification.dismissed) {
+                            this.showSecurityNotification(notification);
+*/
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error checking security notifications:', error);
+                }
+            }
+
+            showSecurityNotification(notification) {
+                // Implementation for showing security notifications
+                console.log('Security Notification:', notification);
+            }
+
+            initializeSecurityStatus() {
+                // Initialize security status indicator
+                this.updateSecurityStatusIndicator('medium');
+                
+/*
+                // Update status periodically
+                setInterval(() => {
+                    this.checkSecurityStatus();
+                }, 30000);
+            }
+
+            async checkSecurityStatus() {
+                try {
+*/
+                    const response = await fetch('/api/security/status/');
+                    const status = await response.json();
+                    this.updateSecurityStatusIndicator(status.level);
+                } catch (error) {
+                    console.error('Error checking security status:', error);
+                    this.updateSecurityStatusIndicator('warning');
+                }
+            }
+
+            updateSecurityStatusIndicator(level) {
+                const statusIcon = document.getElementById('securityStatusIcon');
+                const statusBadge = document.getElementById('securityStatusBadge');
+                
+                if (!statusIcon || !statusBadge) return;
+                
+                const statusConfig = {
+                    'low': { icon: 'bi-shield-check', color: 'success', text: 'Secure' },
+                    'medium': { icon: 'bi-shield-exclamation', color: 'warning', text: 'Warning' },
+                    'high': { icon: 'bi-shield-x', color: 'danger', text: 'At Risk' },
+                    'critical': { icon: 'bi-shield-fill-x', color: 'danger', text: 'Critical' }
+                };
+                
+                const config = statusConfig[level] || statusConfig.medium;
+                
+                statusIcon.className = `bi ${config.icon} fs-6 text-${config.color}`;
+                statusBadge.className = `security-status-badge security-status-${config.color} ms-1`;
+                statusBadge.textContent = config.text;
+                
+                // Add pulse animation for critical status
+                if (level === 'critical') {
+                    statusIcon.classList.add('pulse-danger');
+                } else if (level === 'high') {
+                    statusIcon.classList.add('pulse-warning');
+                } else {
+                    statusIcon.classList.remove('pulse-danger', 'pulse-warning');
+                }
+            }
+        }
+
+        // Security Dashboard Functions
+        let autoRefreshInterval;
+        let severityChart;
+
+        function initializeSecurityDashboard() {
+            console.log('Initializing security dashboard...');
+            
+            // Initialize severity chart if element exists
+            const severityChartElement = document.getElementById('severityChart');
+            if (severityChartElement) {
+                initializeSeverityChart();
+            }
+            
+            // Load threat indicators if element exists
+            const threatIndicators = document.getElementById('failedLogins');
+            if (threatIndicators) {
+                loadThreatIndicators();
+            }
+            
+            // Update last update time
+            updateLastUpdateTime();
+            
+            // Start auto-refresh if enabled
+            const autoRefreshCheckbox = document.getElementById('autoRefresh');
+            if (autoRefreshCheckbox && autoRefreshCheckbox.checked) {
+                startAutoRefresh();
+            }
+        }
+
+        function initializeSeverityChart() {
+            const ctx = document.getElementById('severityChart').getContext('2d');
+            
+            // Default data - in production, this would come from the backend
+            const severityData = [
+                { severity: 'LOW', count: 15 },
+                { severity: 'MEDIUM', count: 8 },
+                { severity: 'HIGH', count: 3 },
+                { severity: 'CRITICAL', count: 2 }
+            ];
+            
+            const labels = [];
+            const data = [];
+            const backgroundColors = [
+                '#20c997', // Low - green
+                '#ffc107', // Medium - yellow
+                '#fd7e14', // High - orange
+                '#dc3545'  // Critical - red
+            ];
+            
+            // Process severity data for chart
+            severityData.forEach(item => {
+                labels.push(item.severity);
+                data.push(item.count);
+            });
+            
+            severityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadThreatIndicators() {
+            // Simulate loading threat indicator data
+            setTimeout(() => {
+                const failedLoginsElement = document.getElementById('failedLogins');
+                const failedLoginsBar = document.getElementById('failedLoginsBar');
+                const suspiciousIPs = document.getElementById('suspiciousIPs');
+                const suspiciousIPsBar = document.getElementById('suspiciousIPsBar');
+                const dataExports = document.getElementById('dataExports');
+                const dataExportsBar = document.getElementById('dataExportsBar');
+                const privilegeChanges = document.getElementById('privilegeChanges');
+                const privilegeChangesBar = document.getElementById('privilegeChangesBar');
+                
+                if (failedLoginsElement) failedLoginsElement.textContent = '12';
+                if (failedLoginsBar) failedLoginsBar.style.width = '60%';
+                
+                if (suspiciousIPs) suspiciousIPs.textContent = '3';
+                if (suspiciousIPsBar) suspiciousIPsBar.style.width = '30%';
+                
+                if (dataExports) dataExports.textContent = '8';
+                if (dataExportsBar) dataExportsBar.style.width = '40%';
+                
+                if (privilegeChanges) privilegeChanges.textContent = '2';
+                if (privilegeChangesBar) privilegeChangesBar.style.width = '20%';
+            }, 1000);
+        }
+
+        function startRealTimeMonitoring() {
+            // Simulate real-time activity updates
+            updateActivityMonitor();
+            
+            // Update activity monitor every 30 seconds
+            setInterval(updateActivityMonitor, 30000);
+        }
+
+        function updateActivityMonitor() {
+            const activityList = document.getElementById('activityList');
+            if (!activityList) return;
+            
+            // Simulate new activities
+            const activities = [
+                { type: 'login', user: 'admin', severity: 'low', message: 'Successful login from trusted IP' },
+                { type: 'alert', user: 'system', severity: 'high', message: 'Multiple failed login attempts detected' },
+                { type: 'export', user: 'user123', severity: 'medium', message: 'Large data export initiated' },
+                { type: 'config', user: 'admin', severity: 'low', message: 'Security settings updated' },
+                { type: 'alert', user: 'system', severity: 'critical', message: 'Suspicious database query detected' }
+            ];
+            
+            const randomActivity = activities[Math.floor(Math.random() * activities.length)];
+            
+            const activityItem = document.createElement('div');
+            activityItem.className = `activity-item ${randomActivity.severity}`;
+            activityItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong>${randomActivity.user}</strong>
+                        <small class="d-block text-muted">${randomActivity.message}</small>
+                    </div>
+                    <small class="text-muted">${new Date().toLocaleTimeString()}</small>
+                </div>
+            `;
+            
+            // Add new activity at the top
+            activityList.insertBefore(activityItem, activityList.firstChild);
+            
+            // Limit to 10 activities
+            if (activityList.children.length > 10) {
+                activityList.removeChild(activityList.lastChild);
+            }
+        }
+
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(refreshDashboard, 30000); // Refresh every 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+        }
+
+        // Security Dashboard Event Handlers
+        function refreshDashboard() {
+            showAlert('Refreshing dashboard...', 'info');
+            
+            // Add pulse animation to indicate refresh
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.add('pulse');
+            });
+            
+            setTimeout(() => {
+                // Remove pulse animation
+                document.querySelectorAll('.card').forEach(card => {
+                    card.classList.remove('pulse');
+                });
+                
+                // Reload the page for complete refresh
+                window.location.reload();
+            }, 1000);
+        }
+
+        function runSecurityScan() {
+            showAlert('Initiating comprehensive security scan...', 'warning');
+            
+            // Simulate scan progress
+            let progress = 0;
+            const scanInterval = setInterval(() => {
+                progress += 10;
+                showAlert(`Security scan in progress... ${progress}%`, 'info');
+                
+                if (progress >= 100) {
+                    clearInterval(scanInterval);
+                    setTimeout(() => {
+                        showAlert('Security scan completed. No critical threats found.', 'success');
+                    }, 1000);
+                }
+            }, 500);
+        }
+
+        function generateSecurityReport() {
+            showAlert('Generating security report...', 'info');
+            
+            setTimeout(() => {
+                // Simulate report generation
+                const link = document.createElement('a');
+                link.href = '#';
+                link.download = 'security_report.pdf';
+                link.click();
+                
+                showAlert('Security report generated successfully!', 'success');
+            }, 2000);
+        }
+
+        function filterEvents(severity) {
+            const rows = document.querySelectorAll('.event-row');
+            
+            rows.forEach(row => {
+                if (severity === 'all' || row.getAttribute('data-severity') === severity) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            showAlert(`Filtered events by severity: ${severity}`, 'info');
+        }
+
+        function viewEventDetails(eventId) {
+            window.location.href = `/audit/security-events/${eventId}/`;
+        }
+
+        function resolveEvent(eventId) {
+            if (confirm('Are you sure you want to mark this event as resolved?')) {
+                fetch(`/audit/security-events/${eventId}/resolve/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCSRFToken(),
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Event marked as resolved successfully!', 'success');
+                        // Reload the event row or the entire table
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showAlert('Error resolving event: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showAlert('Error resolving event: ' + error, 'danger');
+                });
+            }
+        }
+
+        function runComplianceCheck() {
+            showAlert('Running compliance check...', 'info');
+            window.location.href = "{% url 'advanced_analytics' %}";
+        }
+
+        function runVulnerabilityScan() {
+            showAlert('Starting vulnerability assessment...', 'warning');
+            // This would typically open a vulnerability scanning interface
+        }
+
+        function viewAnalytics() {
+            window.location.href = "{% url 'advanced_analytics' %}";
+        }
+
+        function manageAlertRules() {
+            window.location.href = "{% url 'alert_rule_list' %}";
+        }
+
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const lastUpdateElement = document.getElementById('lastUpdate');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = now.toLocaleTimeString();
+            }
+        }
+
+        function showAlert(message, type) {
+            // Remove any existing alerts
+            const existingAlerts = document.querySelectorAll('.alert-dashboard');
+            existingAlerts.forEach(alert => alert.remove());
+            
+            // Create new alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-dashboard`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Export dashboard data
+        function exportDashboardData() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                total_events: document.getElementById('totalEvents')?.textContent || 0,
+                critical_events: document.getElementById('criticalEvents')?.textContent || 0,
+                threat_level: document.getElementById('threatLevel')?.textContent || 'Unknown'
+            };
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "security_dashboard_export.json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            
+            showAlert('Dashboard data exported successfully!', 'success');
+        }
+
+        // Auto-refresh toggle for security dashboard
+        const autoRefreshCheckbox = document.getElementById('autoRefresh');
+        if (autoRefreshCheckbox) {
+            autoRefreshCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    startAutoRefresh();
+                    showAlert('Auto-refresh enabled', 'success');
+                } else {
+                    stopAutoRefresh();
+                    showAlert('Auto-refresh disabled', 'warning');
+                }
+            });
+        }
+
+        // Keyboard shortcuts for security dashboard
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey || event.metaKey) {
+                switch(event.key) {
+                    case 'r':
+                        event.preventDefault();
+                        refreshDashboard();
+                        break;
+                    case 's':
+                        event.preventDefault();
+                        runSecurityScan();
+                        break;
+                    case 'f':
+                        event.preventDefault();
+                        const searchInput = document.querySelector('#eventsTable_filter input');
+                        if (searchInput) searchInput.focus();
+                        break;
+                }
+            }
+        });
+
+        // Toggle sidebar
+        function toggleSidebar() {
+            document.body.classList.toggle('sidebar-collapsed');
+            if (window.innerWidth < 992) {
+                document.body.classList.toggle('sidebar-mobile-visible');
+            }
+        }
+        
+        // Handle notification clicks
+        function handleNotificationClick(linkElement, event) {
+            // Prevent the dropdown from closing immediately
+            event.stopPropagation();
+            
+            const href = linkElement.getAttribute('href');
+            
+            // Only navigate if it's a valid link (not '#')
+            if (href && href !== '#') {
+                // Close the dropdown manually
+                const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationsMenu'));
+                if (dropdown) {
+                    dropdown.hide();
+                }
+                
+                // Navigate to the link after a small delay
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 100);
+            }
+            // If href is '#' or empty, just let the dropdown close (default behavior)
+        }
+
+        // Get CSRF Token properly
+        function getCSRFToken() {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Announcement Banner Functions
+        function loadActiveAnnouncements() {
+            fetch('/announcements/active/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.announcements && data.announcements.length > 0) {
+                        // Show the first announcement
+                        showAnnouncement(data.announcements[0]);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading announcements:', error);
+                });
+        }
+
+        function showAnnouncement(announcement) {
+            const banner = document.querySelector('.announcement-alert');
+            if (!banner) return;
+            
+            banner.style.display = 'flex';
+            banner.setAttribute('data-priority', announcement.priority);
+            banner.setAttribute('data-announcement-id', announcement.id);
+            
+            const alertTitle = banner.querySelector('.alert-title');
+            const alertMessage = banner.querySelector('.alert-message');
+            
+            if (alertTitle) alertTitle.textContent = announcement.title + ':';
+            if (alertMessage) alertMessage.textContent = announcement.message;
+        }
+
+        function dismissAnnouncement(button) {
+            const announcementEl = button.closest('.announcement-alert');
+            if (!announcementEl) return;
+            
+            const announcementId = announcementEl.getAttribute('data-announcement-id');
+            if (!announcementId) return;
+            
+            // Hide immediately
+            announcementEl.style.display = 'none';
+            
+            // Get CSRF token
+            const csrfToken = getCSRFToken();
+            if (!csrfToken) {
+                console.error('CSRF token not found');
+                return;
+            }
+            
+            // Send dismiss request to server
+            fetch(`/announcements/${announcementId}/dismiss/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Failed to dismiss announcement');
+                    // Show the announcement again if dismissal failed
+                    announcementEl.style.display = 'flex';
+                }
+            })
+            .catch(error => {
+                console.error('Error dismissing announcement:', error);
+                // Show the announcement again if dismissal failed
+                announcementEl.style.display = 'flex';
+            });
+        }
+
+        // Mark notification as read when clicked
+        function markNotificationAsRead(notificationId) {
+            const csrfToken = getCSRFToken();
+            if (!csrfToken) return;
+            
+            fetch(`/notifications/${notificationId}/mark-read/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update notification count in UI
+                    updateNotificationCount();
+                }
+            })
+            .catch(error => {
+                console.error('Error marking notification as read:', error);
+            });
+        }
+
+        // Update notification count in the UI
+        function updateNotificationCount() {
+            // This would typically be handled by WebSocket updates
+            // For now, we'll reload the page to get updated counts
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+
+        // Newsletter form submission
+        document.querySelector('.newsletter-form')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = this.querySelector('.newsletter-input').value;
+            
+            // Simulate newsletter subscription
+            showAlert('Thank you for subscribing to our newsletter!', 'success');
+            this.querySelector('.newsletter-input').value = '';
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing school management system...');
+            
+            // Load active announcements
+            loadActiveAnnouncements();
+            
+            // Initialize security dashboard manager
+            window.securityDashboard = new SecurityDashboardManager();
+            
+            // Initialize security dashboard if we're on that page
+            initializeSecurityDashboard();
+            
+            // Start real-time monitoring if we're on security dashboard
+            const securityDashboardElements = document.querySelectorAll('.severity-badge, .threat-indicators');
+            if (securityDashboardElements.length > 0) {
+                startRealTimeMonitoring();
+            }
+            
+            // Mobile sidebar handling
+            if (window.innerWidth < 992) {
+                const navLinks = document.querySelectorAll('.nav-link');
+                navLinks.forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (document.body.classList.contains('sidebar-mobile-visible')) {
+                            toggleSidebar();
+                        }
+                    });
+                });
+            }
+            
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function() {
+                var alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
+                alerts.forEach(function(alert) {
+                    var bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
+            
+            // Auto-expand current menu section
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-link');
+            navLinks.forEach(link => {
+                if (link.href && link.href.includes(currentPath) && currentPath !== '/') {
+                    link.classList.add('active');
+                    // Expand parent menu if exists
+                    const parentMenu = link.closest('.sub-menu');
+                    if (parentMenu) {
+                        parentMenu.classList.add('show');
+                        const toggleLink = document.querySelector('[href="#' + parentMenu.id + '"]');
+                        if (toggleLink) {
+                            toggleLink.classList.add('active');
+                        }
+                    }
+                }
+            });
+
+            // Enhanced notification click handler
+            document.querySelectorAll('.dropdown-notifications .dropdown-item').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    const href = this.getAttribute('href');
+                    const notificationId = this.getAttribute('data-notification-id');
+                    
+                    if (notificationId) {
+                        markNotificationAsRead(notificationId);
+                    }
+                    
+                    if (href && href !== '#') {
+                        // Close dropdown for valid links
+                        const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('notificationsMenu'));
+                        if (dropdown) {
+                            dropdown.hide();
+                        }
+                        
+                        // Navigate after a short delay
+                        setTimeout(() => {
+                            window.location.href = href;
+                        }, 100);
+                    }
+                });
+            });
+
+            // Add notification IDs to dropdown items for better handling
+            document.querySelectorAll('.dropdown-notifications .dropdown-item').forEach((item, index) => {
+                const notificationId = item.getAttribute('href')?.split('/').filter(Boolean).pop();
+                if (notificationId && !isNaN(notificationId)) {
+                    item.setAttribute('data-notification-id', notificationId);
+                }
+            });
+
+            // Debug: Log notification data
+            console.log('Unread notifications:', {{ unread_notifications_count }});
+            console.log('Recent notifications:', {{ recent_notifications|length }});
+        });
+
+        // Global error handler
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+        });
+
+        // Handle page visibility changes (for real-time updates)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // Page became visible, refresh notifications
+                loadActiveAnnouncements();
+            }
+        });
+    </script>
+
+    <!-- Toast container for notifications -->
+    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
