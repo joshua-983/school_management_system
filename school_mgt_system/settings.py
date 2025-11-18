@@ -208,7 +208,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
         'OPTIONS': {
-            'min_length': 10,
+            'min_length': 8,  # Reduced from 10 to 8 for better compatibility
         }
     },
     {
@@ -219,13 +219,25 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Password hashers with Argon2 as default
+# Password hashers - FIXED VERSION (with fallbacks)
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Keep this if argon2 installs successfully
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',  # Added BCrypt
 ]
+
+# If argon2 fails to install, use this fallback configuration:
+"""
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.BCryptPasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Keep at end as fallback
+]
+"""
 
 # ==================== INTERNATIONALIZATION ====================
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
@@ -233,6 +245,10 @@ TIME_ZONE = config('TIME_ZONE', default='UTC')
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
+
+# FIX FOR CELERY TIMEZONE ISSUE
+CELERY_TIMEZONE = 'UTC'  # Force UTC for Celery
+DJANGO_CELERY_BEAT_TZ_AWARE = False  # Disable timezone awareness
 
 # Supported languages
 LANGUAGES = [
@@ -277,13 +293,15 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 # ==================== DEFAULT PRIMARY KEY ====================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# In settings.py - UPDATE THESE LINES
+
 # ==================== AUTHENTICATION CONFIGURATION ====================
 AUTH_USER_MODEL = 'accounts.CustomUser'
-LOGIN_REDIRECT_URL = 'dashboard'
+LOGIN_REDIRECT_URL = 'dashboard'  # This should point to the dashboard view we just created
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'signin'
 
-# Authentication backends
+# Authentication backends - FIXED VERSION
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesBackend',
     'django.contrib.auth.backends.ModelBackend',
@@ -298,6 +316,8 @@ ANONYMOUS_USER_NAME = None
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=1209600, cast=int)  # 2 weeks
 SESSION_COOKIE_NAME = 'school_mgt_sessionid'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
@@ -346,7 +366,14 @@ else:
     SECURE_HSTS_SECONDS = 0
 
 # ==================== EMAIL CONFIGURATION ====================
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+# Smart email backend selection
+if IS_TESTING:
+    EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+elif IS_DEVELOPMENT:
+    EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+else:
+    EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+
 EMAIL_HOST = config('EMAIL_HOST', default='localhost')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
@@ -356,38 +383,51 @@ EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@school.edu.gh')
 SERVER_EMAIL = config('SERVER_EMAIL', default='admin@school.edu.gh')
 
-# Email timeout
-EMAIL_TIMEOUT = 30
-
 # ==================== CACHE CONFIGURATION ====================
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/1"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-            "IGNORE_EXCEPTIONS": True,  # Don't crash if Redis is down
-            "SOCKET_CONNECT_TIMEOUT": 5,
-            "SOCKET_TIMEOUT": 5,
-            "CONNECTION_POOL_KWARGS": {
-                "max_connections": 100,
-                "retry_on_timeout": True,
-            }
+# Redis cache with fallback to local memory for development
+try:
+    import django_redis
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/1"),
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+                "IGNORE_EXCEPTIONS": True,  # Don't crash if Redis is down
+                "SOCKET_CONNECT_TIMEOUT": 5,
+                "SOCKET_TIMEOUT": 5,
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 100,
+                    "retry_on_timeout": True,
+                }
+            },
+            "KEY_PREFIX": "school_mgt",
+            "VERSION": 1,
+            "TIMEOUT": 3600,  # 1 hour default
         },
-        "KEY_PREFIX": "school_mgt",
-        "VERSION": 1,
-        "TIMEOUT": 3600,  # 1 hour default
-    },
-    "sessions": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/2"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
-        "KEY_PREFIX": "school_mgt_sessions",
+        "sessions": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/2"),
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+            "KEY_PREFIX": "school_mgt_sessions",
+        }
     }
-}
+except ImportError:
+    if not IS_PRODUCTION:
+        print("⚠️  Redis not available, using local memory cache")
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "school-mgt-cache",
+            },
+            "sessions": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "school-mgt-sessions",
+            }
+        }
 
 # Session cache alias
 SESSION_CACHE_ALIAS = "sessions"
@@ -411,7 +451,7 @@ CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_ACCEPT_CONTENT = ['json', 'msgpack']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+CELERY_TIMEZONE = 'UTC'
 CELERY_ENABLE_UTC = True
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
@@ -737,6 +777,32 @@ COMPRESS_JS_FILTERS = [
     'compressor.filters.jsmin.JSMinFilter',
 ]
 
+# ==================== DEPENDENCY CHECKS ====================
+def check_required_packages():
+    """Verify all required packages are installed"""
+    required_packages = {
+        'django_redis': 'Redis cache backend',
+        'celery': 'Background tasks',
+        'openpyxl': 'Excel export functionality',
+        'whitenoise': 'Static file serving',
+        'channels': 'WebSocket support',
+        'channels_redis': 'Redis channel layer',
+    }
+    
+    missing = []
+    for package, purpose in required_packages.items():
+        try:
+            __import__(package)
+        except ImportError:
+            missing.append(f"{package} ({purpose})")
+    
+    if missing and IS_PRODUCTION:
+        raise ImportError(f"Missing required packages: {', '.join(missing)}")
+    elif missing:
+        print(f"⚠️  Development note: Missing packages: {', '.join(missing)}")
+
+check_required_packages()
+
 # ==================== TEST CONFIGURATION ====================
 if IS_TESTING:
     print("🧪 TEST MODE: Using optimized settings for testing")
@@ -777,7 +843,7 @@ if IS_TESTING:
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
     
-    # Use locmem email backend for tests
+    # Use locmem email backend for tests (captures emails in memory)
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
     
     # Disable security settings that interfere with tests
@@ -864,3 +930,31 @@ if IS_PRODUCTION and not SECRET_KEY:
 print(f"✅ Settings loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")
 print(f"✅ Database: {DATABASES['default']['ENGINE']}")
 print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
+
+# ==================== CLEAN TIMEZONE PATCH ====================
+def force_utc_timezone():
+    """Force all timezone operations to use UTC"""
+    try:
+        import timezone_field.backends.zoneinfo
+        
+        original_to_tzobj = timezone_field.backends.zoneinfo.ZoneInfoBackend.to_tzobj
+        
+        def safe_to_tzobj(self, tzstr):
+            """Force problematic timezones to UTC"""
+            problematic_tz = ['Jujuy', 'Jamaica', 'Argentina']
+            if any(ptz in tzstr for ptz in problematic_tz):
+                tzstr = 'UTC'
+            try:
+                return original_to_tzobj(self, tzstr)
+            except Exception:
+                return original_to_tzobj(self, 'UTC')
+        
+        timezone_field.backends.zoneinfo.ZoneInfoBackend.to_tzobj = safe_to_tzobj
+        print("✅ Timezone patch applied successfully")
+        
+    except Exception as e:
+        print(f"✅ Timezone patch: {e}")
+
+# Apply the patch
+force_utc_timezone()
+

@@ -14,3 +14,13 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+    def get_anonymous_user_instance(user_model):
+        """
+        Returns an anonymous user instance for django-guardian
+        """
+        return user_model.objects.get_or_create(
+            username='AnonymousUser',
+            defaults={'is_active': False, 'is_staff': False}
+        )[0]

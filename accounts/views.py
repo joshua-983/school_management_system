@@ -3,16 +3,19 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.views import View
 from django.urls import reverse_lazy
+from django.contrib.auth.decorators import user_passes_test
+from django.utils.decorators import method_decorator
 from .forms import CustomUserCreationForm, CustomAuthenticationForm
+
+def is_admin_user(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 class SignUpView(View):
     template_name = 'accounts/signup.html'
     form_class = CustomUserCreationForm
-    success_url = reverse_lazy('home')
     
+    @method_decorator(user_passes_test(is_admin_user, login_url='signin'))
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return redirect(self.success_url)
         return super().dispatch(request, *args, **kwargs)
     
     def get(self, request):
@@ -23,19 +26,24 @@ class SignUpView(View):
         form = self.form_class(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user)
-            messages.success(request, 'Account created successfully!')
-            return redirect(self.success_url)
+            
+            # FIX: Specify the backend when logging in (for admin creating users)
+            backend = 'django.contrib.auth.backends.ModelBackend'
+            user.backend = backend
+            
+            messages.success(request, f'Account created successfully for {user.username}!')
+            return redirect('admin_dashboard')
+        
+        messages.error(request, 'Please correct the errors below.')
         return render(request, self.template_name, {'form': form})
 
 class SignInView(View):
     template_name = 'accounts/signin.html'
     form_class = CustomAuthenticationForm
-    success_url = reverse_lazy('home')
     
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect(self.success_url)
+            return self._redirect_to_dashboard(request.user)
         return super().dispatch(request, *args, **kwargs)
     
     def get(self, request):
@@ -47,17 +55,61 @@ class SignInView(View):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            messages.success(request, f'Welcome back, {user.username}!')
-            return redirect(self.success_url)
+            
+            # School-specific welcome messages
+            if hasattr(user, 'teacher'):
+                welcome_msg = f'Welcome back, Teacher {user.teacher.get_full_name() or user.username}!'
+            elif hasattr(user, 'student'):
+                welcome_msg = f'Welcome back, Student {user.student.get_full_name() or user.username}!'
+            elif hasattr(user, 'parentguardian'):
+                welcome_msg = f'Welcome back, Parent {user.parentguardian.get_full_name() or user.username}!'
+            elif user.is_staff:
+                welcome_msg = f'Welcome back, Administrator {user.username}!'
+            else:
+                welcome_msg = f'Welcome back, {user.username}!'
+                
+            messages.success(request, welcome_msg)
+            return self._redirect_to_dashboard(user)
         
-        messages.error(request, 'Invalid username or password')
+        messages.error(request, 'Invalid username or password. Please try again.')
         return render(request, self.template_name, {'form': form})
+    
+    def _redirect_to_dashboard(self, user):
+        """Redirect user to appropriate dashboard based on role"""
+        if hasattr(user, 'is_staff') and user.is_staff:
+            return redirect('admin_dashboard')
+        elif hasattr(user, 'teacher'):
+            return redirect('teacher_dashboard')
+        elif hasattr(user, 'student'):
+            return redirect('student_dashboard')
+        elif hasattr(user, 'parentguardian'):
+            return redirect('parent_dashboard')
+        else:
+            # Regular users go to home with info message
+            messages.info(request, 'Please contact school administration to assign you a role (Student, Teacher, or Parent).')
+            return redirect('home')
 
 class SignOutView(View):
     success_url = reverse_lazy('home')
     
     def get(self, request):
         if request.user.is_authenticated:
+            # School-specific logout message
+            if hasattr(request.user, 'teacher'):
+                logout_msg = 'Teacher account logged out successfully'
+            elif hasattr(request.user, 'student'):
+                logout_msg = 'Student account logged out successfully'
+            elif hasattr(request.user, 'parentguardian'):
+                logout_msg = 'Parent account logged out successfully'
+            else:
+                logout_msg = 'You have been logged out successfully'
+                
             logout(request)
-            messages.success(request, 'You have been logged out successfully')
+            messages.success(request, logout_msg)
         return redirect(self.success_url)
+
+# Public registration disabled view
+def public_signup_disabled(request):
+    """View to show when public registration is disabled"""
+    messages.error(request, "Public registration is disabled. Please contact the school administration for account access.")
+    return redirect('home')

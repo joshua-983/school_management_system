@@ -2,6 +2,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views.network_views import NetworkHealthView
+from .views.base_views import dashboard
 
 # Import views from modular files
 from .views.base_views import home, admin_dashboard, teacher_dashboard
@@ -146,6 +148,9 @@ urlpatterns = [
     path('', home, name='home'),
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
     path('teacher-dashboard/', teacher_dashboard, name='teacher_dashboard'),
+    
+    # In core/urls.py, add this to urlpatterns:
+    path('dashboard/', dashboard, name='dashboard'),
     
     # Student Dashboard
     path('student-dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
@@ -465,4 +470,5 @@ path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_
     path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),
     path('announcements/bulk-action/', bulk_action_announcements, name='bulk_action_announcements'),
     path('announcements/stats/', AnnouncementStatsView.as_view(), name='announcement_stats'),
+    path('api/network/health/', NetworkHealthView.as_view(), name='network_health'),
 ]

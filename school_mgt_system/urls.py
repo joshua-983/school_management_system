@@ -3,16 +3,17 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import RedirectView  # ADD THIS IMPORT
+from django.views.generic import RedirectView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Redirect old login URLs to new signin URL - ADD THESE LINES
+    # Redirect all old login URLs to the new signin URL
     path('login/', RedirectView.as_view(pattern_name='signin', permanent=True)),
     path('accounts/login/', RedirectView.as_view(pattern_name='signin', permanent=True)),
+    path('auth/login/', RedirectView.as_view(pattern_name='signin', permanent=True)),
     
-    # Your custom accounts URLs
+    # Your custom accounts URLs (this should contain signin/)
     path('accounts/', include('accounts.urls')), 
     
     # Core app URLs

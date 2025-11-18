@@ -58,28 +58,136 @@ def get_class_level_choices():
     )
 
 # Base views
+from django.shortcuts import render, redirect
+from django.http import Http404, JsonResponse
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.urls import reverse_lazy
+from django.core.exceptions import PermissionDenied
+from django.utils import timezone
+from django.db.models import Avg, Sum, Count, Q
+from django.contrib import messages
+import logging
+from datetime import datetime, timedelta
+
+# Import models directly to avoid circular imports
+from core.models import (
+    Student, Teacher, Subject, AuditLog, ClassAssignment, 
+    Assignment, StudentAssignment, Grade, Fee, ParentGuardian, 
+    ParentAnnouncement, ParentMessage, Bill, BillPayment,
+    StudentAttendance, ParentEvent, AcademicTerm
+)
+
+logger = logging.getLogger(__name__)
+
+# Permission functions
+def is_admin(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+def is_teacher(user):
+    return user.is_authenticated and hasattr(user, 'teacher')
+
+def is_student(user):
+    return user.is_authenticated and hasattr(user, 'student')
+
+def is_parent(user):
+    return user.is_authenticated and hasattr(user, 'parentguardian')
+
+# Utility functions for grade views
+def get_current_academic_year():
+    """Get current academic year in YYYY/YYYY format"""
+    now = timezone.now()
+    year = now.year
+    # Assuming academic year runs from September to August
+    if now.month >= 9:  # September or later
+        return f"{year}/{year + 1}"
+    else:  # January to August
+        return f"{year - 1}/{year}"
+
+def get_class_level_choices():
+    """Return standardized class level choices"""
+    return (
+        ('P1', 'Primary 1'),
+        ('P2', 'Primary 2'), 
+        ('P3', 'Primary 3'),
+        ('P4', 'Primary 4'),
+        ('P5', 'Primary 5'),
+        ('P6', 'Primary 6'),
+        ('J1', 'JHS 1'),
+        ('J2', 'JHS 2'),
+        ('J3', 'JHS 3'),
+    )
+
+# Base views
 def home(request):
     """Public homepage with role-based redirects for authenticated users"""
     if request.user.is_authenticated:
-        if is_admin(request.user):
-            return redirect('admin_dashboard')
-        elif is_teacher(request.user):
-            return redirect('teacher_dashboard')
-        elif is_student(request.user):
-            return redirect('student_dashboard')
-        elif is_parent(request.user):
-            return redirect('parent_dashboard')
+        # Check if user has a specific role that should go to dashboard
+        if (hasattr(request.user, 'teacher') or 
+            hasattr(request.user, 'student') or 
+            hasattr(request.user, 'parentguardian') or
+            (hasattr(request.user, 'is_staff') and request.user.is_staff)):
+            return redirect('dashboard')
+        else:
+            # Regular authenticated user without specific role - show home page with info
+            try:
+                context = {
+                    'current_year': timezone.now().year,
+                    'featured_stats': {
+                        'total_students': Student.objects.filter(is_active=True).count(),
+                        'total_teachers': Teacher.objects.filter(is_active=True).count(),
+                        'total_subjects': Subject.objects.count(),
+                    }
+                }
+            except Exception as e:
+                logger.error(f"Error loading home page stats: {str(e)}")
+                context = {
+                    'current_year': timezone.now().year,
+                    'featured_stats': {
+                        'total_students': 0,
+                        'total_teachers': 0,
+                        'total_subjects': 0,
+                    }
+                }
+            return render(request, 'core/home.html', context)
     
     # Show public homepage for unauthenticated users
-    context = {
-        'current_year': timezone.now().year,
-        'featured_stats': {
-            'total_students': Student.objects.filter(is_active=True).count(),
-            'total_teachers': Teacher.objects.filter(is_active=True).count(),
-            'total_subjects': Subject.objects.count(),
+    try:
+        context = {
+            'current_year': timezone.now().year,
+            'featured_stats': {
+                'total_students': Student.objects.filter(is_active=True).count(),
+                'total_teachers': Teacher.objects.filter(is_active=True).count(),
+                'total_subjects': Subject.objects.count(),
+            }
         }
-    }
+    except Exception as e:
+        logger.error(f"Error loading home page stats: {str(e)}")
+        context = {
+            'current_year': timezone.now().year,
+            'featured_stats': {
+                'total_students': 0,
+                'total_teachers': 0,
+                'total_subjects': 0,
+            }
+        }
+    
     return render(request, 'core/home.html', context)
+
+@login_required
+def dashboard(request):
+    """Main dashboard that redirects based on user role"""
+    if hasattr(request.user, 'is_staff') and request.user.is_staff:
+        return redirect('admin_dashboard')
+    elif hasattr(request.user, 'teacher'):
+        return redirect('teacher_dashboard')
+    elif hasattr(request.user, 'student'):
+        return redirect('student_dashboard')
+    elif hasattr(request.user, 'parentguardian'):
+        return redirect('parent_dashboard')
+    else:
+        # If user doesn't have a specific role, show home with message
+        messages.info(request, "Your account is pending role assignment. Please contact school administration.")
+        return redirect('home')
 
 @login_required
 def admin_dashboard(request):
@@ -174,7 +282,7 @@ def admin_dashboard(request):
             'upcoming_events': upcoming_events,
             'today_attendance': today_attendance,
             'current_academic_year': get_current_academic_year(),
-            'current_date': timezone.now(),  # ADDED: current_date for the template
+            'current_date': timezone.now(),
         }
         
         return render(request, 'core/admin/admin_dashboard.html', context)
@@ -182,9 +290,12 @@ def admin_dashboard(request):
     except Exception as e:
         logger.error(f"Error loading admin dashboard: {str(e)}", exc_info=True)
         messages.error(request, "Error loading dashboard data. Please try again.")
-        # Also add current_date to error context
         return render(request, 'core/admin/admin_dashboard.html', {
-            'current_date': timezone.now()
+            'current_date': timezone.now(),
+            'total_students': 0,
+            'total_teachers': 0,
+            'total_subjects': 0,
+            'total_parents': 0,
         })
 
 @login_required
