@@ -24,6 +24,7 @@ IS_PRODUCTION = ENVIRONMENT == 'production'
 IS_STAGING = ENVIRONMENT == 'staging'
 IS_DEVELOPMENT = ENVIRONMENT == 'development'
 IS_TESTING = 'test' in sys.argv or 'pytest' in sys.argv
+IS_DOCKER = os.path.exists('/.dockerenv') or config('DOCKER', default=False, cast=bool)
 
 # ==================== SECURITY SETTINGS ====================
 # Security keys and environment detection
@@ -34,7 +35,7 @@ DEBUG = config('DEBUG', default=not IS_PRODUCTION, cast=bool)
 DEBUG_TOOLBAR = config('DEBUG_TOOLBAR', default=IS_DEVELOPMENT and not IS_TESTING, cast=bool)
 
 # Host configuration
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1,testserver', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1,testserver,web,db,redis', cast=Csv())
 INTERNAL_IPS = config('INTERNAL_IPS', default='127.0.0.1,localhost', cast=Csv())
 
 # ==================== APPLICATION DEFINITION ====================
@@ -66,7 +67,6 @@ THIRD_PARTY_APPS = [
     'django_otp',
     'django_otp.plugins.otp_totp',
     'django_otp.plugins.otp_static',
-    'admin_honeypot',
     'corsheaders',
     'compressor',
     'django_cleanup.apps.CleanupConfig',
@@ -130,32 +130,39 @@ SITE_ID = 1
 
 # ==================== DATABASE CONFIGURATION ====================
 # Database configuration with connection pooling and optimizations
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='school_db'),
-        'USER': config('DB_USER', default='root'),
-        'PASSWORD': config('DB_PASSWORD', default=''),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='3306'),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES', innodb_strict_mode=1",
-            'charset': 'utf8mb4',
-            'connect_timeout': 10,
-            'read_timeout': 30,
-            'write_timeout': 30,
-            'isolation_level': 'read committed',
-        },
-        'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=300, cast=int),  # Connection pooling
-        'ATOMIC_REQUESTS': True,
-        'TEST': {
-            'NAME': config('TEST_DB_NAME', default='test_school_db'),
-            'CHARSET': 'utf8mb4',
-            'COLLATION': 'utf8mb4_unicode_ci',
-            'MIGRATE': False,  # Faster tests
-        }
-    }
+DB_CONFIG = {
+    'ENGINE': 'django.db.backends.mysql',
+    'NAME': config('DB_NAME', default='school_db'),
+    'USER': config('DB_USER', default='school_user'),
+    'PASSWORD': config('DB_PASSWORD', default='school_password'),
+    'HOST': config('DB_HOST', default='db' if IS_DOCKER else 'localhost'),
+    'PORT': config('DB_PORT', default='3306'),
+    'OPTIONS': {
+        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        'charset': 'utf8mb4',
+        'connect_timeout': 60,
+        'read_timeout': 30,
+        'write_timeout': 30,
+    },
+    'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=300, cast=int),
+    'ATOMIC_REQUESTS': False,  # Changed from True to avoid connection issues
 }
+
+# For Docker environment, ensure proper connection
+if IS_DOCKER:
+    DB_CONFIG['OPTIONS'].update({
+        'connect_timeout': 60,
+        'read_timeout': 60,
+        'write_timeout': 60,
+    })
+
+DATABASES = {
+    'default': DB_CONFIG
+}
+
+# Remove socket configuration for Docker
+if not IS_DOCKER and not IS_TESTING and os.path.exists('/var/run/mysqld/mysqld.sock'):
+    DATABASES['default']['OPTIONS']['unix_socket'] = '/var/run/mysqld/mysqld.sock'
 
 # Database router for multiple databases (if needed)
 DATABASE_ROUTERS = []
@@ -208,7 +215,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
         'OPTIONS': {
-            'min_length': 8,  # Reduced from 10 to 8 for better compatibility
+            'min_length': 8,
         }
     },
     {
@@ -219,25 +226,14 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Password hashers - FIXED VERSION (with fallbacks)
+# Password hashers
 PASSWORD_HASHERS = [
-    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Keep this if argon2 installs successfully
-    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
-    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
-    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
-    'django.contrib.auth.hashers.BCryptPasswordHasher',  # Added BCrypt
-]
-
-# If argon2 fails to install, use this fallback configuration:
-"""
-PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
     'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
     'django.contrib.auth.hashers.BCryptPasswordHasher',
-    'django.contrib.auth.hashers.Argon2PasswordHasher',  # Keep at end as fallback
 ]
-"""
 
 # ==================== INTERNATIONALIZATION ====================
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
@@ -247,8 +243,8 @@ USE_L10N = True
 USE_TZ = True
 
 # FIX FOR CELERY TIMEZONE ISSUE
-CELERY_TIMEZONE = 'UTC'  # Force UTC for Celery
-DJANGO_CELERY_BEAT_TZ_AWARE = False  # Disable timezone awareness
+CELERY_TIMEZONE = 'UTC'
+DJANGO_CELERY_BEAT_TZ_AWARE = False
 
 # Supported languages
 LANGUAGES = [
@@ -282,8 +278,8 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # File upload settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = config('FILE_UPLOAD_MAX_MEMORY_SIZE', default=5242880, cast=int)  # 5MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = config('DATA_UPLOAD_MAX_MEMORY_SIZE', default=5242880, cast=int)  # 5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = config('FILE_UPLOAD_MAX_MEMORY_SIZE', default=5242880, cast=int)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config('DATA_UPLOAD_MAX_MEMORY_SIZE', default=5242880, cast=int)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = config('DATA_UPLOAD_MAX_NUMBER_FIELDS', default=1000, cast=int)
 
 # File upload permissions
@@ -293,15 +289,13 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 # ==================== DEFAULT PRIMARY KEY ====================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# In settings.py - UPDATE THESE LINES
-
 # ==================== AUTHENTICATION CONFIGURATION ====================
 AUTH_USER_MODEL = 'accounts.CustomUser'
-LOGIN_REDIRECT_URL = 'dashboard'  # This should point to the dashboard view we just created
+LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'home'
 LOGIN_URL = 'signin'
 
-# Authentication backends - FIXED VERSION
+# Authentication backends
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesBackend',
     'django.contrib.auth.backends.ModelBackend',
@@ -314,7 +308,7 @@ ANONYMOUS_USER_NAME = None
 
 # ==================== SESSION CONFIGURATION ====================
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
-SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=1209600, cast=int)  # 2 weeks
+SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=1209600, cast=int)
 SESSION_COOKIE_NAME = 'school_mgt_sessionid'
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -338,6 +332,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:3000',
+    'http://localhost:8001',
+    'http://web:8000',
 ]
 
 # Content Security Policy
@@ -350,23 +346,20 @@ CSP_CONNECT_SRC = ("'self'",)
 
 # Environment-specific security settings
 if IS_PRODUCTION or IS_STAGING:
-    # Production security settings
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 else:
-    # Development security settings
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
 
 # ==================== EMAIL CONFIGURATION ====================
-# Smart email backend selection
 if IS_TESTING:
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 elif IS_DEVELOPMENT:
@@ -384,19 +377,22 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@school.edu.gh
 SERVER_EMAIL = config('SERVER_EMAIL', default='admin@school.edu.gh')
 
 # ==================== CACHE CONFIGURATION ====================
-# Redis cache with fallback to local memory for development
+# Redis configuration - use 'redis' host in Docker, 'localhost' locally
+REDIS_HOST = 'redis' if IS_DOCKER else 'localhost'
+REDIS_URL = f"redis://{REDIS_HOST}:6379"
+
 try:
     import django_redis
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/1"),
+            "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/1"),
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-                "IGNORE_EXCEPTIONS": True,  # Don't crash if Redis is down
-                "SOCKET_CONNECT_TIMEOUT": 5,
-                "SOCKET_TIMEOUT": 5,
+                "IGNORE_EXCEPTIONS": True,
+                "SOCKET_CONNECT_TIMEOUT": 10,  # Increased for Docker
+                "SOCKET_TIMEOUT": 10,
                 "CONNECTION_POOL_KWARGS": {
                     "max_connections": 100,
                     "retry_on_timeout": True,
@@ -404,11 +400,11 @@ try:
             },
             "KEY_PREFIX": "school_mgt",
             "VERSION": 1,
-            "TIMEOUT": 3600,  # 1 hour default
+            "TIMEOUT": 3600,
         },
         "sessions": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": config('REDIS_URL', default="redis://127.0.0.1:6379/2"),
+            "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/2"),
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
             },
@@ -437,7 +433,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [config('REDIS_URL', default="redis://127.0.0.1:6379/3")],
+            "hosts": [config('REDIS_URL', default=f"{REDIS_URL}/3")],
             "capacity": 1500,
             "expiry": 10,
         },
@@ -445,7 +441,7 @@ CHANNEL_LAYERS = {
 }
 
 # ==================== CELERY CONFIGURATION ====================
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=f"{REDIS_URL}/0")
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_ACCEPT_CONTENT = ['json', 'msgpack']
@@ -454,8 +450,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_ENABLE_UTC = True
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
-CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
 CELERY_RESULT_EXPIRES = timedelta(days=1)
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100
@@ -488,17 +484,17 @@ CELERY_BEAT_SCHEDULE = {
     },
     'backup-database': {
         'task': 'core.tasks.backup_database',
-        'schedule': crontab(hour=1, minute=0, day_of_week=0),  # Weekly on Sunday
+        'schedule': crontab(hour=1, minute=0, day_of_week=0),
         'options': {'expires': 86400},
     },
     'send-grade-notifications': {
         'task': 'core.tasks.send_pending_grade_notifications',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'schedule': crontab(minute='*/15'),
         'options': {'expires': 900},
     },
     'health-check': {
         'task': 'core.tasks.system_health_check',
-        'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        'schedule': crontab(minute='*/5'),
         'options': {'expires': 300},
     },
 }
@@ -542,7 +538,6 @@ REST_FRAMEWORK = {
     'DEFAULT_VERSIONING_CLASS': 'rest_framework.versioning.NamespaceVersioning',
 }
 
-# Only include Browsable API in development
 if DEBUG:
     REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'].append('rest_framework.renderers.BrowsableAPIRenderer')
 
@@ -552,10 +547,10 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # ==================== AXES (LOGIN SECURITY) ====================
 AXES_ENABLED = True
-AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
-AXES_COOLOFF_TIME = timedelta(minutes=15)  # Lock for 15 minutes
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_PARAMETERS = ['username']  # Lock by username
+AXES_LOCKOUT_PARAMETERS = ['username']
 AXES_LOCKOUT_TEMPLATE = 'accounts/lockout.html'
 AXES_VERBOSE = True
 
@@ -601,7 +596,7 @@ log_config = {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOGS_DIR / 'django.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10MB
+            'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',
         },
@@ -609,7 +604,7 @@ log_config = {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOGS_DIR / 'errors.log',
-            'maxBytes': 1024 * 1024 * 10,  # 10MB
+            'maxBytes': 1024 * 1024 * 10,
             'backupCount': 5,
             'formatter': 'verbose',
         },
@@ -617,7 +612,7 @@ log_config = {
             'level': 'WARNING',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOGS_DIR / 'security.log',
-            'maxBytes': 1024 * 1024 * 5,  # 5MB
+            'maxBytes': 1024 * 1024 * 5,
             'backupCount': 3,
             'formatter': 'verbose',
         },
@@ -666,7 +661,6 @@ log_config = {
     },
 }
 
-# Add JSON formatter for production
 if IS_PRODUCTION:
     log_config['formatters']['json'] = {
         '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
@@ -928,8 +922,10 @@ if IS_PRODUCTION and not SECRET_KEY:
 
 # Print environment summary
 print(f"✅ Settings loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")
-print(f"✅ Database: {DATABASES['default']['ENGINE']}")
+print(f"✅ Docker: {IS_DOCKER}")
+print(f"✅ Database: {DATABASES['default']['ENGINE']} -> {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}")
 print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
+print(f"✅ Redis Host: {REDIS_HOST}")
 
 # ==================== CLEAN TIMEZONE PATCH ====================
 def force_utc_timezone():
@@ -957,4 +953,3 @@ def force_utc_timezone():
 
 # Apply the patch
 force_utc_timezone()
-
