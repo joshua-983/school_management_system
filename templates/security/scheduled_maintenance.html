@@ -1,0 +1,203 @@
+{% extends "security/base.html" %}
+{% load static %}
+
+{% block title %}Scheduled Maintenance - Security Management{% endblock %}
+
+{% block page_title %}Scheduled Maintenance Management{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Scheduled Maintenance</li>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card security-table">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tools me-2"></i>Scheduled Maintenance
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Add Maintenance Form -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Schedule New Maintenance</h6>
+                            </div>
+                            <div class="card-body">
+                                <form method="post">
+                                    {% csrf_token %}
+                                    <div class="mb-3">
+                                        <label for="title" class="form-label">Title</label>
+                                        <input type="text" class="form-control" id="title" name="title" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="description" class="form-label">Description</label>
+                                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="maintenance_type" class="form-label">Type</label>
+                                        <select class="form-control" id="maintenance_type" name="maintenance_type">
+                                            <option value="SCHEDULED">Scheduled Maintenance</option>
+                                            <option value="EMERGENCY">Emergency Maintenance</option>
+                                            <option value="UPGRADE">System Upgrade</option>
+                                        </select>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="start_time" class="form-label">Start Time</label>
+                                                <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="end_time" class="form-label">End Time</label>
+                                                <input type="datetime-local" class="form-control" id="end_time" name="end_time" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="message" class="form-label">Message to Users</label>
+                                        <textarea class="form-control" id="message" name="message" rows="3" required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary btn-security">
+                                        <i class="fas fa-calendar-plus me-2"></i>Schedule Maintenance
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <!-- Current Maintenance Status -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Maintenance Status</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>System Status:</strong> 
+                                    {% if MAINTENANCE_MODE %}
+                                    <span class="text-danger">MAINTENANCE MODE ACTIVE</span>
+                                    {% else %}
+                                    <span class="text-success">OPERATIONAL</span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if scheduled_maintenance %}
+                                <h6>Upcoming Maintenance:</h6>
+                                <ul class="list-group">
+                                    {% for maintenance in scheduled_maintenance %}
+                                    <li class="list-group-item">
+                                        <strong>{{ maintenance.title }}</strong><br>
+                                        <small class="text-muted">
+                                            {{ maintenance.start_time|date:"M d, Y H:i" }} - {{ maintenance.end_time|date:"M d, Y H:i" }}
+                                        </small>
+                                        <span class="badge bg-{% if maintenance.is_currently_active %}danger{% elif maintenance.is_upcoming %}warning{% else %}secondary{% endif %} float-end">
+                                            {% if maintenance.is_currently_active %}Active{% elif maintenance.is_upcoming %}Upcoming{% else %}Completed{% endif %}
+                                        </span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="text-muted">No scheduled maintenance.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maintenance History -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">Maintenance History</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if scheduled_maintenance %}
+                        <div class="table-responsive">
+                            <table class="table table-striped security-datatable">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Type</th>
+                                        <th>Start Time</th>
+                                        <th>End Time</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for maintenance in scheduled_maintenance %}
+                                    <tr>
+                                        <td>{{ maintenance.title }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if maintenance.maintenance_type == 'EMERGENCY' %}danger{% elif maintenance.maintenance_type == 'UPGRADE' %}info{% else %}primary{% endif %}">
+                                                {{ maintenance.get_maintenance_type_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ maintenance.start_time|date:"M d, Y H:i" }}</td>
+                                        <td>{{ maintenance.end_time|date:"M d, Y H:i" }}</td>
+                                        <td>
+                                            <span class="badge bg-{% if maintenance.is_currently_active %}danger{% elif maintenance.is_upcoming %}warning{% else %}success{% endif %}">
+                                                {% if maintenance.is_currently_active %}Active
+                                                {% elif maintenance.is_upcoming %}Upcoming
+                                                {% elif maintenance.was_executed %}Completed
+                                                {% else %}Scheduled
+                                                {% endif %}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="viewMaintenanceDetails({{ maintenance.id }})">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            {% if not maintenance.was_executed %}
+                                            <button class="btn btn-sm btn-outline-warning">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No maintenance history found.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function viewMaintenanceDetails(maintenanceId) {
+    fetch(`/security/api/maintenance-details/${maintenanceId}/`)
+        .then(response => response.json())
+        .then(data => {
+            // Show maintenance details in a modal or alert
+            alert(`Maintenance Details:\n\nTitle: ${data.title}\nType: ${data.maintenance_type_display}\nStart: ${data.start_time}\nEnd: ${data.end_time}\nStatus: ${data.is_currently_active ? 'Active' : data.is_upcoming ? 'Upcoming' : 'Completed'}`);
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+// Initialize DataTables
+document.addEventListener('DOMContentLoaded', function() {
+    $('.security-datatable').DataTable({
+        pageLength: 10,
+        order: [[2, 'desc']]
+    });
+});
+</script>
+{% endblock %}

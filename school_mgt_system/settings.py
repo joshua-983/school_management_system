@@ -102,14 +102,16 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # CORS support
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'core.middleware.csrf_definite_bypass.CSRFDefiniteBypassMiddleware',  # Definite CSRF bypass
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # FIXED: Use standard CSRF middleware
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_otp.middleware.OTPMiddleware',  # Two-factor authentication
     'axes.middleware.AxesMiddleware',  # Login attempt tracking
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.security_headers.SecurityHeadersMiddleware',  # Custom security headers
+    'core.middleware.SecurityHeadersMiddleware',  # FIXED: Correct import path
+    'core.middleware.MaintenanceModeMiddleware',
+    'core.middleware.UserBlockMiddleware',
+    'core.middleware.RateLimitMiddleware',  # ADDED: Rate limiting
 ]
 
 # Conditional middleware
@@ -130,39 +132,34 @@ SITE_ID = 1
 
 # ==================== DATABASE CONFIGURATION ====================
 # Database configuration with connection pooling and optimizations
-DB_CONFIG = {
-    'ENGINE': 'django.db.backends.mysql',
-    'NAME': config('DB_NAME', default='school_db'),
-    'USER': config('DB_USER', default='school_user'),
-    'PASSWORD': config('DB_PASSWORD', default='school_password'),
-    'HOST': config('DB_HOST', default='db' if IS_DOCKER else 'localhost'),
-    'PORT': config('DB_PORT', default='3306'),
-    'OPTIONS': {
-        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        'charset': 'utf8mb4',
-        'connect_timeout': 60,
-        'read_timeout': 30,
-        'write_timeout': 30,
-    },
-    'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=300, cast=int),
-    'ATOMIC_REQUESTS': False,  # Changed from True to avoid connection issues
-}
-
-# For Docker environment, ensure proper connection
-if IS_DOCKER:
-    DB_CONFIG['OPTIONS'].update({
-        'connect_timeout': 60,
-        'read_timeout': 60,
-        'write_timeout': 60,
-    })
-
-DATABASES = {
-    'default': DB_CONFIG
-}
-
-# Remove socket configuration for Docker
-if not IS_DOCKER and not IS_TESTING and os.path.exists('/var/run/mysqld/mysqld.sock'):
-    DATABASES['default']['OPTIONS']['unix_socket'] = '/var/run/mysqld/mysqld.sock'
+if IS_TESTING:
+    # Use SQLite for testing
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': config('DB_NAME', default='school_db'),
+            'USER': config('DB_USER', default='school_user'),
+            'PASSWORD': config('DB_PASSWORD', default='school_password'),
+            'HOST': config('DB_HOST', default='db' if IS_DOCKER else 'localhost'),
+            'PORT': config('DB_PORT', default='3306'),
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
+                'connect_timeout': 60,
+                'read_timeout': 30,
+                'write_timeout': 30,
+            },
+            'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=300, cast=int),
+            'ATOMIC_REQUESTS': False,
+        }
+    }
 
 # Database router for multiple databases (if needed)
 DATABASE_ROUTERS = []
@@ -328,21 +325,10 @@ CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_USE_SESSIONS = False
 CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-    'http://localhost:3000',
-    'http://localhost:8001',
-    'http://web:8000',
-]
-
-# Content Security Policy
-CSP_DEFAULT_SRC = ("'self'",)
-CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'") if DEBUG else ("'self'",)
-CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
-CSP_IMG_SRC = ("'self'", "data:", "https:")
-CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com")
-CSP_CONNECT_SRC = ("'self'",)
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', 
+    default='http://localhost:8000,http://127.0.0.1:8000,http://localhost:3000', 
+    cast=Csv()
+)
 
 # Environment-specific security settings
 if IS_PRODUCTION or IS_STAGING:
@@ -391,7 +377,7 @@ try:
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
                 "IGNORE_EXCEPTIONS": True,
-                "SOCKET_CONNECT_TIMEOUT": 10,  # Increased for Docker
+                "SOCKET_CONNECT_TIMEOUT": 10,
                 "SOCKET_TIMEOUT": 10,
                 "CONNECTION_POOL_KWARGS": {
                     "max_connections": 100,
@@ -555,17 +541,11 @@ AXES_LOCKOUT_TEMPLATE = 'accounts/lockout.html'
 AXES_VERBOSE = True
 
 # ==================== LOGGING CONFIGURATION ====================
-import logging
-import logging.config
-
 # Create logs directory first
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
 
-LOGGING_CONFIG = None
-
-# Base logging configuration
-log_config = {
+LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
@@ -661,32 +641,6 @@ log_config = {
     },
 }
 
-if IS_PRODUCTION:
-    log_config['formatters']['json'] = {
-        '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-        'format': '''
-            asctime: %(asctime)s
-            level: %(levelname)s
-            name: %(name)s
-            message: %(message)s
-            module: %(module)s
-            funcName: %(funcName)s
-            lineno: %(lineno)s
-        ''',
-    }
-    log_config['handlers']['json_file'] = {
-        'level': 'INFO',
-        'class': 'logging.handlers.RotatingFileHandler',
-        'filename': LOGS_DIR / 'json.log',
-        'maxBytes': 1024 * 1024 * 10,
-        'backupCount': 5,
-        'formatter': 'json',
-    }
-    log_config['loggers']['django']['handlers'].append('json_file')
-    log_config['loggers']['core']['handlers'].append('json_file')
-
-logging.config.dictConfig(log_config)
-
 # ==================== CUSTOM APPLICATION SETTINGS ====================
 # School information
 SCHOOL_NAME = config('SCHOOL_NAME', default="Ghana Education Service School")
@@ -706,7 +660,18 @@ ENABLE_BACKGROUND_TASKS = config('ENABLE_BACKGROUND_TASKS', default=True, cast=b
 ENABLE_NOTIFICATIONS = config('ENABLE_NOTIFICATIONS', default=True, cast=bool)
 ENABLE_CSP = config('ENABLE_CSP', default=IS_PRODUCTION, cast=bool)
 
+# Security Settings
+MAINTENANCE_MODE = config('MAINTENANCE_MODE', default=False, cast=bool)
+MAINTENANCE_MESSAGE = config('MAINTENANCE_MESSAGE', 
+    default="The system is currently under maintenance. Please check back later.")
+
+# Password Policy
 PASSWORD_ROTATION_DAYS = config('PASSWORD_ROTATION_DAYS', default=90, cast=int)
+MAX_LOGIN_ATTEMPTS = config('MAX_LOGIN_ATTEMPTS', default=5, cast=int)
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS = config('RATE_LIMIT_REQUESTS', default=100, cast=int)
+RATE_LIMIT_WINDOW = config('RATE_LIMIT_WINDOW', default=60, cast=int)
 
 # Academic settings
 ACADEMIC_YEAR_FORMAT = 'YYYY/YYYY'
@@ -740,10 +705,6 @@ HEALTH_CHECKS = {
     'redis': 'django_healthchecks.contrib.check_redis',
 }
 
-# ==================== PERFORMANCE OPTIMIZATIONS ====================
-# Database query optimization
-DATABASES['default']['OPTIONS']['isolation_level'] = 'read committed'
-
 # ==================== CORS CONFIGURATION ====================
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
@@ -770,32 +731,6 @@ COMPRESS_CSS_FILTERS = [
 COMPRESS_JS_FILTERS = [
     'compressor.filters.jsmin.JSMinFilter',
 ]
-
-# ==================== DEPENDENCY CHECKS ====================
-def check_required_packages():
-    """Verify all required packages are installed"""
-    required_packages = {
-        'django_redis': 'Redis cache backend',
-        'celery': 'Background tasks',
-        'openpyxl': 'Excel export functionality',
-        'whitenoise': 'Static file serving',
-        'channels': 'WebSocket support',
-        'channels_redis': 'Redis channel layer',
-    }
-    
-    missing = []
-    for package, purpose in required_packages.items():
-        try:
-            __import__(package)
-        except ImportError:
-            missing.append(f"{package} ({purpose})")
-    
-    if missing and IS_PRODUCTION:
-        raise ImportError(f"Missing required packages: {', '.join(missing)}")
-    elif missing:
-        print(f"⚠️  Development note: Missing packages: {', '.join(missing)}")
-
-check_required_packages()
 
 # ==================== TEST CONFIGURATION ====================
 if IS_TESTING:
@@ -837,7 +772,7 @@ if IS_TESTING:
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
     
-    # Use locmem email backend for tests (captures emails in memory)
+    # Use locmem email backend for tests
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
     
     # Disable security settings that interfere with tests
@@ -849,68 +784,7 @@ if IS_TESTING:
     AXES_ENABLED = False
     
     # Reduce logging noise during tests
-    logging.config.dictConfig({
-        'version': 1,
-        'disable_existing_loggers': True,
-        'handlers': {
-            'console': {
-                'level': 'ERROR',
-                'class': 'logging.StreamHandler',
-            },
-        },
-        'root': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-        },
-    })
-    
-    # Test-specific settings
-    TEST_RUNNER = 'django.test.runner.DiscoverRunner'
-    FIXTURE_DIRS = [BASE_DIR / 'core' / 'fixtures']
-
-# ==================== ENVIRONMENT-SPECIFIC OVERRIDES ====================
-if IS_PRODUCTION:
-    # Production-specific settings
-    print("🚀 PRODUCTION MODE: Maximum security and performance enabled")
-    
-    # Ensure secret key is secure
-    required_production_vars = ['SECRET_KEY', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']
-    missing_vars = [var for var in required_production_vars if not config(var, default='')]
-    if missing_vars:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            f"Missing required environment variables in production: {', '.join(missing_vars)}"
-        )
-    
-    # Additional production security
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    
-    # Production logging
-    logging.getLogger('django').setLevel(logging.WARNING)
-    logging.getLogger('core').setLevel(logging.INFO)
-
-elif IS_STAGING:
-    # Staging environment settings
-    print("🔄 STAGING MODE: Production-like with debugging")
-    
-    DEBUG = False
-    DEBUG_TOOLBAR = False
-    
-    # Staging-specific security
-    ALLOWED_HOSTS = config('STAGING_HOSTS', cast=Csv())
-    
-    # More verbose logging for staging
-    logging.getLogger('core').setLevel(logging.DEBUG)
-
-elif IS_DEVELOPMENT:
-    # Development environment settings
-    print("🔧 DEVELOPMENT MODE: Debugging and development tools enabled")
-    
-    # More verbose logging
-    logging.getLogger('django').setLevel(logging.INFO)
-    logging.getLogger('core').setLevel(logging.DEBUG)
+    logging.disable(logging.CRITICAL)
 
 # ==================== FINAL VALIDATION ====================
 # Validate critical settings
@@ -920,36 +794,10 @@ if IS_PRODUCTION and DEBUG:
 if IS_PRODUCTION and not SECRET_KEY:
     raise ValueError("SECRET_KEY must be set in production!")
 
-# Print environment summary
 print(f"✅ Settings loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")
 print(f"✅ Docker: {IS_DOCKER}")
-print(f"✅ Database: {DATABASES['default']['ENGINE']} -> {DATABASES['default']['HOST']}:{DATABASES['default']['PORT']}")
+print(f"✅ Database: {DATABASES['default']['ENGINE']}")
 print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
-print(f"✅ Redis Host: {REDIS_HOST}")
-
-# ==================== CLEAN TIMEZONE PATCH ====================
-def force_utc_timezone():
-    """Force all timezone operations to use UTC"""
-    try:
-        import timezone_field.backends.zoneinfo
-        
-        original_to_tzobj = timezone_field.backends.zoneinfo.ZoneInfoBackend.to_tzobj
-        
-        def safe_to_tzobj(self, tzstr):
-            """Force problematic timezones to UTC"""
-            problematic_tz = ['Jujuy', 'Jamaica', 'Argentina']
-            if any(ptz in tzstr for ptz in problematic_tz):
-                tzstr = 'UTC'
-            try:
-                return original_to_tzobj(self, tzstr)
-            except Exception:
-                return original_to_tzobj(self, 'UTC')
-        
-        timezone_field.backends.zoneinfo.ZoneInfoBackend.to_tzobj = safe_to_tzobj
-        print("✅ Timezone patch applied successfully")
-        
-    except Exception as e:
-        print(f"✅ Timezone patch: {e}")
-
-# Apply the patch
-force_utc_timezone()
+# Axes configuration - use cache to avoid database schema issues
+AXES_HANDLER = 'axes.handlers.cache.AxesCacheHandler'
+AXES_CACHE = 'default'

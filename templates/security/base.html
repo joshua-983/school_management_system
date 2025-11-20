@@ -1,0 +1,396 @@
+<!-- templates/security/base.html - FIXED -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Security Management{% endblock %} - {{ SCHOOL_NAME }}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- DataTables -->
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
+    <!-- Custom Security CSS -->
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --success-color: #27ae60;
+            --info-color: #17a2b8;
+        }
+        
+        .security-sidebar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            min-height: calc(100vh - 56px);
+            padding: 0;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .security-sidebar .nav-link {
+            color: #ecf0f1;
+            padding: 15px 20px;
+            border-radius: 0;
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+            margin: 2px 0;
+        }
+        
+        .security-sidebar .nav-link:hover {
+            background-color: rgba(255,255,255,0.1);
+            border-left-color: var(--accent-color);
+            color: white;
+        }
+        
+        .security-sidebar .nav-link.active {
+            background-color: rgba(52, 152, 219, 0.2);
+            border-left-color: var(--accent-color);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .security-sidebar .nav-link i {
+            width: 20px;
+            text-align: center;
+            margin-right: 10px;
+        }
+        
+        .stat-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+        }
+        
+        .stat-card.danger-card {
+            border-left-color: var(--danger-color);
+        }
+        
+        .stat-card.warning-card {
+            border-left-color: var(--warning-color);
+        }
+        
+        .stat-card.success-card {
+            border-left-color: var(--success-color);
+        }
+        
+        .security-table {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .security-table th {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        
+        .blocked-user {
+            background-color: rgba(231, 76, 60, 0.1) !important;
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        .maintenance-active {
+            background-color: rgba(243, 156, 18, 0.1) !important;
+            border-left: 4px solid var(--warning-color);
+        }
+        
+        .btn-security {
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-security:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .security-alert {
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Loading animations */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .security-sidebar {
+                min-height: auto;
+                margin-bottom: 20px;
+            }
+        }
+        
+        /* Custom scrollbar for sidebar */
+        .security-sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .security-sidebar::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .security-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 3px;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'security_dashboard' %}">
+                <i class="fas fa-shield-alt me-2"></i>Security Center
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#securityNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="securityNavbar">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Main Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'audit_log_list' %}">
+                            <i class="fas fa-clipboard-list me-1"></i>Audit Logs
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ request.user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <!-- FIXED: Use Django's built-in logout URL or your custom one -->
+                            <li><a class="dropdown-item" href="{% url 'admin:logout' %}">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 security-sidebar">
+                <nav class="nav flex-column py-3">
+                    <a class="nav-link {% if active_tab == 'security_dashboard' %}active{% endif %}" 
+                       href="{% url 'security_dashboard' %}">
+                        <i class="fas fa-tachometer-alt"></i> Security Dashboard
+                    </a>
+                    <a class="nav-link {% if active_tab == 'user_management' %}active{% endif %}" 
+                       href="{% url 'user_management' %}">
+                        <i class="fas fa-user-lock"></i> User Management
+                    </a>
+                    <a class="nav-link {% if active_tab == 'maintenance_mode' %}active{% endif %}" 
+                       href="{% url 'maintenance_mode' %}">
+                        <i class="fas fa-tools"></i> Maintenance Mode
+                    </a>
+                    <a class="nav-link {% if active_tab == 'security_settings' %}active{% endif %}" 
+                       href="{% url 'security_settings' %}">
+                        <i class="fas fa-cogs"></i> Security Settings
+                    </a>
+                    <div class="dropdown-divider my-2" style="border-color: rgba(255,255,255,0.2);"></div>
+                    <a class="nav-link" href="{% url 'audit_log_list' %}">
+                        <i class="fas fa-clipboard-list"></i> Audit Logs
+                    </a>
+                    <a class="nav-link" href="{% url 'security_events' %}">
+                        <i class="fas fa-exclamation-triangle"></i> Security Events
+                    </a>
+                    <a class="nav-link" href="{% url 'alert_rule_list' %}">
+                        <i class="fas fa-bell"></i> Alert Rules
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="container-fluid py-4">
+                    <!-- Breadcrumb -->
+                    <nav aria-label="breadcrumb" class="mb-4">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{% url 'security_dashboard' %}">Security</a></li>
+                            {% block breadcrumb %}{% endblock %}
+                        </ol>
+                    </nav>
+
+                    <!-- Messages -->
+                    {% if messages %}
+                    <div class="messages mb-4">
+                        {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} security-alert alert-dismissible fade show" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="fas 
+                                    {% if message.tags == 'success' %}fa-check-circle
+                                    {% elif message.tags == 'error' or message.tags == 'danger' %}fa-exclamation-circle
+                                    {% elif message.tags == 'warning' %}fa-exclamation-triangle
+                                    {% else %}fa-info-circle{% endif %}
+                                    me-2"></i>
+                                <div>{{ message }}</div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Page Header -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        {% block page_header %}
+                        <h1 class="h3 mb-0 text-dark">
+                            <i class="fas fa-shield-alt text-primary me-2"></i>
+                            {% block page_title %}Security Management{% endblock %}
+                        </h1>
+                        {% endblock %}
+                        
+                        {% block page_actions %}{% endblock %}
+                    </div>
+
+                    <!-- Page Content -->
+                    {% block content %}
+                    {% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- DataTables -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom Security JS -->
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            var alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
+
+        // Confirm destructive actions
+        function confirmAction(message, event) {
+            if (!confirm(message || 'Are you sure you want to perform this action?')) {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                return false;
+            }
+            return true;
+        }
+
+        // Loading state for buttons
+        function setButtonLoading(button, isLoading) {
+            if (isLoading) {
+                button.disabled = true;
+                button.innerHTML = '<span class="loading-spinner me-2"></span>Loading...';
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.getAttribute('data-original-text');
+            }
+        }
+
+        // Initialize DataTables
+        document.addEventListener('DOMContentLoaded', function() {
+            $('.security-datatable').DataTable({
+                pageLength: 25,
+                responsive: true,
+                order: [[0, 'desc']],
+                language: {
+                    search: "_INPUT_",
+                    searchPlaceholder: "Search...",
+                    lengthMenu: "_MENU_ records per page",
+                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                    infoEmpty: "Showing 0 to 0 of 0 entries",
+                    infoFiltered: "(filtered from _MAX_ total entries)"
+                }
+            });
+        });
+
+        // Real-time updates for dashboard
+        function updateSecurityStats() {
+            fetch('{% url "security_stats_api" %}')
+                .then(response => response.json())
+                .then(data => {
+                    // Update stats cards
+                    if (data.today_logins) {
+                        const todayLoginsElement = document.getElementById('today-logins');
+                        if (todayLoginsElement) {
+                            todayLoginsElement.textContent = data.today_logins;
+                        }
+                    }
+                    if (data.blocked_users) {
+                        const blockedUsersElement = document.getElementById('blocked-users-count');
+                        if (blockedUsersElement) {
+                            blockedUsersElement.textContent = data.blocked_users;
+                        }
+                    }
+                })
+                .catch(error => console.error('Error updating security stats:', error));
+        }
+
+        // Update stats every 30 seconds
+        setInterval(updateSecurityStats, 30000);
+
+        // Security event notifications
+        function checkSecurityNotifications() {
+            // This would need a proper API endpoint
+            console.log('Checking security notifications...');
+        }
+
+        // Check for notifications every minute
+        setInterval(checkSecurityNotifications, 60000);
+    </script>
+
+    {% block extra_scripts %}
+    {% endblock %}
+</body>
+</html>

@@ -8,7 +8,8 @@ class SecurityEventListView(ListView):
     template_name = 'core/security_events.html'
     context_object_name = 'security_events'
     paginate_by = 20
-    ordering = ['-timestamp']  # Show latest first
+    # FIXED: Use 'created_at' instead of 'timestamp'
+    ordering = ['-created_at']  # Show latest first
 
     def get_queryset(self):
         queryset = super().get_queryset()

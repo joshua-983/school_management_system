@@ -1,0 +1,296 @@
+{% extends 'security/base.html' %}
+{% load static %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-user-lock text-primary"></i> User Management</h1>
+</div>
+
+<!-- Search Form -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0"><i class="fas fa-search"></i> Search Users</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="id_search_type" class="form-label">Search By</label>
+                {{ search_form.search_type }}
+            </div>
+            <div class="col-md-4">
+                <label for="id_search_query" class="form-label">Search Term</label>
+                {{ search_form.search_query }}
+            </div>
+            <div class="col-md-3">
+                <label for="id_user_type" class="form-label">User Type</label>
+                {{ search_form.user_type }}
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Search Results -->
+{% if search_performed %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-users"></i> Search Results ({{ users|length }} users found)
+        </h5>
+        <small class="text-muted">Showing first 50 results</small>
+    </div>
+    <div class="card-body">
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Username</th>
+                        <th>Full Name</th>
+                        <th>Email</th>
+                        <th>User Type</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr class="{% if user.profile.is_blocked %}table-danger{% endif %}">
+                        <td>
+                            <strong>{{ user.username }}</strong>
+                            {% if user.is_staff %}
+                            <span class="badge bg-info">Staff</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.get_full_name|default:"-" }}</td>
+                        <td>{{ user.email|default:"-" }}</td>
+                        <td>
+                            {% if user.student %}
+                            <span class="badge bg-primary">Student</span>
+                            {% elif user.teacher %}
+                            <span class="badge bg-success">Teacher</span>
+                            {% elif user.parentguardian %}
+                            <span class="badge bg-warning text-dark">Parent</span>
+                            {% else %}
+                            <span class="badge bg-secondary">System</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.profile.is_blocked %}
+                            <span class="badge bg-danger">Blocked</span>
+                            {% if user.profile.blocked_reason %}
+                            <br><small class="text-muted">{{ user.profile.blocked_reason|truncatewords:5 }}</small>
+                            {% endif %}
+                            {% else %}
+                            <span class="badge bg-success">Active</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.last_login %}
+                            {{ user.last_login|date:"M j, Y" }}
+                            {% else %}
+                            <span class="text-muted">Never</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                {% if user.profile.is_blocked %}
+                                <button type="button" class="btn btn-success" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#userActionModal"
+                                        data-user-id="{{ user.id }}"
+                                        data-username="{{ user.username }}"
+                                        data-action="unblock">
+                                    <i class="fas fa-unlock"></i> Unblock
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-warning" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#userActionModal"
+                                        data-user-id="{{ user.id }}"
+                                        data-username="{{ user.username }}"
+                                        data-action="block">
+                                    <i class="fas fa-lock"></i> Block
+                                </button>
+                                {% endif %}
+                                <button type="button" class="btn btn-info" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#userDetailsModal"
+                                        data-user-id="{{ user.id }}">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No users found</h5>
+            <p class="text-muted">Try adjusting your search criteria</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<!-- Instructions -->
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-user-lock fa-4x text-muted mb-3"></i>
+        <h3 class="text-muted">Search for Users</h3>
+        <p class="text-muted">Use the search form above to find users to manage.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- User Action Modal -->
+<div class="modal fade" id="userActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionModalTitle">User Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="userActionForm" method="post" action="{% url 'block_user' 0 %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p id="actionModalMessage">Are you sure you want to perform this action?</p>
+                    <div class="mb-3">
+                        <label for="id_action" class="form-label">Action</label>
+                        {{ block_form.action }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_reason" class="form-label">Reason</label>
+                        {{ block_form.reason }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- User Details Modal -->
+<div class="modal fade" id="userDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">User Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="userDetailsContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // User Action Modal
+    const userActionModal = document.getElementById('userActionModal');
+    userActionModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const userId = button.getAttribute('data-user-id');
+        const username = button.getAttribute('data-username');
+        const action = button.getAttribute('data-action');
+        
+        const modalTitle = userActionModal.querySelector('.modal-title');
+        const modalMessage = userActionModal.querySelector('#actionModalMessage');
+        const form = userActionModal.querySelector('#userActionForm');
+        const actionField = userActionModal.querySelector('#id_action');
+        
+        // Update modal content
+        if (action === 'block') {
+            modalTitle.textContent = `Block User: ${username}`;
+            modalMessage.textContent = `You are about to block user "${username}". This will prevent them from accessing the system.`;
+            actionField.value = 'block';
+        } else {
+            modalTitle.textContent = `Unblock User: ${username}`;
+            modalMessage.textContent = `You are about to unblock user "${username}". This will allow them to access the system again.`;
+            actionField.value = 'unblock';
+        }
+        
+        // Update form action URL
+        form.action = form.action.replace('/0/', `/${userId}/`);
+    });
+    
+    // User Details Modal
+    const userDetailsModal = document.getElementById('userDetailsModal');
+    userDetailsModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const userId = button.getAttribute('data-user-id');
+        const content = userDetailsModal.querySelector('#userDetailsContent');
+        
+        // Load user details via AJAX
+        fetch(`/api/user-details/${userId}/`)
+            .then(response => response.json())
+            .then(data => {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Basic Information</h6>
+                            <p><strong>Username:</strong> ${data.username}</p>
+                            <p><strong>Email:</strong> ${data.email || '-'}</p>
+                            <p><strong>Full Name:</strong> ${data.full_name || '-'}</p>
+                            <p><strong>User Type:</strong> ${data.user_type}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Account Status</h6>
+                            <p><strong>Status:</strong> ${data.is_blocked ? 'Blocked' : 'Active'}</p>
+                            <p><strong>Last Login:</strong> ${data.last_login || 'Never'}</p>
+                            <p><strong>Date Joined:</strong> ${data.date_joined}</p>
+                            ${data.is_blocked ? `<p><strong>Block Reason:</strong> ${data.block_reason || 'No reason provided'}</p>` : ''}
+                        </div>
+                    </div>
+                    ${data.login_history ? `
+                    <div class="mt-3">
+                        <h6>Recent Activity</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Action</th>
+                                        <th>IP Address</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.login_history.map(log => `
+                                        <tr>
+                                            <td>${log.timestamp}</td>
+                                            <td>${log.action}</td>
+                                            <td>${log.ip_address || '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+            })
+            .catch(error => {
+                content.innerHTML = `<div class="alert alert-danger">Error loading user details: ${error}</div>`;
+            });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends "security/base.html" %}
+{% load static %}
+
+{% block title %}Security Events - Security Management{% endblock %}
+
+{% block page_title %}Security Events Monitor{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Security Events</li>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card security-table">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Security Events
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Filters -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <select class="form-control" id="eventTypeFilter">
+                            <option value="">All Event Types</option>
+                            <option value="LOGIN_ATTEMPT">Login Attempts</option>
+                            <option value="SECURITY_ALERT">Security Alerts</option>
+                            <option value="DATA_ACCESS">Data Access</option>
+                            <option value="SYSTEM_EVENT">System Events</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control" id="severityFilter">
+                            <option value="">All Severities</option>
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                            <option value="CRITICAL">Critical</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control" id="statusFilter">
+                            <option value="">All Statuses</option>
+                            <option value="unresolved">Unresolved</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-secondary w-100" onclick="refreshEvents()">
+                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Events Table -->
+                <div class="table-responsive">
+                    <table class="table table-striped security-datatable">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>User</th>
+                                <th>IP Address</th>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in security_events %}
+                            <tr class="{% if not event.is_resolved %}table-warning{% endif %}">
+                                <td>
+                                    <strong>{{ event.title }}</strong>
+                                    {% if event.description %}
+                                    <br><small class="text-muted">{{ event.description|truncatewords:10 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ event.get_event_type_display }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if event.severity == 'CRITICAL' %}danger{% elif event.severity == 'HIGH' %}warning{% elif event.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
+                                        {{ event.get_severity_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if event.user %}
+                                    {{ event.user.username }}
+                                    {% else %}
+                                    <em>System</em>
+                                    {% endif %}
+                                </td>
+                                <td>{{ event.ip_address|default:"N/A" }}</td>
+                                <td>{{ event.created_at|date:"M d, Y H:i" }}</td>
+                                <td>
+                                    {% if event.is_resolved %}
+                                    <span class="badge bg-success">Resolved</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Unresolved</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" 
+                                            onclick="viewEventDetails({{ event.id }})"
+                                            title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    {% if not event.is_resolved %}
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            onclick="resolveEvent({{ event.id }})"
+                                            title="Mark Resolved">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="fas fa-check-circle fa-2x mb-2"></i><br>
+                                    No security events found.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function viewEventDetails(eventId) {
+    window.location.href = `/security/events/${eventId}/`;
+}
+
+function resolveEvent(eventId) {
+    if (confirm('Are you sure you want to mark this event as resolved?')) {
+        fetch(`/audit/security-events/${eventId}/resolve/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error resolving event');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+}
+
+function refreshEvents() {
+    location.reload();
+}
+
+// Initialize filters
+document.addEventListener('DOMContentLoaded', function() {
+    const table = $('.security-datatable').DataTable({
+        pageLength: 25,
+        order: [[5, 'desc']]
+    });
+
+    // Add filter functionality
+    $('#eventTypeFilter, #severityFilter, #statusFilter').on('change', function() {
+        table.draw();
+    });
+});
+</script>
+{% endblock %}

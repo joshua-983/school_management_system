@@ -22,7 +22,7 @@ from django.db.models import Q, Count, Avg, Sum
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _  # ADD THIS LINE
-
+from django.utils.deprecation import MiddlewareMixin
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -3894,3 +3894,140 @@ class Expense(models.Model):
             logger.error(f"Error updating budget tracking: {e}")
 
 
+# ===== SECURITY MODELS =====
+
+class UserProfile(models.Model):
+    """Extended user profile for additional user management features"""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    is_blocked = models.BooleanField(default=False)
+    blocked_reason = models.TextField(blank=True, null=True)
+    blocked_at = models.DateTimeField(blank=True, null=True)
+    blocked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, 
+                                 blank=True, null=True, related_name='blocked_users')
+    
+    # Temporary blocking fields
+    block_duration = models.DurationField(blank=True, null=True, help_text="Duration for temporary block")
+    block_until = models.DateTimeField(blank=True, null=True, help_text="Block until this date/time")
+    auto_unblock_at = models.DateTimeField(blank=True, null=True)
+    
+    login_attempts = models.PositiveIntegerField(default=0)
+    last_login_attempt = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User Profile'
+        verbose_name_plural = 'User Profiles'
+
+    def __str__(self):
+        return f"{self.user.username} - {'Blocked' if self.is_blocked else 'Active'}"
+
+    def block_user(self, blocked_by, reason="", duration=None):
+        """Block this user"""
+        self.is_blocked = True
+        self.blocked_reason = reason
+        self.blocked_at = timezone.now()
+        self.blocked_by = blocked_by
+        
+        if duration:
+            self.block_duration = duration
+            self.block_until = timezone.now() + duration
+            self.auto_unblock_at = self.block_until
+        else:
+            self.block_duration = None
+            self.block_until = None
+            
+        self.save()
+        
+        # Log the action
+        details = {
+            'reason': reason,
+            'username': self.user.username,
+            'blocked_at': self.blocked_at.isoformat(),
+            'duration': str(duration) if duration else 'permanent'
+        }
+        AuditLog.log_action(
+            user=blocked_by,
+            action='BLOCK',
+            model_name='User',
+            object_id=self.user.id,
+            details=details
+        )
+
+    def unblock_user(self, unblocked_by, reason=""):
+        """Unblock this user"""
+        self.is_blocked = False
+        self.blocked_reason = ""
+        self.blocked_at = None
+        self.blocked_by = None
+        self.block_duration = None
+        self.block_until = None
+        self.auto_unblock_at = None
+        self.login_attempts = 0
+        self.save()
+        
+        # Log the action
+        AuditLog.log_action(
+            user=unblocked_by,
+            action='UNBLOCK',
+            model_name='User',
+            object_id=self.user.id,
+            details={
+                'reason': reason,
+                'username': self.user.username,
+                'unblocked_at': timezone.now().isoformat()
+            }
+        )
+
+
+class ScheduledMaintenance(models.Model):
+    """Model for scheduled maintenance windows"""
+    MAINTENANCE_TYPES = [
+        ('EMERGENCY', 'Emergency Maintenance'),
+        ('SCHEDULED', 'Scheduled Maintenance'),
+        ('UPGRADE', 'System Upgrade'),
+    ]
+    
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES, default='SCHEDULED')
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    message = models.TextField(help_text="Message to display to users during maintenance")
+    is_active = models.BooleanField(default=True)
+    was_executed = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Scheduled Maintenance'
+        verbose_name_plural = 'Scheduled Maintenance'
+        ordering = ['-start_time']
+    
+    def __str__(self):
+        return f"{self.title} ({self.start_time} to {self.end_time})"
+    
+    def is_currently_active(self):
+        """Check if maintenance is currently active"""
+        now = timezone.now()
+        return self.start_time <= now <= self.end_time and self.is_active
+    
+    def is_upcoming(self):
+        """Check if maintenance is upcoming"""
+        return self.start_time > timezone.now() and self.is_active
+    
+    def duration(self):
+        """Calculate maintenance duration"""
+        return self.end_time - self.start_time
+
+
+# Signals for UserProfile
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def save_user_profile(sender, instance, **kwargs):
+    if hasattr(instance, 'profile'):
+        instance.profile.save()

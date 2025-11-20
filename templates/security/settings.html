@@ -1,0 +1,140 @@
+{% extends 'security/base.html' %}
+{% load static %}
+
+{% block title %}Security Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-cogs text-primary"></i> Security Settings</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-shield-alt"></i> Security Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Max Login Attempts</label>
+                                <input type="number" class="form-control" name="max_login_attempts" 
+                                       value="{{ max_login_attempts }}" min="1" max="10">
+                                <div class="form-text">
+                                    Maximum failed login attempts before auto-block (1-10)
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Password Rotation (Days)</label>
+                                <input type="number" class="form-control" name="password_rotation_days" 
+                                       value="{{ password_rotation_days }}" min="30" max="365">
+                                <div class="form-text">
+                                    Days before users must change their password
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Rate Limit Requests</label>
+                                <input type="number" class="form-control" name="rate_limit_requests" 
+                                       value="{{ rate_limit_requests }}" min="10" max="1000">
+                                <div class="form-text">
+                                    Maximum requests per rate limit window
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Rate Limit Window (Seconds)</label>
+                                <input type="number" class="form-control" name="rate_limit_window" 
+                                       value="{{ rate_limit_window }}" min="10" max="3600">
+                                <div class="form-text">
+                                    Time window for rate limiting in seconds
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Important Notes:</h6>
+                        <ul class="mb-0">
+                            <li>Changes to these settings may affect system security and performance</li>
+                            <li>Consider the impact on user experience when adjusting limits</li>
+                            <li>Test changes in a staging environment before production</li>
+                            <li>Document any changes for audit purposes</li>
+                        </ul>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Current Settings Summary -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle"></i> Current Settings
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Login Attempts
+                        <span class="badge bg-primary rounded-pill">{{ max_login_attempts }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Password Rotation
+                        <span class="badge bg-primary rounded-pill">{{ password_rotation_days }} days</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Rate Limit
+                        <span class="badge bg-primary rounded-pill">{{ rate_limit_requests }} req</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Rate Window
+                        <span class="badge bg-primary rounded-pill">{{ rate_limit_window }} sec</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'security_dashboard' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt"></i> Security Dashboard
+                    </a>
+                    <a href="{% url 'audit_log_list' %}" class="btn btn-outline-info">
+                        <i class="fas fa-clipboard-list"></i> View Audit Logs
+                    </a>
+                    <a href="{% url 'user_management' %}" class="btn btn-outline-warning">
+                        <i class="fas fa-user-lock"></i> Manage Users
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

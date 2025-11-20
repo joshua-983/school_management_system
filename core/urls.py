@@ -1,4 +1,4 @@
-# core/urls.py - UPDATED VERSION (FIXED)
+# FIXED core/urls.py - Consolidated Security URLs
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
@@ -16,6 +16,7 @@ from .views.student_views import (
     StudentDeleteView, StudentGradeListView, StudentAttendanceView, 
     StudentFeeListView, StudentProfileView, StudentDashboardView
 )
+
 # ==============================
 # PARENT VIEWS IMPORTS - FIXED
 # ==============================
@@ -25,9 +26,10 @@ from .views.parents_views import (
     ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
     parent_dashboard,
     ParentAnnouncementListView, ParentMessageListView,
-    ParentMessageCreateView, ParentMessageDetailView, ParentCalendarView,  # ADDED ParentCalendarView
+    ParentMessageCreateView, ParentMessageDetailView, ParentCalendarView,
     ParentDirectoryView, BulkParentMessageView, ParentCommunicationLogView, ParentEngagementDashboardView
 )
+
 from .views.fee_views import (
     FeeCategoryListView, FeeCategoryCreateView, FeeCategoryUpdateView, FeeCategoryDeleteView,
     FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
@@ -37,6 +39,7 @@ from .views.fee_views import (
     FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView, BudgetManagementView,
     PaymentSummaryView, RefreshPaymentDataView, BudgetCreateView
 )
+
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
 from .views.class_assignments import ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, ClassAssignmentDeleteView
 from .views.assignment_views import (
@@ -64,7 +67,7 @@ from .views.grade_views import (
     # Grade Management Actions
     lock_grade, unlock_grade, mark_grade_for_review, clear_grade_review,
     
-    # Export View - ADD THIS IMPORT
+    # Export View
     GradeExportView,
     
     # Legacy/Compatibility
@@ -72,12 +75,12 @@ from .views.grade_views import (
 )
 
 # ==============================
-# REPORT CARD VIEWS IMPORTS - FIXED: Import the new Quick View classes
+# REPORT CARD VIEWS IMPORTS - FIXED
 # ==============================
 from .views.reportcard_views import (
     ReportCardDashboardView, CreateReportCardView, ReportCardView, 
     ReportCardPDFView, SaveReportCardView,
-    QuickViewReportCardView, QuickViewReportCardPDFView  # ADD THESE
+    QuickViewReportCardView, QuickViewReportCardPDFView
 )
 
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
@@ -89,7 +92,7 @@ from .views.audit_views import (
 )
 
 # ==============================
-# ENHANCED AUDIT VIEWS IMPORTS - FIXED: Import security API functions
+# ENHANCED AUDIT VIEWS IMPORTS - FIXED
 # ==============================
 from .views.audit_enhancements import (
     SecurityEventListView, SecurityEventDetailView,
@@ -97,7 +100,7 @@ from .views.audit_enhancements import (
     AdvancedAnalyticsView, AuditReportListView, DataRetentionPolicyListView,
     run_anomaly_detection, generate_custom_report, apply_retention_policies,
     resolve_security_event, toggle_alert_rule, security_dashboard,
-    security_stats_api, security_notifications_api, system_health_api  # ADD THESE IMPORTANT MISSING IMPORTS
+    security_stats_api, security_notifications_api, system_health_api
 )
 
 from .views.attendance_views import AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
@@ -114,13 +117,12 @@ from .views.notifications_views import (
 )
 
 # ==============================
-# BILL VIEWS IMPORTS - FIXED: Import all bill views directly
+# BILL VIEWS IMPORTS - FIXED
 # ==============================
 from .views.bill_views import (
     BillListView, BillDetailView, BillGenerateView, BillPaymentView, BillCancelView,
     BulkSendRemindersView, BulkExportBillsView, BulkMarkPaidView, BulkDeleteBillsView
 )
-
 
 # ==============================
 # ANNOUNCEMENT VIEWS IMPORTS
@@ -132,10 +134,17 @@ from .views.announcement_views import (
     bulk_action_announcements, AnnouncementStatsView
 )
 
+# ==============================
+from .views.security_views import (
+    security_dashboard, UserManagementView, BlockUserView,
+    MaintenanceModeView, ScheduledMaintenanceView, maintenance_mode_page,
+    user_blocked_page, security_stats_api, user_details_api, RateLimitExceededView,
+    SecuritySettingsView, security_events_api, maintenance_details_api, security_events, alert_rule_list
+)
+
 # Import API views
 from .api import FeeCategoryViewSet
 from .views.api import fee_category_detail
-
 
 router = DefaultRouter()
 router.register(r'fee-categories', FeeCategoryViewSet, basename='fee-category')
@@ -149,7 +158,7 @@ urlpatterns = [
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
     path('teacher-dashboard/', teacher_dashboard, name='teacher_dashboard'),
     
-    # In core/urls.py, add this to urlpatterns:
+    # Dashboard
     path('dashboard/', dashboard, name='dashboard'),
     
     # Student Dashboard
@@ -177,6 +186,25 @@ urlpatterns = [
     path('students/<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create'),
     path('parents/<int:pk>/edit/', ParentUpdateView.as_view(), name='parent_update'),
     path('parents/<int:pk>/delete/', ParentDeleteView.as_view(), name='parent_delete'),
+    path('parent/dashboard/', parent_dashboard, name='parent_dashboard'),
+    path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
+    path('parent/child/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
+    path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
+    path('parent/fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
+    path('parent/fee/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_fee_payment'),
+    path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
+    path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
+    path('parent/report-cards/<int:student_id>/', ParentReportCardListView.as_view(), name='parent_report_card_list_view'),
+    path('parent/report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
+    path('parent/announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
+    path('parent/messages/', ParentMessageListView.as_view(), name='parent_messages'),
+    path('parent/messages/create/', ParentMessageCreateView.as_view(), name='parent_message_create'),
+    path('parent/messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
+    path('parent/calendar/', ParentCalendarView.as_view(), name='parent_calendar'),    
+    path('parent-directory/', ParentDirectoryView.as_view(), name='parent_directory'),
+    path('bulk-parent-message/', BulkParentMessageView.as_view(), name='bulk_parent_message'),
+    path('parent-communication-log/', ParentCommunicationLogView.as_view(), name='parent_communication_log'),
+    path('parent-engagement-dashboard/', ParentEngagementDashboardView.as_view(), name='parent_engagement_dashboard'),
     
     # FEE MANAGEMENT URLS
     # ==============================
@@ -194,7 +222,7 @@ urlpatterns = [
     path('students/<int:student_id>/fees/add/', FeeCreateView.as_view(), name='fee_create'),
     
     # ==============================
-    # BILL MANAGEMENT URLS - FIXED: Use direct imports instead of bill_views.
+    # BILL MANAGEMENT URLS
     # ==============================
     path('bills/', BillListView.as_view(), name='bill_list'),
     path('bills/<int:pk>/', BillDetailView.as_view(), name='bill_detail'),
@@ -228,12 +256,12 @@ urlpatterns = [
     # Finance Dashboard URLs
     path('finance/dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
     path('finance/revenue-analytics/', RevenueAnalyticsView.as_view(), name='revenue_analytics'),
-    path('finance/financial-health/', FinancialHealthView.as_view(), name='financial_health'),  # SINGLE INSTANCE - REMOVED DUPLICATE
+    path('finance/financial-health/', FinancialHealthView.as_view(), name='financial_health'),
     path('finance/budget-management/', BudgetManagementView.as_view(), name='budget_management'),
     path('finance/payment-summary/', PaymentSummaryView.as_view(), name='payment_summary'),
     path('finance/payment-summary/refresh/', RefreshPaymentDataView.as_view(), name='refresh_payment_data'),
-    # Add this to your core/urls.py
     path('finance/budget/create/', BudgetCreateView.as_view(), name='budget_create'),
+    
     # ==============================
     # SUBJECT URLS
     # ==============================
@@ -297,7 +325,7 @@ urlpatterns = [
     path('grades/bulk-upload/', BulkGradeUploadView.as_view(), name='grade_bulk_upload'),
     path('grades/upload-template/', GradeUploadTemplateView.as_view(), name='grade_upload_template'),
     
-    # Grade Export - FIXED: Use class-based view directly
+    # Grade Export
     path('grades/export/', GradeExportView.as_view(), name='export_grades'),
     
     # Grade Management Actions
@@ -313,12 +341,10 @@ urlpatterns = [
     path('grades/students-by-class/', get_students_by_class, name='get_students_by_class'),
     path('grades/subjects-by-class/', get_subjects_by_class, name='get_subjects_by_class'),
     path('api/student-grade-summary/<int:student_id>/', student_grade_summary, name='student_grade_summary'),
-    
-    # FIXED: Remove duplicate line and use the correct path
     path('api/students-by-class/', get_students_by_class, name='api_students_by_class'),
     
     # ==============================
-    # REPORT CARD URLS - FIXED: Use direct imports
+    # REPORT CARD URLS
     # ==============================
     path('report-cards/create/', CreateReportCardView.as_view(), name='create_report_card'),
     path('report-cards/', ReportCardDashboardView.as_view(), name='report_card_dashboard'), 
@@ -328,7 +354,7 @@ urlpatterns = [
     path('report-card/pdf/<int:student_id>/<int:report_card_id>/', ReportCardPDFView.as_view(), name='report_card_pdf_detail'),
     path('report-card/save/<int:student_id>/', SaveReportCardView.as_view(), name='save_report_card'),
     
-    # Quick View Report Card URLs - FIXED: Use direct imports
+    # Quick View Report Card URLs
     path('quick-view/', QuickViewReportCardView.as_view(), name='quick_view_report_card'),
     path('quick-view/pdf/', QuickViewReportCardPDFView.as_view(), name='quick_view_report_card_pdf'),
     
@@ -351,21 +377,51 @@ urlpatterns = [
     path('system-health/', system_health_check, name='system_health_check'),
     
     # ==============================
-    # ENHANCED SECURITY & ANALYTICS URLS - FIXED
+    # CONSOLIDATED SECURITY MANAGEMENT URLS
     # ==============================
+    path('security/', include([
+        # Security Dashboard
+        path('dashboard/', security_dashboard, name='security_dashboard'),
+        
+        # User Management
+        path('user-management/', UserManagementView.as_view(), name='user_management'),
+        path('user/<int:user_id>/block/', BlockUserView.as_view(), name='block_user'),
+        
+        # Maintenance Management
+        path('maintenance-mode/', MaintenanceModeView.as_view(), name='maintenance_mode'),
+        path('scheduled-maintenance/', ScheduledMaintenanceView.as_view(), name='scheduled_maintenance'),
+        
+        # Security Settings
+        path('settings/', SecuritySettingsView.as_view(), name='security_settings'),
+        
+        # Security Events & Audit
+        path("events/", security_events, name="security_events"),
+        path('events/<int:pk>/', SecurityEventDetailView.as_view(), name='security_event_detail'),
+        
+        # Alert Rules Management
+        path('alert-rules/', AuditAlertRuleListView.as_view(), name='alert_rule_list'),
+        path('alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='alert_rule_create'),
+        path('alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='alert_rule_update'),
+        
+        # API endpoints
+        path('api/stats/', security_stats_api, name='security_stats_api'),
+        path('api/events/', security_events_api, name='security_events_api'),
+        path('api/user-details/<int:user_id>/', user_details_api, name='user_details_api'),
+        path('api/maintenance-details/<int:maintenance_id>/', maintenance_details_api, name='maintenance_details_api'),
+    ])),
     
-    # Security Dashboard
-    path('audit/security-dashboard/', security_dashboard, name='security_dashboard'),
-    
-    # Real-time Security Monitoring
-    path('audit/security-events/', SecurityEventListView.as_view(), name='security_events'),
-    path('audit/security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='security_event_detail'),
+    # ==============================
+    # ENHANCED SECURITY & ANALYTICS URLS (KEEP FOR BACKWARD COMPATIBILITY)
+    # ==============================
+    path('audit/security-dashboard/', security_dashboard, name='audit_security_dashboard'),  # Keep for compatibility
+    path('audit/security-events/', SecurityEventListView.as_view(), name='audit_security_events'),  # Keep for compatibility
+    path('audit/security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='audit_security_event_detail'),  # Keep for compatibility
     path('audit/security-events/<int:event_id>/resolve/', resolve_security_event, name='resolve_security_event'),
     
-    # Alert Rules Management
-    path('audit/alert-rules/', AuditAlertRuleListView.as_view(), name='alert_rule_list'),
-    path('audit/alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='alert_rule_create'),
-    path('audit/alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='alert_rule_update'),
+    # Alert Rules Management (Keep for backward compatibility)
+    path('audit/alert-rules/', AuditAlertRuleListView.as_view(), name='audit_alert_rule_list'),
+    path('audit/alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='audit_alert_rule_create'),
+    path('audit/alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='audit_alert_rule_update'),
     path('audit/alert-rules/<int:rule_id>/toggle/', toggle_alert_rule, name='toggle_alert_rule'),
     
     # Advanced Analytics & Machine Learning
@@ -380,19 +436,25 @@ urlpatterns = [
     path('audit/retention-policies/', DataRetentionPolicyListView.as_view(), name='retention_policies'),
     path('audit/apply-retention/', apply_retention_policies, name='apply_retention'),
     
-    # Security API endpoints - FIXED: Use imported functions directly
-    path('api/security/stats/', security_stats_api, name='security_stats_api'),
+    # Security API endpoints (Keep for backward compatibility)
     path('api/security/notifications/', security_notifications_api, name='security_notifications_api'),
     path('api/system-health/', system_health_api, name='system_health_api'),
+    
+    # ==============================
+    # SYSTEM PAGES
+    # ==============================
+    path('maintenance/', maintenance_mode_page, name='maintenance_mode_page'),
+    path('blocked/', user_blocked_page, name='user_blocked'),
+    path('rate-limit-exceeded/', RateLimitExceededView.as_view(), name='rate_limit_exceeded'),
     
     # ==============================
     # NOTIFICATION URLS
     # ==============================
     path('notifications/', NotificationListView.as_view(), name='notification_list'),
-path('notifications/mark-all-read/', mark_all_notifications_read, name='mark_all_notifications_read'),
-path('notifications/<int:pk>/mark-read/', mark_notification_read, name='mark_notification_read'),
-path('api/notifications/count/', get_unread_count, name='get_unread_count'),
-path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_mark_notification_read'),
+    path('notifications/mark-all-read/', mark_all_notifications_read, name='mark_all_notifications_read'),
+    path('notifications/<int:pk>/mark-read/', mark_notification_read, name='mark_notification_read'),
+    path('api/notifications/count/', get_unread_count, name='get_unread_count'),
+    path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_mark_notification_read'),
     
     # ==============================
     # ATTENDANCE URLS
@@ -403,38 +465,8 @@ path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_
     path('student-attendance/', StudentAttendanceListView.as_view(), name='student_attendance_list'),
     
     # ==============================
-    # PARENT PORTAL URLS
-    # ==============================
-    path('parent/dashboard/', parent_dashboard, name='parent_dashboard'),
-    path('parent/children/', ParentChildrenListView.as_view(), name='parent_children_list'),
-    path('parent/child/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
-    path('parent/fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
-    path('parent/fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
-    path('parent/fee/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_fee_payment'),
-    path('parent/attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
-    path('parent/report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
-    path('parent/report-cards/<int:student_id>/', ParentReportCardListView.as_view(), name='parent_report_card_list_view'),
-    path('parent/report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
-    path('parent/announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
-    path('parent/messages/', ParentMessageListView.as_view(), name='parent_messages'),
-    path('parent/messages/create/', ParentMessageCreateView.as_view(), name='parent_message_create'),
-    path('parent/messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
-    path('parent/calendar/', ParentCalendarView.as_view(), name='parent_calendar'),    
-    
-    # Parent Portal Management URLs (for Admin/Teachers)
-    path('parent-directory/', ParentDirectoryView.as_view(), name='parent_directory'),
-    path('bulk-parent-message/', BulkParentMessageView.as_view(), name='bulk_parent_message'),
-    path('parent-communication-log/', ParentCommunicationLogView.as_view(), name='parent_communication_log'),
-    path('parent-engagement-dashboard/', ParentEngagementDashboardView.as_view(), name='parent_engagement_dashboard'),
-    
-    # API endpoints
-    path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
-
-    # ==============================
     # TIMETABLE URLS
     # ==============================
-    
-    # Timetable URLs
     path('timeslots/', TimeSlotListView.as_view(), name='timeslot_list'),
     path('timeslots/create/', TimeSlotCreateView.as_view(), name='timeslot_create'),
     path('timeslots/<int:pk>/update/', TimeSlotUpdateView.as_view(), name='timeslot_update'),
@@ -449,9 +481,6 @@ path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_
     path('timetable/student/', StudentTimetableView.as_view(), name='student_timetable'),
     path('timetable/teacher/', TeacherTimetableView.as_view(), name='teacher_timetable'),
     
-    path('timetable/ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
-    path('timetable/generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
-    # AJAX URLs
     path('timetable/ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
     path('timetable/generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
     path('api/timetable-entries/', get_timetable_entries, name='get_timetable_entries'),
@@ -470,5 +499,12 @@ path('api/notifications/mark-read/<int:pk>/', mark_notification_read, name='api_
     path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),
     path('announcements/bulk-action/', bulk_action_announcements, name='bulk_action_announcements'),
     path('announcements/stats/', AnnouncementStatsView.as_view(), name='announcement_stats'),
+    
+    # Network Health
     path('api/network/health/', NetworkHealthView.as_view(), name='network_health'),
+    
+    # API endpoints
+    path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
 ]
+# TEMPORARY FIX FOR SECURITY TESTS - Add direct URL patterns
+

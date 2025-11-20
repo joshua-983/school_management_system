@@ -1,0 +1,331 @@
+{% extends 'security/base.html' %}
+{% load static %}
+
+{% block title %}Security Dashboard{% endblock %}
+
+{% block page_title %}Security Dashboard{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'user_management' %}" class="btn btn-outline-primary btn-security">
+        <i class="fas fa-user-lock me-2"></i>Manage Users
+    </a>
+    <a href="{% url 'maintenance_mode' %}" class="btn btn-outline-warning btn-security">
+        <i class="fas fa-tools me-2"></i>Maintenance
+    </a>
+    <a href="{% url 'security_settings' %}" class="btn btn-outline-info btn-security">
+        <i class="fas fa-cogs me-2"></i>Settings
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-muted text-uppercase small">Total Users</h6>
+                        <h2 class="text-primary mb-0">{{ total_users }}</h2>
+                        <small class="text-muted">Active system users</small>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x text-primary opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card danger-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-muted text-uppercase small">Blocked Users</h6>
+                        <h2 class="text-danger mb-0" id="blocked-users-count">{{ blocked_users }}</h2>
+                        <small class="text-muted">Restricted access</small>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-user-slash fa-2x text-danger opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card warning-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-muted text-uppercase small">Maintenance</h6>
+                        <h2 class="{% if maintenance_mode %}text-warning{% else %}text-success{% endif %} mb-0">
+                            {% if maintenance_mode %}ACTIVE{% else %}INACTIVE{% endif %}
+                        </h2>
+                        <small class="text-muted">System status</small>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-tools fa-2x {% if maintenance_mode %}text-warning{% else %}text-success{% endif %} opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-muted text-uppercase small">Today's Logins</h6>
+                        <h2 class="text-info mb-0" id="today-logins">--</h2>
+                        <small class="text-muted">Successful logins</small>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-sign-in-alt fa-2x text-info opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Security Events -->
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Recent Security Events
+                </h5>
+                <a href="{% url 'security_events' %}" class="btn btn-sm btn-light">View All</a>
+            </div>
+            <div class="card-body">
+                {% if recent_security_events %}
+                <div class="table-responsive">
+                    <table class="table table-hover security-table">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Severity</th>
+                                <th>User</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in recent_security_events %}
+                            <tr>
+                                <td>
+                                    <strong>{{ event.title }}</strong>
+                                    {% if event.description %}
+                                    <br><small class="text-muted">{{ event.description|truncatewords:10 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ event.get_severity_color }}">
+                                        {{ event.get_severity_display }}
+                                    </span>
+                                </td>
+                                <td>{{ event.user.username|default:"System" }}</td>
+                                <td>{{ event.created_at|timesince }} ago</td>
+                                <td>
+                                    {% if event.is_resolved %}
+                                    <span class="badge bg-success">Resolved</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Open</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3 opacity-50"></i>
+                    <h5 class="text-muted">No Recent Security Events</h5>
+                    <p class="text-muted">All systems are secure</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & System Status -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <a href="{% url 'user_management' %}" class="btn btn-outline-primary w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center">
+                            <i class="fas fa-search fa-2x mb-2"></i>
+                            <span>Search Users</span>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        {% if maintenance_mode %}
+                        <a href="{% url 'maintenance_mode' %}" class="btn btn-warning w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center">
+                            <i class="fas fa-power-off fa-2x mb-2"></i>
+                            <span>Disable Maintenance</span>
+                        </a>
+                        {% else %}
+                        <a href="{% url 'maintenance_mode' %}" class="btn btn-outline-warning w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center">
+                            <i class="fas fa-tools fa-2x mb-2"></i>
+                            <span>Enable Maintenance</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'audit_log_list' %}" class="btn btn-outline-info w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center">
+                            <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                            <span>Audit Logs</span>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'security_events' %}" class="btn btn-outline-danger w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                            <span>Security Events</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>System Health
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>Database</span>
+                        <span class="badge bg-success">Healthy</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>Cache</span>
+                        <span class="badge bg-success">Active</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>Background Tasks</span>
+                        <span class="badge bg-success">Running</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>Security Services</span>
+                        <span class="badge bg-success">Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Block Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-user-lock me-2"></i>Recent User Management Actions
+                </h5>
+                <span class="badge bg-light text-dark">{{ recent_blocks|length }} actions</span>
+            </div>
+            <div class="card-body">
+                {% if recent_blocks %}
+                <div class="table-responsive">
+                    <table class="table security-datatable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                                <th>User</th>
+                                <th>Target User</th>
+                                <th>Reason</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in recent_blocks %}
+                            <tr class="{% if log.action == 'BLOCK' %}blocked-user{% endif %}">
+                                <td data-order="{{ log.timestamp|date:'U' }}">
+                                    <small>{{ log.timestamp|date:"M j, Y H:i" }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if log.action == 'BLOCK' %}danger{% else %}success{% endif %}">
+                                        {{ log.action }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>{{ log.user.username|default:"System" }}</strong>
+                                </td>
+                                <td>
+                                    {% if log.details.username %}
+                                    {{ log.details.username }}
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if log.details.reason %}
+                                    {{ log.details.reason|truncatewords:8 }}
+                                    {% else %}
+                                    <span class="text-muted">No reason provided</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <code>{{ log.ip_address|default:"Unknown" }}</code>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-history fa-3x text-muted mb-3 opacity-50"></i>
+                    <h5 class="text-muted">No Recent Actions</h5>
+                    <p class="text-muted">No user management actions in the past 24 hours</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Load initial stats
+    document.addEventListener('DOMContentLoaded', function() {
+        updateSecurityStats();
+        
+        // Initialize DataTables
+        $('.security-datatable').DataTable({
+            pageLength: 10,
+            responsive: true,
+            order: [[0, 'desc']],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search actions...",
+                lengthMenu: "_MENU_ records per page"
+            }
+        });
+    });
+</script>
+{% endblock %}
