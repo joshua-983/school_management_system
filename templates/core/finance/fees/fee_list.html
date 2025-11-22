@@ -230,27 +230,10 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h2><i class="bi bi-cash-stack me-2"></i>Fee Records</h2>
-                {% if is_admin or is_teacher %}
-                <div>
-                    <a href="{% url 'fee_report' %}" class="btn btn-outline-info me-2">
-                        <i class="bi bi-file-earmark-bar-graph me-1"></i> Reports
-                    </a>
-                    {% if 'student_id' in request.resolver_match.kwargs %}
-                        <a href="{% url 'fee_create' student_id=request.resolver_match.kwargs.student_id %}" class="btn btn-primary">
-                            <i class="bi bi-plus-circle me-1"></i> Add Fee
-                        </a>
-                    {% else %}
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
-                            <i class="bi bi-plus-circle me-1"></i> Add Fee
-                        </button>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
+    <!-- Header Section with Bulk Operations Dropdown -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-cash-stack me-2"></i>Fee Records</h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
@@ -258,10 +241,54 @@
                 </ol>
             </nav>
         </div>
+        <div class="btn-group">
+            {% if is_admin or is_teacher %}
+            <div>
+                <a href="{% url 'fee_report' %}" class="btn btn-outline-info me-2">
+                    <i class="bi bi-file-earmark-bar-graph me-1"></i> Reports
+                </a>
+                {% if 'student_id' in request.resolver_match.kwargs %}
+                    <a href="{% url 'fee_create' student_id=request.resolver_match.kwargs.student_id %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> Add Fee
+                    </a>
+                {% else %}
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#selectStudentModal">
+                        <i class="bi bi-plus-circle me-1"></i> Add Fee
+                    </button>
+                {% endif %}
+                
+                <!-- Bulk Operations Dropdown -->
+                <div class="btn-group ms-2">
+                    <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-gear me-1"></i> Bulk Operations
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><h6 class="dropdown-header">Bulk Fee Management</h6></li>
+                        <li><a class="dropdown-item" href="{% url 'bulk_fee_import' %}">
+                            <i class="bi bi-file-earmark-arrow-up text-primary me-2"></i>
+                            Import from File
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'bulk_fee_creation' %}">
+                            <i class="bi bi-layers text-success me-2"></i>
+                            Bulk Create Fees
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'bulk_fee_update' %}">
+                            <i class="bi bi-pencil-square text-warning me-2"></i>
+                            Bulk Update Fees
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'generate_term_fees' %}">
+                            <i class="bi bi-magic text-info me-2"></i>
+                            Generate Term Fees
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
     </div>
 
-    <!-- Quick Actions -->
-    {% if is_admin or is_teacher %}
+    <!-- Quick Actions Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="quick-actions">
@@ -269,30 +296,50 @@
                     <div class="quick-action-icon">
                         <i class="bi bi-plus-circle"></i>
                     </div>
-                    <div>Add Fee</div>
+                    <div>Add Single Fee</div>
                 </button>
+                
+                <!-- Bulk Import -->
+                <a href="{% url 'bulk_fee_import' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                    </div>
+                    <div>Bulk Import</div>
+                </a>
+                
+                <!-- Bulk Create -->
+                <a href="{% url 'bulk_fee_creation' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-layers"></i>
+                    </div>
+                    <div>Bulk Create</div>
+                </a>
+                
+                <!-- Bulk Update -->
+                <a href="{% url 'bulk_fee_update' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-pencil-square"></i>
+                    </div>
+                    <div>Bulk Update</div>
+                </a>
+                
                 <a href="{% url 'fee_report' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                     <div class="quick-action-icon">
                         <i class="bi bi-graph-up"></i>
                     </div>
                     <div>View Reports</div>
                 </a>
-                <button type="button" class="quick-action-btn btn-export" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                
+                <!-- Generate Term Fees -->
+                <a href="{% url 'generate_term_fees' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
                     <div class="quick-action-icon">
-                        <i class="bi bi-download"></i>
+                        <i class="bi bi-magic"></i>
                     </div>
-                    <div>Export Data</div>
-                </button>
-                <a href="{% url 'fee_analytics' %}" class="quick-action-btn" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
-                    <div class="quick-action-icon">
-                        <i class="bi bi-bar-chart"></i>
-                    </div>
-                    <div>Analytics</div>
+                    <div>Auto Generate</div>
                 </a>
             </div>
         </div>
     </div>
-    {% endif %}
 
     <!-- Summary Cards -->
     <div class="row mb-4">

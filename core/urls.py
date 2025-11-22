@@ -74,6 +74,11 @@ from .views.grade_views import (
     grade_delete
 )
 
+from .views.fee_views import (
+    BulkFeeImportView, BulkFeeCreationView, BulkFeeUpdateView,
+    DownloadFeeTemplateView, GenerateTermFeesView
+)
+
 # ==============================
 # REPORT CARD VIEWS IMPORTS - FIXED
 # ==============================
@@ -505,6 +510,13 @@ urlpatterns = [
     
     # API endpoints
     path('api/fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
+    
+    # Bulk Fee URLs
+    path('fees/bulk-import/', BulkFeeImportView.as_view(), name='bulk_fee_import'),
+    path('fees/bulk-creation/', BulkFeeCreationView.as_view(), name='bulk_fee_creation'),
+    path('fees/bulk-update/', BulkFeeUpdateView.as_view(), name='bulk_fee_update'),
+    path('fees/download-template/<str:file_type>/', DownloadFeeTemplateView.as_view(), name='download_fee_template'),
+    path('fees/generate-term-fees/', GenerateTermFeesView.as_view(), name='generate_term_fees'),
 ]
-# TEMPORARY FIX FOR SECURITY TESTS - Add direct URL patterns
+
 

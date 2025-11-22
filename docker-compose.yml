@@ -1,66 +1,44 @@
 version: '3.8'
 
 services:
-  db:
-    image: mysql:8.0
-    command: 
-      - --default-authentication-plugin=mysql_native_password
-      - --wait_timeout=28800
-      - --interactive_timeout=28800
-      - --max_allowed_packet=256M
-      - --innodb_buffer_pool_size=512M
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: school_db
-      MYSQL_USER: school_user
-      MYSQL_PASSWORD: school_password
-      MYSQL_ROOT_HOST: '%'
-    ports:
-      - "3307:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
-      timeout: 20s
-      retries: 10
-      start_period: 60s
-      interval: 10s
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 10s
-      retries: 5
-    restart: unless-stopped
-
   web:
     build: .
-    command: >
-      sh -c "python manage.py wait_for_db &&
-             python manage.py runserver 0.0.0.0:8000"
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
       - "8000:8000"
     environment:
       - DJANGO_ENVIRONMENT=development
-      - DEBUG=True
+      - DOCKER_COMPOSE=true
       - DB_HOST=db
-      - DB_PORT=3306
       - DB_NAME=school_db
       - DB_USER=school_user
       - DB_PASSWORD=school_password
       - REDIS_HOST=redis
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      - db
+      - redis
+    stdin_open: true
+    tty: true
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: school_db
+      MYSQL_USER: school_user
+      MYSQL_PASSWORD: school_password
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "3307:3306"  # Different port to avoid conflict with local MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"  # Different port to avoid conflict with local Redis
 
 volumes:
-  db_data:
+  mysql_data:

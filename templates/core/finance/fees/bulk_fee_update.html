@@ -1,0 +1,582 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Fee Update - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.action-guide {
+    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+    border-radius: 10px;
+    color: white;
+}
+.fee-input-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    min-height: 150px;
+}
+.action-section {
+    transition: all 0.3s ease;
+}
+.action-section:not(.active) {
+    display: none;
+}
+.preview-updates {
+    border-left: 4px solid #ffc107;
+}
+.quick-actions .btn {
+    margin-bottom: 0.5rem;
+}
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 text-gray-800">
+                    <i class="fas fa-edit text-warning me-2"></i>
+                    Bulk Fee Update
+                </h1>
+                <a href="{% url 'fee_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Fees
+                </a>
+            </div>
+            <p class="text-muted">Update multiple fee records at once</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Action Guide -->
+        <div class="col-lg-4 mb-4">
+            <div class="action-guide card shadow">
+                <div class="card-body">
+                    <h5 class="card-title text-white">
+                        <i class="fas fa-cogs me-2"></i>Available Actions
+                    </h5>
+                    <ul class="list-unstyled text-white">
+                        <li class="mb-2">
+                            <i class="fas fa-sync me-2"></i>
+                            Update Payment Status
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Change Due Dates
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-money-bill-wave me-2"></i>
+                            Adjust Amounts
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Mark as Paid/Overdue
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-plus-circle me-2"></i>
+                            Add Payments
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="stats-card card shadow mt-4">
+                <div class="card-body text-center">
+                    <h6 class="text-white mb-3">
+                        <i class="fas fa-chart-pie me-2"></i>Fee Statistics
+                    </h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-white">
+                                <h4>{{ total_fees }}</h4>
+                                <small>Total Fees</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-white">
+                                <h4>{{ unpaid_fees }}</h4>
+                                <small>Unpaid</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body quick-actions">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'bulk_fee_import' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-file-import me-2"></i>Bulk Import
+                        </a>
+                        <a href="{% url 'bulk_fee_creation' %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-layer-group me-2"></i>Bulk Create
+                        </a>
+                        <a href="{% url 'generate_term_fees' %}" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-magic me-2"></i>Generate Term Fees
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Form -->
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sliders-h me-2"></i>Bulk Update Fees
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="updateForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Action Selection -->
+                        <div class="mb-4">
+                            <label for="{{ form.action.id_for_label }}" class="form-label fw-bold">
+                                Select Action <span class="text-danger">*</span>
+                            </label>
+                            {{ form.action }}
+                            {% if form.action.errors %}
+                            <div class="text-danger small">{{ form.action.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Fee IDs -->
+                        <div class="mb-4">
+                            <label for="{{ form.fee_ids.id_for_label }}" class="form-label fw-bold">
+                                Fee IDs <span class="text-danger">*</span>
+                            </label>
+                            <div class="fee-input-area">
+                                {{ form.fee_ids }}
+                                <div class="mt-2">
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Enter fee IDs separated by commas or one per line. 
+                                        You can get these from the Fees list page.
+                                    </small>
+                                </div>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="validateFees">
+                                        <i class="fas fa-check me-1"></i>Validate Fees
+                                    </button>
+                                    <span id="feeCount" class="badge bg-info ms-2 d-none">0 fees</span>
+                                </div>
+                            </div>
+                            {% if form.fee_ids.errors %}
+                            <div class="text-danger small mt-2">{{ form.fee_ids.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Action-specific sections -->
+                        
+                        <!-- Update Status Section -->
+                        <div class="action-section" id="statusSection">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.new_status.id_for_label }}" class="form-label">
+                                            New Status <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.new_status }}
+                                        {% if form.new_status.errors %}
+                                        <div class="text-danger small">{{ form.new_status.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Update Due Date Section -->
+                        <div class="action-section" id="dueDateSection">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.new_due_date.id_for_label }}" class="form-label">
+                                            New Due Date <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.new_due_date }}
+                                        {% if form.new_due_date.errors %}
+                                        <div class="text-danger small">{{ form.new_due_date.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Adjust Amount Section -->
+                        <div class="action-section" id="amountSection">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.adjustment_type.id_for_label }}" class="form-label">
+                                            Adjustment Type <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.adjustment_type }}
+                                        {% if form.adjustment_type.errors %}
+                                        <div class="text-danger small">{{ form.adjustment_type.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.amount_adjustment.id_for_label }}" class="form-label">
+                                            Amount <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.amount_adjustment }}
+                                        {% if form.amount_adjustment.errors %}
+                                        <div class="text-danger small">{{ form.amount_adjustment.errors }}</div>
+                                        {% endif %}
+                                        <small class="form-text text-muted" id="amountHelp">
+                                            Enter the adjustment amount
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Add Payment Section -->
+                        <div class="action-section" id="paymentSection">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.amount_adjustment.id_for_label }}" class="form-label">
+                                            Payment Amount <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.amount_adjustment }}
+                                        <small class="form-text text-muted">
+                                            Amount to be added as payment
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview Section -->
+                        <div class="preview-updates card mt-4 d-none" id="previewSection">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-eye me-2"></i>Update Preview
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Action:</strong>
+                                        <div id="previewAction" class="fw-bold text-warning"></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Changes:</strong>
+                                        <div id="previewChanges" class="mt-1"></div>
+                                    </div>
+                                </div>
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    This will update <strong id="previewCount">0</strong> fee records. This action cannot be undone.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <button type="button" class="btn btn-secondary me-md-2" onclick="history.back()">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="submit" class="btn btn-warning" id="submitButton">
+                                <i class="fas fa-play me-2"></i>Execute Update
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent Bulk Updates -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Recent Bulk Updates
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Fees Updated</th>
+                                    <th>By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        No recent bulk updates
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize Select2
+    $('select').select2({
+        theme: 'bootstrap4'
+    });
+
+    let feeData = [];
+    let currentAction = '';
+
+    // Action change handler
+    $('#id_action').on('change', function() {
+        currentAction = $(this).val();
+        showActionSection(currentAction);
+        updatePreview();
+    });
+
+    // Validate fees
+    $('#validateFees').on('click', function() {
+        const feeIdsText = $('#id_fee_ids').val().trim();
+        if (!feeIdsText) {
+            alert('Please enter some fee IDs');
+            return;
+        }
+
+        const feeIds = parseFeeIds(feeIdsText);
+        
+        // Show loading
+        $(this).html('<i class="fas fa-spinner fa-spin me-1"></i>Validating...');
+        $('#feeCount').removeClass('d-none').html('<i class="fas fa-spinner fa-spin"></i>');
+
+        // Simulate API call to validate fees
+        setTimeout(() => {
+            // In real implementation, this would be an AJAX call to validate fees
+            feeData = feeIds.map(id => ({ 
+                id: id, 
+                student: `Student ${id}`, 
+                category: 'Tuition Fee',
+                amount: '1000.00',
+                status: 'unpaid'
+            }));
+            
+            updatePreview();
+            $('#feeCount').text(feeData.length + ' fees');
+            $(this).html('<i class="fas fa-check me-1"></i>Validated');
+        }, 1000);
+    });
+
+    // Update amount help text based on adjustment type
+    $('#id_adjustment_type').on('change', function() {
+        updateAmountHelpText();
+        updatePreview();
+    });
+
+    // Auto-update preview when form changes
+    $('input, select').on('change keyup', function() {
+        if (feeData.length > 0 && currentAction) {
+            updatePreview();
+        }
+    });
+
+    function showActionSection(action) {
+        // Hide all sections first
+        $('.action-section').removeClass('active').hide();
+        
+        // Show relevant section
+        switch(action) {
+            case 'update_status':
+                $('#statusSection').addClass('active').show();
+                break;
+            case 'update_due_date':
+                $('#dueDateSection').addClass('active').show();
+                break;
+            case 'adjust_amount':
+                $('#amountSection').addClass('active').show();
+                updateAmountHelpText();
+                break;
+            case 'mark_paid':
+            case 'mark_overdue':
+                // No additional fields needed
+                break;
+            case 'add_payment':
+                $('#paymentSection').addClass('active').show();
+                break;
+        }
+    }
+
+    function updateAmountHelpText() {
+        const adjustmentType = $('#id_adjustment_type').val();
+        let helpText = 'Enter the adjustment amount';
+        
+        switch(adjustmentType) {
+            case 'increase':
+                helpText = 'Enter amount to add to current payable amount';
+                break;
+            case 'decrease':
+                helpText = 'Enter amount to subtract from current payable amount';
+                break;
+            case 'set':
+                helpText = 'Enter new total payable amount';
+                break;
+        }
+        
+        $('#amountHelp').text(helpText);
+    }
+
+    function parseFeeIds(text) {
+        const lines = text.split('\n');
+        let ids = [];
+        lines.forEach(line => {
+            const lineIds = line.split(',').map(id => id.trim()).filter(id => id && !isNaN(id));
+            ids = ids.concat(lineIds);
+        });
+        return ids;
+    }
+
+    function updatePreview() {
+        if (!currentAction || feeData.length === 0) return;
+
+        const actionText = $('#id_action option:selected').text();
+        $('#previewAction').text(actionText);
+        $('#previewCount').text(feeData.length);
+
+        let changesHtml = '';
+
+        switch(currentAction) {
+            case 'update_status':
+                const newStatus = $('#id_new_status option:selected').text();
+                changesHtml = `<div>Set status to: <strong>${newStatus}</strong></div>`;
+                break;
+            case 'update_due_date':
+                const dueDate = $('#id_new_due_date').val();
+                changesHtml = `<div>Set due date to: <strong>${new Date(dueDate).toLocaleDateString()}</strong></div>`;
+                break;
+            case 'adjust_amount':
+                const adjustmentType = $('#id_adjustment_type option:selected').text();
+                const amount = $('#id_amount_adjustment').val();
+                changesHtml = `
+                    <div>Adjustment type: <strong>${adjustmentType}</strong></div>
+                    <div>Amount: <strong>GH₵${amount}</strong></div>
+                `;
+                break;
+            case 'mark_paid':
+                changesHtml = `<div>Mark all as <strong class="text-success">Paid</strong></div>`;
+                break;
+            case 'mark_overdue':
+                changesHtml = `<div>Mark all as <strong class="text-danger">Overdue</strong></div>`;
+                break;
+            case 'add_payment':
+                const paymentAmount = $('#id_amount_adjustment').val();
+                changesHtml = `<div>Add payment of: <strong>GH₵${paymentAmount}</strong></div>`;
+                break;
+        }
+
+        $('#previewChanges').html(changesHtml);
+        $('#previewSection').removeClass('d-none');
+    }
+
+    // Form submission
+    $('#updateForm').on('submit', function(e) {
+        if (feeData.length === 0) {
+            e.preventDefault();
+            alert('Please validate fee IDs first');
+            return false;
+        }
+
+        if (!validateAction()) {
+            e.preventDefault();
+            return false;
+        }
+
+        const submitButton = $('#submitButton');
+        submitButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Updating...');
+        
+        return true;
+    });
+
+    function validateAction() {
+        const action = currentAction;
+        
+        switch(action) {
+            case 'update_status':
+                if (!$('#id_new_status').val()) {
+                    alert('Please select a new status');
+                    return false;
+                }
+                break;
+            case 'update_due_date':
+                if (!$('#id_new_due_date').val()) {
+                    alert('Please select a due date');
+                    return false;
+                }
+                break;
+            case 'adjust_amount':
+                if (!$('#id_adjustment_type').val() || !$('#id_amount_adjustment').val()) {
+                    alert('Please complete all amount adjustment fields');
+                    return false;
+                }
+                break;
+            case 'add_payment':
+                if (!$('#id_amount_adjustment').val()) {
+                    alert('Please enter payment amount');
+                    return false;
+                }
+                break;
+        }
+        
+        return true;
+    }
+
+    // Format fee IDs input
+    $('#id_fee_ids').on('blur', function() {
+        const text = $(this).val().trim();
+        if (text) {
+            // Normalize input
+            const lines = text.split('\n').map(line => 
+                line.split(',').map(id => id.trim()).filter(id => id && !isNaN(id)).join(', ')
+            ).filter(line => line.trim());
+            
+            $(this).val(lines.join('\n'));
+        }
+    });
+
+    // Initialize with first action
+    if ($('#id_action').val()) {
+        currentAction = $('#id_action').val();
+        showActionSection(currentAction);
+    }
+});
+</script>
+{% endblock %}

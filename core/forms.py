@@ -1279,6 +1279,10 @@ class AttendanceFilterForm(forms.Form):
 
 # ===== GRADE FORMS =====
 
+# In core/forms.py - FIX THE GradeEntryForm CLASS
+
+# In core/forms.py - Update the GradeEntryForm class
+
 class GradeEntryForm(forms.ModelForm):
     class_level = forms.ChoiceField(
         choices=CLASS_LEVEL_CHOICES,
@@ -1295,7 +1299,6 @@ class GradeEntryForm(forms.ModelForm):
         fields = [
             'student', 'subject', 'class_level', 'academic_year', 'term',
             'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks'
-            # Note: class_assignment is NOT included here - we'll handle it differently
         ]
         widgets = {
             'academic_year': forms.TextInput(attrs={
@@ -1342,6 +1345,10 @@ class GradeEntryForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
+        # Debug information
+        print(f"DEBUG GradeEntryForm: User: {self.user}")
+        print(f"DEBUG GradeEntryForm: Is teacher: {hasattr(self.user, 'teacher') if self.user else False}")
+        
         # Set current academic year and term
         current_year = timezone.now().year
         self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
@@ -1362,40 +1369,82 @@ class GradeEntryForm(forms.ModelForm):
         
         # Filter students and subjects based on user role
         if self.user and hasattr(self.user, 'teacher'):
+            print("DEBUG: Setting up teacher form")
             self.setup_teacher_form()
         else:
+            print("DEBUG: Setting up admin form")
             self.setup_admin_form()
 
     def setup_teacher_form(self):
-        """Setup form for teacher users"""
+        """Setup form for teacher users with comprehensive fallback"""
+        if not self.user or not hasattr(self.user, 'teacher'):
+            print("DEBUG: No teacher found")
+            return
+            
         teacher = self.user.teacher
+        print(f"DEBUG: Teacher: {teacher}")
         
-        # Get class levels this teacher teaches
-        teacher_class_levels = ClassAssignment.objects.filter(
-            teacher=teacher,
-            is_active=True
-        ).values_list('class_level', flat=True).distinct()
-        
-        # Filter class level choices
-        self.fields['class_level'].choices = [
-            (level, display) for level, display in CLASS_LEVEL_CHOICES 
-            if level in teacher_class_levels
-        ]
-        
-        # Filter students to only those in teacher's classes
-        self.fields['student'].queryset = Student.objects.filter(
-            class_level__in=teacher_class_levels,
-            is_active=True
-        ).order_by('class_level', 'last_name', 'first_name')
-        
-        # Filter subjects to only those teacher teaches
-        self.fields['subject'].queryset = Subject.objects.filter(
-            classassignment__teacher=teacher,
-            classassignment__is_active=True
-        ).distinct().order_by('name')
+        try:
+            # Get class levels this teacher teaches
+            teacher_class_levels = ClassAssignment.objects.filter(
+                teacher=teacher,
+                is_active=True
+            ).values_list('class_level', flat=True).distinct()
+            
+            print(f"DEBUG: Teacher class levels: {list(teacher_class_levels)}")
+            
+            # Filter class level choices
+            self.fields['class_level'].choices = [
+                (level, display) for level, display in CLASS_LEVEL_CHOICES 
+                if level in teacher_class_levels
+            ]
+            
+            # Filter students to only those in teacher's classes
+            self.fields['student'].queryset = Student.objects.filter(
+                class_level__in=teacher_class_levels,
+                is_active=True
+            ).order_by('class_level', 'last_name', 'first_name')
+            
+            # PRIMARY METHOD: Get subjects from active class assignments
+            class_assignments = ClassAssignment.objects.filter(
+                teacher=teacher,
+                is_active=True
+            ).select_related('subject')
+            
+            subject_ids = class_assignments.values_list('subject_id', flat=True).distinct()
+            
+            subjects_queryset = Subject.objects.filter(
+                id__in=subject_ids,
+                is_active=True
+            ).distinct().order_by('name')
+            
+            print(f"DEBUG: Primary method - Subjects count: {subjects_queryset.count()}")
+            
+            # FALLBACK 1: If no subjects from class assignments, use teacher's assigned subjects
+            if not subjects_queryset.exists():
+                print("DEBUG: Using teacher's assigned subjects as fallback")
+                subjects_queryset = teacher.subjects.filter(is_active=True).order_by('name')
+                print(f"DEBUG: Fallback 1 - Subjects count: {subjects_queryset.count()}")
+            
+            # FALLBACK 2: If still no subjects, show all active subjects
+            if not subjects_queryset.exists():
+                print("DEBUG: Using all active subjects as final fallback")
+                subjects_queryset = Subject.objects.filter(is_active=True).order_by('name')
+                print(f"DEBUG: Fallback 2 - Subjects count: {subjects_queryset.count()}")
+            
+            self.fields['subject'].queryset = subjects_queryset
+            
+            print(f"DEBUG: Final subjects count for teacher: {subjects_queryset.count()}")
+            print(f"DEBUG: Final subjects: {list(subjects_queryset.values_list('name', flat=True))}")
+            
+        except Exception as e:
+            print(f"DEBUG: Error in setup_teacher_form: {e}")
+            # Ultimate fallback - show all active subjects
+            self.fields['subject'].queryset = Subject.objects.filter(is_active=True).order_by('name')
 
     def setup_admin_form(self):
         """Setup form for admin users"""
+        print("DEBUG: Setting up admin form")
         self.fields['student'].queryset = Student.objects.filter(
             is_active=True
         ).order_by('class_level', 'last_name', 'first_name')
@@ -1403,20 +1452,8 @@ class GradeEntryForm(forms.ModelForm):
         self.fields['subject'].queryset = Subject.objects.filter(
             is_active=True
         ).order_by('name')
-
-    def clean_class_level(self):
-        """Validate class level"""
-        class_level = self.cleaned_data.get('class_level')
-        student = self.cleaned_data.get('student')
         
-        if student and class_level != student.class_level:
-            class_display = dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
-            student_class_display = student.get_class_level_display()
-            raise ValidationError(
-                f"Selected class level ({class_display}) doesn't match student's actual class ({student_class_display})"
-            )
-        
-        return class_level
+        print(f"DEBUG: Admin subjects count: {self.fields['subject'].queryset.count()}")
 
     def clean(self):
         """
@@ -1439,7 +1476,7 @@ class GradeEntryForm(forms.ModelForm):
             return cleaned_data
         
         # DEBUG: Log the values we're working with
-        logger.info(f"Grade form data - Student: {student}, Subject: {subject}, Class Level: {class_level}, Academic Year: {academic_year}")
+        print(f"DEBUG GradeEntryForm clean: Student: {student}, Subject: {subject}, Class Level: {class_level}, Academic Year: {academic_year}")
         
         # Handle class assignment - with enhanced error handling
         try:
@@ -1450,14 +1487,14 @@ class GradeEntryForm(forms.ModelForm):
             if class_assignment:
                 # Set the class_assignment on the instance
                 self.instance.class_assignment = class_assignment
-                logger.info(f"Successfully assigned class_assignment: {class_assignment}")
+                print(f"DEBUG: Successfully assigned class_assignment: {class_assignment}")
             else:
                 # Provide more detailed error information
                 error_msg = self.get_detailed_class_assignment_error(class_level, subject, academic_year)
                 raise ValidationError(error_msg)
                 
         except Exception as e:
-            logger.error(f"Error in class assignment handling: {str(e)}")
+            print(f"DEBUG: Error in class assignment handling: {str(e)}")
             raise ValidationError(f"Error setting up class assignment: {str(e)}")
         
         # Check for duplicate grades
@@ -1518,7 +1555,7 @@ class GradeEntryForm(forms.ModelForm):
         Get or create class assignment for the given parameters with enhanced logic
         """
         try:
-            logger.info(f"Looking for class assignment: {class_level}, {subject}, {academic_year}")
+            print(f"DEBUG: Looking for class assignment: {class_level}, {subject}, {academic_year}")
             
             # First try to find existing ACTIVE class assignment
             class_assignment = ClassAssignment.objects.filter(
@@ -1529,7 +1566,7 @@ class GradeEntryForm(forms.ModelForm):
             ).first()
             
             if class_assignment:
-                logger.info(f"Found existing active class assignment: {class_assignment}")
+                print(f"DEBUG: Found existing active class assignment: {class_assignment}")
                 return class_assignment
             
             # If no active assignment found, check for any existing assignment (even inactive)
@@ -1543,11 +1580,11 @@ class GradeEntryForm(forms.ModelForm):
                 # Reactivate the existing assignment
                 existing_inactive.is_active = True
                 existing_inactive.save()
-                logger.info(f"Reactivated existing class assignment: {existing_inactive}")
+                print(f"DEBUG: Reactivated existing class assignment: {existing_inactive}")
                 return existing_inactive
             
             # If no existing assignment, create a new one
-            logger.info("No existing class assignment found, creating new one")
+            print("DEBUG: No existing class assignment found, creating new one")
             
             # Determine the teacher to assign
             teacher = None
@@ -1558,7 +1595,7 @@ class GradeEntryForm(forms.ModelForm):
                 if (current_teacher.is_active and 
                     current_teacher.subjects.filter(id=subject.id).exists()):
                     teacher = current_teacher
-                    logger.info(f"Using current teacher: {teacher}")
+                    print(f"DEBUG: Using current teacher: {teacher}")
             
             # If current teacher not available or not qualified, find any available teacher
             if not teacher:
@@ -1566,10 +1603,10 @@ class GradeEntryForm(forms.ModelForm):
                     subjects=subject,
                     is_active=True
                 ).first()
-                logger.info(f"Found available teacher: {teacher}")
+                print(f"DEBUG: Found available teacher: {teacher}")
             
             if not teacher:
-                logger.error("No available teacher found for subject")
+                print("DEBUG: No available teacher found for subject")
                 return None
             
             # Create the class assignment
@@ -1581,11 +1618,11 @@ class GradeEntryForm(forms.ModelForm):
                 is_active=True
             )
             
-            logger.info(f"Created new class assignment: {class_assignment}")
+            print(f"DEBUG: Created new class assignment: {class_assignment}")
             return class_assignment
             
         except Exception as e:
-            logger.error(f"Error in get_or_create_class_assignment: {str(e)}")
+            print(f"DEBUG: Error in get_or_create_class_assignment: {str(e)}")
             return None
 
     def validate_no_duplicate_grade(self, student, subject, academic_year, term):
@@ -1637,6 +1674,7 @@ class GradeEntryForm(forms.ModelForm):
             self.instance.recorded_by = self.user
     
         return super().save(commit=commit)
+
 
 class BulkGradeUploadForm(forms.Form):
     assignment = forms.ModelChoiceField(
@@ -2199,6 +2237,8 @@ TERM_CHOICES = [
 
 # ===== FEE CATEGORY FORMS =====
 
+# ===== FEE CATEGORY FORMS =====
+
 class FeeCategoryForm(forms.ModelForm):
     class Meta:
         model = FeeCategory
@@ -2253,7 +2293,9 @@ class FeeCategoryForm(forms.ModelForm):
                     raise ValidationError(f"Invalid class level: {level}. Valid levels are: {', '.join(valid_levels)}")
         return class_levels
 
+# ===== FEE FORMS =====
 
+# In core/forms.py - FIXED FeeForm
 # ===== FEE FORMS =====
 
 class FeeForm(forms.ModelForm):
@@ -2265,14 +2307,23 @@ class FeeForm(forms.ModelForm):
         })
     )
     
+    # Explicit category field with proper queryset and ordering
+    category = forms.ModelChoiceField(
+        queryset=FeeCategory.objects.filter(is_active=True).order_by('name'),
+        widget=forms.Select(attrs={
+            'class': 'form-control',
+            'id': 'id_category'
+        }),
+        label="Fee Category",
+        required=True,
+        empty_label="Select Fee Category"
+    )
+    
     class Meta:
         model = Fee
         fields = ['student', 'category', 'academic_year', 'term', 
-                 'amount_payable', 'amount_paid', 'payment_mode', 'payment_date', 'due_date', 'notes']  # ADDED payment_mode and payment_date
+                 'amount_payable', 'amount_paid', 'payment_mode', 'payment_date', 'due_date', 'notes']
         widgets = {
-            'category': forms.Select(attrs={
-                'class': 'form-control'
-            }),
             'academic_year': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'YYYY/YYYY e.g., 2024/2025'
@@ -2292,10 +2343,10 @@ class FeeForm(forms.ModelForm):
                 'step': '0.01',
                 'min': '0'
             }),
-            'payment_mode': forms.Select(attrs={  # ADDED payment_mode widget
+            'payment_mode': forms.Select(attrs={
                 'class': 'form-control'
             }),
-            'payment_date': forms.DateInput(attrs={  # ADDED payment_date widget
+            'payment_date': forms.DateInput(attrs={
                 'class': 'form-control',
                 'type': 'date'
             }),
@@ -2312,24 +2363,34 @@ class FeeForm(forms.ModelForm):
         labels = {
             'amount_payable': 'Amount Payable (GH₵)',
             'amount_paid': 'Amount Paid (GH₵)',
-            'payment_mode': 'Payment Method',  # ADDED label
-            'payment_date': 'Payment Date',    # ADDED label
+            'payment_mode': 'Payment Method',
+            'payment_date': 'Payment Date',
         }
 
     def __init__(self, *args, **kwargs):
         self.student_id = kwargs.pop('student_id', None)
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+        
+        print(f"DEBUG FeeForm: student_id = {self.student_id}")
+        print(f"DEBUG FeeForm: Initial data = {self.initial}")
         
         # Set current academic year as default
         current_year = timezone.now().year
         next_year = current_year + 1
         self.fields['academic_year'].initial = f"{current_year}/{next_year}"
         
-        # Filter categories to active ones only
-        self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True)
-        
         # Set current date as default for payment_date
         self.fields['payment_date'].initial = timezone.now().date()
+        
+        # Set due date to 30 days from now
+        self.fields['due_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
+        
+        # DEBUG: Check category field
+        print(f"DEBUG FeeForm: Category field exists = {'category' in self.fields}")
+        if 'category' in self.fields:
+            print(f"DEBUG FeeForm: Category queryset count = {self.fields['category'].queryset.count()}")
+            print(f"DEBUG FeeForm: Available categories = {list(self.fields['category'].queryset.values_list('name', flat=True))}")
         
         # If student_id is provided, set the student field and make it read-only
         if self.student_id:
@@ -2338,7 +2399,9 @@ class FeeForm(forms.ModelForm):
                 self.fields['student'].initial = student
                 self.fields['student'].widget.attrs['readonly'] = True
                 self.fields['student'].disabled = True
+                print(f"DEBUG FeeForm: Student set to {student}")
             except Student.DoesNotExist:
+                print(f"DEBUG FeeForm: Student with ID {self.student_id} not found")
                 pass
 
     def clean_academic_year(self):
@@ -2393,6 +2456,8 @@ class FeeForm(forms.ModelForm):
         payment_mode = cleaned_data.get('payment_mode')
         payment_date = cleaned_data.get('payment_date')
 
+        print(f"DEBUG FeeForm clean: Student = {student}, Category = {category}")
+
         # Check for duplicate fee records
         if student and category and academic_year and term:
             existing_fee = Fee.objects.filter(
@@ -2420,6 +2485,7 @@ class FeeForm(forms.ModelForm):
                 })
 
         return cleaned_data
+
 
 # ===== FEE PAYMENT FORMS =====
 
@@ -4068,7 +4134,7 @@ class BudgetForm(forms.ModelForm):
         # Set current academic year as default
         current_year = timezone.now().year
         self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
-        self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True)
+        self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True).order_by('name')
     
     def clean_academic_year(self):
         academic_year = self.cleaned_data.get('academic_year')
@@ -4081,7 +4147,6 @@ class BudgetForm(forms.ModelForm):
         if amount and amount < Decimal('0.01'):
             raise ValidationError("Budget amount must be at least GH₵0.01")
         return amount
-
 
 
 # ===== SECURITY FORMS =====
@@ -4192,3 +4257,326 @@ class ScheduledMaintenanceForm(forms.ModelForm):
             'message': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
         }
 
+# Add these to your existing forms in core/forms.py
+
+class BulkFeeImportForm(forms.Form):
+    FILE_TYPE_CHOICES = [
+        ('excel', 'Excel File (.xlsx, .xls)'),
+        ('csv', 'CSV File (.csv)'),
+    ]
+    
+    file = forms.FileField(
+        label="Upload File",
+        help_text="Upload Excel or CSV file with fee data",
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv,.xlsx,.xls',
+            'required': 'required'
+        })
+    )
+    
+    file_type = forms.ChoiceField(
+        choices=FILE_TYPE_CHOICES,
+        initial='excel',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    academic_year = forms.CharField(
+        max_length=9,
+        required=True,
+        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025',
+            'pattern': r'\d{4}/\d{4}'
+        })
+    )
+    
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    update_existing = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Update existing fees",
+        help_text="Update fees that already exist for students",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set current academic year as default
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+    
+    def clean_file(self):
+        file = self.cleaned_data.get('file')
+        if file:
+            # Validate file type
+            file_type = self.cleaned_data.get('file_type', 'excel')
+            if file_type == 'excel' and not file.name.endswith(('.xlsx', '.xls')):
+                raise ValidationError("Please upload an Excel file (.xlsx or .xls)")
+            elif file_type == 'csv' and not file.name.endswith('.csv'):
+                raise ValidationError("Please upload a CSV file (.csv)")
+            
+            # Validate file size (10MB max)
+            if file.size > 10 * 1024 * 1024:
+                raise ValidationError("File size must be less than 10MB")
+        
+        return file
+    
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if academic_year:
+            try:
+                year1, year2 = map(int, academic_year.split('/'))
+                if year2 != year1 + 1:
+                    raise ValidationError("The second year should be exactly one year after the first year")
+            except (ValueError, IndexError):
+                raise ValidationError("Invalid academic year format. Use YYYY/YYYY")
+        
+        return academic_year
+
+class BulkFeeUpdateForm(forms.Form):
+    ACTION_CHOICES = [
+        ('update_status', 'Update Payment Status'),
+        ('update_due_date', 'Update Due Date'),
+        ('adjust_amount', 'Adjust Amount'),
+        ('mark_paid', 'Mark as Paid'),
+        ('mark_overdue', 'Mark as Overdue'),
+        ('add_payment', 'Add Payment'),
+    ]
+    
+    PAYMENT_STATUS_CHOICES = [
+        ('paid', 'Paid'),
+        ('unpaid', 'Unpaid'),
+        ('partial', 'Partial Payment'),
+        ('overdue', 'Overdue'),
+    ]
+    
+    ADJUSTMENT_TYPE_CHOICES = [
+        ('increase', 'Increase Amount'),
+        ('decrease', 'Decrease Amount'),
+        ('set', 'Set Specific Amount'),
+    ]
+    
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        required=True,
+        widget=forms.Select(attrs={
+            'class': 'form-control',
+            'id': 'id_action'
+        })
+    )
+    
+    fee_ids = forms.CharField(
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Enter fee IDs separated by commas or one per line...'
+        }),
+        help_text="Enter fee IDs (comma-separated or one per line)"
+    )
+    
+    new_status = forms.ChoiceField(
+        choices=PAYMENT_STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_due_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    amount_adjustment = forms.DecimalField(
+        required=False,
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'min': '0.01'
+        }),
+        help_text="Amount to adjust by or set to"
+    )
+    
+    adjustment_type = forms.ChoiceField(
+        choices=ADJUSTMENT_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default due date to 30 days from now
+        self.fields['new_due_date'].initial = timezone.now().date() + timedelta(days=30)
+    
+    def clean_fee_ids(self):
+        fee_ids = self.cleaned_data.get('fee_ids', '').strip()
+        if not fee_ids:
+            raise ValidationError("Please enter at least one fee ID")
+        
+        # Parse fee IDs - handle both comma-separated and newline-separated
+        fee_id_list = []
+        for line in fee_ids.split('\n'):
+            for fee_id in line.split(','):
+                fee_id = fee_id.strip()
+                if fee_id and fee_id.isdigit():
+                    fee_id_list.append(int(fee_id))
+        
+        if not fee_id_list:
+            raise ValidationError("No valid fee IDs found. Please enter numeric fee IDs.")
+        
+        # Check if fees exist
+        existing_fees = Fee.objects.filter(id__in=fee_id_list)
+        if existing_fees.count() != len(fee_id_list):
+            found_ids = set(existing_fees.values_list('id', flat=True))
+            missing_ids = set(fee_id_list) - found_ids
+            raise ValidationError(f"Some fee IDs not found: {', '.join(map(str, missing_ids))}")
+        
+        return fee_id_list
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        new_status = cleaned_data.get('new_status')
+        new_due_date = cleaned_data.get('new_due_date')
+        amount_adjustment = cleaned_data.get('amount_adjustment')
+        adjustment_type = cleaned_data.get('adjustment_type')
+        
+        # Validate required fields based on action
+        if action == 'update_status' and not new_status:
+            self.add_error('new_status', 'This field is required for status updates')
+        
+        elif action == 'update_due_date' and not new_due_date:
+            self.add_error('new_due_date', 'This field is required for due date updates')
+        
+        elif action == 'adjust_amount':
+            if not amount_adjustment:
+                self.add_error('amount_adjustment', 'This field is required for amount adjustments')
+            if not adjustment_type:
+                self.add_error('adjustment_type', 'This field is required for amount adjustments')
+            elif amount_adjustment and amount_adjustment <= 0:
+                self.add_error('amount_adjustment', 'Amount must be greater than 0')
+        
+        elif action == 'add_payment' and not amount_adjustment:
+            self.add_error('amount_adjustment', 'Payment amount is required')
+        
+        return cleaned_data
+
+class BulkFeeCreationForm(forms.Form):
+    student_ids = forms.CharField(
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 4,
+            'placeholder': 'Enter student IDs separated by commas or one per line...'
+        }),
+        help_text="Enter student IDs (comma-separated or one per line)"
+    )
+    
+    category = forms.ModelChoiceField(
+        queryset=FeeCategory.objects.filter(is_active=True),
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    amount_payable = forms.DecimalField(
+        required=True,
+        max_digits=10,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'min': '0.01'
+        }),
+        help_text="Amount payable for each student"
+    )
+    
+    academic_year = forms.CharField(
+        max_length=9,
+        required=True,
+        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    due_date = forms.DateField(
+        required=True,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Optional description for the fees...'
+        })
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default values
+        current_year = timezone.now().year
+        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
+        self.fields['due_date'].initial = timezone.now().date() + timedelta(days=30)
+    
+    def clean_student_ids(self):
+        student_ids = self.cleaned_data.get('student_ids', '').strip()
+        if not student_ids:
+            raise ValidationError("Please enter at least one student ID")
+        
+        # Parse student IDs
+        student_id_list = []
+        for line in student_ids.split('\n'):
+            for student_id in line.split(','):
+                student_id = student_id.strip()
+                if student_id:
+                    student_id_list.append(student_id)
+        
+        if not student_id_list:
+            raise ValidationError("No valid student IDs found")
+        
+        # Check if students exist
+        existing_students = Student.objects.filter(
+            student_id__in=student_id_list, 
+            is_active=True
+        )
+        
+        if existing_students.count() != len(student_id_list):
+            found_ids = set(existing_students.values_list('student_id', flat=True))
+            missing_ids = set(student_id_list) - found_ids
+            raise ValidationError(f"Some student IDs not found or inactive: {', '.join(missing_ids)}")
+        
+        return student_id_list
+    
+    def clean_amount_payable(self):
+        amount = self.cleaned_data.get('amount_payable')
+        if amount and amount <= 0:
+            raise ValidationError("Amount payable must be greater than 0")
+        return amount
+    
+    def clean_due_date(self):
+        due_date = self.cleaned_data.get('due_date')
+        if due_date and due_date < timezone.now().date():
+            raise ValidationError("Due date cannot be in the past")
+        return due_date
+    

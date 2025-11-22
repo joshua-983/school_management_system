@@ -15,6 +15,9 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    
     <!-- Chart.js for Security Dashboard -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -822,6 +825,86 @@
             background-color: #f8f9fa;
             transform: translateX(2px);
         }
+
+        /* Bulk Operations Specific Styles */
+        .bulk-import-guide {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+        }
+        
+        .bulk-creation-guide {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-radius: 10px;
+            color: white;
+        }
+        
+        .bulk-update-guide {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border-radius: 10px;
+            color: white;
+        }
+        
+        .template-download {
+            border-left: 4px solid #28a745;
+            background-color: #f8fff9;
+        }
+        
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            background-color: #f8f9fa;
+        }
+        
+        .upload-area:hover {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+        
+        .upload-area.dragover {
+            border-color: #28a745;
+            background-color: #e8f5e8;
+        }
+        
+        .file-info {
+            background-color: #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .student-input-area, .fee-input-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 1.5rem;
+            background-color: #f8f9fa;
+            min-height: 150px;
+        }
+        
+        .preview-card {
+            border-left: 4px solid #28a745;
+        }
+        
+        .preview-updates {
+            border-left: 4px solid #ffc107;
+        }
+        
+        .action-section {
+            transition: all 0.3s ease;
+        }
+        
+        .action-section:not(.active) {
+            display: none;
+        }
+        
+        .import-stats, .quick-stats {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -1126,84 +1209,120 @@
             {% endif %}
             
             <!-- Finance Menu -->
-{% if user.is_superuser or user.teacher or user.parentguardian %}
-<li class="nav-item">
-    <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
-        <i class="bi bi-cash-stack"></i>
-        <span>Finance</span>
-        <i class="bi bi-chevron-down float-end"></i>
-    </a>
-    <div class="sub-menu collapse" id="financeMenu">
-        {% if user.is_superuser %}
-        <!-- Dashboard & Overview -->
-        <a class="nav-link" href="{% url 'finance_dashboard' %}">
-            <i class="bi bi-speedometer2"></i>
-            <span>Finance Dashboard</span>
-        </a>
-        <a class="nav-link" href="{% url 'payment_summary' %}">
-            <i class="bi bi-pie-chart"></i>
-            <span>Payment Summary</span>
-        </a>
-        
-        <!-- Fee Management -->
-        <a class="nav-link" href="{% url 'fee_list' %}">
-            <i class="bi bi-credit-card"></i>
-            <span>Fee Management</span>
-        </a>
-        <a class="nav-link" href="{% url 'bill_list' %}">
-            <i class="bi bi-file-invoice"></i>
-            <span>Bill Management</span>
-        </a>
-        
-        <!-- Analytics & Reports -->
-        <a class="nav-link" href="{% url 'revenue_analytics' %}">
-            <i class="bi bi-graph-up"></i>
-            <span>Revenue Analytics</span>
-        </a>
-        <a class="nav-link" href="{% url 'financial_health' %}">
-            <i class="bi bi-heart-pulse"></i>
-            <span>Financial Health</span>
-        </a>
-        <a class="nav-link" href="{% url 'budget_management' %}">
-            <i class="bi bi-clipboard-data"></i>
-            <span>Budget Management</span>
-        </a>
-        <a class="nav-link" href="{% url 'fee_analytics' %}">
-            <i class="bi bi-bar-chart"></i>
-            <span>Fee Analytics</span>
-        </a>
-        
-        <!-- Reports -->
-        <a class="nav-link" href="{% url 'fee_report' %}">
-            <i class="bi bi-file-earmark-text"></i>
-            <span>Financial Reports</span>
-        </a>
-        
-        {% elif user.teacher %}
-        <!-- Teacher Finance Access -->
-        <a class="nav-link" href="{% url 'payment_summary' %}">
-            <i class="bi bi-pie-chart"></i>
-            <span>Payment Summary</span>
-        </a>
-        <a class="nav-link" href="{% url 'fee_list' %}">
-            <i class="bi bi-credit-card"></i>
-            <span>Class Fees</span>
-        </a>
-        <a class="nav-link" href="{% url 'fee_report' %}">
-            <i class="bi bi-file-earmark-text"></i>
-            <span>Fee Reports</span>
-        </a>
-        
-        {% elif user.parentguardian %}
-        <!-- Parent Finance Access -->
-        <a class="nav-link" href="{% url 'parent_fee_list' %}">
-            <i class="bi bi-credit-card"></i>
-            <span>Fee Payments</span>
-        </a>
-        {% endif %}
-    </div>
-</li>
-{% endif %}
+            {% if user.is_superuser or user.teacher or user.parentguardian %}
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="collapse" href="#financeMenu">
+                    <i class="bi bi-cash-stack"></i>
+                    <span>Finance</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </a>
+                <div class="sub-menu collapse" id="financeMenu">
+                    {% if user.is_superuser %}
+                    <!-- Dashboard & Overview -->
+                    <a class="nav-link" href="{% url 'finance_dashboard' %}">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Finance Dashboard</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'payment_summary' %}">
+                        <i class="bi bi-pie-chart"></i>
+                        <span>Payment Summary</span>
+                    </a>
+                    
+                    <!-- Fee Management -->
+                    <a class="nav-link" href="{% url 'fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Fee Management</span>
+                    </a>
+                    
+                    <!-- Bulk Fee Operations -->
+                    <li><hr class="dropdown-divider m-0"></li>
+                    <li><h6 class="dropdown-header py-2">Bulk Operations</h6></li>
+                    <a class="nav-link" href="{% url 'bulk_fee_import' %}">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                        <span>Bulk Fee Import</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'bulk_fee_creation' %}">
+                        <i class="bi bi-layers"></i>
+                        <span>Bulk Fee Creation</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'bulk_fee_update' %}">
+                        <i class="bi bi-pencil-square"></i>
+                        <span>Bulk Fee Update</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'generate_term_fees' %}">
+                        <i class="bi bi-magic"></i>
+                        <span>Generate Term Fees</span>
+                    </a>
+                    <li><hr class="dropdown-divider m-0"></li>
+                    
+                    <a class="nav-link" href="{% url 'bill_list' %}">
+                        <i class="bi bi-file-invoice"></i>
+                        <span>Bill Management</span>
+                    </a>
+                    
+                    <!-- Analytics & Reports -->
+                    <a class="nav-link" href="{% url 'revenue_analytics' %}">
+                        <i class="bi bi-graph-up"></i>
+                        <span>Revenue Analytics</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'financial_health' %}">
+                        <i class="bi bi-heart-pulse"></i>
+                        <span>Financial Health</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'budget_management' %}">
+                        <i class="bi bi-clipboard-data"></i>
+                        <span>Budget Management</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'fee_analytics' %}">
+                        <i class="bi bi-bar-chart"></i>
+                        <span>Fee Analytics</span>
+                    </a>
+                    
+                    <!-- Reports -->
+                    <a class="nav-link" href="{% url 'fee_report' %}">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <span>Financial Reports</span>
+                    </a>
+                    
+                    {% elif user.teacher %}
+                    <!-- Teacher Finance Access -->
+                    <a class="nav-link" href="{% url 'payment_summary' %}">
+                        <i class="bi bi-pie-chart"></i>
+                        <span>Payment Summary</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Class Fees</span>
+                    </a>
+                    
+                    <!-- Teacher Bulk Operations -->
+                    <li><hr class="dropdown-divider m-0"></li>
+                    <li><h6 class="dropdown-header py-2">Bulk Operations</h6></li>
+                    <a class="nav-link" href="{% url 'bulk_fee_import' %}">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                        <span>Bulk Fee Import</span>
+                    </a>
+                    <a class="nav-link" href="{% url 'bulk_fee_creation' %}">
+                        <i class="bi bi-layers"></i>
+                        <span>Bulk Fee Creation</span>
+                    </a>
+                    <li><hr class="dropdown-divider m-0"></li>
+                    
+                    <a class="nav-link" href="{% url 'fee_report' %}">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <span>Fee Reports</span>
+                    </a>
+                    
+                    {% elif user.parentguardian %}
+                    <!-- Parent Finance Access -->
+                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </li>
+            {% endif %}
 
             <!-- Audit & Security Menu - For Admin Only -->
             {% if user.is_superuser %}
@@ -1536,6 +1655,9 @@
     
     <!-- jQuery (optional) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     
     <script>
         // Security Dashboard Integration
@@ -2424,6 +2546,19 @@
             this.querySelector('.newsletter-input').value = '';
         });
 
+        // Initialize Select2 for all select elements
+        function initializeSelect2() {
+            $('select').each(function() {
+                if (!$(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2({
+                        theme: 'bootstrap4',
+                        width: '100%',
+                        placeholder: $(this).attr('placeholder') || 'Select an option...'
+                    });
+                }
+            });
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Initializing school management system...');
@@ -2442,6 +2577,9 @@
             if (securityDashboardElements.length > 0) {
                 startRealTimeMonitoring();
             }
+            
+            // Initialize Select2
+            initializeSelect2();
             
             // Mobile sidebar handling
             if (window.innerWidth < 992) {

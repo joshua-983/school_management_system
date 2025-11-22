@@ -1,0 +1,466 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Fee Import - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.import-guide {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    color: white;
+}
+.import-guide .card-body {
+    padding: 2rem;
+}
+.template-download {
+    border-left: 4px solid #28a745;
+    background-color: #f8fff9;
+}
+.upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+}
+.upload-area:hover {
+    border-color: #007bff;
+    background-color: #e3f2fd;
+}
+.upload-area.dragover {
+    border-color: #28a745;
+    background-color: #e8f5e8;
+}
+.file-info {
+    background-color: #e9ecef;
+    border-radius: 5px;
+    padding: 10px;
+    margin-top: 10px;
+}
+.progress {
+    height: 8px;
+}
+.import-stats {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border-radius: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 text-gray-800">
+                    <i class="fas fa-file-import text-primary me-2"></i>
+                    Bulk Fee Import
+                </h1>
+                <a href="{% url 'fee_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Fees
+                </a>
+            </div>
+            <p class="text-muted">Import multiple fee records from Excel or CSV files</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Import Guide -->
+        <div class="col-lg-4 mb-4">
+            <div class="import-guide card shadow">
+                <div class="card-body">
+                    <h5 class="card-title text-white">
+                        <i class="fas fa-info-circle me-2"></i>Import Guide
+                    </h5>
+                    <ul class="list-unstyled text-white">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Download the template first
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Fill in the required fields
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Upload your completed file
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Review and confirm import
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Template Download -->
+            <div class="template-download card shadow mt-4">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-download me-2"></i>Download Template
+                    </h6>
+                    <p class="small text-muted">Use our pre-formatted template to ensure proper data formatting.</p>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'download_fee_template' 'excel' %}" class="btn btn-success btn-sm">
+                            <i class="fas fa-file-excel me-2"></i>Excel Template
+                        </a>
+                        <a href="{% url 'download_fee_template' 'csv' %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-file-csv me-2"></i>CSV Template
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Required Fields -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list-alt me-2"></i>Required Fields
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>student_id</strong></td>
+                            <td><span class="badge bg-danger">Required</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>category</strong></td>
+                            <td><span class="badge bg-danger">Required</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>amount_payable</strong></td>
+                            <td><span class="badge bg-danger">Required</span></td>
+                        </tr>
+                        <tr>
+                            <td>amount_paid</td>
+                            <td><span class="badge bg-warning">Optional</span></td>
+                        </tr>
+                        <tr>
+                            <td>due_date</td>
+                            <td><span class="badge bg-warning">Optional</span></td>
+                        </tr>
+                        <tr>
+                            <td>payment_status</td>
+                            <td><span class="badge bg-warning">Optional</span></td>
+                        </tr>
+                        <tr>
+                            <td>description</td>
+                            <td><span class="badge bg-warning">Optional</span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Form -->
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-upload me-2"></i>Upload Fee Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="importForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.file_type.id_for_label }}" class="form-label">
+                                        File Type <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.file_type }}
+                                    {% if form.file_type.errors %}
+                                    <div class="text-danger small">{{ form.file_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.academic_year.id_for_label }}" class="form-label">
+                                        Academic Year <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.academic_year }}
+                                    {% if form.academic_year.errors %}
+                                    <div class="text-danger small">{{ form.academic_year.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.term.id_for_label }}" class="form-label">
+                                        Term <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.term }}
+                                    {% if form.term.errors %}
+                                    <div class="text-danger small">{{ form.term.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check mt-4">
+                                        {{ form.update_existing }}
+                                        <label for="{{ form.update_existing.id_for_label }}" class="form-check-label">
+                                            {{ form.update_existing.label }}
+                                        </label>
+                                    </div>
+                                    <small class="form-text text-muted">{{ form.update_existing.help_text }}</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File Upload Area -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                Upload File <span class="text-danger">*</span>
+                            </label>
+                            <div class="upload-area" id="uploadArea">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h5>Drag & Drop your file here</h5>
+                                <p class="text-muted">or click to browse</p>
+                                <input type="file" name="file" id="fileInput" class="d-none" accept=".csv,.xlsx,.xls">
+                                <button type="button" class="btn btn-primary mt-2" id="browseButton">
+                                    <i class="fas fa-folder-open me-2"></i>Browse Files
+                                </button>
+                                <div id="fileInfo" class="file-info d-none">
+                                    <i class="fas fa-file me-2"></i>
+                                    <span id="fileName"></span>
+                                    <span id="fileSize" class="text-muted ms-2"></span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" id="removeFile">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% if form.file.errors %}
+                            <div class="text-danger small mt-2">{{ form.file.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Progress Bar (Initially Hidden) -->
+                        <div class="mb-3 d-none" id="progressSection">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Processing...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div class="progress">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-secondary me-md-2" onclick="history.back()">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="submitButton">
+                                <i class="fas fa-upload me-2"></i>Start Import
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Sample Data Preview -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-table me-2"></i>Sample Data Format
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>student_id</th>
+                                    <th>category</th>
+                                    <th>amount_payable</th>
+                                    <th>amount_paid</th>
+                                    <th>due_date</th>
+                                    <th>payment_status</th>
+                                    <th>description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>STU001</td>
+                                    <td>Tuition Fee</td>
+                                    <td>1000.00</td>
+                                    <td>500.00</td>
+                                    <td>2024-12-31</td>
+                                    <td>partial</td>
+                                    <td>First term tuition</td>
+                                </tr>
+                                <tr>
+                                    <td>STU002</td>
+                                    <td>Transport Fee</td>
+                                    <td>200.00</td>
+                                    <td>0.00</td>
+                                    <td>2024-12-31</td>
+                                    <td>unpaid</td>
+                                    <td>Monthly transport</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize Select2
+    $('select').select2({
+        theme: 'bootstrap4'
+    });
+
+    // File upload handling
+    const uploadArea = $('#uploadArea');
+    const fileInput = $('#fileInput');
+    const browseButton = $('#browseButton');
+    const fileInfo = $('#fileInfo');
+    const fileName = $('#fileName');
+    const fileSize = $('#fileSize');
+    const removeFile = $('#removeFile');
+    const submitButton = $('#submitButton');
+
+    // Browse button click
+    browseButton.on('click', function() {
+        fileInput.click();
+    });
+
+    // File input change
+    fileInput.on('change', function(e) {
+        if (this.files.length > 0) {
+            handleFileSelection(this.files[0]);
+        }
+    });
+
+    // Drag and drop functionality
+    uploadArea.on('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.addClass('dragover');
+    });
+
+    uploadArea.on('dragleave', function(e) {
+        e.preventDefault();
+        uploadArea.removeClass('dragover');
+    });
+
+    uploadArea.on('drop', function(e) {
+        e.preventDefault();
+        uploadArea.removeClass('dragover');
+        
+        if (e.originalEvent.dataTransfer.files.length > 0) {
+            handleFileSelection(e.originalEvent.dataTransfer.files[0]);
+            fileInput[0].files = e.originalEvent.dataTransfer.files;
+        }
+    });
+
+    // Remove file
+    removeFile.on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        fileInput.val('');
+        fileInfo.addClass('d-none');
+        uploadArea.find('h5').text('Drag & Drop your file here');
+        uploadArea.find('p').text('or click to browse');
+    });
+
+    function handleFileSelection(file) {
+        if (file) {
+            // Validate file type
+            const validTypes = ['.csv', '.xlsx', '.xls'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validTypes.includes(fileExtension)) {
+                alert('Please select a valid file type (CSV, XLSX, or XLS)');
+                return;
+            }
+
+            // Update UI
+            fileName.text(file.name);
+            fileSize.text(formatFileSize(file.size));
+            fileInfo.removeClass('d-none');
+            
+            uploadArea.find('h5').text('File Selected');
+            uploadArea.find('p').text('Ready to upload');
+        }
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Form submission with progress
+    $('#importForm').on('submit', function(e) {
+        const file = fileInput[0].files[0];
+        if (!file) {
+            e.preventDefault();
+            alert('Please select a file to upload');
+            return;
+        }
+
+        // Show progress bar
+        $('#progressSection').removeClass('d-none');
+        submitButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Importing...');
+
+        // Simulate progress (in real implementation, this would be handled by server-side events)
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 5;
+            if (progress <= 90) {
+                $('#progressBar').css('width', progress + '%');
+                $('#progressPercent').text(progress + '%');
+            }
+        }, 500);
+
+        // Clear interval when form submission completes
+        $(this).one('submit', function() {
+            clearInterval(progressInterval);
+        });
+    });
+
+    // Auto-detect file type based on file extension
+    fileInput.on('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const fileName = file.name.toLowerCase();
+            if (fileName.endsWith('.csv')) {
+                $('#id_file_type').val('csv').trigger('change');
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                $('#id_file_type').val('excel').trigger('change');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

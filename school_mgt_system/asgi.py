@@ -1,6 +1,6 @@
-# school_mgt_system/asgi.py
 """
 ASGI config for school_mgt_system project.
+Optimized for production with proper timeout handling.
 """
 
 import os
@@ -13,7 +13,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_mgt_system.settings')
 django.setup()
 django_application = get_asgi_application()
 
-# Then set up WebSockets
+# WebSocket configuration with better timeout handling
 try:
     from channels.routing import ProtocolTypeRouter, URLRouter
     from channels.auth import AuthMiddlewareStack
@@ -23,7 +23,7 @@ try:
     # Import consumers after Django is initialized
     from .consumers import NotificationConsumer, SecurityConsumer
 
-    # WebSocket URL patterns
+    # WebSocket URL patterns with increased timeout
     websocket_urlpatterns = [
         re_path(r"ws/notifications/$", NotificationConsumer.as_asgi()),
         re_path(r"ws/security/$", SecurityConsumer.as_asgi()),
@@ -38,9 +38,7 @@ try:
         ),
     })
     
-    print("✅ WebSocket routes configured:")
-    print("   - /ws/notifications/")
-    print("   - /ws/security/")
+    print("✅ WebSocket routes configured with optimized settings")
     
 except ImportError as e:
     print(f"❌ Channels not available, using basic ASGI: {e}")

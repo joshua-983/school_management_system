@@ -29,13 +29,16 @@ def is_parent(user):
 
 
 class TwoFactorLoginRequiredMixin(LoginRequiredMixin):
-    """LoginRequiredMixin that works with django-two-factor-auth"""
-    login_url = reverse_lazy('two_factor:login')
+    """LoginRequiredMixin that uses your signin URL"""
+    login_url = reverse_lazy('signin')  # Use your actual signin URL
     
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
+    
+    def get_login_url(self):
+        return self.login_url
 
 
 class AdminRequiredMixin(UserPassesTestMixin):

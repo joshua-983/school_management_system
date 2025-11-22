@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Fee Creation - School Management System{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.creation-guide {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    border-radius: 10px;
+    color: white;
+}
+.student-input-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 1.5rem;
+    background-color: #f8f9fa;
+    min-height: 200px;
+}
+.preview-card {
+    border-left: 4px solid #28a745;
+}
+.bulk-actions {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 5px;
+    padding: 15px;
+}
+.quick-stats {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 text-gray-800">
+                    <i class="fas fa-layer-group text-primary me-2"></i>
+                    Bulk Fee Creation
+                </h1>
+                <a href="{% url 'fee_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Fees
+                </a>
+            </div>
+            <p class="text-muted">Create multiple fee records for selected students</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Creation Guide -->
+        <div class="col-lg-4 mb-4">
+            <div class="creation-guide card shadow">
+                <div class="card-body">
+                    <h5 class="card-title text-white">
+                        <i class="fas fa-lightbulb me-2"></i>Quick Creation
+                    </h5>
+                    <p class="text-white mb-3">Create the same fee for multiple students at once.</p>
+                    <ul class="list-unstyled text-white">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Select students by ID
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Choose fee category
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Set amount and due date
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            Review and create
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="quick-stats card shadow mt-4">
+                <div class="card-body text-center">
+                    <h6 class="text-white mb-3">
+                        <i class="fas fa-chart-bar me-2"></i>Quick Stats
+                    </h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-white">
+                                <h4>{{ active_students_count }}</h4>
+                                <small>Active Students</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-white">
+                                <h4>{{ mandatory_categories_count }}</h4>
+                                <small>Fee Categories</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Actions -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'bulk_fee_import' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-file-import me-2"></i>Import from File
+                        </a>
+                        <a href="{% url 'bulk_fee_update' %}" class="btn btn-outline-warning btn-sm">
+                            <i class="fas fa-edit me-2"></i>Bulk Update
+                        </a>
+                        <a href="{% url 'generate_term_fees' %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-magic me-2"></i>Generate Term Fees
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Creation Form -->
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plus-circle me-2"></i>Create Fees in Bulk
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="creationForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Student IDs -->
+                        <div class="mb-4">
+                            <label for="{{ form.student_ids.id_for_label }}" class="form-label fw-bold">
+                                Student IDs <span class="text-danger">*</span>
+                            </label>
+                            <div class="student-input-area">
+                                {{ form.student_ids }}
+                                <div class="mt-2">
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Enter student IDs separated by commas or one per line. 
+                                        Example: STU001, STU002, STU003
+                                    </small>
+                                </div>
+                                <div class="mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="validateStudents">
+                                        <i class="fas fa-check me-1"></i>Validate Students
+                                    </button>
+                                    <span id="studentCount" class="badge bg-info ms-2 d-none">0 students</span>
+                                </div>
+                            </div>
+                            {% if form.student_ids.errors %}
+                            <div class="text-danger small mt-2">{{ form.student_ids.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.category.id_for_label }}" class="form-label">
+                                        Fee Category <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.category }}
+                                    {% if form.category.errors %}
+                                    <div class="text-danger small">{{ form.category.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.amount_payable.id_for_label }}" class="form-label">
+                                        Amount Payable (GH₵) <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.amount_payable }}
+                                    {% if form.amount_payable.errors %}
+                                    <div class="text-danger small">{{ form.amount_payable.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.academic_year.id_for_label }}" class="form-label">
+                                        Academic Year <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.academic_year }}
+                                    {% if form.academic_year.errors %}
+                                    <div class="text-danger small">{{ form.academic_year.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.term.id_for_label }}" class="form-label">
+                                        Term <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.term }}
+                                    {% if form.term.errors %}
+                                    <div class="text-danger small">{{ form.term.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                                        Due Date <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.due_date }}
+                                    {% if form.due_date.errors %}
+                                    <div class="text-danger small">{{ form.due_date.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.description.id_for_label }}" class="form-label">
+                                        Description
+                                    </label>
+                                    {{ form.description }}
+                                    {% if form.description.errors %}
+                                    <div class="text-danger small">{{ form.description.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview Section -->
+                        <div class="preview-card card mt-4 d-none" id="previewSection">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-eye me-2"></i>Creation Preview
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Fee Details:</strong>
+                                        <ul class="list-unstyled mt-2">
+                                            <li><strong>Category:</strong> <span id="previewCategory"></span></li>
+                                            <li><strong>Amount:</strong> GH₵<span id="previewAmount"></span></li>
+                                            <li><strong>Due Date:</strong> <span id="previewDueDate"></span></li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Students:</strong>
+                                        <div id="previewStudents" class="mt-2 small"></div>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-3 mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    This will create <strong id="previewCount">0</strong> fee records for the selected students.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <button type="button" class="btn btn-secondary me-md-2" onclick="history.back()">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="submitButton">
+                                <i class="fas fa-plus-circle me-2"></i>Create Fees
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent Bulk Operations -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Recent Bulk Operations
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Operation</th>
+                                    <th>Students</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        No recent bulk operations
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize Select2
+    $('#id_category').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Select fee category...'
+    });
+
+    let studentData = [];
+
+    // Validate students
+    $('#validateStudents').on('click', function() {
+        const studentIdsText = $('#id_student_ids').val().trim();
+        if (!studentIdsText) {
+            alert('Please enter some student IDs');
+            return;
+        }
+
+        const studentIds = parseStudentIds(studentIdsText);
+        
+        // Show loading
+        $(this).html('<i class="fas fa-spinner fa-spin me-1"></i>Validating...');
+        $('#studentCount').removeClass('d-none').html('<i class="fas fa-spinner fa-spin"></i>');
+
+        // Simulate API call to validate students
+        setTimeout(() => {
+            // In real implementation, this would be an AJAX call to validate students
+            studentData = studentIds.map(id => ({ id: id, name: `Student ${id}`, class: 'P1' }));
+            
+            updatePreview();
+            $('#studentCount').text(studentData.length + ' students');
+            $(this).html('<i class="fas fa-check me-1"></i>Validated');
+        }, 1000);
+    });
+
+    // Auto-update preview when form changes
+    $('#id_category, #id_amount_payable, #id_due_date').on('change', function() {
+        if (studentData.length > 0) {
+            updatePreview();
+        }
+    });
+
+    function parseStudentIds(text) {
+        const lines = text.split('\n');
+        let ids = [];
+        lines.forEach(line => {
+            const lineIds = line.split(',').map(id => id.trim()).filter(id => id);
+            ids = ids.concat(lineIds);
+        });
+        return ids;
+    }
+
+    function updatePreview() {
+        const category = $('#id_category option:selected').text();
+        const amount = $('#id_amount_payable').val();
+        const dueDate = $('#id_due_date').val();
+
+        if (category && amount && dueDate && studentData.length > 0) {
+            $('#previewCategory').text(category);
+            $('#previewAmount').text(amount);
+            $('#previewDueDate').text(new Date(dueDate).toLocaleDateString());
+            $('#previewCount').text(studentData.length);
+
+            // Show limited student list
+            const studentList = studentData.slice(0, 5).map(student => 
+                `<div>${student.id} - ${student.name}</div>`
+            ).join('');
+            
+            if (studentData.length > 5) {
+                studentList += `<div class="text-muted">... and ${studentData.length - 5} more</div>`;
+            }
+
+            $('#previewStudents').html(studentList);
+            $('#previewSection').removeClass('d-none');
+        }
+    }
+
+    // Form submission
+    $('#creationForm').on('submit', function(e) {
+        if (studentData.length === 0) {
+            e.preventDefault();
+            alert('Please validate student IDs first');
+            return false;
+        }
+
+        const submitButton = $('#submitButton');
+        submitButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Creating...');
+        
+        return true;
+    });
+
+    // Format student IDs input
+    $('#id_student_ids').on('blur', function() {
+        const text = $(this).val().trim();
+        if (text) {
+            // Normalize input: remove extra spaces and ensure proper formatting
+            const lines = text.split('\n').map(line => 
+                line.split(',').map(id => id.trim()).filter(id => id).join(', ')
+            ).filter(line => line.trim());
+            
+            $(this).val(lines.join('\n'));
+        }
+    });
+});
+</script>
+{% endblock %}

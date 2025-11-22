@@ -2414,13 +2414,14 @@ class AssignmentTemplate(models.Model):
 
 class FeeCategory(models.Model):
     CATEGORY_TYPES = [
-        ('ADMISSION', 'Admission Fees'),
         ('TUITION', 'Tuition Fees'),
-        ('FEEDING', 'Feeding Fees'),
+        ('ADMISSION', 'Admission Fees'),
+        ('TRANSPORT', 'Transport Fees'),
+        ('TECHNOLOGY', 'Technology Fee'),
+        ('EXAMINATION', 'Examination Fees'),
         ('UNIFORM', 'Uniform Fees'),
-        ('BOOKS', 'Books and Materials'),
-        ('TRANSPORT', 'Transportation Fees'),
-        ('OTHER', 'Other Fees'),
+        ('PTA', 'PTA Fees'),
+        ('EXTRA_CLASSES', 'Extra Classes Fees'),
     ]
     
     FREQUENCY_CHOICES = [
@@ -2480,6 +2481,99 @@ class FeeCategory(models.Model):
         if self.applies_to_all or not self.class_levels:
             return True
         return class_level in self.get_applicable_class_levels()
+    
+    @classmethod
+    def setup_default_categories(cls):
+        """Create default professional fee categories"""
+        categories = [
+            {
+                'name': 'TUITION',
+                'description': 'Core academic instruction fees covering teachers salaries and classroom costs',
+                'default_amount': 5000.00,
+                'frequency': 'termly',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'ADMISSION',
+                'description': 'One-time fee charged when a student is newly enrolled in the school',
+                'default_amount': 500.00,
+                'frequency': 'one_time',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'TRANSPORT',
+                'description': 'School bus transportation services',
+                'default_amount': 800.00,
+                'frequency': 'termly',
+                'is_mandatory': False,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'TECHNOLOGY',
+                'description': 'Covers computer labs, software licenses, internet access and educational technology',
+                'default_amount': 300.00,
+                'frequency': 'termly',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'EXAMINATION',
+                'description': 'Fees for internal and external examinations and certifications',
+                'default_amount': 200.00,
+                'frequency': 'termly',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'UNIFORM',
+                'description': 'School uniform costs',
+                'default_amount': 350.00,
+                'frequency': 'one_time',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'PTA',
+                'description': 'Parent-Teacher Association fees for school development projects',
+                'default_amount': 100.00,
+                'frequency': 'termly',
+                'is_mandatory': True,
+                'is_active': True,
+                'applies_to_all': True,
+            },
+            {
+                'name': 'EXTRA_CLASSES',
+                'description': 'Additional tuition and special classes outside regular hours',
+                'default_amount': 400.00,
+                'frequency': 'termly',
+                'is_mandatory': False,
+                'is_active': True,
+                'applies_to_all': True,
+            }
+        ]
+        
+        for category_data in categories:
+            category, created = cls.objects.get_or_create(
+                name=category_data['name'],
+                defaults=category_data
+            )
+            if not created:
+                # Update existing category
+                for key, value in category_data.items():
+                    if key != 'name':
+                        setattr(category, key, value)
+                category.save()
+        
+        return cls.objects.count()
+
 
 class Bill(models.Model):
     """Represents an invoice sent to a student for specific fees"""
@@ -4031,3 +4125,62 @@ def create_user_profile(sender, instance, created, **kwargs):
 def save_user_profile(sender, instance, **kwargs):
     if hasattr(instance, 'profile'):
         instance.profile.save()
+# Add these to your existing models in core/models.py
+
+class BulkFeeImport(models.Model):
+    """Track bulk fee import operations"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10, choices=[('excel', 'Excel'), ('csv', 'CSV')])
+    total_records = models.PositiveIntegerField(default=0)
+    successful_records = models.PositiveIntegerField(default=0)
+    failed_records = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    errors = models.JSONField(default=dict, blank=True, null=True)
+    academic_year = models.CharField(max_length=9)
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Bulk Fee Import'
+        verbose_name_plural = 'Bulk Fee Imports'
+    
+    def __str__(self):
+        return f"Bulk Import - {self.file_name} - {self.status}"
+
+class BulkFeeOperation(models.Model):
+    """Track bulk fee operations like updates, creations, etc."""
+    OPERATION_TYPES = [
+        ('create', 'Bulk Create'),
+        ('update', 'Bulk Update'),
+        ('status_update', 'Status Update'),
+        ('amount_adjustment', 'Amount Adjustment'),
+        ('due_date_update', 'Due Date Update'),
+    ]
+    
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
+    description = models.TextField()
+    total_affected = models.PositiveIntegerField(default=0)
+    successful_operations = models.PositiveIntegerField(default=0)
+    failed_operations = models.PositiveIntegerField(default=0)
+    parameters = models.JSONField(default=dict, blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Bulk Fee Operation'
+        verbose_name_plural = 'Bulk Fee Operations'
+    
+    def __str__(self):
+        return f"{self.get_operation_type_display()} - {self.created_at}"
+    

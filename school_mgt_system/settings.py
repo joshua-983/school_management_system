@@ -1,3 +1,6 @@
+import pymysql
+pymysql.install_as_MySQLdb()
+
 """
 Django settings for school_mgt_system project.
 
@@ -24,7 +27,12 @@ IS_PRODUCTION = ENVIRONMENT == 'production'
 IS_STAGING = ENVIRONMENT == 'staging'
 IS_DEVELOPMENT = ENVIRONMENT == 'development'
 IS_TESTING = 'test' in sys.argv or 'pytest' in sys.argv
-IS_DOCKER = os.path.exists('/.dockerenv') or config('DOCKER', default=False, cast=bool)
+
+# Improved Docker detection
+IS_DOCKER = os.path.exists('/.dockerenv')
+IS_DOCKER_COMPOSE = os.getenv('DOCKER_COMPOSE', 'false').lower() == 'true'
+
+print(f"🚀 Environment: {ENVIRONMENT}, Docker: {IS_DOCKER}, Docker Compose: {IS_DOCKER_COMPOSE}")
 
 # ==================== SECURITY SETTINGS ====================
 # Security keys and environment detection
@@ -131,36 +139,45 @@ WSGI_APPLICATION = 'school_mgt_system.wsgi.application'
 SITE_ID = 1
 
 # ==================== DATABASE CONFIGURATION ====================
-# Database configuration with connection pooling and optimizations
 if IS_TESTING:
-    # Use SQLite for testing
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'test_db.sqlite3',
         }
     }
-else:
+elif IS_DOCKER or IS_DOCKER_COMPOSE:
+    print("🐳 Using MySQL in Docker environment")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
             'NAME': config('DB_NAME', default='school_db'),
             'USER': config('DB_USER', default='school_user'),
             'PASSWORD': config('DB_PASSWORD', default='school_password'),
-            'HOST': config('DB_HOST', default='db' if IS_DOCKER else 'localhost'),
+            'HOST': config('DB_HOST', default='db'),
             'PORT': config('DB_PORT', default='3306'),
             'OPTIONS': {
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES', innodb_lock_wait_timeout=300",
                 'charset': 'utf8mb4',
-                'connect_timeout': 60,
-                'read_timeout': 30,
-                'write_timeout': 30,
+                'connect_timeout': 120,
+                'read_timeout': 120,
+                'write_timeout': 120,
             },
-            'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=300, cast=int),
+            'CONN_MAX_AGE': 60,
             'ATOMIC_REQUESTS': False,
         }
     }
-
+else:
+    print("🔧 Using SQLite for local development")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 30,  # Add timeout for SQLite
+            }
+        }
+    }
 # Database router for multiple databases (if needed)
 DATABASE_ROUTERS = []
 
@@ -260,9 +277,12 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-# Static files storage with compression
+# Improved Whitenoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# Add this for better ASGI static file handling
+WHITENOISE_MAX_AGE = 31536000  # 1 year
+WHITENOISE_USE_FINDERS = True
 # Static files finders
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
@@ -363,68 +383,96 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@school.edu.gh
 SERVER_EMAIL = config('SERVER_EMAIL', default='admin@school.edu.gh')
 
 # ==================== CACHE CONFIGURATION ====================
-# Redis configuration - use 'redis' host in Docker, 'localhost' locally
-REDIS_HOST = 'redis' if IS_DOCKER else 'localhost'
+# Define REDIS_URL at the top level so it's available everywhere
+REDIS_HOST = 'redis' if (IS_DOCKER or IS_DOCKER_COMPOSE) else 'localhost'
 REDIS_URL = f"redis://{REDIS_HOST}:6379"
 
-try:
-    import django_redis
+# TEMPORARY FIX: Use dummy cache for local development
+if not (IS_DOCKER or IS_DOCKER_COMPOSE):
+    print("🔧 Using dummy cache for local development")
     CACHES = {
         "default": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/1"),
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-                "IGNORE_EXCEPTIONS": True,
-                "SOCKET_CONNECT_TIMEOUT": 10,
-                "SOCKET_TIMEOUT": 10,
-                "CONNECTION_POOL_KWARGS": {
-                    "max_connections": 100,
-                    "retry_on_timeout": True,
-                }
-            },
-            "KEY_PREFIX": "school_mgt",
-            "VERSION": 1,
-            "TIMEOUT": 3600,
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         },
         "sessions": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/2"),
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            },
-            "KEY_PREFIX": "school_mgt_sessions",
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
-except ImportError:
-    if not IS_PRODUCTION:
-        print("⚠️  Redis not available, using local memory cache")
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
+    }
+else:
+    # Original Redis configuration for Docker
+    try:
+        import django_redis
         CACHES = {
             "default": {
-                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-                "LOCATION": "school-mgt-cache",
+                "BACKEND": "django_redis.cache.RedisCache",
+                "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/1"),
+                "OPTIONS": {
+                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                    "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+                    "IGNORE_EXCEPTIONS": True,
+                    "SOCKET_CONNECT_TIMEOUT": 10,
+                    "SOCKET_TIMEOUT": 10,
+                    "CONNECTION_POOL_KWARGS": {
+                        "max_connections": 100,
+                        "retry_on_timeout": True,
+                    }
+                },
+                "KEY_PREFIX": "school_mgt",
+                "VERSION": 1,
+                "TIMEOUT": 3600,
             },
             "sessions": {
-                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-                "LOCATION": "school-mgt-sessions",
+                "BACKEND": "django_redis.cache.RedisCache",
+                "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/2"),
+                "OPTIONS": {
+                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                },
+                "KEY_PREFIX": "school_mgt_sessions",
             }
         }
+    except ImportError:
+        if not IS_PRODUCTION:
+            print("⚠️  Redis not available, using local memory cache")
+            CACHES = {
+                "default": {
+                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                    "LOCATION": "school-mgt-cache",
+                },
+                "sessions": {
+                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                    "LOCATION": "school-mgt-sessions",
+                }
+            }
 
 # Session cache alias
 SESSION_CACHE_ALIAS = "sessions"
 
 # ==================== CHANNEL LAYERS ====================
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [config('REDIS_URL', default=f"{REDIS_URL}/3")],
-            "capacity": 1500,
-            "expiry": 10,
-        },
+if not (IS_DOCKER or IS_DOCKER_COMPOSE):
+    # Use InMemoryChannelLayer for local development
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
     }
-}
+else:
+    # Use Redis for Docker environment
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [config('REDIS_URL', default="redis://redis:6379/3")],
+                "capacity": 1500,
+                "expiry": 10,
+            },
+        }
+    }
 
 # ==================== CELERY CONFIGURATION ====================
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=f"{REDIS_URL}/0")
@@ -732,6 +780,21 @@ COMPRESS_JS_FILTERS = [
     'compressor.filters.jsmin.JSMinFilter',
 ]
 
+
+# ==================== SESSION FIX ====================
+# Clear any corrupted sessions
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+
+# Add session serialization fix
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
+
+# Session cookie settings for security
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 # ==================== TEST CONFIGURATION ====================
 if IS_TESTING:
     print("🧪 TEST MODE: Using optimized settings for testing")
@@ -798,6 +861,3 @@ print(f"✅ Settings loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")
 print(f"✅ Docker: {IS_DOCKER}")
 print(f"✅ Database: {DATABASES['default']['ENGINE']}")
 print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
-# Axes configuration - use cache to avoid database schema issues
-AXES_HANDLER = 'axes.handlers.cache.AxesCacheHandler'
-AXES_CACHE = 'default'

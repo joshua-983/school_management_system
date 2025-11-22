@@ -1760,6 +1760,8 @@ class GradeUploadTemplateView(View):
         response['Content-Disposition'] = 'attachment; filename="grade_upload_template.csv"'
         return response
 
+# In core/views/grade_views.py - Update GradeEntryView
+
 class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
@@ -1769,8 +1771,18 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Debug: Check what subjects are available
+        form = context.get('form')
+        if form:
+            print(f"DEBUG: Form subjects queryset: {form.fields['subject'].queryset.count()}")
         
         # Get students based on user role
         if is_teacher(self.request.user):
@@ -1784,10 +1796,14 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                 is_active=True
             ).order_by('last_name', 'first_name')
             
+            # FIX: Get subjects directly from class assignments
             context['subjects'] = Subject.objects.filter(
                 classassignment__teacher=self.request.user.teacher,
                 classassignment__is_active=True
             ).distinct().order_by('name')
+            
+            print(f"DEBUG: Context subjects count: {context['subjects'].count()}")
+            
         else:
             context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
             context['subjects'] = Subject.objects.filter(is_active=True).order_by('name')

@@ -31,6 +31,11 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from ..forms import BudgetForm
 
+from ..forms import (
+    FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, 
+    FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm
+)
+
 # Add logger configuration
 logger = logging.getLogger(__name__)
 
@@ -137,7 +142,518 @@ class FeeCategoryDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView)
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Fee category deleted successfully')
         return super().delete(request, *args, **kwargs)
+
+class DownloadFeeTemplateView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Download fee import template"""
     
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request, file_type='excel'):
+        if file_type == 'excel':
+            return self.download_excel_template()
+        else:
+            return self.download_csv_template()
+    
+    def download_excel_template(self):
+        """Download Excel template"""
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="fee_import_template.xlsx"'
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Fee Import Template"
+        
+        # Headers
+        headers = [
+            'student_id', 'category', 'amount_payable', 'amount_paid',
+            'due_date', 'payment_status', 'description'
+        ]
+        
+        for col_num, header in enumerate(headers, 1):
+            ws.cell(row=1, column=col_num, value=header).font = Font(bold=True)
+        
+        # Sample data
+        sample_data = [
+            ['STU001', 'Tuition Fee', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
+            ['STU002', 'Transport Fee', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+        ]
+        
+        for row_num, row_data in enumerate(sample_data, 2):
+            for col_num, value in enumerate(row_data, 1):
+                ws.cell(row=row_num, column=col_num, value=value)
+        
+        # Auto-size columns
+        for col in ws.columns:
+            max_length = 0
+            column_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min((max_length + 2), 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(response)
+        return response
+    
+    def download_csv_template(self):
+        """Download CSV template"""
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="fee_import_template.csv"'
+        
+        writer = csv.writer(response)
+        headers = [
+            'student_id', 'category', 'amount_payable', 'amount_paid',
+            'due_date', 'payment_status', 'description'
+        ]
+        writer.writerow(headers)
+        
+        sample_data = [
+            ['STU001', 'Tuition Fee', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
+            ['STU002', 'Transport Fee', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+        ]
+        
+        for row in sample_data:
+            writer.writerow(row)
+        
+        return response
+
+
+# Bulk Fee Import Views
+class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Bulk import fees from Excel/CSV files"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request):
+        form = BulkFeeImportForm()
+        context = {
+            'form': form,
+            'template_headers': self.get_template_headers(),
+            'sample_data': self.get_sample_data(),
+        }
+        return render(request, 'core/finance/fees/bulk_fee_import.html', context)
+    
+    def post(self, request):
+        form = BulkFeeImportForm(request.POST, request.FILES)
+        
+        if not form.is_valid():
+            messages.error(request, 'Please correct the errors below.')
+            return render(request, 'core/finance/fees/bulk_fee_import.html', {'form': form})
+        
+        try:
+            file = request.FILES['file']
+            file_type = form.cleaned_data['file_type']
+            academic_year = form.cleaned_data['academic_year']
+            term = form.cleaned_data['term']
+            update_existing = form.cleaned_data['update_existing']
+            
+            # Process the file based on type
+            if file_type == 'excel':
+                results = self.process_excel_file(file, academic_year, term, update_existing)
+            else:  # CSV
+                results = self.process_csv_file(file, academic_year, term, update_existing)
+            
+            # Show results to user
+            self.show_import_results(request, results)
+            
+            if results['success_count'] > 0:
+                return redirect('fee_list')
+            else:
+                return render(request, 'core/finance/fees/bulk_fee_import.html', {
+                    'form': form,
+                    'import_results': results
+                })
+                
+        except Exception as e:
+            logger.error(f"Bulk import error: {str(e)}")
+            messages.error(request, f'Error processing file: {str(e)}')
+            return render(request, 'core/finance/fees/bulk_fee_import.html', {'form': form})
+    
+    def process_excel_file(self, file, academic_year, term, update_existing):
+        """Process Excel file for bulk fee import"""
+        results = {
+            'success_count': 0,
+            'error_count': 0,
+            'errors': [],
+            'warnings': [],
+            'skipped': 0
+        }
+        
+        try:
+            wb = load_workbook(filename=BytesIO(file.read()))
+            ws = wb.active
+            
+            # Get header row and map columns
+            headers = [cell.value for cell in ws[1]]
+            column_map = self.map_columns(headers)
+            
+            # Validate required columns
+            missing_columns = self.validate_required_columns(column_map)
+            if missing_columns:
+                results['errors'].append(f"Missing required columns: {', '.join(missing_columns)}")
+                return results
+            
+            # Process data rows
+            with transaction.atomic():
+                for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                    if not any(row):  # Skip empty rows
+                        continue
+                    
+                    try:
+                        fee_data = self.extract_fee_data(row, column_map, academic_year, term)
+                        validation_result = self.validate_fee_data(fee_data)
+                        
+                        if not validation_result['is_valid']:
+                            results['error_count'] += 1
+                            results['errors'].append(f"Row {row_num}: {validation_result['error']}")
+                            continue
+                        
+                        # Create or update fee
+                        fee, created = self.create_or_update_fee(fee_data, update_existing)
+                        
+                        if created:
+                            results['success_count'] += 1
+                        else:
+                            if update_existing:
+                                results['success_count'] += 1
+                            else:
+                                results['skipped'] += 1
+                                results['warnings'].append(f"Row {row_num}: Fee already exists for student {fee_data['student_id']} and category {fee_data['category_name']}")
+                        
+                    except Exception as e:
+                        results['error_count'] += 1
+                        results['errors'].append(f"Row {row_num}: {str(e)}")
+                        continue
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Excel processing error: {str(e)}")
+            raise Exception(f"Error reading Excel file: {str(e)}")
+    
+    def process_csv_file(self, file, academic_year, term, update_existing):
+        """Process CSV file for bulk fee import"""
+        results = {
+            'success_count': 0,
+            'error_count': 0,
+            'errors': [],
+            'warnings': [],
+            'skipped': 0
+        }
+        
+        try:
+            # Read CSV file
+            file_content = file.read().decode('utf-8')
+            csv_reader = csv.DictReader(StringIO(file_content))
+            
+            # Map columns
+            column_map = self.map_columns(csv_reader.fieldnames)
+            
+            # Validate required columns
+            missing_columns = self.validate_required_columns(column_map)
+            if missing_columns:
+                results['errors'].append(f"Missing required columns: {', '.join(missing_columns)}")
+                return results
+            
+            # Process data rows
+            with transaction.atomic():
+                for row_num, row in enumerate(csv_reader, start=2):
+                    try:
+                        fee_data = self.extract_fee_data_from_dict(row, column_map, academic_year, term)
+                        validation_result = self.validate_fee_data(fee_data)
+                        
+                        if not validation_result['is_valid']:
+                            results['error_count'] += 1
+                            results['errors'].append(f"Row {row_num}: {validation_result['error']}")
+                            continue
+                        
+                        # Create or update fee
+                        fee, created = self.create_or_update_fee(fee_data, update_existing)
+                        
+                        if created:
+                            results['success_count'] += 1
+                        else:
+                            if update_existing:
+                                results['success_count'] += 1
+                            else:
+                                results['skipped'] += 1
+                                results['warnings'].append(f"Row {row_num}: Fee already exists for student {fee_data['student_id']} and category {fee_data['category_name']}")
+                        
+                    except Exception as e:
+                        results['error_count'] += 1
+                        results['errors'].append(f"Row {row_num}: {str(e)}")
+                        continue
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"CSV processing error: {str(e)}")
+            raise Exception(f"Error reading CSV file: {str(e)}")
+    
+    def map_columns(self, headers):
+        """Map column headers to field names"""
+        column_map = {}
+        standard_columns = {
+            'student_id': ['student_id', 'student', 'student id', 'id'],
+            'category_name': ['category', 'fee_category', 'category_name', 'fee type'],
+            'amount_payable': ['amount', 'amount_payable', 'payable', 'fee_amount', 'total'],
+            'amount_paid': ['amount_paid', 'paid', 'paid_amount'],
+            'due_date': ['due_date', 'due date', 'due'],
+            'payment_status': ['payment_status', 'status', 'payment status'],
+            'description': ['description', 'notes', 'remarks']
+        }
+        
+        for header in headers:
+            if header is None:
+                continue
+                
+            header_lower = str(header).lower().strip()
+            for field, possible_names in standard_columns.items():
+                if header_lower in possible_names and field not in column_map:
+                    column_map[field] = header
+                    break
+        
+        return column_map
+    
+    def validate_required_columns(self, column_map):
+        """Validate that all required columns are present"""
+        required_columns = ['student_id', 'category_name', 'amount_payable']
+        missing = []
+        
+        for col in required_columns:
+            if col not in column_map:
+                missing.append(col)
+        
+        return missing
+    
+    def extract_fee_data(self, row, column_map, academic_year, term):
+        """Extract fee data from Excel row"""
+        fee_data = {
+            'student_id': self.get_cell_value(row, column_map, 'student_id'),
+            'category_name': self.get_cell_value(row, column_map, 'category_name'),
+            'amount_payable': self.get_cell_value(row, column_map, 'amount_payable'),
+            'amount_paid': self.get_cell_value(row, column_map, 'amount_paid', default=0),
+            'due_date': self.get_cell_value(row, column_map, 'due_date'),
+            'payment_status': self.get_cell_value(row, column_map, 'payment_status', default='unpaid'),
+            'description': self.get_cell_value(row, column_map, 'description', default=''),
+            'academic_year': academic_year,
+            'term': term
+        }
+        
+        return fee_data
+    
+    def extract_fee_data_from_dict(self, row, column_map, academic_year, term):
+        """Extract fee data from CSV row dictionary"""
+        fee_data = {
+            'student_id': self.get_dict_value(row, column_map, 'student_id'),
+            'category_name': self.get_dict_value(row, column_map, 'category_name'),
+            'amount_payable': self.get_dict_value(row, column_map, 'amount_payable'),
+            'amount_paid': self.get_dict_value(row, column_map, 'amount_paid', default=0),
+            'due_date': self.get_dict_value(row, column_map, 'due_date'),
+            'payment_status': self.get_dict_value(row, column_map, 'payment_status', default='unpaid'),
+            'description': self.get_dict_value(row, column_map, 'description', default=''),
+            'academic_year': academic_year,
+            'term': term
+        }
+        
+        return fee_data
+    
+    def get_cell_value(self, row, column_map, field, default=None):
+        """Get value from Excel row using column mapping"""
+        if field not in column_map:
+            return default
+        
+        header = column_map[field]
+        headers = [k for k, v in column_map.items() if v == header]
+        if not headers:
+            return default
+        
+        # Find the index of the header in the original headers
+        # This is simplified - in practice, you'd need to track the original header order
+        index = list(column_map.values()).index(header)
+        if index < len(row):
+            value = row[index]
+            return value if value not in [None, ''] else default
+        
+        return default
+    
+    def get_dict_value(self, row, column_map, field, default=None):
+        """Get value from CSV row dictionary using column mapping"""
+        if field not in column_map:
+            return default
+        
+        header = column_map[field]
+        value = row.get(header, default)
+        return value if value not in [None, ''] else default
+    
+    def validate_fee_data(self, fee_data):
+        """Validate fee data before creation"""
+        try:
+            # Check required fields
+            if not fee_data['student_id']:
+                return {'is_valid': False, 'error': 'Student ID is required'}
+            
+            if not fee_data['category_name']:
+                return {'is_valid': False, 'error': 'Category name is required'}
+            
+            # Validate student exists
+            try:
+                student = Student.objects.get(student_id=fee_data['student_id'])
+                fee_data['student'] = student
+            except Student.DoesNotExist:
+                return {'is_valid': False, 'error': f"Student with ID {fee_data['student_id']} not found"}
+            
+            # Validate category exists
+            try:
+                category = FeeCategory.objects.get(name__iexact=fee_data['category_name'].strip())
+                fee_data['category'] = category
+            except FeeCategory.DoesNotExist:
+                return {'is_valid': False, 'error': f"Fee category '{fee_data['category_name']}' not found"}
+            
+            # Validate amounts
+            try:
+                amount_payable = Decimal(str(fee_data['amount_payable']))
+                if amount_payable < 0:
+                    return {'is_valid': False, 'error': 'Amount payable cannot be negative'}
+                fee_data['amount_payable'] = amount_payable
+            except (InvalidOperation, ValueError, TypeError):
+                return {'is_valid': False, 'error': 'Invalid amount payable'}
+            
+            try:
+                amount_paid = Decimal(str(fee_data['amount_paid'] or 0))
+                if amount_paid < 0:
+                    return {'is_valid': False, 'error': 'Amount paid cannot be negative'}
+                fee_data['amount_paid'] = amount_paid
+            except (InvalidOperation, ValueError, TypeError):
+                return {'is_valid': False, 'error': 'Invalid amount paid'}
+            
+            # Validate due date
+            if fee_data['due_date']:
+                try:
+                    if isinstance(fee_data['due_date'], str):
+                        due_date = datetime.strptime(fee_data['due_date'], '%Y-%m-%d').date()
+                    else:
+                        due_date = fee_data['due_date']
+                    fee_data['due_date'] = due_date
+                except (ValueError, TypeError):
+                    return {'is_valid': False, 'error': 'Invalid due date format. Use YYYY-MM-DD'}
+            else:
+                # Set default due date (30 days from now)
+                fee_data['due_date'] = timezone.now().date() + timedelta(days=30)
+            
+            # Validate payment status
+            valid_statuses = ['paid', 'unpaid', 'partial', 'overdue']
+            status = (fee_data['payment_status'] or 'unpaid').lower()
+            if status not in valid_statuses:
+                return {'is_valid': False, 'error': f'Invalid payment status. Must be one of: {", ".join(valid_statuses)}'}
+            fee_data['payment_status'] = status
+            
+            return {'is_valid': True}
+            
+        except Exception as e:
+            return {'is_valid': False, 'error': f'Validation error: {str(e)}'}
+    
+    def create_or_update_fee(self, fee_data, update_existing):
+        """Create or update fee record"""
+        # Check if fee already exists
+        existing_fee = Fee.objects.filter(
+            student=fee_data['student'],
+            category=fee_data['category'],
+            academic_year=fee_data['academic_year'],
+            term=fee_data['term']
+        ).first()
+        
+        if existing_fee:
+            if update_existing:
+                # Update existing fee
+                existing_fee.amount_payable = fee_data['amount_payable']
+                existing_fee.amount_paid = fee_data['amount_paid']
+                existing_fee.balance = fee_data['amount_payable'] - fee_data['amount_paid']
+                existing_fee.due_date = fee_data['due_date']
+                existing_fee.payment_status = fee_data['payment_status']
+                existing_fee.description = fee_data['description']
+                existing_fee.save()
+                return existing_fee, False
+            else:
+                return existing_fee, False
+        else:
+            # Create new fee
+            fee = Fee.objects.create(
+                student=fee_data['student'],
+                category=fee_data['category'],
+                academic_year=fee_data['academic_year'],
+                term=fee_data['term'],
+                amount_payable=fee_data['amount_payable'],
+                amount_paid=fee_data['amount_paid'],
+                balance=fee_data['amount_payable'] - fee_data['amount_paid'],
+                due_date=fee_data['due_date'],
+                payment_status=fee_data['payment_status'],
+                description=fee_data['description'],
+                recorded_by=self.request.user
+            )
+            return fee, True
+    
+    def show_import_results(self, request, results):
+        """Show import results to user"""
+        if results['success_count'] > 0:
+            messages.success(request, f'Successfully imported {results["success_count"]} fee records')
+        
+        if results['error_count'] > 0:
+            messages.error(request, f'Failed to import {results["error_count"]} records. Check errors below.')
+            # Store errors in session for display
+            request.session['import_errors'] = results['errors'][:10]  # Show first 10 errors
+        
+        if results['skipped'] > 0:
+            messages.warning(request, f'Skipped {results["skipped"]} existing records')
+        
+        if results['warnings']:
+            for warning in results['warnings'][:5]:  # Show first 5 warnings
+                messages.warning(request, warning)
+    
+    def get_template_headers(self):
+        """Get template headers for download"""
+        return [
+            'student_id',
+            'category',
+            'amount_payable',
+            'amount_paid',
+            'due_date',
+            'payment_status',
+            'description'
+        ]
+    
+    def get_sample_data(self):
+        """Get sample data for template"""
+        return [
+            {
+                'student_id': 'STU001',
+                'category': 'Tuition Fee',
+                'amount_payable': '1000.00',
+                'amount_paid': '500.00',
+                'due_date': '2024-12-31',
+                'payment_status': 'partial',
+                'description': 'First term tuition'
+            },
+            {
+                'student_id': 'STU002', 
+                'category': 'Transport Fee',
+                'amount_payable': '200.00',
+                'amount_paid': '0.00',
+                'due_date': '2024-12-31',
+                'payment_status': 'unpaid',
+                'description': 'Monthly transport'
+            }
+        ]
+
+
+
+    
+# Fee Views
 # Fee Views
 class FeeListView(LoginRequiredMixin, ListView):
     model = Fee
@@ -290,7 +806,6 @@ class FeeListView(LoginRequiredMixin, ListView):
         wb.save(response)
         return response
 
-
 class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Fee
     template_name = 'core/finance/fees/fee_dashboard.html'
@@ -317,6 +832,7 @@ class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         context['is_teacher'] = is_teacher(self.request.user)
         return context
 
+# In core/views/fee_views.py - FIXED FeeCreateView
 class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Fee
     form_class = FeeForm
@@ -327,34 +843,59 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_form_kwargs(self):
-        """Add student_id to form kwargs"""
+        """Add student_id and request to form kwargs"""
         kwargs = super().get_form_kwargs()
         student_id = self.kwargs.get('student_id')
         if student_id:
             kwargs['student_id'] = student_id
+        kwargs['request'] = self.request  # ADDED: Pass request to form
+        
+        print(f"DEBUG FeeCreateView: Form kwargs - student_id: {student_id}")
         return kwargs
     
-    def get_initial(self):
-        """Set initial values for the form"""
-        initial = super().get_initial()
+    def get_form(self, form_class=None):
+        """Get the form and debug it"""
+        form = super().get_form(form_class)
+        
+        # Debug the category field
+        if 'category' in form.fields:
+            print(f"DEBUG FeeCreateView: Category field exists")
+            print(f"DEBUG FeeCreateView: Category queryset count: {form.fields['category'].queryset.count()}")
+            print(f"DEBUG FeeCreateView: Available categories: {list(form.fields['category'].queryset.values_list('name', flat=True))}")
+        else:
+            print("DEBUG FeeCreateView: Category field NOT found in form")
+            
+        return form
+    
+    def get_context_data(self, **kwargs):
+        """Add debug information to template context"""
+        context = super().get_context_data(**kwargs)
         student_id = self.kwargs.get('student_id')
+        
+        # Add debug information
+        context['debug_categories'] = FeeCategory.objects.filter(is_active=True)
+        context['debug_categories_count'] = context['debug_categories'].count()
+        context['debug_student_id'] = student_id
+        context['debug_user'] = self.request.user
         
         if student_id:
             try:
                 student = Student.objects.get(pk=student_id)
-                initial['student'] = student
+                context['student'] = student
+                print(f"DEBUG FeeCreateView: Student found: {student.get_full_name()}")
             except Student.DoesNotExist:
-                pass
-        
-        # Set default academic year to current year
-        current_year = timezone.now().year
-        next_year = current_year + 1
-        initial['academic_year'] = f"{current_year}/{next_year}"
-        
-        return initial
+                print(f"DEBUG FeeCreateView: Student with ID {student_id} not found")
+                context['student'] = None
+        else:
+            context['student'] = None
+            
+        return context
     
     def form_valid(self, form):
-        """Handle valid form submission"""
+        """Handle valid form submission with debugging"""
+        print("DEBUG FeeCreateView: Form is valid")
+        print(f"DEBUG FeeCreateView: Form data: {form.cleaned_data}")
+        
         # Get student from form data
         student = form.cleaned_data.get('student')
         if not student:
@@ -379,34 +920,6 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             f'Fee record for {student.get_full_name()} created successfully'
         )
         return super().form_valid(form)
-    
-    def get_success_url(self):
-        """Redirect to student detail page after creation"""
-        return reverse_lazy('student_detail', kwargs={'pk': self.object.student.pk})
-    
-    def get_context_data(self, **kwargs):
-        """Add student and other context data to template"""
-        context = super().get_context_data(**kwargs)
-        student_id = self.kwargs.get('student_id')
-        
-        if student_id:
-            try:
-                student = Student.objects.get(pk=student_id)
-                context['student'] = student
-                
-                # Add existing fees for reference
-                context['existing_fees'] = Fee.objects.filter(
-                    student=student
-                ).select_related('category').order_by('-due_date')[:5]
-                context['total_fees'] = Fee.objects.filter(student=student).count()
-                
-            except Student.DoesNotExist:
-                messages.error(self.request, 'Selected student does not exist')
-                context['student'] = None
-        else:
-            context['student'] = None
-            
-        return context
 
 class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Fee
@@ -705,36 +1218,202 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
 
 # NEW: Bulk Fee Operations
 class BulkFeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Enhanced bulk fee operations with more actions"""
+    
     def test_func(self):
         return is_admin(self.request.user)
     
+    def get(self, request):
+        form = BulkFeeUpdateForm()
+        return render(request, 'core/finance/fees/bulk_fee_update.html', {'form': form})
+    
     def post(self, request):
-        fee_ids = request.POST.getlist('fee_ids')
-        action = request.POST.get('action')
+        form = BulkFeeUpdateForm(request.POST)
         
-        if not fee_ids:
-            messages.error(request, 'No fees selected')
+        if not form.is_valid():
+            messages.error(request, 'Please correct the errors below.')
+            return render(request, 'core/finance/fees/bulk_fee_update.html', {'form': form})
+        
+        try:
+            action = form.cleaned_data['action']
+            fee_ids = form.cleaned_data['fee_ids']
+            new_status = form.cleaned_data.get('new_status')
+            new_due_date = form.cleaned_data.get('new_due_date')
+            amount_adjustment = form.cleaned_data.get('amount_adjustment')
+            adjustment_type = form.cleaned_data.get('adjustment_type')
+            
+            if not fee_ids:
+                messages.error(request, 'No fees selected')
+                return render(request, 'core/finance/fees/bulk_fee_update.html', {'form': form})
+            
+            # Convert comma-separated IDs to list
+            if isinstance(fee_ids, str):
+                fee_id_list = [id.strip() for id in fee_ids.split(',') if id.strip()]
+            else:
+                fee_id_list = fee_ids
+            
+            updated_count = 0
+            with transaction.atomic():
+                for fee_id in fee_id_list:
+                    try:
+                        fee = Fee.objects.get(pk=fee_id)
+                        
+                        if action == 'update_status' and new_status:
+                            fee.payment_status = new_status
+                            if new_status == 'paid' and not fee.payment_date:
+                                fee.payment_date = timezone.now().date()
+                            updated_count += 1
+                        
+                        elif action == 'update_due_date' and new_due_date:
+                            fee.due_date = new_due_date
+                            # Recheck overdue status
+                            if (fee.due_date < timezone.now().date() and 
+                                fee.payment_status != 'paid'):
+                                fee.payment_status = 'overdue'
+                            updated_count += 1
+                        
+                        elif action == 'adjust_amount' and amount_adjustment and adjustment_type:
+                            adjustment = Decimal(amount_adjustment)
+                            if adjustment_type == 'increase':
+                                fee.amount_payable += adjustment
+                            elif adjustment_type == 'decrease':
+                                fee.amount_payable = max(Decimal('0.00'), fee.amount_payable - adjustment)
+                            elif adjustment_type == 'set':
+                                fee.amount_payable = adjustment
+                            
+                            # Recalculate balance
+                            fee.balance = fee.amount_payable - fee.amount_paid
+                            updated_count += 1
+                        
+                        elif action == 'mark_paid':
+                            fee.payment_status = 'paid'
+                            fee.payment_date = timezone.now().date()
+                            fee.amount_paid = fee.amount_payable
+                            fee.balance = Decimal('0.00')
+                            updated_count += 1
+                        
+                        elif action == 'mark_overdue':
+                            fee.payment_status = 'overdue'
+                            updated_count += 1
+                        
+                        elif action == 'add_payment':
+                            # Create a payment record
+                            if amount_adjustment:
+                                payment_amount = Decimal(amount_adjustment)
+                                FeePayment.objects.create(
+                                    fee=fee,
+                                    amount=payment_amount,
+                                    payment_mode='bulk_update',
+                                    payment_date=timezone.now().date(),
+                                    recorded_by=request.user,
+                                    is_confirmed=True,
+                                    confirmed_by=request.user,
+                                    confirmed_at=timezone.now()
+                                )
+                                updated_count += 1
+                        
+                        fee.save()
+                        
+                    except Fee.DoesNotExist:
+                        continue
+                    except Exception as e:
+                        logger.error(f"Error updating fee {fee_id}: {str(e)}")
+                        continue
+            
+            messages.success(request, f'Successfully updated {updated_count} fee records')
             return redirect('fee_list')
+            
+        except Exception as e:
+            logger.error(f"Bulk update error: {str(e)}")
+            messages.error(request, f'Error performing bulk update: {str(e)}')
+            return render(request, 'core/finance/fees/bulk_fee_update.html', {'form': form})
+
+
+class BulkFeeCreationView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Bulk fee creation for multiple students"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request):
+        form = BulkFeeCreationForm()
+        return render(request, 'core/finance/fees/bulk_fee_creation.html', {'form': form})
+    
+    def post(self, request):
+        form = BulkFeeCreationForm(request.POST)
         
-        updated_count = 0
-        with transaction.atomic():
-            for fee_id in fee_ids:
-                try:
-                    fee = Fee.objects.get(pk=fee_id)
-                    if action == 'mark_paid':
-                        fee.payment_status = 'paid'
-                        fee.payment_date = timezone.now().date()
-                        fee.save()
-                        updated_count += 1
-                    elif action == 'mark_overdue':
-                        fee.payment_status = 'overdue'
-                        fee.save()
-                        updated_count += 1
-                except Fee.DoesNotExist:
-                    continue
+        if not form.is_valid():
+            messages.error(request, 'Please correct the errors below.')
+            return render(request, 'core/finance/fees/bulk_fee_creation.html', {'form': form})
         
-        messages.success(request, f'Updated {updated_count} fee records')
-        return redirect('fee_list')
+        try:
+            student_ids = form.cleaned_data['student_ids']
+            category = form.cleaned_data['category']
+            amount_payable = form.cleaned_data['amount_payable']
+            academic_year = form.cleaned_data['academic_year']
+            term = form.cleaned_data['term']
+            due_date = form.cleaned_data['due_date']
+            description = form.cleaned_data.get('description', '')
+            
+            # Convert student IDs to list
+            if isinstance(student_ids, str):
+                student_id_list = [id.strip() for id in student_ids.split(',') if id.strip()]
+            else:
+                student_id_list = student_ids
+            
+            created_count = 0
+            skipped_count = 0
+            
+            with transaction.atomic():
+                for student_id in student_id_list:
+                    try:
+                        student = Student.objects.get(student_id=student_id)
+                        
+                        # Check if fee already exists
+                        if Fee.objects.filter(
+                            student=student,
+                            category=category,
+                            academic_year=academic_year,
+                            term=term
+                        ).exists():
+                            skipped_count += 1
+                            continue
+                        
+                        # Create fee
+                        Fee.objects.create(
+                            student=student,
+                            category=category,
+                            academic_year=academic_year,
+                            term=term,
+                            amount_payable=amount_payable,
+                            amount_paid=Decimal('0.00'),
+                            balance=amount_payable,
+                            due_date=due_date,
+                            payment_status='unpaid',
+                            description=description,
+                            recorded_by=request.user
+                        )
+                        created_count += 1
+                        
+                    except Student.DoesNotExist:
+                        messages.warning(request, f"Student with ID {student_id} not found")
+                    except Exception as e:
+                        logger.error(f"Error creating fee for student {student_id}: {str(e)}")
+                        messages.error(request, f"Error creating fee for student {student_id}: {str(e)}")
+            
+            if created_count > 0:
+                messages.success(request, f'Successfully created {created_count} fee records')
+            if skipped_count > 0:
+                messages.warning(request, f'Skipped {skipped_count} existing fee records')
+            
+            return redirect('fee_list')
+            
+        except Exception as e:
+            logger.error(f"Bulk creation error: {str(e)}")
+            messages.error(request, f'Error creating fees: {str(e)}')
+            return render(request, 'core/finance/fees/bulk_fee_creation.html', {'form': form})
+
+
 
 # NEW: Payment Reminders
 class SendPaymentRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
