@@ -1762,6 +1762,8 @@ class GradeUploadTemplateView(View):
 
 # In core/views/grade_views.py - Update GradeEntryView
 
+# In core/views/grade_views.py - Update GradeEntryView
+
 class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
@@ -1770,56 +1772,6 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
 
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Debug: Check what subjects are available
-        form = context.get('form')
-        if form:
-            print(f"DEBUG: Form subjects queryset: {form.fields['subject'].queryset.count()}")
-        
-        # Get students based on user role
-        if is_teacher(self.request.user):
-            teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher,
-                is_active=True
-            ).values_list('class_level', flat=True).distinct()
-            
-            context['students'] = Student.objects.filter(
-                class_level__in=teacher_classes, 
-                is_active=True
-            ).order_by('last_name', 'first_name')
-            
-            # FIX: Get subjects directly from class assignments
-            context['subjects'] = Subject.objects.filter(
-                classassignment__teacher=self.request.user.teacher,
-                classassignment__is_active=True
-            ).distinct().order_by('name')
-            
-            print(f"DEBUG: Context subjects count: {context['subjects'].count()}")
-            
-        else:
-            context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
-            context['subjects'] = Subject.objects.filter(is_active=True).order_by('name')
-        
-        # Add class level choices
-        context['class_levels'] = CLASS_LEVEL_CHOICES
-        
-        # Pre-select student if coming from student list
-        student_id = self.request.GET.get('student')
-        if student_id:
-            try:
-                context['selected_student'] = Student.objects.get(pk=student_id)
-            except Student.DoesNotExist:
-                pass
-                
-        return context
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1840,6 +1792,84 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             kwargs['initial'] = initial
         
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Debug information for template
+        form = context.get('form')
+        if form and hasattr(form, 'fields') and 'subject' in form.fields:
+            subjects_count = form.fields['subject'].queryset.count()
+            print(f"DEBUG GradeEntryView: Form subjects count: {subjects_count}")
+        
+        # Get additional context for the template
+        if is_teacher(self.request.user):
+            teacher = self.request.user.teacher
+            
+            # Get subjects for display in template (using same logic as form)
+            try:
+                class_assignments = ClassAssignment.objects.filter(
+                    teacher=teacher,
+                    is_active=True
+                ).select_related('subject')
+                
+                subject_ids = class_assignments.values_list('subject_id', flat=True).distinct()
+                
+                available_subjects = Subject.objects.filter(
+                    id__in=subject_ids,
+                    is_active=True
+                ).distinct().order_by('name')
+                
+                # Fallbacks if no subjects found
+                if not available_subjects.exists():
+                    available_subjects = teacher.subjects.filter(is_active=True).order_by('name')
+                
+                if not available_subjects.exists():
+                    available_subjects = Subject.objects.filter(is_active=True).order_by('name')
+                    
+            except Exception as e:
+                print(f"DEBUG GradeEntryView: Error getting available subjects: {e}")
+                available_subjects = Subject.objects.filter(is_active=True).order_by('name')
+                
+        else:
+            available_subjects = Subject.objects.filter(is_active=True).order_by('name')
+        
+        # Get students based on user role for template context
+        if is_teacher(self.request.user):
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=self.request.user.teacher,
+                is_active=True
+            ).values_list('class_level', flat=True).distinct()
+            
+            context['students'] = Student.objects.filter(
+                class_level__in=teacher_classes, 
+                is_active=True
+            ).order_by('last_name', 'first_name')
+        else:
+            context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+        
+        context.update({
+            'available_subjects': available_subjects,
+            'class_levels': CLASS_LEVEL_CHOICES,
+            'is_teacher': is_teacher(self.request.user),
+            'is_admin': is_admin(self.request.user),
+        })
+        
+        # Pre-select student if coming from student list
+        student_id = self.request.GET.get('student')
+        if student_id:
+            try:
+                context['selected_student'] = Student.objects.get(pk=student_id)
+            except Student.DoesNotExist:
+                pass
+        
+        # Debug output
+        print(f"DEBUG GradeEntryView: Available subjects count: {available_subjects.count()}")
+        print(f"DEBUG GradeEntryView: Students count: {context['students'].count()}")
+        print(f"DEBUG GradeEntryView: Is teacher: {is_teacher(self.request.user)}")
+        print(f"DEBUG GradeEntryView: Is admin: {is_admin(self.request.user)}")
+                
+        return context
 
     @transaction.atomic
     def form_valid(self, form):
@@ -1870,12 +1900,14 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             return response
             
         except Exception as e:
+            print(f"DEBUG GradeEntryView: Error saving grade: {str(e)}")
             logger.error(f"Error saving grade: {str(e)}", exc_info=True)
             messages.error(self.request, 'Error saving grade. Please check the form and try again.')
             return self.form_invalid(form)
 
     def form_invalid(self, form):
         """Enhanced form invalid handling with better error reporting"""
+        print(f"DEBUG GradeEntryView: Form invalid - Errors: {form.errors}")
         logger.warning(f"Grade entry form invalid - Errors: {form.errors}")
         
         # Add specific error messages for common issues
@@ -1922,6 +1954,7 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             )
             
         except Exception as e:
+            print(f"DEBUG GradeEntryView: Failed to log grade creation: {str(e)}")
             logger.error(f"Failed to log grade creation: {str(e)}")
 
     def _get_client_ip(self):
@@ -1932,6 +1965,7 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
         else:
             ip = self.request.META.get('REMOTE_ADDR')
         return ip
+    
 
 class GradeReportView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/academics/grades/grade_report.html'

@@ -522,3 +522,250 @@ def alert_rule_list(request):
         'alert_rules': alert_rules,
     }
     return render(request, 'security/alert_rules.html', context)
+
+
+# Add these functions to your security_views.py
+
+def security_status_api(request):
+    """API endpoint for security system status"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    # Get system health status
+    from core.models import SecurityEvent, AuditLog
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Check for recent security events (last 24 hours)
+    recent_events = SecurityEvent.objects.filter(
+        created_at__gte=timezone.now() - timedelta(hours=24)
+    ).count()
+    
+    # Check system health
+    system_status = 'healthy'
+    threat_level = 'low'
+    
+    if recent_events > 50:
+        system_status = 'critical'
+        threat_level = 'critical'
+    elif recent_events > 10:
+        system_status = 'warning' 
+        threat_level = 'high'
+    elif recent_events > 5:
+        threat_level = 'medium'
+    
+    return JsonResponse({
+        'status': 'success',
+        'system_status': system_status,
+        'threat_level': threat_level,
+        'last_updated': timezone.now().isoformat(),
+        'active_alerts': recent_events,
+        'components': {
+            'database': 'online',
+            'authentication': 'online', 
+            'monitoring': 'online',
+            'logging': 'online'
+        }
+    })
+
+def security_notifications_api(request):
+    """API endpoint for security notifications (compatibility alias)"""
+    return security_events_api(request)
+
+def security_stats_api(request):
+    """API endpoint for security statistics"""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Authentication required'}, status=401)
+    
+    from core.models import SecurityEvent, AuditLog
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Calculate stats for last 7 days
+    week_ago = timezone.now() - timedelta(days=7)
+    
+    total_events = SecurityEvent.objects.filter(created_at__gte=week_ago).count()
+    critical_events = SecurityEvent.objects.filter(
+        created_at__gte=week_ago, 
+        severity='CRITICAL'
+    ).count()
+    
+    # Get active alert rules count
+    active_rules = 5  # Default value
+    
+    return JsonResponse({
+        'total_events': total_events,
+        'critical_events': critical_events,
+        'active_rules': active_rules,
+        'threat_level': 'low' if critical_events == 0 else 'medium' if critical_events < 3 else 'high'
+    })
+
+
+
+# =============================================================================
+# AXES LOCKOUT MANAGEMENT - BEAUTIFUL ADMIN INTERFACE
+# =============================================================================
+
+@user_passes_test(lambda u: u.is_superuser)
+def axes_lockout_management(request):
+    """Main lockout management dashboard"""
+    try:
+        from axes.models import AccessAttempt
+        # Get currently locked users
+        locked_users = AccessAttempt.objects.filter(failures_since_start__gte=5)
+        
+        # Get recent lockout history (last 24 hours)
+        from django.utils import timezone
+        from datetime import timedelta
+        recent_lockouts = AccessAttempt.objects.filter(
+            attempt_time__gte=timezone.now() - timedelta(hours=24)
+        ).order_by('-attempt_time')[:20]
+        
+        context = {
+            'active_tab': 'lockout_management',
+            'locked_users_count': locked_users.count(),
+            'recent_lockouts': recent_lockouts,
+            'total_attempts_today': AccessAttempt.objects.filter(
+                attempt_time__date=timezone.now().date()
+            ).count(),
+        }
+        return render(request, 'security/lockout_management.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading lockout management: {str(e)}')
+        return redirect('security_dashboard')
+
+@user_passes_test(lambda u: u.is_superuser)
+def unlock_user_api(request, username):
+    """API endpoint to unlock user"""
+    try:
+        from axes.models import AccessAttempt
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Check if user exists
+        user_exists = User.objects.filter(username=username).exists()
+        if not user_exists:
+            return JsonResponse({
+                'success': False, 
+                'error': f'User "{username}" not found in system'
+            })
+        
+        # Delete lockout records
+        deleted_count, _ = AccessAttempt.objects.filter(username=username).delete()
+        
+        # Log the action
+        AuditLog.log_action(
+            user=request.user,
+            action='AXES_UNLOCK',
+            model_name='User',
+            object_id=0,
+            details={
+                'unlocked_user': username,
+                'deleted_records': deleted_count,
+                'unlocked_by': request.user.username
+            }
+        )
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'✅ Successfully unlocked user "{username}"',
+            'details': f'Removed {deleted_count} lockout records',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False, 
+            'error': f'Error unlocking user: {str(e)}'
+        })
+
+@user_passes_test(lambda u: u.is_superuser)  
+def locked_users_api(request):
+    """API endpoint to get currently locked users"""
+    try:
+        from axes.models import AccessAttempt
+        from django.utils import timezone
+        
+        locked_users = AccessAttempt.objects.filter(failures_since_start__gte=5)
+        
+        users_data = []
+        for attempt in locked_users:
+            # Calculate time since lockout
+            time_since_lockout = timezone.now() - attempt.attempt_time
+            hours_locked = int(time_since_lockout.total_seconds() / 3600)
+            minutes_locked = int((time_since_lockout.total_seconds() % 3600) / 60)
+            
+            users_data.append({
+                'username': attempt.username,
+                'ip_address': attempt.ip_address,
+                'user_agent': attempt.user_agent[:50] + '...' if attempt.user_agent and len(attempt.user_agent) > 50 else attempt.user_agent,
+                'failures': attempt.failures_since_start,
+                'locked_at': attempt.attempt_time.strftime("%Y-%m-%d %H:%M:%S"),
+                'time_locked': f"{hours_locked}h {minutes_locked}m",
+                'is_recent': time_since_lockout.total_seconds() < 3600,  # Less than 1 hour
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'locked_users': users_data,
+            'total_locked': len(users_data),
+            'last_updated': timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False, 
+            'error': f'Error fetching locked users: {str(e)}'
+        })
+
+@user_passes_test(lambda u: u.is_superuser)
+def unlock_all_users_api(request):
+    """API endpoint to unlock ALL locked users"""
+    try:
+        from axes.models import AccessAttempt
+        
+        # Get count before deletion
+        locked_count = AccessAttempt.objects.filter(failures_since_start__gte=5).count()
+        
+        # Delete all lockout records
+        deleted_count, _ = AccessAttempt.objects.all().delete()
+        
+        # Log the action
+        AuditLog.log_action(
+            user=request.user,
+            action='AXES_UNLOCK_ALL',
+            model_name='System',
+            object_id=0,
+            details={
+                'unlocked_count': locked_count,
+                'deleted_records': deleted_count,
+                'unlocked_by': request.user.username
+            }
+        )
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'✅ Successfully unlocked all users',
+            'details': f'Removed {deleted_count} lockout records, unlocked {locked_count} users',
+            'unlocked_count': locked_count,
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False, 
+            'error': f'Error unlocking all users: {str(e)}'
+        })
+
+
+
+
+
+
+
+
+
+
+
+

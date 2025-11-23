@@ -44,6 +44,26 @@
         background-color: #f8f9fa;
         border-radius: 10px;
     }
+    
+    .stat-card {
+        transition: transform 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(58, 123, 213, 0.05);
+    }
+    
+    .export-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
 </style>
 {% endblock %}
 
@@ -61,6 +81,9 @@
                     <a href="{% url 'bill_generate' %}" class="btn btn-primary">
                         <i class="bi bi-plus-circle me-1"></i> Generate Bills
                     </a>
+                    <button class="btn btn-outline-info" data-bs-toggle="collapse" data-bs-target="#exportSection">
+                        <i class="bi bi-download me-1"></i> Export
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -74,37 +97,84 @@
         </div>
     </div>
 
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Export Section -->
+    {% if is_admin %}
+    <div class="collapse" id="exportSection">
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="export-section">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">
+                                <i class="bi bi-download me-2"></i>
+                                Export Bills Data
+                            </h5>
+                            <p class="mb-0">Export selected bills or all bills to Excel format</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-light me-2" id="exportSelected">
+                                <i class="bi bi-check-square me-1"></i> Export Selected
+                            </button>
+                            <button class="btn btn-outline-light" id="exportAll">
+                                <i class="bi bi-download me-1"></i> Export All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Statistics Cards -->
     <div class="row mb-4">
         <div class="col-md-3">
-            <div class="card bg-light mb-3">
+            <div class="card stat-card bg-primary text-white mb-3">
                 <div class="card-body text-center">
-                    <div class="text-primary fs-2 fw-bold">{{ total_bills }}</div>
-                    <div class="text-muted">Total Bills</div>
+                    <div class="fs-2 fw-bold">{{ total_bills }}</div>
+                    <div>Total Bills</div>
+                    <small>All generated bills</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-light mb-3">
+            <div class="card stat-card bg-success text-white mb-3">
                 <div class="card-body text-center">
-                    <div class="text-success fs-2 fw-bold">{{ paid_bills }}</div>
-                    <div class="text-muted">Paid Bills</div>
+                    <div class="fs-2 fw-bold">{{ paid_bills }}</div>
+                    <div>Paid Bills</div>
+                    <small>Fully paid</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-light mb-3">
+            <div class="card stat-card bg-warning text-white mb-3">
                 <div class="card-body text-center">
-                    <div class="text-warning fs-2 fw-bold">{{ outstanding_bills }}</div>
-                    <div class="text-muted">Outstanding</div>
+                    <div class="fs-2 fw-bold">{{ outstanding_bills }}</div>
+                    <div>Outstanding</div>
+                    <small>Pending payment</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card bg-light mb-3">
+            <div class="card stat-card bg-danger text-white mb-3">
                 <div class="card-body text-center">
-                    <div class="text-danger fs-2 fw-bold">{{ overdue_bills }}</div>
-                    <div class="text-muted">Overdue</div>
+                    <div class="fs-2 fw-bold">{{ overdue_bills }}</div>
+                    <div>Overdue</div>
+                    <small>Past due date</small>
                 </div>
             </div>
         </div>
@@ -114,10 +184,14 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">All Bills</h5>
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-ul me-2"></i>
+                        All Bills
+                        <span class="badge bg-secondary ms-2">{{ bills.paginator.count }}</span>
+                    </h5>
                     <div class="d-flex">
                         <input type="text" id="billSearch" class="form-control form-control-sm search-box me-2" 
-                               placeholder="Search bills...">
+                               placeholder="Search bills, students, or bill numbers...">
                         <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" 
                                 data-bs-target="#filterCollapse">
                             <i class="bi bi-funnel"></i> Filters
@@ -128,13 +202,13 @@
                 <!-- Filters Section -->
                 <div class="collapse" id="filterCollapse">
                     <div class="card-body border-bottom filter-card">
-                        <form method="get" class="row g-3">
+                        <form method="get" class="row g-3" id="filterForm">
                             <div class="col-md-3">
                                 <label class="form-label">Academic Year</label>
                                 <input type="text" name="academic_year" class="form-control" 
                                        placeholder="e.g., 2024/2025" value="{{ request.GET.academic_year }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Term</label>
                                 <select name="term" class="form-select">
                                     <option value="">All Terms</option>
@@ -143,7 +217,7 @@
                                     <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">Status</label>
                                 <select name="status" class="form-select">
                                     <option value="">All Statuses</option>
@@ -155,9 +229,20 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
+                                <label class="form-label">Class Level</label>
+                                <select name="class_level" class="form-select">
+                                    <option value="">All Classes</option>
+                                    {% for value, display in class_level_choices %}
+                                    <option value="{{ value }}" {% if request.GET.class_level == value %}selected{% endif %}>{{ display }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
                                 <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-filter me-1"></i> Apply
+                                    </button>
                                 </div>
                             </div>
                         </form>
@@ -170,6 +255,11 @@
                         <table class="table table-hover" id="billsTable">
                             <thead class="table-light">
                                 <tr>
+                                    {% if is_admin %}
+                                    <th width="30">
+                                        <input type="checkbox" id="selectAll" class="form-check-input">
+                                    </th>
+                                    {% endif %}
                                     <th>Bill Number</th>
                                     <th>Student</th>
                                     <th>Class</th>
@@ -184,8 +274,15 @@
                             <tbody>
                                 {% for bill in bills %}
                                 <tr class="bill-row" data-bill-id="{{ bill.bill_number }}">
+                                    {% if is_admin %}
+                                    <td>
+                                        <input type="checkbox" class="form-check-input bill-checkbox" value="{{ bill.bill_number }}">
+                                    </td>
+                                    {% endif %}
                                     <td>
                                         <strong>{{ bill.bill_number }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ bill.issue_date|date:"M d, Y" }}</small>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
@@ -199,13 +296,27 @@
                                     <td>{{ bill.student.get_class_level_display }}</td>
                                     <td>{{ bill.academic_year }}</td>
                                     <td>Term {{ bill.term }}</td>
-                                    <td class="text-end fw-bold bill-amount">GH₵{{ bill.total_amount|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        <div class="fw-bold bill-amount">GH₵{{ bill.total_amount|floatformat:2 }}</div>
+                                        <small class="text-muted">
+                                            Paid: GH₵{{ bill.amount_paid|floatformat:2 }}
+                                        </small>
+                                    </td>
                                     <td>
-                                        <span class="bill-status status-{{ bill.status }}">
+                                        <span class="bill-status status-{{ bill.status }}" data-bs-toggle="tooltip" 
+                                              title="Balance: GH₵{{ bill.balance|floatformat:2 }}">
                                             {{ bill.get_status_display }}
                                         </span>
                                     </td>
-                                    <td>{{ bill.due_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        {{ bill.due_date|date:"M d, Y" }}
+                                        {% if bill.is_overdue %}
+                                        <br>
+                                        <small class="text-danger">
+                                            <i class="bi bi-exclamation-triangle"></i> Overdue
+                                        </small>
+                                        {% endif %}
+                                    </td>
                                     <td class="action-buttons">
                                         <a href="{% url 'bill_detail' pk=bill.pk %}" 
                                            class="btn btn-sm btn-outline-primary"
@@ -222,6 +333,17 @@
                                             <i class="bi bi-cash-coin"></i>
                                         </a>
                                         {% endif %}
+                                        {% if bill.status != 'cancelled' %}
+                                        <form method="post" action="{% url 'bill_cancel' pk=bill.pk %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    title="Cancel Bill"
+                                                    data-bs-toggle="tooltip"
+                                                    onclick="return confirm('Cancel this bill?')">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -230,28 +352,66 @@
                         </table>
                     </div>
                     
+                    <!-- Bulk Actions -->
+                    {% if is_admin %}
+                    <div class="mt-3 p-3 bg-light rounded d-none" id="bulkActions">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <strong id="selectedCount">0</strong> bills selected
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="sendReminders">
+                                        <i class="bi bi-send me-1"></i> Send Reminders
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning" id="markOverdue">
+                                        <i class="bi bi-clock me-1"></i> Mark Overdue
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="cancelSelected">
+                                        <i class="bi bi-x-circle me-1"></i> Cancel Selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <!-- Pagination -->
                     {% if is_paginated %}
                     <nav aria-label="Bill pagination">
                         <ul class="pagination justify-content-center mt-4">
                             {% if page_obj.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    <i class="bi bi-chevron-left"></i> Previous
+                                </a>
                             </li>
                             {% endif %}
                             
                             {% for num in page_obj.paginator.page_range %}
-                            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
-                            </li>
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                                    </li>
+                                {% endif %}
                             {% endfor %}
                             
                             {% if page_obj.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </a>
                             </li>
                             {% endif %}
                         </ul>
+                        <div class="text-center text-muted">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            • {{ bills.paginator.count }} total bills
+                        </div>
                     </nav>
                     {% endif %}
                     
@@ -259,10 +419,15 @@
                     <div class="text-center py-5">
                         <i class="bi bi-receipt display-1 text-muted"></i>
                         <h5 class="text-muted mt-3">No bills found</h5>
-                        <p class="text-muted">Get started by generating bills for the current term.</p>
-                        {% if is_admin %}
+                        <p class="text-muted">{% if request.GET %}Try adjusting your filters{% else %}Get started by generating bills for the current term{% endif %}</p>
+                        {% if is_admin and not request.GET %}
                         <a href="{% url 'bill_generate' %}" class="btn btn-primary mt-2">
                             <i class="bi bi-plus-lg me-1"></i> Generate Bills
+                        </a>
+                        {% endif %}
+                        {% if request.GET %}
+                        <a href="{% url 'bill_list' %}" class="btn btn-outline-secondary mt-2">
+                            <i class="bi bi-x-circle me-1"></i> Clear Filters
                         </a>
                         {% endif %}
                     </div>
@@ -288,6 +453,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (searchInput && billRows.length > 0) {
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
+            let visibleCount = 0;
             
             billRows.forEach(row => {
                 const rowText = row.textContent.toLowerCase();
@@ -296,116 +462,243 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (studentName.includes(searchTerm) || billNumber.includes(searchTerm) || rowText.includes(searchTerm)) {
                     row.style.display = '';
+                    visibleCount++;
                 } else {
                     row.style.display = 'none';
                 }
             });
             
             // Show/hide no results message
-            const visibleRows = document.querySelectorAll('.bill-row[style=""]');
             const noResults = document.getElementById('noResults');
+            const tableBody = document.querySelector('#billsTable tbody');
             
-            if (!noResults) {
-                if (visibleRows.length === 0 && searchTerm) {
-                    const tbody = document.querySelector('#billsTable tbody');
+            if (visibleCount === 0 && searchTerm) {
+                if (!noResults) {
                     const messageRow = document.createElement('tr');
                     messageRow.id = 'noResults';
-                    messageRow.innerHTML = `<td colspan="9" class="text-center py-4 text-muted">
+                    messageRow.innerHTML = `<td colspan="{% if is_admin %}10{% else %}9{% endif %}" class="text-center py-4 text-muted">
                         <i class="bi bi-search me-2"></i>No bills found matching "${searchTerm}"
                     </td>`;
-                    tbody.appendChild(messageRow);
+                    tableBody.appendChild(messageRow);
                 }
             } else {
-                if (visibleRows.length > 0 || !searchTerm) {
+                if (noResults) {
                     noResults.remove();
-                } else {
-                    noResults.querySelector('td').innerHTML = 
-                        `<i class="bi bi-search me-2"></i>No bills found matching "${searchTerm}"`;
                 }
             }
         });
     }
 
-    // Status filter badges with click functionality
-    const statusBadges = document.querySelectorAll('.bill-status');
-    statusBadges.forEach(badge => {
+    // Bulk selection functionality
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const billCheckboxes = document.querySelectorAll('.bill-checkbox');
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            billCheckboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateBulkActions();
+        });
+        
+        billCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateBulkActions);
+        });
+        
+        function updateBulkActions() {
+            const selectedBills = document.querySelectorAll('.bill-checkbox:checked');
+            const count = selectedBills.length;
+            
+            selectedCount.textContent = count;
+            
+            if (count > 0) {
+                bulkActions.classList.remove('d-none');
+                selectAllCheckbox.checked = count === billCheckboxes.length;
+                selectAllCheckbox.indeterminate = count > 0 && count < billCheckboxes.length;
+            } else {
+                bulkActions.classList.add('d-none');
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+        
+        // Bulk action handlers
+        document.getElementById('sendReminders').addEventListener('click', function() {
+            const selectedBills = getSelectedBillIds();
+            if (selectedBills.length > 0) {
+                sendBulkAction('send_reminders', selectedBills);
+            }
+        });
+        
+        document.getElementById('markOverdue').addEventListener('click', function() {
+            const selectedBills = getSelectedBillIds();
+            if (selectedBills.length > 0) {
+                if (confirm(`Mark ${selectedBills.length} bills as overdue?`)) {
+                    sendBulkAction('mark_overdue', selectedBills);
+                }
+            }
+        });
+        
+        document.getElementById('cancelSelected').addEventListener('click', function() {
+            const selectedBills = getSelectedBillIds();
+            if (selectedBills.length > 0) {
+                if (confirm(`Cancel ${selectedBills.length} bills? This action cannot be undone.`)) {
+                    sendBulkAction('cancel', selectedBills);
+                }
+            }
+        });
+        
+        function getSelectedBillIds() {
+            const selected = [];
+            document.querySelectorAll('.bill-checkbox:checked').forEach(checkbox => {
+                selected.push(checkbox.value);
+            });
+            return selected;
+        }
+        
+        function sendBulkAction(action, billIds) {
+            // Show loading
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+            button.disabled = true;
+            
+            // In a real implementation, you'd make an AJAX call here
+            setTimeout(() => {
+                alert(`${action} action would be performed on ${billIds.length} bills`);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }, 1000);
+        }
+    }
+
+    // Export functionality
+    document.getElementById('exportSelected').addEventListener('click', function() {
+        const selectedBills = getSelectedBillIds ? getSelectedBillIds() : [];
+        if (selectedBills.length === 0) {
+            alert('Please select at least one bill to export');
+            return;
+        }
+        exportBills(selectedBills, 'selected');
+    });
+    
+    document.getElementById('exportAll').addEventListener('click', function() {
+        exportBills([], 'all');
+    });
+    
+    function exportBills(billIds, type) {
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exporting...';
+        button.disabled = true;
+        
+        // Build export URL
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', 'excel');
+        if (type === 'selected' && billIds.length > 0) {
+            params.set('bill_ids', billIds.join(','));
+        }
+        
+        // Create temporary form for download
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = window.location.pathname;
+        
+        for (const [key, value] of params) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        
+        // Reset button after delay
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 3000);
+    }
+
+    // Auto-refresh data every 2 minutes
+    let refreshInterval;
+    function startAutoRefresh() {
+        refreshInterval = setInterval(() => {
+            if (document.visibilityState === 'visible' && !document.hidden) {
+                // Only refresh if page is visible and user is not interacting
+                const refreshIndicator = document.getElementById('autoRefresh');
+                if (!refreshIndicator) {
+                    const indicator = document.createElement('div');
+                    indicator.id = 'autoRefresh';
+                    indicator.className = 'alert alert-info alert-dismissible fade show';
+                    indicator.innerHTML = `
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Auto-refreshing bill data...
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container-fluid').prepend(indicator);
+                }
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+        }, 120000); // 2 minutes
+    }
+    
+    function stopAutoRefresh() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+    }
+    
+    // Start auto-refresh when page loads
+    startAutoRefresh();
+    
+    // Stop auto-refresh when user is interacting with the page
+    document.addEventListener('mousemove', stopAutoRefresh);
+    document.addEventListener('keypress', stopAutoRefresh);
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Enhanced row highlighting
+    document.querySelectorAll('.bill-row').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#f8f9fa';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '';
+        });
+    });
+
+    // Quick status filter
+    document.querySelectorAll('.bill-status').forEach(badge => {
         badge.style.cursor = 'pointer';
         badge.addEventListener('click', function() {
             const status = this.textContent.trim().toLowerCase();
-            const statusSelect = document.querySelector('select[name="status"]');
+            const statusMap = {
+                'issued': 'issued',
+                'paid': 'paid', 
+                'partially paid': 'partial',
+                'overdue': 'overdue',
+                'cancelled': 'cancelled'
+            };
             
-            if (statusSelect) {
-                // Map display text to value
-                const statusMap = {
-                    'issued': 'issued',
-                    'paid': 'paid', 
-                    'partially paid': 'partial',
-                    'overdue': 'overdue',
-                    'cancelled': 'cancelled'
-                };
-                
-                const statusValue = statusMap[status] || status;
-                statusSelect.value = statusValue;
-                
-                // Trigger form submission
-                document.querySelector('form').submit();
-            }
+            const statusValue = statusMap[status] || status;
+            document.querySelector('select[name="status"]').value = statusValue;
+            document.getElementById('filterForm').submit();
         });
-        
-        // Add hover effects
-        badge.addEventListener('mouseenter', function() {
-            this.style.transform = 'scale(1.05)';
-            this.style.transition = 'transform 0.2s ease';
-        });
-        
-        badge.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-        });
-    });
-
-    // Auto-submit filters when values change
-    const filterInputs = document.querySelectorAll('select[name], input[name]');
-    filterInputs.forEach(input => {
-        if (input.name !== 'page') { // Don't auto-submit on pagination
-            input.addEventListener('change', function() {
-                // Add loading indicator
-                const submitBtn = document.createElement('button');
-                submitBtn.type = 'submit';
-                submitBtn.style.display = 'none';
-                this.form.appendChild(submitBtn);
-                submitBtn.click();
-            });
-        }
-    });
-
-    // Export functionality
-    const exportBtn = document.getElementById('exportBtn');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', function() {
-            // Get current filters
-            const params = new URLSearchParams(window.location.search);
-            params.set('export', 'excel');
-            
-            // Show loading state
-            const originalText = this.innerHTML;
-            this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Exporting...';
-            this.disabled = true;
-            
-            // Trigger download
-            window.location.href = `?${params.toString()}`;
-            
-            // Reset button after delay
-            setTimeout(() => {
-                this.innerHTML = originalText;
-                this.disabled = false;
-            }, 3000);
-        });
-    }
-
-    // Add data attributes for quick actions
-    document.querySelectorAll('.bill-row').forEach(row => {
-        const billId = row.querySelector('td:first-child').textContent.trim();
-        row.setAttribute('data-bill-id', billId.replace('Bill #', ''));
     });
 
     // Keyboard shortcuts
@@ -419,120 +712,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Ctrl/Cmd + E for export
         if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
             e.preventDefault();
-            exportBtn?.click();
+            document.getElementById('exportAll')?.click();
         }
     });
-
-    // Responsive table enhancements
-    function enhanceTableResponsiveness() {
-        const table = document.getElementById('billsTable');
-        if (table && window.innerWidth < 768) {
-            table.classList.add('table-sm');
-            
-            // Add responsive wrapper if not exists
-            if (!table.parentElement.classList.contains('table-responsive')) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'table-responsive';
-                table.parentElement.insertBefore(wrapper, table);
-                wrapper.appendChild(table);
-            }
-        }
-    }
-
-    // Initialize on load and resize
-    enhanceTableResponsiveness();
-    window.addEventListener('resize', enhanceTableResponsiveness);
-
-    // Auto-refresh data every 5 minutes
-    setInterval(() => {
-        if (document.visibilityState === 'visible') {
-            // Only refresh if page is visible
-            const refreshIndicator = document.getElementById('autoRefresh');
-            if (!refreshIndicator) {
-                const indicator = document.createElement('div');
-                indicator.id = 'autoRefresh';
-                indicator.className = 'alert alert-info alert-dismissible fade show';
-                indicator.innerHTML = `
-                    <i class="bi bi-arrow-clockwise me-2"></i>
-                    Auto-refreshing bill data...
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                document.querySelector('.container-fluid').prepend(indicator);
-            }
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
-        }
-    }, 300000); // 5 minutes
-
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-
-    // Enhanced row highlighting on hover
-    document.querySelectorAll('.bill-row').forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = '#f8f9fa';
-            this.style.transition = 'background-color 0.2s ease';
-        });
-        
-        row.addEventListener('mouseleave', function() {
-            this.style.backgroundColor = '';
-        });
-    });
-
-    // Real-time status updates
-    function updateBillStatuses() {
-        // This would typically make an API call to get updated statuses
-        // For now, we'll just simulate it
-        console.log('Updating bill statuses...');
-        
-        // You could implement WebSocket or polling here for real-time updates
-    }
-
-    // Periodically update statuses (every 2 minutes)
-    setInterval(updateBillStatuses, 120000);
-
-    // Print functionality
-    function printBill(billId) {
-        const printWindow = window.open(`/bills/${billId}/print/`, '_blank');
-        printWindow.addEventListener('load', function() {
-            printWindow.print();
-        });
-    }
-
-    // Enhanced filtering with local storage
-    function saveFilterState() {
-        const filterState = {
-            academic_year: document.querySelector('input[name="academic_year"]').value,
-            term: document.querySelector('select[name="term"]').value,
-            status: document.querySelector('select[name="status"]').value
-        };
-        localStorage.setItem('billFilters', JSON.stringify(filterState));
-    }
-
-    function loadFilterState() {
-        const savedFilters = localStorage.getItem('billFilters');
-        if (savedFilters) {
-            const filters = JSON.parse(savedFilters);
-            document.querySelector('input[name="academic_year"]').value = filters.academic_year || '';
-            document.querySelector('select[name="term"]').value = filters.term || '';
-            document.querySelector('select[name="status"]').value = filters.status || '';
-        }
-    }
-
-    // Save filters when they change
-    document.querySelectorAll('input[name], select[name]').forEach(element => {
-        if (element.name !== 'page') {
-            element.addEventListener('change', saveFilterState);
-        }
-    });
-
-    // Load saved filters on page load
-    loadFilterState();
 });
 </script>
 {% endblock %}

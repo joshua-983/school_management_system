@@ -474,6 +474,10 @@ else:
         }
     }
 
+# WebSocket configuration
+WEBSOCKET_URL = '/ws/'
+WEBSOCKET_HEARTBEAT_INTERVAL = 30  # seconds
+
 # ==================== CELERY CONFIGURATION ====================
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=f"{REDIS_URL}/0")
 CELERY_RESULT_BACKEND = 'django-db'

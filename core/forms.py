@@ -2999,13 +2999,17 @@ class BillPaymentForm(forms.ModelForm):
     
     def clean_amount(self):
         amount = self.cleaned_data.get('amount')
-        if self.bill:
-            if amount > self.bill.get_balance_due:
-                raise forms.ValidationError(
-                    f"Payment amount cannot exceed balance due of GH₵{self.bill.get_balance_due:.2f}"
-                )
-            if amount <= 0:
-                raise forms.ValidationError("Payment amount must be greater than zero")
+        if amount:
+            # FIXED: Convert to Decimal for comparison
+            amount_decimal = Decimal(str(amount))
+            if self.bill:
+                balance_due = Decimal(str(self.bill.get_balance_due))
+                if amount_decimal > balance_due:
+                    raise forms.ValidationError(
+                        f"Payment amount cannot exceed balance due of GH₵{balance_due:.2f}"
+                    )
+                if amount_decimal <= Decimal('0.00'):
+                    raise forms.ValidationError("Payment amount must be greater than zero")
         return amount
 
     def clean_payment_date(self):

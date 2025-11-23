@@ -22,6 +22,7 @@ from ..forms import BillGenerationForm, BillPaymentForm
 
 logger = logging.getLogger(__name__)
 
+
 def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip_existing, request_user):
     """
     Generate bills for students based on mandatory fee categories
@@ -51,20 +52,24 @@ def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip
                 ).exists():
                     continue
                 
-                # Calculate total amount from fee categories
+                # Calculate total amount from fee categories - FIXED: Ensure Decimal operations
                 total_amount = Decimal('0.00')
                 bill_items = []
                 
                 for category in fee_categories:
                     if category.is_applicable_to_class(student.class_level):
-                        total_amount += category.default_amount
+                        # FIX: Convert to Decimal if needed
+                        category_amount = category.default_amount
+                        if isinstance(category_amount, float):
+                            category_amount = Decimal(str(category_amount))
+                        total_amount += category_amount
                         bill_items.append({
                             'category': category,
-                            'amount': category.default_amount,
+                            'amount': category_amount,
                             'description': f"{category.get_name_display()} - Term {term}"
                         })
                 
-                if total_amount > 0:
+                if total_amount > Decimal('0.00'):
                     # Create the bill
                     bill = Bill.objects.create(
                         student=student,
@@ -92,6 +97,25 @@ def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip
     except Exception as e:
         logger.error(f"Error generating bills: {str(e)}")
         raise
+    
+    
+def safe_decimal(value, default=Decimal('0.00')):
+    """Safely convert value to Decimal"""
+    if value is None:
+        return default
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, int):
+        return Decimal(str(value))
+    if isinstance(value, str):
+        try:
+            return Decimal(value)
+        except:
+            return default
+    return default
+
 
 class BillListView(LoginRequiredMixin, ListView):
     model = Bill
@@ -175,6 +199,7 @@ class BillDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         context['payment_form'] = BillPaymentForm(bill=self.object)
         
         return context
+
 
 class BillGenerateView(LoginRequiredMixin, UserPassesTestMixin, View):
     template_name = 'core/finance/bills/bill_generate.html'
@@ -261,6 +286,7 @@ class BillGenerateView(LoginRequiredMixin, UserPassesTestMixin, View):
         }
         return render(request, self.template_name, context)
 
+
 class BillPaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
     """View to handle bill payments"""
     
@@ -282,6 +308,12 @@ class BillPaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
                     payment = form.save(commit=False)
                     payment.bill = bill
                     payment.recorded_by = request.user
+                    
+                    # FIXED: Ensure amount is properly handled
+                    payment_amount = payment.amount
+                    if isinstance(payment_amount, float):
+                        payment.amount = Decimal(str(payment_amount))
+                    
                     payment.save()
                     
                     # Update bill status
@@ -402,7 +434,7 @@ class BulkExportBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
                 ws[f'{col_letter}1'] = header
                 ws[f'{col_letter}1'].font = Font(bold=True)
             
-            # Add data
+            # Add data - FIXED: Handle Decimal values properly
             for row_num, bill in enumerate(bills, 2):
                 ws[f'A{row_num}'] = bill.bill_number
                 ws[f'B{row_num}'] = bill.student.get_full_name()
@@ -410,9 +442,9 @@ class BulkExportBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
                 ws[f'D{row_num}'] = bill.student.get_class_level_display()
                 ws[f'E{row_num}'] = bill.academic_year
                 ws[f'F{row_num}'] = f'Term {bill.term}'
-                ws[f'G{row_num}'] = float(bill.total_amount)
-                ws[f'H{row_num}'] = float(bill.amount_paid)
-                ws[f'I{row_num}'] = float(bill.balance)
+                ws[f'G{row_num}'] = float(bill.total_amount) if bill.total_amount else 0.0
+                ws[f'H{row_num}'] = float(bill.amount_paid) if bill.amount_paid else 0.0
+                ws[f'I{row_num}'] = float(bill.balance) if bill.balance else 0.0
                 ws[f'J{row_num}'] = bill.get_status_display()
                 ws[f'K{row_num}'] = bill.due_date.strftime('%Y-%m-%d')
                 ws[f'L{row_num}'] = bill.issue_date.strftime('%Y-%m-%d')
@@ -437,6 +469,7 @@ class BulkExportBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
             logger.error(f"Error exporting bulk bills: {str(e)}")
             messages.error(request, f'Error exporting bills: {str(e)}')
             return redirect('bill_list')
+
 
 class BulkMarkPaidView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Mark multiple bills as paid"""

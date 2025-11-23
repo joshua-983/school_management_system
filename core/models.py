@@ -2634,23 +2634,22 @@ class Bill(models.Model):
                 
             self.bill_number = f"BILL{current_year}{new_sequence:06d}"
         
+        # FIXED: Ensure all amounts are Decimal before calculation
+        total_amount = Decimal(str(self.total_amount)) if self.total_amount else Decimal('0.00')
+        amount_paid = Decimal(str(self.amount_paid)) if self.amount_paid else Decimal('0.00')
+        
         # Calculate balance
-        self.balance = self.total_amount - self.amount_paid
+        self.balance = total_amount - amount_paid
         
         # Auto-update status based on payments and due date
-        if self.amount_paid >= self.total_amount:
+        if amount_paid >= total_amount:
             self.status = 'paid'
-        elif self.amount_paid > 0:
+        elif amount_paid > Decimal('0.00'):
             self.status = 'partial'
         elif timezone.now().date() > self.due_date:
             self.status = 'overdue'
         
         super().save(*args, **kwargs)
-    
-    @property
-    def get_balance_due(self):
-        """Get remaining balance due"""
-        return self.total_amount - self.amount_paid
     
     def update_status(self):
         """Update bill status based on payments and due date"""
@@ -3231,15 +3230,14 @@ class Notification(models.Model):
     
     @classmethod
     def get_unread_count_for_user(cls, user):
-        """Get unread notification count for a user"""
+        """Get unread notification count for a specific user"""
+        if not user or not user.is_authenticated:
+            return 0
         return cls.objects.filter(recipient=user, is_read=False).count()
     
     @classmethod
-    def create_notification(cls, recipient, title, message, notification_type="GENERAL", link=None, 
-                          related_object=None):
-        """
-        Class method to create a notification with proper error handling
-        """
+    def create_notification(cls, recipient, title, message, notification_type="GENERAL", link=None, related_object=None):
+        """Create a notification and send WebSocket update"""
         try:
             notification = cls.objects.create(
                 recipient=recipient,
@@ -3263,6 +3261,60 @@ class Notification(models.Model):
         except Exception as e:
             logger.error(f"Failed to create notification: {str(e)}")
             return None
+    
+    def send_new_notification_ws(self):
+        """Send WebSocket notification when a new notification is created"""
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{self.recipient.id}',
+                {
+                    'type': 'notification_update',
+                    'action': 'new_notification',
+                    'notification': {
+                        'id': self.id,
+                        'title': self.title,
+                        'message': self.message,
+                        'notification_type': self.notification_type,
+                        'created_at': self.created_at.isoformat(),
+                        'is_read': self.is_read,
+                    },
+                    'unread_count': self.get_unread_count_for_user(self.recipient)  # FIXED: Pass user argument
+                }
+            )
+        except Exception as e:
+            logger.error(f"WebSocket new notification failed: {str(e)}")
+    
+    def mark_as_read(self):
+        """Mark notification as read and send WebSocket update"""
+        if not self.is_read:
+            self.is_read = True
+            self.save(update_fields=['is_read'])
+            self.send_websocket_update()
+            return True
+        return False
+    
+    def send_websocket_update(self):
+        """Send WebSocket update for this notification"""
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{self.recipient.id}',
+                {
+                    'type': 'notification_update',
+                    'action': 'single_read',
+                    'notification_id': self.id,
+                    'unread_count': self.get_unread_count_for_user(self.recipient)  # FIXED: Pass user argument
+                }
+            )
+        except Exception as e:
+            logger.error(f"WebSocket update failed for notification {self.id}: {str(e)}")
     
     def save(self, *args, **kwargs):
         """Override save to handle WebSocket notifications"""

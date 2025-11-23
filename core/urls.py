@@ -5,6 +5,7 @@ from . import views
 from .views.network_views import NetworkHealthView
 from .views.base_views import dashboard
 
+
 # Import views from modular files
 from .views.base_views import home, admin_dashboard, teacher_dashboard
 from .views.teacher_views import (
@@ -136,18 +137,26 @@ from .views.announcement_views import (
     AnnouncementListView, CreateAnnouncementView, UpdateAnnouncementView, 
     DeleteAnnouncementView, get_active_announcements, dismiss_announcement, 
     dismiss_all_announcements, announcement_detail, toggle_announcement_status,
-    bulk_action_announcements, AnnouncementStatsView
+    bulk_action_announcements, AnnouncementStatsView,
+    # ADD THE MISSING active_announcements VIEW
+    active_announcements
 )
 
+# ==============================
+# SECURITY VIEWS IMPORTS - FIXED WITH NEW LOCKOUT FUNCTIONS
 # ==============================
 from .views.security_views import (
     security_dashboard, UserManagementView, BlockUserView,
     MaintenanceModeView, ScheduledMaintenanceView, maintenance_mode_page,
     user_blocked_page, security_stats_api, user_details_api, RateLimitExceededView,
-    SecuritySettingsView, security_events_api, maintenance_details_api, security_events, alert_rule_list
+    SecuritySettingsView, security_events_api, maintenance_details_api, security_events, alert_rule_list,
+    # ADD THESE MISSING IMPORTS:
+    security_status_api, security_notifications_api,
+    # NEW LOCKOUT MANAGEMENT FUNCTIONS:
+    axes_lockout_management, unlock_user_api, locked_users_api, unlock_all_users_api
 )
 
-# Import API views
+# Import API views - FIXED: Import the correct ViewSet
 from .api import FeeCategoryViewSet
 from .views.api import fee_category_detail
 
@@ -408,19 +417,29 @@ urlpatterns = [
         path('alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='alert_rule_create'),
         path('alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='alert_rule_update'),
         
-        # API endpoints
+        # NEW LOCKOUT MANAGEMENT
+        path('lockout-management/', axes_lockout_management, name='lockout_management'),
+        
+        # API endpoints - FIXED
+        path('api/status/', security_status_api, name='security_status_api'),
         path('api/stats/', security_stats_api, name='security_stats_api'),
         path('api/events/', security_events_api, name='security_events_api'),
+        path('api/notifications/', security_events_api, name='security_notifications_api'),
         path('api/user-details/<int:user_id>/', user_details_api, name='user_details_api'),
         path('api/maintenance-details/<int:maintenance_id>/', maintenance_details_api, name='maintenance_details_api'),
+        
+        # NEW LOCKOUT MANAGEMENT API ENDPOINTS
+        path('api/unlock-user/<str:username>/', unlock_user_api, name='unlock_user_api'),
+        path('api/locked-users/', locked_users_api, name='locked_users_api'),
+        path('api/unlock-all-users/', unlock_all_users_api, name='unlock_all_users_api'),
     ])),
     
     # ==============================
     # ENHANCED SECURITY & ANALYTICS URLS (KEEP FOR BACKWARD COMPATIBILITY)
     # ==============================
-    path('audit/security-dashboard/', security_dashboard, name='audit_security_dashboard'),  # Keep for compatibility
-    path('audit/security-events/', SecurityEventListView.as_view(), name='audit_security_events'),  # Keep for compatibility
-    path('audit/security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='audit_security_event_detail'),  # Keep for compatibility
+    path('audit/security-dashboard/', security_dashboard, name='audit_security_dashboard'),
+    path('audit/security-events/', SecurityEventListView.as_view(), name='audit_security_events'),
+    path('audit/security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='audit_security_event_detail'),
     path('audit/security-events/<int:event_id>/resolve/', resolve_security_event, name='resolve_security_event'),
     
     # Alert Rules Management (Keep for backward compatibility)
@@ -491,19 +510,21 @@ urlpatterns = [
     path('api/timetable-entries/', get_timetable_entries, name='get_timetable_entries'),
     
     # ==============================
-    # ANNOUNCEMENT URLS
+    # ANNOUNCEMENT URLS - UPDATED
     # ==============================
-    path('announcements/', AnnouncementListView.as_view(), name='announcement_list'),
-    path('announcements/create/', CreateAnnouncementView.as_view(), name='create_announcement'),
-    path('announcements/<int:pk>/', announcement_detail, name='announcement_detail'),
-    path('announcements/<int:pk>/update/', UpdateAnnouncementView.as_view(), name='update_announcement'),
-    path('announcements/<int:pk>/delete/', DeleteAnnouncementView.as_view(), name='delete_announcement'),
-    path('announcements/<int:pk>/toggle-status/', toggle_announcement_status, name='toggle_announcement_status'),
-    path('announcements/active/', get_active_announcements, name='active_announcements'),
-    path('announcements/<int:pk>/dismiss/', dismiss_announcement, name='dismiss_announcement'),
-    path('announcements/dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),
-    path('announcements/bulk-action/', bulk_action_announcements, name='bulk_action_announcements'),
-    path('announcements/stats/', AnnouncementStatsView.as_view(), name='announcement_stats'),
+    path('announcements/', include([
+        path('', AnnouncementListView.as_view(), name='announcement_list'),
+        path('create/', CreateAnnouncementView.as_view(), name='create_announcement'),
+        path('active/', active_announcements, name='active_announcements'),  # FIXED: Using function view
+        path('<int:pk>/', announcement_detail, name='announcement_detail'),
+        path('<int:pk>/update/', UpdateAnnouncementView.as_view(), name='update_announcement'),
+        path('<int:pk>/delete/', DeleteAnnouncementView.as_view(), name='delete_announcement'),
+        path('<int:pk>/toggle-status/', toggle_announcement_status, name='toggle_announcement_status'),
+        path('<int:pk>/dismiss/', dismiss_announcement, name='dismiss_announcement'),
+        path('dismiss-all/', dismiss_all_announcements, name='dismiss_all_announcements'),
+        path('bulk-action/', bulk_action_announcements, name='bulk_action_announcements'),
+        path('stats/', AnnouncementStatsView.as_view(), name='announcement_stats'),
+    ])),
     
     # Network Health
     path('api/network/health/', NetworkHealthView.as_view(), name='network_health'),
@@ -518,5 +539,3 @@ urlpatterns = [
     path('fees/download-template/<str:file_type>/', DownloadFeeTemplateView.as_view(), name='download_fee_template'),
     path('fees/generate-term-fees/', GenerateTermFeesView.as_view(), name='generate_term_fees'),
 ]
-
-

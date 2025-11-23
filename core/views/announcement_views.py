@@ -247,31 +247,35 @@ class CreateAnnouncementView(LoginRequiredMixin, UserPassesTestMixin, CreateView
         messages.error(self.request, "Please correct the errors below.")
         return super().form_invalid(form)
 
+    # In core/views/announcement_views.py - Update the send_announcement_notifications method
+
     def send_announcement_notifications(self, announcement):
         """Send notifications to targeted users based on class levels and roles"""
         try:
             from django.contrib.auth import get_user_model
             User = get_user_model()
-            
+        
             target_users = self.get_target_users(announcement)
             notification_count = 0
-            
+        
             for user in target_users:
-                # Create notification using the Notification model method
-                notification = Notification.create_notification(
-                    recipient=user,
-                    title=f"New Announcement: {announcement.title}",
-                    message=announcement.message[:200] + "..." if len(announcement.message) > 200 else announcement.message,
-                    notification_type="ANNOUNCEMENT",
-                    link=reverse('announcement_detail', kwargs={'pk': announcement.pk}),
-                    related_object=announcement
-                )
-                if notification:
-                    notification_count += 1
-            
+                # Only send notifications to users who should see this announcement
+                if should_user_see_announcement(user, announcement):
+                    # Create notification using the Notification model method
+                    notification = Notification.create_notification(
+                        recipient=user,
+                        title=f"New Announcement: {announcement.title}",
+                        message=announcement.message[:200] + "..." if len(announcement.message) > 200 else announcement.message,
+                        notification_type="ANNOUNCEMENT",
+                        link=reverse('announcement_detail', kwargs={'pk': announcement.pk}),
+                        related_object=announcement
+                    )
+                    if notification:
+                        notification_count += 1
+        
             logger.info(f"Sent {notification_count} notifications for announcement {announcement.id}")
             return notification_count
-            
+        
         except Exception as e:
             logger.error(f"Failed to send announcement notifications: {str(e)}")
             return 0
@@ -406,8 +410,9 @@ class DeleteAnnouncementView(LoginRequiredMixin, UserPassesTestMixin, DeleteView
 
 # API Views for announcements
 @login_required
+# Remove @login_required decorator to make it publicly accessible
 def get_active_announcements(request):
-    """Get active announcements for the current user"""
+    """Get active announcements - publicly accessible"""
     try:
         announcements = Announcement.objects.filter(
             is_active=True,
@@ -416,12 +421,22 @@ def get_active_announcements(request):
             Q(end_date__isnull=True) | Q(end_date__gte=timezone.now())
         ).order_by('-priority', '-created_at')
         
-        # Filter announcements based on user type and class levels
+        # For unauthenticated users, show only announcements for all roles
+        if not request.user.is_authenticated:
+            announcements = announcements.filter(target_roles__contains='ALL')
+        
+        # Filter announcements based on user type and class levels for authenticated users
         filtered_announcements = []
         
         for announcement in announcements:
-            if should_user_see_announcement(request.user, announcement):
-                filtered_announcements.append(announcement)
+            if not request.user.is_authenticated:
+                # Show to unauthenticated users if target includes ALL
+                if 'ALL' in announcement.target_roles:
+                    filtered_announcements.append(announcement)
+            else:
+                # Use existing logic for authenticated users
+                if should_user_see_announcement(request.user, announcement):
+                    filtered_announcements.append(announcement)
         
         # Remove duplicates by title (case-insensitive)
         seen_titles = set()
@@ -436,12 +451,13 @@ def get_active_announcements(request):
         # Prepare response data
         announcement_data = []
         for announcement in unique_announcements[:10]:  # Limit to 10 most recent
-            # Mark as viewed
-            UserAnnouncementView.objects.get_or_create(
-                user=request.user,
-                announcement=announcement,
-                defaults={'viewed_at': timezone.now()}
-            )
+            # Mark as viewed for authenticated users only
+            if request.user.is_authenticated:
+                UserAnnouncementView.objects.get_or_create(
+                    user=request.user,
+                    announcement=announcement,
+                    defaults={'viewed_at': timezone.now()}
+                )
             
             announcement_data.append({
                 'id': announcement.id,
@@ -463,8 +479,16 @@ def get_active_announcements(request):
 
 def should_user_see_announcement(user, announcement):
     """Check if a user should see a specific announcement based on roles and class levels"""
+    # Check if announcement is active and not expired
+    if not announcement.is_active_now():
+        return False
+    
     target_class_levels = announcement.get_target_class_levels()
     target_roles = announcement.target_roles
+    
+    # Staff and teachers can see all announcements
+    if user.is_staff or hasattr(user, 'teacher'):
+        return True
     
     # Check if user's role is in target roles
     user_role_matches = False
@@ -476,6 +500,8 @@ def should_user_see_announcement(user, announcement):
     elif hasattr(user, 'student') and 'STUDENT' in target_roles:
         user_role_matches = True
     elif hasattr(user, 'parentguardian') and 'PARENT' in target_roles:
+        user_role_matches = True
+    elif 'ALL' in target_roles:
         user_role_matches = True
     
     if not user_role_matches:
@@ -546,28 +572,38 @@ def dismiss_all_announcements(request):
 @login_required
 def announcement_detail(request, pk):
     """View announcement details and mark as viewed"""
-    announcement = get_object_or_404(Announcement, pk=pk)
-    
-    # Check if user should see this announcement
-    if not should_user_see_announcement(request.user, announcement):
-        messages.error(request, "You don't have permission to view this announcement.")
-        return redirect('announcement_list')
-    
-    # Mark as viewed
-    UserAnnouncementView.objects.update_or_create(
-        user=request.user,
-        announcement=announcement,
-        defaults={'viewed_at': timezone.now()}
-    )
-    
-    # Get views count
-    views_count = UserAnnouncementView.objects.filter(announcement=announcement).count()
-    
-    return render(request, 'core/announcements/announcement_detail.html', {
-        'announcement': announcement,
-        'now': timezone.now(),
-        'views_count': views_count
-    })
+    try:
+        announcement = get_object_or_404(Announcement, pk=pk)
+        
+        # Check if user should see this announcement
+        user_can_view = should_user_see_announcement(request.user, announcement)
+        
+        if not user_can_view:
+            # Show permission denied page instead of redirecting
+            return render(request, 'core/announcements/announcement_permission_denied.html', {
+                'announcement': announcement
+            })
+        
+        # Mark as viewed
+        UserAnnouncementView.objects.get_or_create(
+            user=request.user,
+            announcement=announcement,
+            defaults={'viewed_at': timezone.now()}
+        )
+        
+        # Get views count
+        views_count = UserAnnouncementView.objects.filter(announcement=announcement).count()
+        
+        return render(request, 'core/announcements/announcement_detail.html', {
+            'announcement': announcement,
+            'now': timezone.now(),
+            'views_count': views_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error viewing announcement {pk}: {str(e)}")
+        messages.error(request, "An error occurred while loading the announcement.")
+        return redirect('active_announcements')
 
 @login_required
 @require_POST
@@ -769,4 +805,49 @@ class AnnouncementStatsView(LoginRequiredMixin, UserPassesTestMixin, TemplateVie
         })
         
         return context
+
+
+@login_required
+def active_announcements(request):
+    """View active announcements for the current user"""
+    try:
+        announcements = Announcement.objects.filter(
+            is_active=True,
+            start_date__lte=timezone.now(),
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=timezone.now())
+        ).order_by('-priority', '-created_at')
+        
+        # Filter announcements based on user type and class levels for authenticated users
+        filtered_announcements = []
+        
+        for announcement in announcements:
+            if should_user_see_announcement(request.user, announcement):
+                filtered_announcements.append(announcement)
+        
+        # Mark as viewed when user visits this page
+        for announcement in filtered_announcements:
+            UserAnnouncementView.objects.get_or_create(
+                user=request.user,
+                announcement=announcement,
+                defaults={'viewed_at': timezone.now()}
+            )
+        
+        return render(request, 'core/announcements/active_announcements.html', {
+            'announcements': filtered_announcements,
+            'now': timezone.now(),
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading active announcements: {str(e)}")
+        messages.error(request, "An error occurred while loading announcements.")
+        return render(request, 'core/announcements/active_announcements.html', {
+            'announcements': [],
+            'now': timezone.now(),
+        })
+
+
+
+
+
 

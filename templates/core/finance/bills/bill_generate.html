@@ -18,6 +18,17 @@
         font-weight: bold;
         color: #3a7bd5;
     }
+    .recent-activity-item {
+        border-left: 3px solid #3a7bd5;
+        padding-left: 15px;
+        margin-bottom: 15px;
+    }
+    .form-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
 </style>
 {% endblock %}
 
@@ -44,6 +55,20 @@
         </div>
     </div>
 
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row">
         <div class="col-lg-8">
             <div class="card shadow-sm generation-card">
@@ -54,60 +79,150 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="post" id="billGenerationForm">
+                    <form method="post" id="billGenerationForm" novalidate>
                         {% csrf_token %}
                         
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Academic Year</label>
-                                <input type="text" class="form-control" name="academic_year" 
-                                       placeholder="e.g., 2024/2025" required
-                                       pattern="\d{4}/\d{4}" title="Format: YYYY/YYYY">
-                                <div class="form-text">Format: YYYY/YYYY</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Term</label>
-                                <select class="form-select" name="term" required>
-                                    <option value="">Select Term</option>
-                                    <option value="1">Term 1</option>
-                                    <option value="2">Term 2</option>
-                                    <option value="3">Term 3</option>
-                                </select>
+                        <!-- Academic Year and Term -->
+                        <div class="form-section">
+                            <h6 class="mb-3"><i class="bi bi-calendar me-2"></i>Academic Information</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Academic Year *</label>
+                                        <input type="text" class="form-control" name="academic_year" 
+                                               placeholder="e.g., 2024/2025" required
+                                               pattern="\d{4}/\d{4}" title="Format: YYYY/YYYY"
+                                               value="{% if form.academic_year.value %}{{ form.academic_year.value }}{% else %}{{ current_year }}/{{ next_year }}{% endif %}">
+                                        <div class="form-text">Format: YYYY/YYYY</div>
+                                        {% if form.academic_year.errors %}
+                                        <div class="text-danger small">
+                                            {% for error in form.academic_year.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Term *</label>
+                                        <select class="form-select" name="term" required>
+                                            <option value="">Select Term</option>
+                                            <option value="1" {% if form.term.value == "1" %}selected{% endif %}>Term 1</option>
+                                            <option value="2" {% if form.term.value == "2" %}selected{% endif %}>Term 2</option>
+                                            <option value="3" {% if form.term.value == "3" %}selected{% endif %}>Term 3</option>
+                                        </select>
+                                        {% if form.term.errors %}
+                                        <div class="text-danger small">
+                                            {% for error in form.term.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Class Levels</label>
-                                <select class="form-select" name="class_levels" multiple size="6">
-                                    {% for value, display in class_level_choices %}
-                                    <option value="{{ value }}">{{ display }}</option>
+                        <!-- Class Levels and Due Date -->
+                        <div class="form-section">
+                            <h6 class="mb-3"><i class="bi bi-people me-2"></i>Target Students</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Class Levels</label>
+                                        <select class="form-select" name="class_levels" multiple size="6" id="classLevels">
+                                            {% for value, display in class_level_choices %}
+                                            <option value="{{ value }}" 
+                                                    {% if value in form.class_levels.value %}selected{% endif %}>
+                                                {{ display }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="form-text">Hold Ctrl/Cmd to select multiple classes. Leave empty for all classes.</div>
+                                        {% if form.class_levels.errors %}
+                                        <div class="text-danger small">
+                                            {% for error in form.class_levels.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Due Date *</label>
+                                        <input type="date" class="form-control" name="due_date" required
+                                               value="{% if form.due_date.value %}{{ form.due_date.value }}{% else %}{{ default_due_date }}{% endif %}"
+                                               min="{{ today }}">
+                                        <div class="form-text">Bills will be due on this date</div>
+                                        {% if form.due_date.errors %}
+                                        <div class="text-danger small">
+                                            {% for error in form.due_date.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Settings -->
+                        <div class="form-section">
+                            <h6 class="mb-3"><i class="bi bi-gear me-2"></i>Additional Settings</h6>
+                            <div class="mb-3">
+                                <label class="form-label">Notes (Optional)</label>
+                                <textarea class="form-control" name="notes" rows="2" 
+                                          placeholder="Optional notes for the bills">{% if form.notes.value %}{{ form.notes.value }}{% endif %}</textarea>
+                                {% if form.notes.errors %}
+                                <div class="text-danger small">
+                                    {% for error in form.notes.errors %}
+                                        {{ error }}
                                     {% endfor %}
-                                </select>
-                                <div class="form-text">Hold Ctrl/Cmd to select multiple classes</div>
+                                </div>
+                                {% endif %}
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Due Date</label>
-                                <input type="date" class="form-control" name="due_date" required>
-                                <div class="form-text">Bills will be due on this date</div>
+
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" name="skip_existing" id="skipExisting" 
+                                       {% if form.skip_existing.value %}checked{% endif %}>
+                                <label class="form-check-label" for="skipExisting">
+                                    Skip students who already have bills for this term
+                                </label>
+                                <div class="form-text">Prevents duplicate bill generation for the same term</div>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Notes (Optional)</label>
-                            <textarea class="form-control" name="notes" rows="2" 
-                                      placeholder="Optional notes for the bills"></textarea>
-                        </div>
-
-                        <div class="form-check mb-4">
-                            <input class="form-check-input" type="checkbox" name="skip_existing" id="skipExisting" checked>
-                            <label class="form-check-label" for="skipExisting">
-                                Skip students who already have bills for this term
-                            </label>
+                        <!-- Generation Preview -->
+                        <div class="alert alert-info" id="generationPreview">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-eye me-2"></i>Generation Preview
+                            </h6>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="fw-bold text-primary" id="previewStudentCount">0</div>
+                                    <small class="text-muted">Students</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-success" id="previewCategoryCount">{{ fee_category_count }}</div>
+                                    <small class="text-muted">Fee Categories</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="fw-bold text-warning" id="previewTotalBills">0</div>
+                                    <small class="text-muted">Total Bills</small>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="text-center">
+                                <small class="text-muted">
+                                    Estimated Revenue: <strong id="previewRevenue">GH₵0.00</strong>
+                                </small>
+                            </div>
                         </div>
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="submit" class="btn btn-primary btn-lg" id="generateButton">
                                 <i class="bi bi-gear me-2"></i>
                                 Generate Bills
                             </button>
@@ -123,7 +238,7 @@
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-eye me-2"></i>
-                        Generation Preview
+                        System Overview
                     </h5>
                 </div>
                 <div class="card-body text-center">
@@ -135,10 +250,10 @@
                     
                     <hr>
                     
-                    <p class="text-muted">
+                    <div class="alert alert-warning">
                         <i class="bi bi-info-circle me-1"></i>
                         Bills will be generated for all active students with mandatory fee categories
-                    </p>
+                    </div>
                 </div>
             </div>
 
@@ -153,188 +268,220 @@
                 <div class="card-body">
                     {% if recent_generations %}
                     {% for generation in recent_generations %}
-                    <div class="border-bottom pb-2 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <span class="fw-medium">{{ generation.academic_year }} Term {{ generation.term }}</span>
+                    <div class="recent-activity-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="fw-medium">{{ generation.academic_year }} Term {{ generation.term }}</span>
+                                <br>
+                                <small class="text-muted">{{ generation.bills_created }} bills created</small>
+                            </div>
                             <small class="text-muted">{{ generation.created_at|timesince }} ago</small>
                         </div>
-                        <small class="text-muted">{{ generation.bills_created }} bills created</small>
                     </div>
                     {% endfor %}
                     {% else %}
-                    <p class="text-muted text-center">No recent bill generations</p>
+                    <div class="text-center py-3">
+                        <i class="bi bi-clock-history display-4 text-muted mb-3"></i>
+                        <p class="text-muted">No recent bill generations</p>
+                    </div>
                     {% endif %}
                 </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle me-2"></i>
+                        Help & Tips
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Before Generating:</h6>
+                        <ul class="small">
+                            <li>Verify active student count</li>
+                            <li>Check mandatory fee categories</li>
+                            <li>Set appropriate due date</li>
+                            <li>Select specific classes if needed</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <h6>After Generation:</h6>
+                        <ul class="small">
+                            <li>Bills will be visible in Bills list</li>
+                            <li>Students/parents can view their bills</li>
+                            <li>Payments can be recorded individually</li>
+                            <li>Reports will update automatically</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Confirm Bill Generation
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h6>Generation Summary</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <small>Academic Year:</small><br>
+                            <strong id="confirmAcademicYear"></strong>
+                        </div>
+                        <div class="col-6">
+                            <small>Term:</small><br>
+                            <strong id="confirmTerm"></strong>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <small>Classes:</small><br>
+                            <strong id="confirmClasses"></strong>
+                        </div>
+                        <div class="col-6">
+                            <small>Due Date:</small><br>
+                            <strong id="confirmDueDate"></strong>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <small>Total Bills:</small><br>
+                            <strong id="confirmTotalBills"></strong>
+                        </div>
+                        <div class="col-6">
+                            <small>Estimated Revenue:</small><br>
+                            <strong id="confirmRevenue"></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirmGeneration">
+                    <label class="form-check-label" for="confirmGeneration">
+                        I understand that this action will generate multiple bills and cannot be easily undone
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmGenerateBtn" disabled>
+                    <i class="bi bi-gear me-2"></i>Generate Bills
+                </button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
+{% block footer %}
+
+{% endblock %}
+
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('billGenerationForm');
-    const classLevelsSelect = document.querySelector('select[name="class_levels"]');
+    const classLevelsSelect = document.getElementById('classLevels');
     const dueDateInput = document.querySelector('input[name="due_date"]');
     const academicYearInput = document.querySelector('input[name="academic_year"]');
     const termSelect = document.querySelector('select[name="term"]');
-
-    // Initialize datepicker with validation
-    if (dueDateInput) {
-        // Set min date to today
-        const today = new Date().toISOString().split('T')[0];
-        dueDateInput.min = today;
-        
-        // Set default to 30 days from now
-        const defaultDueDate = new Date();
-        defaultDueDate.setDate(defaultDueDate.getDate() + 30);
+    const skipExistingCheckbox = document.getElementById('skipExisting');
+    
+    // Preview elements
+    const previewStudentCount = document.getElementById('previewStudentCount');
+    const previewTotalBills = document.getElementById('previewTotalBills');
+    const previewRevenue = document.getElementById('previewRevenue');
+    
+    // Set default dates
+    const today = new Date().toISOString().split('T')[0];
+    const defaultDueDate = new Date();
+    defaultDueDate.setDate(defaultDueDate.getDate() + 30);
+    
+    if (dueDateInput && !dueDateInput.value) {
         dueDateInput.value = defaultDueDate.toISOString().split('T')[0];
-        
-        dueDateInput.addEventListener('change', validateDueDate);
+        dueDateInput.min = today;
     }
-
-    // Academic year validation
-    if (academicYearInput) {
-        academicYearInput.addEventListener('blur', validateAcademicYear);
-        academicYearInput.addEventListener('input', formatAcademicYear);
+    
+    // Set current academic year if not set
+    if (academicYearInput && !academicYearInput.value) {
+        const currentYear = new Date().getFullYear();
+        academicYearInput.value = `${currentYear}/${currentYear + 1}`;
     }
-
-    // Class levels selection enhancement
-    if (classLevelsSelect) {
-        // Add "Select All" option
-        const selectAllOption = document.createElement('option');
-        selectAllOption.value = 'all';
-        selectAllOption.textContent = 'Select All Classes';
-        classLevelsSelect.insertBefore(selectAllOption, classLevelsSelect.firstChild);
-        
-        classLevelsSelect.addEventListener('change', function() {
-            if (this.value === 'all') {
-                // Select all options except "Select All"
-                Array.from(this.options).forEach(option => {
-                    if (option.value !== 'all') {
-                        option.selected = true;
-                    }
-                });
-            }
-            updateStudentCount();
-        });
-    }
-
-    // Real-time student count update
-    function updateStudentCount() {
-        const selectedClasses = Array.from(classLevelsSelect?.selectedOptions || [])
-            .map(opt => opt.value)
-            .filter(val => val !== 'all');
-            
-        const academicYear = academicYearInput?.value;
-        const term = termSelect?.value;
-
-        if (selectedClasses.length > 0 && academicYear && term) {
-            // Show loading
-            const previewCard = document.querySelector('.preview-card .stat-number');
-            const originalContent = previewCard?.textContent;
-            
-            if (previewCard) {
-                previewCard.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
-            }
-
-            // Simulate API call to get student count
-            setTimeout(() => {
-                // This would be an actual API call in production
-                const mockCount = selectedClasses.length * 25; // Mock data
-                if (previewCard) {
-                    previewCard.textContent = mockCount;
-                }
-                
-                updateGenerationPreview();
-            }, 1000);
-        }
-    }
-
-    // Update generation preview
+    
+    // Update preview when inputs change
     function updateGenerationPreview() {
-        const selectedClasses = Array.from(classLevelsSelect?.selectedOptions || [])
-            .map(opt => opt.value)
-            .filter(val => val !== 'all');
-            
-        const studentCount = parseInt(document.querySelector('.preview-card .stat-number:first-child')?.textContent || '0');
-        const categoryCount = parseInt(document.querySelector('.preview-card .stat-number:last-child')?.textContent || '0');
+        const selectedClasses = Array.from(classLevelsSelect.selectedOptions).map(opt => opt.value);
+        const academicYear = academicYearInput.value;
+        const term = termSelect.value;
         
-        const totalBills = studentCount * categoryCount;
+        // Mock data - in real implementation, you'd fetch this from the server
+        const studentCount = selectedClasses.length > 0 ? selectedClasses.length * 25 : {{ student_count }};
+        const categoryCount = {{ fee_category_count }};
+        const totalBills = studentCount;
+        const avgFeeAmount = 500; // Average fee amount per bill
         
-        const previewSection = document.getElementById('generationPreview');
-        if (!previewSection) {
-            const cardBody = document.querySelector('.preview-card .card-body');
-            const previewDiv = document.createElement('div');
-            previewDiv.id = 'generationPreview';
-            previewDiv.className = 'mt-3 p-3 bg-light rounded';
-            previewDiv.innerHTML = `
-                <h6>Generation Preview</h6>
-                <div class="row text-center">
-                    <div class="col-6">
-                        <div class="fw-bold text-primary">${totalBills}</div>
-                        <small class="text-muted">Total Bills</small>
-                    </div>
-                    <div class="col-6">
-                        <div class="fw-bold text-success">GH₵${(totalBills * 500).toLocaleString()}</div>
-                        <small class="text-muted">Estimated Revenue</small>
-                    </div>
-                </div>
-            `;
-            cardBody?.appendChild(previewDiv);
-        } else {
-            previewSection.querySelector('.fw-bold:first-child').textContent = totalBills;
-            previewSection.querySelector('.fw-bold:last-child').textContent = 
-                `GH₵${(totalBills * 500).toLocaleString()}`;
-        }
+        previewStudentCount.textContent = studentCount.toLocaleString();
+        previewTotalBills.textContent = totalBills.toLocaleString();
+        previewRevenue.textContent = 'GH₵' + (totalBills * avgFeeAmount).toLocaleString();
     }
-
+    
+    // Add event listeners for preview updates
+    [classLevelsSelect, academicYearInput, termSelect].forEach(element => {
+        if (element) {
+            element.addEventListener('change', updateGenerationPreview);
+        }
+    });
+    
     // Form validation
-    function validateDueDate() {
-        const dueDate = new Date(dueDateInput.value);
-        const today = new Date();
+    function validateForm() {
+        let isValid = true;
         
-        if (dueDate < today) {
+        // Validate academic year format
+        if (academicYearInput.value && !academicYearInput.value.match(/^\d{4}\/\d{4}$/)) {
+            showError(academicYearInput, 'Academic year must be in format YYYY/YYYY');
+            isValid = false;
+        } else {
+            clearError(academicYearInput);
+        }
+        
+        // Validate due date
+        if (dueDateInput.value && new Date(dueDateInput.value) < new Date(today)) {
             showError(dueDateInput, 'Due date cannot be in the past');
-            return false;
+            isValid = false;
+        } else {
+            clearError(dueDateInput);
         }
         
-        clearError(dueDateInput);
-        return true;
+        // Validate required fields
+        if (!academicYearInput.value) {
+            showError(academicYearInput, 'Academic year is required');
+            isValid = false;
+        }
+        
+        if (!termSelect.value) {
+            showError(termSelect, 'Term is required');
+            isValid = false;
+        }
+        
+        if (!dueDateInput.value) {
+            showError(dueDateInput, 'Due date is required');
+            isValid = false;
+        }
+        
+        return isValid;
     }
-
-    function validateAcademicYear() {
-        const pattern = /^\d{4}\/\d{4}$/;
-        if (!pattern.test(academicYearInput.value)) {
-            showError(academicYearInput, 'Academic year must be in format YYYY/YYYY (e.g., 2024/2025)');
-            return false;
-        }
-        
-        const years = academicYearInput.value.split('/');
-        const startYear = parseInt(years[0]);
-        const endYear = parseInt(years[1]);
-        
-        if (endYear !== startYear + 1) {
-            showError(academicYearInput, 'The second year must be exactly one year after the first year');
-            return false;
-        }
-        
-        clearError(academicYearInput);
-        return true;
-    }
-
-    function formatAcademicYear() {
-        let value = this.value.replace(/[^0-9\/]/g, '');
-        
-        // Auto-insert slash after 4 digits
-        if (value.length === 4 && !value.includes('/')) {
-            value += '/';
-        }
-        
-        this.value = value;
-    }
-
+    
     function showError(input, message) {
         clearError(input);
         
@@ -345,7 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
         input.classList.add('is-invalid');
         input.parentNode.appendChild(errorDiv);
     }
-
+    
     function clearError(input) {
         input.classList.remove('is-invalid');
         const existingError = input.parentNode.querySelector('.invalid-feedback');
@@ -353,103 +500,70 @@ document.addEventListener('DOMContentLoaded', function() {
             existingError.remove();
         }
     }
-
+    
     // Form submission handling
     form.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        // Validate all fields
-        const isDueDateValid = validateDueDate();
-        const isAcademicYearValid = validateAcademicYear();
-        const areClassesSelected = classLevelsSelect?.selectedOptions.length > 0 || 
-                                 (classLevelsSelect?.selectedOptions[0]?.value === 'all');
-
-        if (!areClassesSelected) {
-            showError(classLevelsSelect, 'Please select at least one class level');
-        } else {
-            clearError(classLevelsSelect);
-        }
-
-        if (isDueDateValid && isAcademicYearValid && areClassesSelected) {
-            // Show confirmation modal
+        if (validateForm()) {
             showConfirmationModal();
         }
     });
-
+    
     function showConfirmationModal() {
-        const selectedClasses = Array.from(classLevelsSelect.selectedOptions)
-            .filter(opt => opt.value !== 'all')
-            .map(opt => opt.textContent);
+        const selectedClasses = Array.from(classLevelsSelect.selectedOptions);
+        const classNames = selectedClasses.length > 0 
+            ? selectedClasses.map(opt => opt.textContent).join(', ')
+            : 'All Classes';
             
-        const modalHtml = `
-            <div class="modal fade" id="confirmationModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header bg-warning text-dark">
-                            <h5 class="modal-title">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                Confirm Bill Generation
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="alert alert-info">
-                                <h6>Generation Summary</h6>
-                                <ul class="mb-0">
-                                    <li>Academic Year: ${academicYearInput.value}</li>
-                                    <li>Term: ${termSelect.options[termSelect.selectedIndex].text}</li>
-                                    <li>Classes: ${selectedClasses.join(', ')}</li>
-                                    <li>Due Date: ${dueDateInput.value}</li>
-                                    <li>Estimated Bills: ${document.querySelector('#generationPreview .fw-bold:first-child')?.textContent || 'N/A'}</li>
-                                </ul>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="confirmGeneration">
-                                <label class="form-check-label" for="confirmGeneration">
-                                    I understand that this action will generate multiple bills and cannot be easily undone
-                                </label>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-warning" id="confirmGenerateBtn" disabled>
-                                <i class="bi bi-gear me-2"></i>Generate Bills
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Remove existing modal if any
-        const existingModal = document.getElementById('confirmationModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        // Set confirmation modal content
+        document.getElementById('confirmAcademicYear').textContent = academicYearInput.value;
+        document.getElementById('confirmTerm').textContent = 'Term ' + termSelect.options[termSelect.selectedIndex].text;
+        document.getElementById('confirmClasses').textContent = classNames;
+        document.getElementById('confirmDueDate').textContent = new Date(dueDateInput.value).toLocaleDateString();
+        document.getElementById('confirmTotalBills').textContent = previewTotalBills.textContent;
+        document.getElementById('confirmRevenue').textContent = previewRevenue.textContent;
         
         const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
         modal.show();
-        
-        // Enable generate button when checkbox is checked
-        document.getElementById('confirmGeneration').addEventListener('change', function() {
-            document.getElementById('confirmGenerateBtn').disabled = !this.checked;
-        });
-        
-        // Handle final confirmation
-        document.getElementById('confirmGenerateBtn').addEventListener('click', function() {
-            // Show loading state
-            this.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Generating...';
-            this.disabled = true;
-            
-            // Submit the form
-            form.submit();
-        });
     }
-
-    // Initialize
-    updateStudentCount();
+    
+    // Enable generate button when checkbox is checked
+    document.getElementById('confirmGeneration').addEventListener('change', function() {
+        document.getElementById('confirmGenerateBtn').disabled = !this.checked;
+    });
+    
+    // Handle final confirmation
+    document.getElementById('confirmGenerateBtn').addEventListener('click', function() {
+        // Show loading state
+        const generateBtn = document.getElementById('generateButton');
+        generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+        generateBtn.disabled = true;
+        
+        // Submit the form
+        form.submit();
+    });
+    
+    // Initialize preview
+    updateGenerationPreview();
+    
+    // Add select all functionality for class levels
+    const selectAllOption = document.createElement('option');
+    selectAllOption.value = 'all';
+    selectAllOption.textContent = '--- Select All Classes ---';
+    classLevelsSelect.insertBefore(selectAllOption, classLevelsSelect.firstChild);
+    
+    classLevelsSelect.addEventListener('change', function() {
+        if (this.value === 'all') {
+            // Select all options except "Select All"
+            Array.from(this.options).forEach(option => {
+                if (option.value !== 'all') {
+                    option.selected = true;
+                }
+            });
+        }
+        updateGenerationPreview();
+    });
 });
 </script>
 {% endblock %}

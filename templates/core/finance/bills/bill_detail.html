@@ -48,6 +48,21 @@
     .progress {
         height: 10px;
     }
+    
+    .balance-positive {
+        color: #28a745;
+        font-weight: bold;
+    }
+    
+    .balance-negative {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .balance-zero {
+        color: #6c757d;
+        font-weight: bold;
+    }
 </style>
 {% endblock %}
 
@@ -74,6 +89,20 @@
         </div>
     </div>
 
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Bill Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -82,6 +111,7 @@
                     <div class="col-md-6">
                         <h3 class="mb-1">Bill #{{ bill.bill_number }}</h3>
                         <p class="mb-0">Issued for {{ bill.student.get_full_name }}</p>
+                        <p class="mb-0"><small>Student ID: {{ bill.student.student_id }}</small></p>
                     </div>
                     <div class="col-md-6 text-md-end">
                         <span class="status-badge status-{{ bill.status }}">
@@ -89,7 +119,11 @@
                         </span>
                         <div class="amount-display mt-2">GH₵{{ bill.total_amount|floatformat:2 }}</div>
                         <div class="text-white mt-1">
-                            <small>Balance: GH₵{{ bill.balance|floatformat:2 }}</small>
+                            <small>Balance: 
+                                <span class="{% if bill.balance > 0 %}balance-negative{% elif bill.balance < 0 %}balance-positive{% else %}balance-zero{% endif %}">
+                                    GH₵{{ bill.balance|floatformat:2 }}
+                                </span>
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -203,7 +237,15 @@
                                     <td>{{ item.description|default:"Standard fee" }}</td>
                                     <td class="text-end">GH₵{{ item.amount|floatformat:2 }}</td>
                                 </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-3 text-muted">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        No fee items found for this bill
+                                    </td>
+                                </tr>
                                 {% endfor %}
+                                {% if bill.items.all %}
                                 <tr class="table-primary">
                                     <td colspan="2" class="text-end fw-bold">Total Amount:</td>
                                     <td class="text-end fw-bold">GH₵{{ bill.total_amount|floatformat:2 }}</td>
@@ -214,8 +256,12 @@
                                 </tr>
                                 <tr class="table-warning">
                                     <td colspan="2" class="text-end fw-bold">Balance Due:</td>
-                                    <td class="text-end fw-bold">GH₵{{ bill.balance|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold 
+                                        {% if bill.balance > 0 %}text-danger{% elif bill.balance < 0 %}text-success{% endif %}">
+                                        GH₵{{ bill.balance|floatformat:2 }}
+                                    </td>
                                 </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
@@ -223,6 +269,7 @@
             </div>
 
             <!-- Associated Fees -->
+            {% if fees %}
             <div class="card shadow-sm">
                 <div class="card-header bg-white">
                     <h5 class="mb-0">
@@ -263,19 +310,13 @@
                                         </a>
                                     </td>
                                 </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center py-3">
-                                        <i class="bi bi-info-circle me-1"></i>
-                                        No fee records associated with this bill
-                                    </td>
-                                </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
 
         <!-- Sidebar - Actions and Payments -->
@@ -307,15 +348,15 @@
                         <form method="post" action="{% url 'bill_cancel' pk=bill.pk %}" class="d-inline">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger action-btn w-100" 
-                                    onclick="return confirm('Are you sure you want to cancel this bill?')">
+                                    onclick="return confirm('Are you sure you want to cancel this bill? This action cannot be undone.')">
                                 <i class="bi bi-x-circle me-2"></i>Cancel Bill
                             </button>
                         </form>
                         {% endif %}
                         
-                        <a href="#" class="btn btn-info action-btn">
+                        <button class="btn btn-info action-btn" onclick="window.print()">
                             <i class="bi bi-printer me-2"></i>Print Bill
-                        </a>
+                        </button>
                         {% endif %}
                         
                         <a href="{% url 'student_detail' pk=bill.student.pk %}" class="btn btn-outline-primary action-btn">
@@ -356,7 +397,10 @@
                     </div>
                     {% endfor %}
                     {% else %}
-                    <p class="text-muted text-center">No payments recorded yet</p>
+                    <div class="text-center py-3">
+                        <i class="bi bi-cash-coin display-4 text-muted mb-3"></i>
+                        <p class="text-muted">No payments recorded yet</p>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -383,12 +427,13 @@
                         <label class="form-label">Amount *</label>
                         <input type="number" class="form-control" name="amount" step="0.01" min="0.01" 
                                max="{{ bill.get_balance_due }}" required
-                               placeholder="Enter payment amount">
+                               placeholder="Enter payment amount"
+                               id="paymentAmount">
                         <div class="form-text">Maximum: GH₵{{ bill.get_balance_due|floatformat:2 }}</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Payment Mode *</label>
-                        <select class="form-select" name="payment_mode" required>
+                        <select class="form-select" name="payment_mode" required id="paymentMode">
                             <option value="">Select Payment Mode</option>
                             <option value="cash">Cash</option>
                             <option value="bank_transfer">Bank Transfer</option>
@@ -399,21 +444,38 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Payment Date *</label>
-                        <input type="date" class="form-control" name="payment_date" required>
+                        <input type="date" class="form-control" name="payment_date" required id="paymentDate">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Reference Number (Optional)</label>
                         <input type="text" class="form-control" name="reference_number" 
-                               placeholder="Transaction reference or check number">
+                               placeholder="Transaction reference or check number" id="paymentReference">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Notes (Optional)</label>
-                        <textarea class="form-control" name="notes" rows="2" placeholder="Additional notes"></textarea>
+                        <textarea class="form-control" name="notes" rows="2" placeholder="Additional notes" id="paymentNotes"></textarea>
+                    </div>
+                    
+                    <!-- Payment Preview -->
+                    <div class="alert alert-warning mt-3" id="paymentPreview">
+                        <h6 class="alert-heading">Payment Preview</h6>
+                        <div class="row">
+                            <div class="col-6">
+                                <small>Current Balance:</small><br>
+                                <strong>GH₵<span id="currentBalance">{{ bill.get_balance_due|floatformat:2 }}</span></strong>
+                            </div>
+                            <div class="col-6">
+                                <small>New Balance:</small><br>
+                                <strong id="newBalance">GH₵{{ bill.get_balance_due|floatformat:2 }}</strong>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Record Payment</button>
+                    <button type="submit" class="btn btn-primary" id="submitPayment">
+                        <i class="bi bi-check-circle me-2"></i>Record Payment
+                    </button>
                 </div>
             </form>
         </div>
@@ -430,66 +492,162 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Set today's date as default for payment date
     const today = new Date().toISOString().split('T')[0];
-    document.querySelector('input[name="payment_date"]').value = today;
+    document.getElementById('paymentDate').value = today;
     
-    // Format currency amounts
-    document.querySelectorAll('.amount-display').forEach(element => {
-        const amount = element.textContent.trim();
-        if (!amount.startsWith('GH₵')) {
-            element.textContent = 'GH₵' + amount;
+    // Payment amount validation and preview
+    const paymentAmount = document.getElementById('paymentAmount');
+    const currentBalance = parseFloat('{{ bill.get_balance_due }}');
+    const currentBalanceElement = document.getElementById('currentBalance');
+    const newBalanceElement = document.getElementById('newBalance');
+    
+    function updatePaymentPreview() {
+        const amount = parseFloat(paymentAmount.value) || 0;
+        const newBalance = currentBalance - amount;
+        
+        newBalanceElement.textContent = 'GH₵' + newBalance.toFixed(2);
+        
+        if (newBalance < 0) {
+            newBalanceElement.className = 'text-danger';
+        } else if (newBalance === 0) {
+            newBalanceElement.className = 'text-success';
+        } else {
+            newBalanceElement.className = 'text-warning';
+        }
+        
+        // Validate amount
+        if (amount > currentBalance) {
+            paymentAmount.classList.add('is-invalid');
+            document.getElementById('submitPayment').disabled = true;
+        } else {
+            paymentAmount.classList.remove('is-invalid');
+            document.getElementById('submitPayment').disabled = false;
+        }
+    }
+    
+    paymentAmount.addEventListener('input', updatePaymentPreview);
+    paymentAmount.addEventListener('change', updatePaymentPreview);
+    
+    // Form submission handling
+    const paymentForm = document.getElementById('paymentForm');
+    paymentForm.addEventListener('submit', function(e) {
+        const amount = parseFloat(paymentAmount.value) || 0;
+        
+        if (amount <= 0) {
+            e.preventDefault();
+            alert('Please enter a valid payment amount.');
+            paymentAmount.focus();
+            return false;
+        }
+        
+        if (amount > currentBalance) {
+            e.preventDefault();
+            const confirmOverpayment = confirm(
+                `Payment amount (GH₵${amount.toFixed(2)}) exceeds balance due (GH₵${currentBalance.toFixed(2)}). Do you want to continue?`
+            );
+            if (!confirmOverpayment) {
+                paymentAmount.focus();
+                return false;
+            }
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitPayment');
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        submitBtn.disabled = true;
+    });
+
+    // Initialize modal when shown
+    document.getElementById('paymentModal').addEventListener('show.bs.modal', function () {
+        document.getElementById('paymentDate').value = today;
+        updatePaymentPreview();
+        
+        // Reset form state
+        const submitBtn = document.getElementById('submitPayment');
+        if (submitBtn) {
+            submitBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Record Payment';
+            submitBtn.disabled = false;
         }
     });
 
-    // Payment form validation
-    const paymentForm = document.getElementById('paymentForm');
-    if (paymentForm) {
-        paymentForm.addEventListener('submit', function(e) {
-            const amountInput = document.querySelector('input[name="amount"]');
-            const maxAmount = parseFloat(amountInput.getAttribute('max'));
-            const enteredAmount = parseFloat(amountInput.value);
-            
-            if (enteredAmount > maxAmount) {
-                e.preventDefault();
-                alert(`Payment amount cannot exceed GH₵${maxAmount.toFixed(2)}`);
-                amountInput.focus();
-                return false;
-            }
-            
-            if (enteredAmount <= 0) {
-                e.preventDefault();
-                alert('Please enter a valid payment amount');
-                amountInput.focus();
-                return false;
-            }
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
-            submitBtn.disabled = true;
-        });
+    // Print functionality
+    function printBill() {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Bill #{{ bill.bill_number }}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .bill-info { margin-bottom: 20px; }
+                        .table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        .table th { background-color: #f8f9fa; }
+                        .total-row { font-weight: bold; background-color: #e9ecef; }
+                        @media print { body { margin: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>Bill #{{ bill.bill_number }}</h2>
+                        <p>Generated on ${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div class="bill-info">
+                        <p><strong>Student:</strong> {{ bill.student.get_full_name }}</p>
+                        <p><strong>Student ID:</strong> {{ bill.student.student_id }}</p>
+                        <p><strong>Class:</strong> {{ bill.student.get_class_level_display }}</p>
+                        <p><strong>Academic Year:</strong> {{ bill.academic_year }} - Term {{ bill.term }}</p>
+                        <p><strong>Due Date:</strong> {{ bill.due_date|date:"M d, Y" }}</p>
+                        <p><strong>Status:</strong> {{ bill.get_status_display }}</p>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Fee Category</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in bill.items.all %}
+                            <tr>
+                                <td>{{ item.fee_category.get_name_display }}</td>
+                                <td>{{ item.description|default:"Standard fee" }}</td>
+                                <td>GH₵{{ item.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="total-row">
+                                <td colspan="2">Total Amount</td>
+                                <td>GH₵{{ bill.total_amount|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td colspan="2">Amount Paid</td>
+                                <td>GH₵{{ bill.amount_paid|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td colspan="2">Balance Due</td>
+                                <td>GH₵{{ bill.balance|floatformat:2 }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    {% if bill.notes %}
+                    <div class="notes">
+                        <h4>Notes:</h4>
+                        <p>{{ bill.notes }}</p>
+                    </div>
+                    {% endif %}
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
     }
 
-    // Auto-format currency inputs
-    document.querySelectorAll('input[type="number"]').forEach(input => {
-        input.addEventListener('blur', function() {
-            if (this.value) {
-                this.value = parseFloat(this.value).toFixed(2);
-            }
-        });
+    // Attach print function to print button
+    document.querySelector('button[onclick="window.print()"]').addEventListener('click', function(e) {
+        e.preventDefault();
+        printBill();
     });
-});
-
-// Initialize modal when shown
-document.getElementById('paymentModal').addEventListener('show.bs.modal', function () {
-    const today = new Date().toISOString().split('T')[0];
-    document.querySelector('input[name="payment_date"]').value = today;
-    
-    // Reset form state
-    const submitBtn = document.querySelector('#paymentForm button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.innerHTML = 'Record Payment';
-        submitBtn.disabled = false;
-    }
 });
 </script>
 {% endblock %}

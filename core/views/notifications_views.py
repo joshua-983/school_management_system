@@ -59,7 +59,7 @@ class NotificationListView(LoginRequiredMixin, ListView):
             if ann.id not in dismissed_announcements
         ]
         
-        # Add unread count to context
+        # FIXED: Pass user argument
         context['unread_count'] = Notification.get_unread_count_for_user(self.request.user)
         
         return context
@@ -111,6 +111,7 @@ def mark_notification_read(request, pk):
         )
         
         if notification.mark_as_read():
+            # FIXED: Pass user argument
             return JsonResponse({
                 'status': 'success',
                 'unread_count': Notification.get_unread_count_for_user(request.user)
@@ -165,6 +166,7 @@ def mark_all_notifications_read(request):
 def get_unread_count(request):
     """API endpoint to get unread notification count"""
     try:
+        # FIXED: Pass user argument
         count = Notification.get_unread_count_for_user(request.user)
         return JsonResponse({'unread_count': count})
     except Exception as e:
@@ -198,18 +200,21 @@ def create_notification(recipient, title, message, notification_type="GENERAL", 
         logger.error(f"Failed to create notification: {str(e)}")
         return None
 
+
 def send_ws_notification_update(user):
     """
     Send WebSocket update for notification count
     """
     try:
         channel_layer = get_channel_layer()
+        # FIXED: Pass user argument to get_unread_count_for_user
+        unread_count = Notification.get_unread_count_for_user(user)
         async_to_sync(channel_layer.group_send)(
             f'notifications_{user.id}',
             {
                 'type': 'notification_update',
                 'action': 'count_update',
-                'unread_count': Notification.get_unread_count_for_user(user)
+                'unread_count': unread_count
             }
         )
     except Exception as e:
@@ -217,6 +222,7 @@ def send_ws_notification_update(user):
 
 def get_unread_count(user):
     """Get unread notification count for a user"""
+    # FIXED: Pass user argument
     return Notification.get_unread_count_for_user(user)
 
 def send_assignment_notification(assignment):
@@ -404,6 +410,7 @@ def create_announcement_notification(announcement):
         logger.error(f"Failed to send announcement notifications: {str(e)}")
         return 0
 
+
 def send_fee_notification(student, fee, notification_type="FEE"):
     """
     Send fee-related notifications to students/parents
@@ -439,4 +446,3 @@ def send_fee_notification(student, fee, notification_type="FEE"):
     except Exception as e:
         logger.error(f"Failed to send fee notifications: {str(e)}")
         return False
-

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Active Announcements - School Management System{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-bullhorn me-2"></i>
+                        Active Announcements
+                    </h4>
+                    <p class="text-muted mb-0">Announcements relevant to you</p>
+                </div>
+                <div class="card-body">
+                    {% if announcements %}
+                        <div class="list-group list-group-flush">
+                            {% for announcement in announcements %}
+                                <div class="list-group-item {% if announcement.priority == 'URGENT' %}list-group-item-danger{% elif announcement.priority == 'HIGH' %}list-group-item-warning{% endif %}">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h5 class="mb-1">
+                                            {{ announcement.title }}
+                                            {% if announcement.priority == 'URGENT' %}
+                                                <span class="badge bg-danger ms-2">URGENT</span>
+                                            {% elif announcement.priority == 'HIGH' %}
+                                                <span class="badge bg-warning ms-2">HIGH</span>
+                                            {% endif %}
+                                        </h5>
+                                        <small class="text-muted">{{ announcement.created_at|naturaltime }}</small>
+                                    </div>
+                                    <p class="mb-1">{{ announcement.message|truncatewords:50 }}</p>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted">
+                                            By: {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
+                                            {% if announcement.target_roles != 'ALL' %}
+                                                • For: {{ announcement.get_audience_display }}
+                                            {% endif %}
+                                        </small>
+                                        <a href="{% url 'announcement_detail' announcement.pk %}" class="btn btn-sm btn-outline-primary">
+                                            View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-bullhorn fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No active announcements</h5>
+                            <p class="text-muted">There are no announcements for you at this time.</p>
+                            <a href="{% url 'dashboard' %}" class="btn btn-primary">
+                                <i class="fas fa-home me-2"></i>Go to Dashboard
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Access Denied - Announcement{% endblock %}
+
+{% block extra_css %}
+<style>
+.permission-denied-card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.denied-header {
+    background: linear-gradient(135deg, #dc3545, #e74c3c);
+    color: white;
+    padding: 2rem;
+}
+
+.suggestion-card {
+    border-left: 4px solid #007bff;
+    background: #f8f9fa;
+}
+
+.action-buttons .btn {
+    border-radius: 25px;
+    padding: 10px 25px;
+    font-weight: 500;
+}
+
+.reason-list {
+    list-style: none;
+    padding: 0;
+}
+
+.reason-list li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.reason-list li:last-child {
+    border-bottom: none;
+}
+
+.reason-list li::before {
+    content: "•";
+    color: #dc3545;
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+            <!-- Permission Denied Card -->
+            <div class="card permission-denied-card">
+                <!-- Header -->
+                <div class="denied-header text-center">
+                    <i class="bi bi-shield-exclamation display-1 mb-3"></i>
+                    <h1 class="h3 mb-3">Access Denied</h1>
+                    <p class="mb-0 opacity-75">You don't have permission to view this announcement</p>
+                </div>
+
+                <!-- Content -->
+                <div class="card-body p-4">
+                    <div class="row">
+                        <!-- Main Message -->
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <h4 class="text-danger mb-3">Why can't I view this announcement?</h4>
+                                
+                                <ul class="reason-list">
+                                    <li>The announcement is for a different class level</li>
+                                    <li>The announcement is for specific roles only</li>
+                                    <li>The announcement may have expired</li>
+                                    <li>The announcement may be inactive</li>
+                                    <li>You may need different user permissions</li>
+                                </ul>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="action-buttons">
+                                <h5 class="text-muted mb-3">What would you like to do?</h5>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'active_announcements' %}" class="btn btn-primary">
+                                        <i class="bi bi-bullhorn me-2"></i>View Active Announcements
+                                    </a>
+                                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                                        <i class="bi bi-house me-2"></i>Go to Dashboard
+                                    </a>
+                                    {% if request.META.HTTP_REFERER %}
+                                    <a href="{{ request.META.HTTP_REFERER }}" class="btn btn-outline-primary">
+                                        <i class="bi bi-arrow-left me-2"></i>Go Back
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Announcement Info -->
+                        <div class="col-md-6">
+                            <div class="card suggestion-card">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Announcement Information
+                                    </h5>
+                                    
+                                    {% if announcement %}
+                                    <div class="mb-3">
+                                        <strong>Title:</strong>
+                                        <p class="text-muted mb-1">{{ announcement.title }}</p>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <strong>Created By:</strong>
+                                        <p class="text-muted mb-1">{{ announcement.created_by.get_full_name|default:announcement.created_by.username }}</p>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <strong>Created Date:</strong>
+                                        <p class="text-muted mb-1">{{ announcement.created_at|date:"F j, Y" }}</p>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <strong>Status:</strong>
+                                        <span class="badge bg-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
+                                            {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
+                                        </span>
+                                    </div>
+                                    
+                                    {% if announcement.end_date %}
+                                    <div class="mb-3">
+                                        <strong>Expiry Date:</strong>
+                                        <p class="text-muted mb-1">{{ announcement.end_date|date:"F j, Y" }}</p>
+                                    </div>
+                                    {% endif %}
+                                    {% else %}
+                                    <p class="text-muted">Announcement information not available.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Contact Support -->
+                            <div class="card mt-3 border-warning">
+                                <div class="card-body">
+                                    <h6 class="card-title text-warning">
+                                        <i class="bi bi-question-circle me-2"></i>
+                                        Need Help?
+                                    </h6>
+                                    <p class="small text-muted mb-2">
+                                        If you believe you should have access to this announcement, 
+                                        please contact your administrator or teacher.
+                                    </p>
+                                    <button class="btn btn-outline-warning btn-sm" onclick="showContactInfo()">
+                                        <i class="bi bi-envelope me-1"></i>Contact Support
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Help Section -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">
+                        <i class="bi bi-lightbulb me-2"></i>
+                        Quick Tips
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="text-center p-3">
+                                <i class="bi bi-people text-primary display-6 mb-2"></i>
+                                <h6>Check Your Role</h6>
+                                <p class="small text-muted mb-0">
+                                    Ensure you're logged in with the correct user account
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3">
+                                <i class="bi bi-calendar-check text-success display-6 mb-2"></i>
+                                <h6>Check Dates</h6>
+                                <p class="small text-muted mb-0">
+                                    Some announcements are only available during specific periods
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3">
+                                <i class="bi bi-shield-check text-info display-6 mb-2"></i>
+                                <h6>Verify Access</h6>
+                                <p class="small text-muted mb-0">
+                                    Contact support if you need access to specific content
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showContactInfo() {
+    const contactInfo = `
+        <div class="mt-2">
+            <p class="small mb-1"><strong>School Administrator:</strong> admin@school.edu.gh</p>
+            <p class="small mb-1"><strong>Technical Support:</strong> support@school.edu.gh</p>
+            <p class="small mb-0"><strong>Phone:</strong> +233 XX XXX XXXX</p>
+        </div>
+    `;
+    
+    // Show in a toast or alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-info alert-dismissible fade show mt-3';
+    alertDiv.innerHTML = `
+        <h6 class="alert-heading">Contact Information</h6>
+        ${contactInfo}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.querySelector('.card-body').appendChild(alertDiv);
+}
+
+// Auto-dismiss alerts after 10 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(alert => {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 10000);
+});
+</script>
+{% endblock %}
