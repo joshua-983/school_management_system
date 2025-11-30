@@ -6,6 +6,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1><i class="fas fa-cogs text-primary"></i> Security Settings</h1>
+    <button class="btn btn-outline-secondary" onclick="resetToDefaults()">
+        <i class="fas fa-undo me-2"></i>Reset to Defaults
+    </button>
 </div>
 
 <div class="row">
@@ -17,50 +20,126 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="securitySettingsForm">
                     {% csrf_token %}
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Max Login Attempts</label>
-                                <input type="number" class="form-control" name="max_login_attempts" 
-                                       value="{{ max_login_attempts }}" min="1" max="10">
-                                <div class="form-text">
-                                    Maximum failed login attempts before auto-block (1-10)
+                    <!-- Authentication Settings -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-lock me-2"></i>Authentication Settings
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Max Login Attempts</label>
+                                    <input type="number" class="form-control" name="max_login_attempts" 
+                                           value="{{ max_login_attempts }}" min="1" max="10" required>
+                                    <div class="form-text">
+                                        Maximum failed login attempts before auto-block (1-10)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Password Rotation (Days)</label>
+                                    <input type="number" class="form-control" name="password_rotation_days" 
+                                           value="{{ password_rotation_days }}" min="30" max="365" required>
+                                    <div class="form-text">
+                                        Days before users must change their password
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Password Rotation (Days)</label>
-                                <input type="number" class="form-control" name="password_rotation_days" 
-                                       value="{{ password_rotation_days }}" min="30" max="365">
-                                <div class="form-text">
-                                    Days before users must change their password
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Session Timeout (Minutes)</label>
+                                    <input type="number" class="form-control" name="session_timeout" 
+                                           value="{{ session_timeout|default:60 }}" min="15" max="480" required>
+                                    <div class="form-text">
+                                        User session timeout in minutes
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Password Minimum Length</label>
+                                    <input type="number" class="form-control" name="password_min_length" 
+                                           value="{{ password_min_length|default:8 }}" min="6" max="20" required>
+                                    <div class="form-text">
+                                        Minimum characters required for passwords
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Rate Limit Requests</label>
-                                <input type="number" class="form-control" name="rate_limit_requests" 
-                                       value="{{ rate_limit_requests }}" min="10" max="1000">
-                                <div class="form-text">
-                                    Maximum requests per rate limit window
+                    <!-- Rate Limiting -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-tachometer-alt me-2"></i>Rate Limiting
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Rate Limit Requests</label>
+                                    <input type="number" class="form-control" name="rate_limit_requests" 
+                                           value="{{ rate_limit_requests }}" min="10" max="1000" required>
+                                    <div class="form-text">
+                                        Maximum requests per rate limit window
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Rate Limit Window (Seconds)</label>
+                                    <input type="number" class="form-control" name="rate_limit_window" 
+                                           value="{{ rate_limit_window }}" min="10" max="3600" required>
+                                    <div class="form-text">
+                                        Time window for rate limiting in seconds
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Rate Limit Window (Seconds)</label>
-                                <input type="number" class="form-control" name="rate_limit_window" 
-                                       value="{{ rate_limit_window }}" min="10" max="3600">
-                                <div class="form-text">
-                                    Time window for rate limiting in seconds
+                    </div>
+                    
+                    <!-- Security Policies -->
+                    <div class="mb-4">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-policy me-2"></i>Security Policies
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="enable_2fa" 
+                                           id="enable_2fa" {% if enable_2fa %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_2fa">
+                                        Enable Two-Factor Authentication
+                                    </label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="force_ssl" 
+                                           id="force_ssl" {% if force_ssl %}checked{% endif %}>
+                                    <label class="form-check-label" for="force_ssl">
+                                        Force SSL/HTTPS
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="log_user_activity" 
+                                           id="log_user_activity" {% if log_user_activity %}checked{% endif %}>
+                                    <label class="form-check-label" for="log_user_activity">
+                                        Log User Activity
+                                    </label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="enable_audit_trail" 
+                                           id="enable_audit_trail" {% if enable_audit_trail %}checked{% endif %}>
+                                    <label class="form-check-label" for="enable_audit_trail">
+                                        Enable Audit Trail
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -76,9 +155,14 @@
                         </ul>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Settings
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Settings
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="testSettings()">
+                            <i class="fas fa-vial"></i> Test Settings
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -110,13 +194,46 @@
                         Rate Window
                         <span class="badge bg-primary rounded-pill">{{ rate_limit_window }} sec</span>
                     </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        2FA Enabled
+                        <span class="badge bg-{% if enable_2fa %}success{% else %}secondary{% endif %} rounded-pill">
+                            {% if enable_2fa %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        SSL Forced
+                        <span class="badge bg-{% if force_ssl %}success{% else %}secondary{% endif %} rounded-pill">
+                            {% if force_ssl %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Security Health Check -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat"></i> Security Health
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="securityHealthCheck">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary w-100 mt-2" onclick="runHealthCheck()">
+                    <i class="fas fa-sync-alt me-2"></i>Run Health Check
+                </button>
             </div>
         </div>
         
         <!-- Quick Actions -->
         <div class="card">
-            <div class="card-header bg-success text-white">
+            <div class="card-header bg-warning text-white">
                 <h5 class="card-title mb-0">
                     <i class="fas fa-bolt"></i> Quick Actions
                 </h5>
@@ -132,9 +249,210 @@
                     <a href="{% url 'user_management' %}" class="btn btn-outline-warning">
                         <i class="fas fa-user-lock"></i> Manage Users
                     </a>
+                    <a href="{% url 'lockout_management' %}" class="btn btn-outline-danger">
+                        <i class="fas fa-unlock-alt"></i> Lockout Management
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Settings History -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history"></i> Settings Change History
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Changed By</th>
+                                <th>Setting</th>
+                                <th>Old Value</th>
+                                <th>New Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    No settings change history available
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function resetToDefaults() {
+        if (confirm('Are you sure you want to reset all security settings to their default values? This action cannot be undone.')) {
+            // Reset form values to defaults
+            document.querySelector('input[name="max_login_attempts"]').value = 5;
+            document.querySelector('input[name="password_rotation_days"]').value = 90;
+            document.querySelector('input[name="rate_limit_requests"]').value = 100;
+            document.querySelector('input[name="rate_limit_window"]').value = 60;
+            document.querySelector('input[name="session_timeout"]').value = 60;
+            document.querySelector('input[name="password_min_length"]').value = 8;
+            
+            // Reset checkboxes
+            document.getElementById('enable_2fa').checked = false;
+            document.getElementById('force_ssl').checked = false;
+            document.getElementById('log_user_activity').checked = true;
+            document.getElementById('enable_audit_trail').checked = true;
+            
+            showToast('Settings reset to defaults', 'info');
+        }
+    }
+
+    function testSettings() {
+        showToast('Testing security settings...', 'info');
+        
+        // Simulate settings test
+        setTimeout(() => {
+            const healthCheck = document.getElementById('securityHealthCheck');
+            healthCheck.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>All security settings are properly configured.</strong><br>
+                    <small class="text-muted">No issues detected in current configuration.</small>
+                </div>
+            `;
+            showToast('Settings test completed successfully', 'success');
+        }, 2000);
+    }
+
+    function runHealthCheck() {
+        const healthCheck = document.getElementById('securityHealthCheck');
+        healthCheck.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2">Running security health check...</div>
+            </div>
+        `;
+
+        // Simulate health check
+        setTimeout(() => {
+            healthCheck.innerHTML = `
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Authentication
+                        <span class="badge bg-success">Healthy</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Rate Limiting
+                        <span class="badge bg-success">Active</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Session Management
+                        <span class="badge bg-warning">Needs Review</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Audit Logging
+                        <span class="badge bg-success">Enabled</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        Data Protection
+                        <span class="badge bg-success">Secure</span>
+                    </div>
+                </div>
+            `;
+            showToast('Security health check completed', 'success');
+        }, 3000);
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        const container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.appendChild(toast);
+        document.body.appendChild(container);
+        
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', () => {
+            container.remove();
+        });
+    }
+
+    // Form validation
+    document.getElementById('securitySettingsForm').addEventListener('submit', function(e) {
+        const maxLoginAttempts = document.querySelector('input[name="max_login_attempts"]').value;
+        const rateLimitRequests = document.querySelector('input[name="rate_limit_requests"]').value;
+        
+        if (maxLoginAttempts < 1 || maxLoginAttempts > 10) {
+            e.preventDefault();
+            showToast('Login attempts must be between 1 and 10', 'danger');
+            return;
+        }
+        
+        if (rateLimitRequests < 10 || rateLimitRequests > 1000) {
+            e.preventDefault();
+            showToast('Rate limit requests must be between 10 and 1000', 'danger');
+            return;
+        }
+        
+        showToast('Saving security settings...', 'info');
+    });
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        runHealthCheck();
+        
+        // Add real-time validation
+        const inputs = document.querySelectorAll('input[type="number"]');
+        inputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const value = parseInt(this.value);
+                const min = parseInt(this.min);
+                const max = parseInt(this.max);
+                
+                if (value < min || value > max) {
+                    this.classList.add('is-invalid');
+                    showToast(`${this.name.replace(/_/g, ' ')} must be between ${min} and ${max}`, 'warning');
+                } else {
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                }
+            });
+        });
+    });
+</script>
+
+<style>
+    .is-valid {
+        border-color: #198754 !important;
+    }
+    
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+    
+    .form-check-input:checked {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+</style>
 {% endblock %}

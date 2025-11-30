@@ -1,20 +1,24 @@
-<!-- templates/security/base.html - FIXED -->
-{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Security Management{% endblock %} - {{ SCHOOL_NAME }}</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Security Management{% endblock %} - School Management System</title>
     
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+    <!-- Select2 -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <!-- Toastr -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
     
     <!-- Custom Security CSS -->
     <style>
@@ -26,13 +30,36 @@
             --warning-color: #f39c12;
             --success-color: #27ae60;
             --info-color: #17a2b8;
+            --dark-color: #2c3e50;
+            --light-color: #ecf0f1;
         }
         
-        .security-sidebar {
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            overflow-x: hidden;
+        }
+        
+        /* Navigation */
+        .navbar-security {
             background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 0.8rem 1rem;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        /* Sidebar */
+        .security-sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             min-height: calc(100vh - 56px);
             padding: 0;
             box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 56px;
         }
         
         .security-sidebar .nav-link {
@@ -42,12 +69,14 @@
             border-left: 4px solid transparent;
             transition: all 0.3s ease;
             margin: 2px 0;
+            font-weight: 500;
         }
         
         .security-sidebar .nav-link:hover {
             background-color: rgba(255,255,255,0.1);
             border-left-color: var(--accent-color);
             color: white;
+            transform: translateX(5px);
         }
         
         .security-sidebar .nav-link.active {
@@ -61,14 +90,32 @@
             width: 20px;
             text-align: center;
             margin-right: 10px;
+            font-size: 1.1rem;
         }
         
+        .sidebar-section {
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .sidebar-section-title {
+            color: #bdc3c7;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0 20px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        /* Cards */
         .stat-card {
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             border-left: 4px solid var(--accent-color);
+            overflow: hidden;
         }
         
         .stat-card:hover {
@@ -88,6 +135,16 @@
             border-left-color: var(--success-color);
         }
         
+        .stat-card.info-card {
+            border-left-color: var(--info-color);
+        }
+        
+        .card-header {
+            font-weight: 600;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        
+        /* Tables */
         .security-table {
             border-radius: 10px;
             overflow: hidden;
@@ -99,8 +156,19 @@
             color: white;
             border: none;
             font-weight: 600;
+            padding: 12px 15px;
         }
         
+        .security-table td {
+            padding: 12px 15px;
+            vertical-align: middle;
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+        
+        /* Status Indicators */
         .blocked-user {
             background-color: rgba(231, 76, 60, 0.1) !important;
             border-left: 4px solid var(--danger-color);
@@ -111,11 +179,18 @@
             border-left: 4px solid var(--warning-color);
         }
         
+        .critical-event {
+            background-color: rgba(231, 76, 60, 0.1) !important;
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        /* Buttons */
         .btn-security {
             border-radius: 8px;
             padding: 10px 20px;
             font-weight: 600;
             transition: all 0.3s ease;
+            border: none;
         }
         
         .btn-security:hover {
@@ -123,10 +198,43 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
         
+        .btn-security:active {
+            transform: translateY(0);
+        }
+        
+        .btn-security-primary {
+            background: linear-gradient(135deg, var(--accent-color), #2980b9);
+            color: white;
+        }
+        
+        .btn-security-danger {
+            background: linear-gradient(135deg, var(--danger-color), #c0392b);
+            color: white;
+        }
+        
+        .btn-security-warning {
+            background: linear-gradient(135deg, var(--warning-color), #e67e22);
+            color: white;
+        }
+        
+        .btn-security-success {
+            background: linear-gradient(135deg, var(--success-color), #229954);
+            color: white;
+        }
+        
+        /* Alerts */
         .security-alert {
             border-radius: 10px;
             border: none;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px 20px;
+        }
+        
+        /* Badges */
+        .badge-security {
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-weight: 600;
         }
         
         /* Loading animations */
@@ -144,12 +252,41 @@
             to { transform: rotate(360deg); }
         }
         
-        /* Responsive adjustments */
-        @media (max-width: 768px) {
-            .security-sidebar {
-                min-height: auto;
-                margin-bottom: 20px;
-            }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Progress bars */
+        .security-progress {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+            overflow: hidden;
+        }
+        
+        .security-progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.6s ease;
+        }
+        
+        /* Forms */
+        .form-control-security {
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            padding: 10px 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control-security:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
         }
         
         /* Custom scrollbar for sidebar */
@@ -165,15 +302,194 @@
             background: rgba(255,255,255,0.3);
             border-radius: 3px;
         }
+        
+        /* Breadcrumb */
+        .breadcrumb-security {
+            background-color: transparent;
+            padding: 0;
+            margin-bottom: 1rem;
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        /* Page header */
+        .page-header {
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .security-sidebar {
+                min-height: auto;
+                margin-bottom: 20px;
+                position: relative;
+                top: 0;
+            }
+            
+            .navbar-collapse {
+                margin-top: 10px;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1a1a1a;
+                color: #f8f9fa;
+            }
+            
+            .card {
+                background-color: #2d3748;
+                color: #f8f9fa;
+            }
+            
+            .table {
+                color: #f8f9fa;
+            }
+            
+            .form-control-security {
+                background-color: #2d3748;
+                border-color: #4a5568;
+                color: #f8f9fa;
+            }
+        }
+        
+        /* Print styles */
+        @media print {
+            .navbar, .security-sidebar, .btn, .page-actions {
+                display: none !important;
+            }
+            
+            .card {
+                border: 1px solid #000;
+                box-shadow: none;
+            }
+        }
+        
+        /* Utility classes */
+        .text-gradient {
+            background: linear-gradient(135deg, var(--accent-color), var(--primary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .shadow-custom {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .border-left-accent {
+            border-left: 4px solid var(--accent-color);
+        }
+        
+        .border-left-danger {
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        .border-left-warning {
+            border-left: 4px solid var(--warning-color);
+        }
+        
+        .border-left-success {
+            border-left: 4px solid var(--success-color);
+        }
+        
+        /* Notification badge */
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger-color);
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Status indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-online {
+            background-color: var(--success-color);
+        }
+        
+        .status-offline {
+            background-color: var(--danger-color);
+        }
+        
+        .status-warning {
+            background-color: var(--warning-color);
+        }
+        
+        /* Custom toggle switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--accent-color);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);">
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-security">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="{% url 'security_dashboard' %}">
+            <a class="navbar-brand" href="{% url 'security_dashboard' %}">
                 <i class="fas fa-shield-alt me-2"></i>Security Center
             </a>
             
@@ -182,7 +498,7 @@
             </button>
             
             <div class="collapse navbar-collapse" id="securityNavbar">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'admin_dashboard' %}">
                             <i class="fas fa-tachometer-alt me-1"></i>Main Dashboard
@@ -193,12 +509,41 @@
                             <i class="fas fa-clipboard-list me-1"></i>Audit Logs
                         </a>
                     </li>
+                </ul>
+                
+                <ul class="navbar-nav ms-auto">
+                    <!-- Notifications -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-bell"></i>
+                            <span class="notification-badge" id="notificationCount">0</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" id="notificationDropdown">
+                            <li><h6 class="dropdown-header">Notifications</h6></li>
+                            <li><div class="dropdown-item-text text-center" id="notificationLoading">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                Loading notifications...
+                            </div></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-center" href="{% url 'notification_list' %}">View All</a></li>
+                        </ul>
+                    </li>
+                    
+                    <!-- User Menu -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user me-1"></i>{{ request.user.username }}
                         </a>
-                        <ul class="dropdown-menu">
-                            <!-- FIXED: Use Django's built-in logout URL or your custom one -->
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+                                <i class="fas fa-cog me-2"></i>Admin Panel
+                            </a></li>
+                            <li><a class="dropdown-item" href="#">
+                                <i class="fas fa-user-cog me-2"></i>Profile Settings
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'admin:logout' %}">
                                 <i class="fas fa-sign-out-alt me-2"></i>Logout
                             </a></li>
@@ -214,32 +559,78 @@
             <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 security-sidebar">
                 <nav class="nav flex-column py-3">
-                    <a class="nav-link {% if active_tab == 'security_dashboard' %}active{% endif %}" 
-                       href="{% url 'security_dashboard' %}">
-                        <i class="fas fa-tachometer-alt"></i> Security Dashboard
-                    </a>
-                    <a class="nav-link {% if active_tab == 'user_management' %}active{% endif %}" 
-                       href="{% url 'user_management' %}">
-                        <i class="fas fa-user-lock"></i> User Management
-                    </a>
-                    <a class="nav-link {% if active_tab == 'maintenance_mode' %}active{% endif %}" 
-                       href="{% url 'maintenance_mode' %}">
-                        <i class="fas fa-tools"></i> Maintenance Mode
-                    </a>
-                    <a class="nav-link {% if active_tab == 'security_settings' %}active{% endif %}" 
-                       href="{% url 'security_settings' %}">
-                        <i class="fas fa-cogs"></i> Security Settings
-                    </a>
-                    <div class="dropdown-divider my-2" style="border-color: rgba(255,255,255,0.2);"></div>
-                    <a class="nav-link" href="{% url 'audit_log_list' %}">
-                        <i class="fas fa-clipboard-list"></i> Audit Logs
-                    </a>
-                    <a class="nav-link" href="{% url 'security_events' %}">
-                        <i class="fas fa-exclamation-triangle"></i> Security Events
-                    </a>
-                    <a class="nav-link" href="{% url 'alert_rule_list' %}">
-                        <i class="fas fa-bell"></i> Alert Rules
-                    </a>
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Dashboard</div>
+                        <a class="nav-link {% if active_tab == 'security_dashboard' %}active{% endif %}" 
+                           href="{% url 'security_dashboard' %}">
+                            <i class="fas fa-tachometer-alt"></i> Security Dashboard
+                        </a>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">User Management</div>
+                        <a class="nav-link {% if active_tab == 'user_management' %}active{% endif %}" 
+                           href="{% url 'user_management' %}">
+                            <i class="fas fa-user-lock"></i> User Management
+                        </a>
+                        <a class="nav-link {% if active_tab == 'lockout_management' %}active{% endif %}" 
+                           href="{% url 'lockout_management' %}">
+                            <i class="fas fa-unlock-alt"></i> Lockout Management
+                        </a>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">System Controls</div>
+                        <a class="nav-link {% if active_tab == 'maintenance_mode' %}active{% endif %}" 
+                           href="{% url 'maintenance_mode' %}">
+                            <i class="fas fa-tools"></i> Maintenance Mode
+                        </a>
+                        <a class="nav-link {% if active_tab == 'security_settings' %}active{% endif %}" 
+                           href="{% url 'security_settings' %}">
+                            <i class="fas fa-cogs"></i> Security Settings
+                        </a>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">Monitoring</div>
+                        <a class="nav-link" href="{% url 'audit_log_list' %}">
+                            <i class="fas fa-clipboard-list"></i> Audit Logs
+                        </a>
+                        <a class="nav-link {% if active_tab == 'security_events' %}active{% endif %}" 
+                           href="{% url 'security_events' %}">
+                            <i class="fas fa-exclamation-triangle"></i> Security Events
+                        </a>
+                        <a class="nav-link {% if active_tab == 'alert_rule_list' %}active{% endif %}" 
+                           href="{% url 'alert_rule_list' %}">
+                            <i class="fas fa-bell"></i> Alert Rules
+                        </a>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">System Status</div>
+                        <div class="px-3 py-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <small>System Health:</small>
+                                <span class="badge bg-success badge-security" id="systemHealthBadge">
+                                    <i class="fas fa-check-circle me-1"></i>Healthy
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <small>Maintenance:</small>
+                                <span class="badge bg-{% if maintenance_mode %}warning{% else %}success{% endif %} badge-security" id="maintenanceStatusBadge">
+                                    {% if maintenance_mode %}
+                                    <i class="fas fa-tools me-1"></i>Active
+                                    {% else %}
+                                    <i class="fas fa-check me-1"></i>Inactive
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small>Last Updated:</small>
+                                <small class="text-muted" id="lastUpdatedTime">Just now</small>
+                            </div>
+                        </div>
+                    </div>
                 </nav>
             </div>
 
@@ -248,8 +639,10 @@
                 <div class="container-fluid py-4">
                     <!-- Breadcrumb -->
                     <nav aria-label="breadcrumb" class="mb-4">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item"><a href="{% url 'security_dashboard' %}">Security</a></li>
+                        <ol class="breadcrumb breadcrumb-security">
+                            <li class="breadcrumb-item"><a href="{% url 'security_dashboard' %}">
+                                <i class="fas fa-home me-1"></i>Security
+                            </a></li>
                             {% block breadcrumb %}{% endblock %}
                         </ol>
                     </nav>
@@ -275,12 +668,15 @@
                     {% endif %}
 
                     <!-- Page Header -->
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4 page-header">
                         {% block page_header %}
-                        <h1 class="h3 mb-0 text-dark">
-                            <i class="fas fa-shield-alt text-primary me-2"></i>
-                            {% block page_title %}Security Management{% endblock %}
-                        </h1>
+                        <div>
+                            <h1 class="h3 mb-1 text-dark">
+                                <i class="fas fa-shield-alt text-primary me-2"></i>
+                                {% block page_title %}Security Management{% endblock %}
+                            </h1>
+                            <p class="text-muted mb-0">{% block page_subtitle %}Monitor and manage system security{% endblock %}</p>
+                        </div>
                         {% endblock %}
                         
                         {% block page_actions %}{% endblock %}
@@ -288,110 +684,460 @@
 
                     <!-- Page Content -->
                     {% block content %}
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body text-center py-5">
+                                    <i class="fas fa-shield-alt fa-4x text-muted mb-3"></i>
+                                    <h3 class="text-muted">Security Management System</h3>
+                                    <p class="text-muted">Select an option from the sidebar to get started.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% endblock %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-3 mt-5">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <small>&copy; {% now "Y" %} School Management System. All rights reserved.</small>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="currentTime">{% now "F j, Y, g:i a" %}</span> | 
+                        <span id="systemUptime">System Uptime: <span id="uptimeCounter">00:00:00</span></span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Libraries -->
     <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <!-- DataTables -->
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+    <!-- Select2 -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <!-- Toastr -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     
     <!-- Custom Security JS -->
     <script>
-        // Auto-dismiss alerts after 5 seconds
-        setTimeout(function() {
-            var alerts = document.querySelectorAll('.alert');
-            alerts.forEach(function(alert) {
-                var bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            });
-        }, 5000);
-
-        // Confirm destructive actions
-        function confirmAction(message, event) {
-            if (!confirm(message || 'Are you sure you want to perform this action?')) {
-                if (event) {
-                    event.preventDefault();
-                    event.stopPropagation();
+        // Toastr configuration
+        toastr.options = {
+            "closeButton": true,
+            "debug": false,
+            "newestOnTop": true,
+            "progressBar": true,
+            "positionClass": "toast-top-right",
+            "preventDuplicates": false,
+            "onclick": null,
+            "showDuration": "300",
+            "hideDuration": "1000",
+            "timeOut": "5000",
+            "extendedTimeOut": "1000",
+            "showEasing": "swing",
+            "hideEasing": "linear",
+            "showMethod": "fadeIn",
+            "hideMethod": "fadeOut"
+        };
+        
+        // Global variables
+        let securityData = {
+            lastUpdate: new Date(),
+            notificationCount: 0,
+            systemStatus: 'healthy'
+        };
+        
+        // Axios Authentication Interceptor - FIXED VERSION
+        axios.interceptors.response.use(
+            function(response) {
+                return response;
+            },
+            function(error) {
+                if (error.response?.status === 401) {
+                    // Session expired - redirect to login
+                    console.log('Session expired, redirecting to login...');
+                    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                    window.location.href = '/accounts/signin/?next=' + currentPath;
+                    return Promise.reject(error);
                 }
-                return false;
-            }
-            return true;
-        }
-
-        // Loading state for buttons
-        function setButtonLoading(button, isLoading) {
-            if (isLoading) {
-                button.disabled = true;
-                button.innerHTML = '<span class="loading-spinner me-2"></span>Loading...';
-            } else {
-                button.disabled = false;
-                button.innerHTML = button.getAttribute('data-original-text');
-            }
-        }
-
-        // Initialize DataTables
-        document.addEventListener('DOMContentLoaded', function() {
-            $('.security-datatable').DataTable({
-                pageLength: 25,
-                responsive: true,
-                order: [[0, 'desc']],
-                language: {
-                    search: "_INPUT_",
-                    searchPlaceholder: "Search...",
-                    lengthMenu: "_MENU_ records per page",
-                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                    infoEmpty: "Showing 0 to 0 of 0 entries",
-                    infoFiltered: "(filtered from _MAX_ total entries)"
+                if (error.response?.status === 403) {
+                    // Access denied
+                    console.error('Access denied for resource:', error.config.url);
+                    toastr.error('Access denied. You do not have permission to access this resource.');
                 }
-            });
+                if (error.response?.status === 404) {
+                    console.error('Resource not found:', error.config.url);
+                }
+                if (error.response?.status === 429) {
+                    toastr.warning('Too many requests. Please wait a moment.');
+                }
+                if (error.response?.status === 500) {
+                    toastr.error('Server error occurred. Please try again later.');
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        // Add CSRF token to all Axios requests
+        axios.interceptors.request.use(function(config) {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                            document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (csrfToken) {
+                config.headers['X-CSRFToken'] = csrfToken;
+            }
+            config.headers['X-Requested-With'] = 'XMLHttpRequest';
+            return config;
         });
 
-        // Real-time updates for dashboard
-        function updateSecurityStats() {
-            fetch('{% url "security_stats_api" %}')
-                .then(response => response.json())
-                .then(data => {
-                    // Update stats cards
-                    if (data.today_logins) {
-                        const todayLoginsElement = document.getElementById('today-logins');
-                        if (todayLoginsElement) {
-                            todayLoginsElement.textContent = data.today_logins;
+        // Document ready function
+        $(document).ready(function() {
+            // Initialize components
+            initializeSecuritySystem();
+            loadNotifications();
+            startSystemClock();
+            startUptimeCounter();
+            
+            // Set up periodic updates
+            setInterval(updateSecurityStatus, 30000); // Every 30 seconds
+            setInterval(loadNotifications, 60000); // Every minute
+            
+            // Initialize DataTables with security theme
+            $('.security-datatable').each(function() {
+                $(this).DataTable({
+                    pageLength: 25,
+                    responsive: true,
+                    order: [[0, 'desc']],
+                    language: {
+                        search: "_INPUT_",
+                        searchPlaceholder: "Search...",
+                        lengthMenu: "_MENU_ records per page",
+                        info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                        infoEmpty: "Showing 0 to 0 of 0 entries",
+                        infoFiltered: "(filtered from _MAX_ total entries)",
+                        paginate: {
+                            first: "First",
+                            last: "Last",
+                            next: "Next",
+                            previous: "Previous"
                         }
+                    },
+                    dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>' +
+                         '<"row"<"col-sm-12"tr>>' +
+                         '<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+                    initComplete: function() {
+                        // Add custom classes after initialization
+                        $(this).closest('.dataTables_wrapper').addClass('security-table-wrapper');
                     }
-                    if (data.blocked_users) {
-                        const blockedUsersElement = document.getElementById('blocked-users-count');
-                        if (blockedUsersElement) {
-                            blockedUsersElement.textContent = data.blocked_users;
-                        }
-                    }
+                });
+            });
+            
+            // Initialize Select2 for enhanced dropdowns
+            $('.select2-security').select2({
+                theme: 'bootstrap-5',
+                width: '100%'
+            });
+            
+            // Auto-dismiss alerts after 5 seconds
+            setTimeout(function() {
+                $('.alert').alert('close');
+            }, 5000);
+        });
+        
+        // Initialize security system
+        function initializeSecuritySystem() {
+            console.log('Security System Initialized');
+            
+            // Check system status
+            checkSystemStatus();
+            
+            // Set up event listeners
+            setupEventListeners();
+            
+            // Update last updated time
+            updateLastUpdatedTime();
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            // Confirm destructive actions
+            $(document).on('click', '.btn-confirm', function(e) {
+                const message = $(this).data('confirm') || 'Are you sure you want to perform this action?';
+                if (!confirm(message)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+                return true;
+            });
+            
+            // Loading state for buttons
+            $(document).on('click', '.btn-loading', function() {
+                const btn = $(this);
+                const originalText = btn.html();
+                btn.html('<span class="loading-spinner me-2"></span>Loading...').prop('disabled', true);
+                
+                // Revert after 5 seconds (safety net)
+                setTimeout(function() {
+                    btn.html(originalText).prop('disabled', false);
+                }, 5000);
+            });
+            
+            // Auto-refresh data on button click
+            $(document).on('click', '.btn-refresh', function() {
+                const target = $(this).data('target');
+                if (target) {
+                    $(target).addClass('pulse');
+                    setTimeout(function() {
+                        $(target).removeClass('pulse');
+                    }, 1000);
+                }
+                toastr.info('Refreshing data...');
+            });
+        }
+        
+        // Load notifications using Axios
+        function loadNotifications() {
+            axios.get('{% url "get_unread_count" %}')
+                .then(function(response) {
+                    const count = response.data.unread_count || 0;
+                    securityData.notificationCount = count;
+                    updateNotificationBadge(count);
+                    updateNotificationDropdown(count);
                 })
-                .catch(error => console.error('Error updating security stats:', error));
+                .catch(function(error) {
+                    console.error('Error loading notifications:', error);
+                    // Error is handled by the interceptor
+                });
         }
-
-        // Update stats every 30 seconds
-        setInterval(updateSecurityStats, 30000);
-
-        // Security event notifications
-        function checkSecurityNotifications() {
-            // This would need a proper API endpoint
-            console.log('Checking security notifications...');
+        
+        // Update notification badge
+        function updateNotificationBadge(count) {
+            const badge = $('#notificationCount');
+            if (count > 0) {
+                badge.text(count).show();
+            } else {
+                badge.hide();
+            }
         }
+        
+        // Update notification dropdown
+        function updateNotificationDropdown(count) {
+            const dropdown = $('#notificationDropdown');
+            const loading = $('#notificationLoading');
+            
+            // Clear existing notifications except header and loading
+            dropdown.find('.notification-item').remove();
+            
+            if (count > 0) {
+                loading.hide();
+                // Add sample notification (in real app, fetch actual notifications)
+                $(`<li class="notification-item">
+                    <a class="dropdown-item" href="#">
+                        <div class="d-flex w-100 justify-content-between">
+                            <small>New security event detected</small>
+                            <small class="text-muted">1 min ago</small>
+                        </div>
+                    </a>
+                </li>`).insertAfter(loading);
+            } else {
+                loading.html('<div class="text-center text-muted py-2">No new notifications</div>');
+            }
+        }
+        
+        // Check system status using Axios
+        function checkSystemStatus() {
+            axios.get('{% url "security_status_api" %}')
+                .then(function(response) {
+                    const data = response.data;
+                    securityData.systemStatus = data.system_status || 'healthy';
+                    updateSystemStatusIndicator(data);
+                })
+                .catch(function(error) {
+                    console.error('Error checking system status:', error);
+                    securityData.systemStatus = 'error';
+                    updateSystemStatusIndicator({system_status: 'error'});
+                });
+        }
+        
+        // Update system status indicator
+        function updateSystemStatusIndicator(data) {
+            const badge = $('#systemHealthBadge');
+            const status = data.system_status || 'unknown';
+            
+            badge.removeClass('bg-success bg-warning bg-danger bg-secondary');
+            
+            switch(status) {
+                case 'healthy':
+                    badge.addClass('bg-success').html('<i class="fas fa-check-circle me-1"></i>Healthy');
+                    break;
+                case 'warning':
+                    badge.addClass('bg-warning').html('<i class="fas fa-exclamation-triangle me-1"></i>Warning');
+                    break;
+                case 'critical':
+                    badge.addClass('bg-danger').html('<i class="fas fa-exclamation-circle me-1"></i>Critical');
+                    break;
+                default:
+                    badge.addClass('bg-secondary').html('<i class="fas fa-question-circle me-1"></i>Unknown');
+            }
+        }
+        
+        // Update security status using Axios
+        function updateSecurityStatus() {
+            axios.get('{% url "security_stats_api" %}')
+                .then(function(response) {
+                    updateSecurityStats(response.data);
+                    updateLastUpdatedTime();
+                })
+                .catch(function(error) {
+                    console.error('Error updating security stats:', error);
+                    toastr.error('Failed to update security status');
+                });
+        }
+        
+        // Update security statistics in the UI
+        function updateSecurityStats(data) {
+            // Update any elements with data attributes for stats
+            $('[data-stat="today_logins"]').text(data.today_logins || 0);
+            $('[data-stat="blocked_users"]').text(data.blocked_users || 0);
+            $('[data-stat="maintenance_mode"]').text(data.maintenance_mode ? 'Active' : 'Inactive');
+            
+            // Update maintenance status badge
+            const maintenanceBadge = $('#maintenanceStatusBadge');
+            if (data.maintenance_mode) {
+                maintenanceBadge.removeClass('bg-success').addClass('bg-warning')
+                    .html('<i class="fas fa-tools me-1"></i>Active');
+            } else {
+                maintenanceBadge.removeClass('bg-warning').addClass('bg-success')
+                    .html('<i class="fas fa-check me-1"></i>Inactive');
+            }
+        }
+        
+        // Update last updated time
+        function updateLastUpdatedTime() {
+            securityData.lastUpdate = new Date();
+            const timeString = securityData.lastUpdate.toLocaleTimeString();
+            $('#lastUpdatedTime').text(timeString);
+        }
+        
+        // Start system clock
+        function startSystemClock() {
+            function updateClock() {
+                const now = new Date();
+                $('#currentTime').text(now.toLocaleString());
+            }
+            
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+        
+        // Start uptime counter
+        function startUptimeCounter() {
+            let startTime = new Date();
+            
+            function updateUptime() {
+                const now = new Date();
+                const diff = now - startTime;
+                
+                const hours = Math.floor(diff / 3600000);
+                const minutes = Math.floor((diff % 3600000) / 60000);
+                const seconds = Math.floor((diff % 60000) / 1000);
+                
+                $('#uptimeCounter').text(
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+                );
+            }
+            
+            updateUptime();
+            setInterval(updateUptime, 1000);
+        }
+        
+        // Utility functions
+        function confirmAction(message, callback) {
+            if (confirm(message || 'Are you sure you want to perform this action?')) {
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        function showLoading(element) {
+            $(element).addClass('pulse').prop('disabled', true);
+        }
+        
+        function hideLoading(element) {
+            $(element).removeClass('pulse').prop('disabled', false);
+        }
+        
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+        
+        function formatDate(date) {
+            return new Date(date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Session monitoring - check every 5 minutes
+        setInterval(function() {
+            axios.get('/api/notifications/count/')
+                .then(function(response) {
+                    // Session is still valid
+                    console.log('Session check: OK');
+                })
+                .catch(function(error) {
+                    if (error.response?.status === 401) {
+                        console.log('Session check: EXPIRED');
+                        // Don't redirect here, let the interceptor handle it on next actual API call
+                    }
+                });
+        }, 300000); // 5 minutes
 
-        // Check for notifications every minute
-        setInterval(checkSecurityNotifications, 60000);
+        // Export functions for use in other scripts
+        window.SecuritySystem = {
+            confirmAction: confirmAction,
+            showLoading: showLoading,
+            hideLoading: hideLoading,
+            formatBytes: formatBytes,
+            formatDate: formatDate,
+            updateSecurityStatus: updateSecurityStatus,
+            loadNotifications: loadNotifications
+        };
     </script>
 
-    {% block extra_scripts %}
-    
-    {% endblock %}
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

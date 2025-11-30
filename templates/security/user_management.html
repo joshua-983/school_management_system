@@ -17,15 +17,26 @@
         <form method="get" class="row g-3">
             <div class="col-md-3">
                 <label for="id_search_type" class="form-label">Search By</label>
-                {{ search_form.search_type }}
+                <select name="search_type" id="id_search_type" class="form-select">
+                    <option value="username" {% if request.GET.search_type == 'username' %}selected{% endif %}>Username</option>
+                    <option value="email" {% if request.GET.search_type == 'email' %}selected{% endif %}>Email</option>
+                    <option value="name" {% if request.GET.search_type == 'name' %}selected{% endif %}>Name</option>
+                </select>
             </div>
             <div class="col-md-4">
                 <label for="id_search_query" class="form-label">Search Term</label>
-                {{ search_form.search_query }}
+                <input type="text" name="search_query" id="id_search_query" class="form-control" 
+                       value="{{ request.GET.search_query }}" placeholder="Enter search term...">
             </div>
             <div class="col-md-3">
                 <label for="id_user_type" class="form-label">User Type</label>
-                {{ search_form.user_type }}
+                <select name="user_type" id="id_user_type" class="form-select">
+                    <option value="all" {% if request.GET.user_type == 'all' %}selected{% endif %}>All Users</option>
+                    <option value="student" {% if request.GET.user_type == 'student' %}selected{% endif %}>Students</option>
+                    <option value="teacher" {% if request.GET.user_type == 'teacher' %}selected{% endif %}>Teachers</option>
+                    <option value="parent" {% if request.GET.user_type == 'parent' %}selected{% endif %}>Parents</option>
+                    <option value="staff" {% if request.GET.user_type == 'staff' %}selected{% endif %}>Staff</option>
+                </select>
             </div>
             <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary w-100">
@@ -48,7 +59,7 @@
     <div class="card-body">
         {% if users %}
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover security-datatable">
                 <thead class="table-light">
                     <tr>
                         <th>Username</th>
@@ -67,6 +78,9 @@
                             <strong>{{ user.username }}</strong>
                             {% if user.is_staff %}
                             <span class="badge bg-info">Staff</span>
+                            {% endif %}
+                            {% if user.is_superuser %}
+                            <span class="badge bg-warning">Admin</span>
                             {% endif %}
                         </td>
                         <td>{{ user.get_full_name|default:"-" }}</td>
@@ -94,7 +108,7 @@
                         </td>
                         <td>
                             {% if user.last_login %}
-                            {{ user.last_login|date:"M j, Y" }}
+                            {{ user.last_login|date:"M j, Y H:i" }}
                             {% else %}
                             <span class="text-muted">Never</span>
                             {% endif %}
@@ -149,6 +163,11 @@
         <i class="fas fa-user-lock fa-4x text-muted mb-3"></i>
         <h3 class="text-muted">Search for Users</h3>
         <p class="text-muted">Use the search form above to find users to manage.</p>
+        <div class="mt-3">
+            <button class="btn btn-outline-primary" onclick="loadRecentUsers()">
+                <i class="fas fa-clock me-2"></i>Show Recent Users
+            </button>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -167,11 +186,26 @@
                     <p id="actionModalMessage">Are you sure you want to perform this action?</p>
                     <div class="mb-3">
                         <label for="id_action" class="form-label">Action</label>
-                        {{ block_form.action }}
+                        <select name="action" id="id_action" class="form-select" required>
+                            <option value="block">Block User</option>
+                            <option value="unblock">Unblock User</option>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label for="id_reason" class="form-label">Reason</label>
-                        {{ block_form.reason }}
+                        <textarea name="reason" id="id_reason" class="form-control" rows="3" 
+                                  placeholder="Enter reason for this action..." required></textarea>
+                    </div>
+                    <div class="mb-3" id="durationField" style="display: none;">
+                        <label for="id_duration" class="form-label">Block Duration</label>
+                        <select name="duration" id="id_duration" class="form-select">
+                            <option value="">Permanent</option>
+                            <option value="1 hour">1 Hour</option>
+                            <option value="6 hours">6 Hours</option>
+                            <option value="1 day">1 Day</option>
+                            <option value="3 days">3 Days</option>
+                            <option value="1 week">1 Week</option>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -203,10 +237,6 @@
 </div>
 {% endblock %}
 
-{% block footer %}
-
-{% endblock %}
-
 {% block extra_scripts %}
 <script>
     // User Action Modal
@@ -221,22 +251,28 @@
         const modalMessage = userActionModal.querySelector('#actionModalMessage');
         const form = userActionModal.querySelector('#userActionForm');
         const actionField = userActionModal.querySelector('#id_action');
-        
+        const durationField = userActionModal.querySelector('#durationField');
+        const reasonField = userActionModal.querySelector('#id_reason');
+
         // Update modal content
         if (action === 'block') {
             modalTitle.textContent = `Block User: ${username}`;
             modalMessage.textContent = `You are about to block user "${username}". This will prevent them from accessing the system.`;
             actionField.value = 'block';
+            durationField.style.display = 'block';
+            reasonField.placeholder = 'Enter reason for blocking this user...';
         } else {
             modalTitle.textContent = `Unblock User: ${username}`;
             modalMessage.textContent = `You are about to unblock user "${username}". This will allow them to access the system again.`;
             actionField.value = 'unblock';
+            durationField.style.display = 'none';
+            reasonField.placeholder = 'Enter reason for unblocking this user...';
         }
         
         // Update form action URL
         form.action = form.action.replace('/0/', `/${userId}/`);
     });
-    
+
     // User Details Modal
     const userDetailsModal = document.getElementById('userDetailsModal');
     userDetailsModal.addEventListener('show.bs.modal', function (event) {
@@ -245,8 +281,13 @@
         const content = userDetailsModal.querySelector('#userDetailsContent');
         
         // Load user details via AJAX
-        fetch(`/api/user-details/${userId}/`)
-            .then(response => response.json())
+        fetch(`/security/api/user-details/${userId}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('User details not found');
+                }
+                return response.json();
+            })
             .then(data => {
                 content.innerHTML = `
                     <div class="row">
@@ -256,45 +297,59 @@
                             <p><strong>Email:</strong> ${data.email || '-'}</p>
                             <p><strong>Full Name:</strong> ${data.full_name || '-'}</p>
                             <p><strong>User Type:</strong> ${data.user_type}</p>
+                            <p><strong>Date Joined:</strong> ${data.date_joined}</p>
                         </div>
                         <div class="col-md-6">
                             <h6>Account Status</h6>
-                            <p><strong>Status:</strong> ${data.is_blocked ? 'Blocked' : 'Active'}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="badge ${data.is_blocked ? 'bg-danger' : 'bg-success'}">
+                                    ${data.is_blocked ? 'Blocked' : 'Active'}
+                                </span>
+                            </p>
                             <p><strong>Last Login:</strong> ${data.last_login || 'Never'}</p>
-                            <p><strong>Date Joined:</strong> ${data.date_joined}</p>
-                            ${data.is_blocked ? `<p><strong>Block Reason:</strong> ${data.block_reason || 'No reason provided'}</p>` : ''}
+                            ${data.is_blocked ? `
+                                <p><strong>Block Reason:</strong> ${data.block_reason || 'No reason provided'}</p>
+                                <p><strong>Blocked At:</strong> ${data.blocked_at || 'Unknown'}</p>
+                            ` : ''}
                         </div>
                     </div>
-                    ${data.login_history ? `
                     <div class="mt-3">
                         <h6>Recent Activity</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Action</th>
-                                        <th>IP Address</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${data.login_history.map(log => `
-                                        <tr>
-                                            <td>${log.timestamp}</td>
-                                            <td>${log.action}</td>
-                                            <td>${log.ip_address || '-'}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Activity history would be displayed here when available.
                         </div>
                     </div>
-                    ` : ''}
                 `;
             })
             .catch(error => {
-                content.innerHTML = `<div class="alert alert-danger">Error loading user details: ${error}</div>`;
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error loading user details: ${error.message}
+                    </div>
+                `;
             });
+    });
+
+    // Load recent users
+    function loadRecentUsers() {
+        // This would typically make an API call to get recent users
+        window.location.href = '?search_query=&search_type=username&user_type=all';
+    }
+
+    // Initialize DataTables
+    document.addEventListener('DOMContentLoaded', function() {
+        $('.security-datatable').DataTable({
+            pageLength: 25,
+            responsive: true,
+            order: [[0, 'asc']],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search users...",
+                lengthMenu: "_MENU_ records per page"
+            }
+        });
     });
 </script>
 {% endblock %}

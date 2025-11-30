@@ -1,0 +1,93 @@
+import logging
+from django.utils.deprecation import MiddlewareMixin
+from django.contrib.sessions.models import Session
+from django.contrib.sessions.backends.base import CreateError
+import json
+
+logger = logging.getLogger(__name__)
+
+class SessionProtectionMiddleware(MiddlewareMixin):
+    """
+    Middleware to protect against session corruption and fix issues
+    """
+    
+    def process_request(self, request):
+        # Skip for non-authenticated users and static files
+        if (not hasattr(request, 'user') or 
+            request.path.startswith('/static/') or 
+            request.path.startswith('/media/')):
+            return None
+        
+        # Check if session exists and is valid
+        if hasattr(request, 'session'):
+            try:
+                session_key = request.session.session_key
+                
+                # If no session key, create one
+                if not session_key:
+                    request.session.create()
+                    logger.info("Created new session for request")
+                    return None
+                
+                # Verify session exists in database and is not corrupted
+                try:
+                    session_obj = Session.objects.get(session_key=session_key)
+                    # Test session data decoding
+                    session_obj.get_decoded()
+                    
+                except Session.DoesNotExist:
+                    logger.warning(f"Session {session_key} not found in database")
+                    # Create new session
+                    request.session.flush()
+                    request.session.create()
+                    logger.info("Created new session after database lookup failed")
+                    
+                except (ValueError, json.JSONDecodeError) as e:
+                    logger.error(f"Session data corrupted for {session_key}: {str(e)}")
+                    # Delete corrupted session and create new one
+                    try:
+                        Session.objects.filter(session_key=session_key).delete()
+                    except:
+                        pass
+                    request.session.flush()
+                    request.session.create()
+                    logger.info("Created new session after corruption detection")
+                    
+            except CreateError as e:
+                logger.error(f"Failed to create session: {str(e)}")
+                # Continue without session
+                request.session = {}
+                
+            except Exception as e:
+                logger.error(f"Unexpected session error: {str(e)}")
+                # Continue without modifying session
+        
+        return None
+
+    def process_response(self, request, response):
+        # Clean up session if it's causing issues
+        if hasattr(request, 'session') and hasattr(request, 'user'):
+            try:
+                # Don't save empty sessions to reduce database writes
+                if (not request.session.modified and 
+                    not request.session.keys() and 
+                    not request.user.is_authenticated):
+                    request.session.flush()
+                    
+                # Limit session data size to prevent corruption
+                if hasattr(request.session, '_session'):
+                    session_size = len(str(request.session._session))
+                    if session_size > 4096:  # 4KB limit
+                        logger.warning(f"Session data too large: {session_size} bytes")
+                        # Keep only essential data
+                        essential_keys = ['_auth_user_id', '_auth_user_backend', '_auth_user_hash']
+                        current_session = request.session._session.copy()
+                        request.session.clear()
+                        for key in essential_keys:
+                            if key in current_session:
+                                request.session[key] = current_session[key]
+                        
+            except Exception as e:
+                logger.error(f"Session cleanup error in response: {str(e)}")
+        
+        return response

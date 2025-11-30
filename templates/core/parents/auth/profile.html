@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Profile - Parent Portal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <!-- Profile Card -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-person-badge me-2"></i>
+                    Profile Overview
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <div class="avatar-circle bg-primary text-white mx-auto mb-3" 
+                         style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
+                        {{ parent.user.first_name|first|upper }}{{ parent.user.last_name|first|upper }}
+                    </div>
+                    <h4>{{ parent.user.get_full_name }}</h4>
+                    <p class="text-muted mb-1">{{ parent.get_relationship_display }}</p>
+                    <span class="badge bg-{% if parent.account_status == 'active' %}success{% else %}warning{% endif %}">
+                        {{ parent.get_account_status_display }}
+                    </span>
+                </div>
+
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Email</span>
+                        <span class="text-muted">{{ parent.user.email }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Phone</span>
+                        <span class="text-muted">{{ parent.phone_number }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Occupation</span>
+                        <span class="text-muted">{{ parent.occupation|default:"Not specified" }}</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Last Login</span>
+                        <span class="text-muted">
+                            {% if parent.last_login_date %}
+                                {{ parent.last_login_date|timesince }} ago
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Login Count</span>
+                        <span class="badge bg-primary rounded-pill">{{ parent.login_count }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Children Summary -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-people me-2"></i>
+                    My Children ({{ parent.get_children_count }})
+                </h6>
+            </div>
+            <div class="card-body">
+                {% for child in parent.get_children %}
+                <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-circle-sm bg-secondary text-white">
+                            {{ child.first_name|first|upper }}
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="mb-0">{{ child.get_full_name }}</h6>
+                        <small class="text-muted">
+                            {{ child.get_class_level_display }} • {{ child.student_id }}
+                        </small>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center mb-0">No children assigned</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <!-- Profile Edit Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pencil-square me-2"></i>
+                    Edit Profile
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                                    First Name
+                                </label>
+                                {{ form.first_name }}
+                                {% if form.first_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.first_name.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                                    Last Name
+                                </label>
+                                {{ form.last_name }}
+                                {% if form.last_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.last_name.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.phone_number.id_for_label }}" class="form-label">
+                            Phone Number
+                        </label>
+                        {{ form.phone_number }}
+                        {% if form.phone_number.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.phone_number.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.occupation.id_for_label }}" class="form-label">
+                            Occupation
+                        </label>
+                        {{ form.occupation }}
+                        {% if form.occupation.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.occupation.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.address.id_for_label }}" class="form-label">
+                            Address
+                        </label>
+                        {{ form.address }}
+                        {% if form.address.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.address.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.relationship.id_for_label }}" class="form-label">
+                            Relationship
+                        </label>
+                        {{ form.relationship }}
+                        {% if form.relationship.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.relationship.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'parent_dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i>
+                            Back to Dashboard
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Update Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Account Security -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-lock me-2"></i>
+                    Account Security
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Change Password</h6>
+                        <p class="text-muted small mb-3">
+                            Update your password regularly to keep your account secure.
+                        </p>
+                        <!-- FIXED: Use conditional URL or direct link -->
+                        {% url 'password_change' as password_change_url %}
+                        {% if password_change_url %}
+                        <a href="{{ password_change_url }}" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-key me-1"></i>
+                            Change Password
+                        </a>
+                        {% else %}
+                        <a href="/accounts/password-change/" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-key me-1"></i>
+                            Change Password
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Login Activity</h6>
+                        <p class="text-muted small mb-3">
+                            Monitor your account login activity and sessions.
+                        </p>
+                        <button class="btn btn-outline-info btn-sm" disabled>
+                            <i class="bi bi-clock-history me-1"></i>
+                            View Login History
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    .avatar-circle-sm {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}

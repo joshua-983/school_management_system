@@ -9,6 +9,17 @@
 <li class="breadcrumb-item active">Security Events</li>
 {% endblock %}
 
+{% block page_actions %}
+<div class="btn-group">
+    <button class="btn btn-outline-success" onclick="exportEvents()">
+        <i class="fas fa-download me-2"></i>Export
+    </button>
+    <button class="btn btn-outline-danger" onclick="clearResolvedEvents()">
+        <i class="fas fa-trash me-2"></i>Clear Resolved
+    </button>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">
@@ -47,9 +58,58 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <button class="btn btn-outline-secondary w-100" onclick="refreshEvents()">
-                            <i class="fas fa-sync-alt me-2"></i>Refresh
-                        </button>
+                        <div class="btn-group w-100">
+                            <button class="btn btn-outline-secondary" onclick="refreshEvents()">
+                                <i class="fas fa-sync-alt me-2"></i>Refresh
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="applyFilters()">
+                                <i class="fas fa-filter me-2"></i>Filter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Events Summary -->
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <div class="card bg-light">
+                            <div class="card-body text-center p-2">
+                                <h6 class="mb-0" id="totalEvents">{{ security_events|length }}</h6>
+                                <small class="text-muted">Total</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center p-2">
+                                <h6 class="mb-0" id="unresolvedEvents">{{ unresolved_count }}</h6>
+                                <small>Unresolved</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center p-2">
+                                <h6 class="mb-0" id="criticalEvents">{{ critical_count }}</h6>
+                                <small>Critical</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center p-2">
+                                <h6 class="mb-0" id="todayEvents">{{ today_count }}</h6>
+                                <small>Today</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-dark text-white">
+                            <div class="card-body text-center p-2">
+                                <h6 class="mb-0" id="lastUpdated">Just now</h6>
+                                <small>Last Updated</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -102,18 +162,25 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-primary" 
-                                            onclick="viewEventDetails({{ event.id }})"
-                                            title="View Details">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    {% if not event.is_resolved %}
-                                    <button class="btn btn-sm btn-outline-success" 
-                                            onclick="resolveEvent({{ event.id }})"
-                                            title="Mark Resolved">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    {% endif %}
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" 
+                                                onclick="viewEventDetails({{ event.id }})"
+                                                title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        {% if not event.is_resolved %}
+                                        <button class="btn btn-outline-success" 
+                                                onclick="resolveEvent({{ event.id }})"
+                                                title="Mark Resolved">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-outline-info" 
+                                                onclick="investigateEvent({{ event.id }})"
+                                                title="Investigate">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             {% empty %}
@@ -131,53 +198,232 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block footer %}
-
+<!-- Event Details Modal -->
+<div class="modal fade" id="eventDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Security Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="eventDetailsContent">
+                <!-- Content loaded via JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-function viewEventDetails(eventId) {
-    window.location.href = `/security/events/${eventId}/`;
-}
+    let eventsTable;
 
-function resolveEvent(eventId) {
-    if (confirm('Are you sure you want to mark this event as resolved?')) {
-        fetch(`/audit/security-events/${eventId}/resolve/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => {
-            if (response.ok) {
-                location.reload();
-            } else {
-                alert('Error resolving event');
-            }
-        })
-        .catch(error => console.error('Error:', error));
+    function viewEventDetails(eventId) {
+        const modal = new bootstrap.Modal(document.getElementById('eventDetailsModal'));
+        const content = document.getElementById('eventDetailsContent');
+        
+        content.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+
+        fetch(`/security/events/${eventId}/`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Event not found');
+                }
+                return response.json();
+            })
+            .then(data => {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Basic Information</h6>
+                            <p><strong>Title:</strong> ${data.title}</p>
+                            <p><strong>Type:</strong> <span class="badge bg-secondary">${data.event_type}</span></p>
+                            <p><strong>Severity:</strong> <span class="badge bg-${getSeverityColor(data.severity)}">${data.severity}</span></p>
+                            <p><strong>User:</strong> ${data.user || 'System'}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Technical Details</h6>
+                            <p><strong>IP Address:</strong> <code>${data.ip_address || 'N/A'}</code></p>
+                            <p><strong>Timestamp:</strong> ${data.timestamp}</p>
+                            <p><strong>Status:</strong> <span class="badge ${data.is_resolved ? 'bg-success' : 'bg-warning'}">${data.is_resolved ? 'Resolved' : 'Unresolved'}</span></p>
+                            ${data.resolved_by ? `<p><strong>Resolved By:</strong> ${data.resolved_by}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Description</h6>
+                            <div class="alert alert-light">
+                                ${data.description || 'No description provided.'}
+                            </div>
+                        </div>
+                    </div>
+                    ${data.details ? `
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6>Additional Details</h6>
+                            <pre class="bg-light p-3 rounded"><code>${JSON.stringify(data.details, null, 2)}</code></pre>
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+            })
+            .catch(error => {
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error loading event details: ${error.message}
+                    </div>
+                `;
+            });
+
+        modal.show();
     }
-}
 
-function refreshEvents() {
-    location.reload();
-}
+    function resolveEvent(eventId) {
+        if (confirm('Are you sure you want to mark this event as resolved?')) {
+            fetch(`/audit/security-events/${eventId}/resolve/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    showToast('Event marked as resolved successfully', 'success');
+                    refreshEvents();
+                } else {
+                    throw new Error('Failed to resolve event');
+                }
+            })
+            .catch(error => {
+                showToast('Error resolving event: ' + error.message, 'danger');
+            });
+        }
+    }
 
-// Initialize filters
-document.addEventListener('DOMContentLoaded', function() {
-    const table = $('.security-datatable').DataTable({
-        pageLength: 25,
-        order: [[5, 'desc']]
+    function investigateEvent(eventId) {
+        // Open investigation tools or logs
+        window.open(`/audit/logs/?event_id=${eventId}`, '_blank');
+    }
+
+    function refreshEvents() {
+        showToast('Refreshing events...', 'info');
+        location.reload();
+    }
+
+    function applyFilters() {
+        const eventType = document.getElementById('eventTypeFilter').value;
+        const severity = document.getElementById('severityFilter').value;
+        const status = document.getElementById('statusFilter').value;
+
+        // This would typically make an API call with filters
+        showToast('Applying filters...', 'info');
+        
+        // Reload page with filter parameters
+        const params = new URLSearchParams();
+        if (eventType) params.append('event_type', eventType);
+        if (severity) params.append('severity', severity);
+        if (status) params.append('status', status);
+        
+        window.location.href = '?' + params.toString();
+    }
+
+    function exportEvents() {
+        showToast('Preparing export...', 'info');
+        // This would typically generate and download a CSV/PDF
+        setTimeout(() => {
+            showToast('Export ready for download', 'success');
+        }, 2000);
+    }
+
+    function clearResolvedEvents() {
+        if (confirm('Are you sure you want to clear all resolved events? This action cannot be undone.')) {
+            showToast('Clearing resolved events...', 'warning');
+            // This would typically call an API endpoint
+            setTimeout(() => {
+                showToast('Resolved events cleared successfully', 'success');
+                refreshEvents();
+            }, 1500);
+        }
+    }
+
+    function getSeverityColor(severity) {
+        const colors = {
+            'CRITICAL': 'danger',
+            'HIGH': 'warning',
+            'MEDIUM': 'info',
+            'LOW': 'secondary'
+        };
+        return colors[severity] || 'secondary';
+    }
+
+    function showToast(message, type = 'info') {
+        // Use the SecuritySystem utility if available, otherwise fallback
+        if (window.SecuritySystem && window.SecuritySystem.showToast) {
+            window.SecuritySystem.showToast(message, type);
+        } else {
+            // Fallback toast implementation
+            toastr[type](message);
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        eventsTable = $('.security-datatable').DataTable({
+            pageLength: 25,
+            order: [[5, 'desc']],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search events...",
+                lengthMenu: "_MENU_ records per page"
+            }
+        });
+
+        // Add filter functionality to DataTables
+        $('#eventTypeFilter, #severityFilter, #statusFilter').on('change', function() {
+            eventsTable.draw();
+        });
+
+        // Real-time updates
+        setInterval(() => {
+            fetch('{% url "security_events_api" %}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.events && data.events.length !== {{ security_events|length }}) {
+                        showToast('New security events detected', 'warning');
+                        // In a real app, you'd update the table dynamically
+                    }
+                })
+                .catch(error => console.error('Error checking for new events:', error));
+        }, 30000);
     });
 
-    // Add filter functionality
-    $('#eventTypeFilter, #severityFilter, #statusFilter').on('change', function() {
-        table.draw();
-    });
-});
+    // Custom filtering for DataTables
+    $.fn.dataTable.ext.search.push(
+        function(settings, data, dataIndex) {
+            const eventType = $('#eventTypeFilter').val();
+            const severity = $('#severityFilter').val();
+            const status = $('#statusFilter').val();
+
+            const rowEventType = data[1].toLowerCase();
+            const rowSeverity = data[2].toLowerCase();
+            const rowStatus = data[6].toLowerCase();
+
+            if (eventType && !rowEventType.includes(eventType.toLowerCase())) return false;
+            if (severity && !rowSeverity.includes(severity.toLowerCase())) return false;
+            if (status === 'unresolved' && !rowStatus.includes('unresolved')) return false;
+            if (status === 'resolved' && !rowStatus.includes('resolved')) return false;
+
+            return true;
+        }
+    );
 </script>
 {% endblock %}

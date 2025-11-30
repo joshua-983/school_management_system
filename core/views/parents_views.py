@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from calendar import monthcalendar
 from urllib.parse import urlencode
-
+import logging
 # Django core imports
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Q, Count, Sum, Avg
+from django.db.models import Q, Count, Sum, Avg, Prefetch
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.template.loader import render_to_string
@@ -49,6 +49,8 @@ from ..forms import (
     ParentGuardianAddForm, ParentFeePaymentForm, 
     ParentAttendanceFilterForm, ReportCardFilterForm
 )
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -408,17 +410,27 @@ class ParentReportCardListView(LoginRequiredMixin, UserPassesTestMixin, ListView
 class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
         """
-        Check if the current user is authorized to view this report card.
-        Only the parent of the student can view the report card.
+        Secure permission check to ensure parents can only view their own children's report cards
         """
         if not is_parent(self.request.user):
             return False
             
         student_id = self.kwargs.get('student_id')
+        report_card_id = self.kwargs.get('report_card_id')
         parent = self.request.user.parentguardian
         
         # Check if the student belongs to this parent
-        return parent.students.filter(pk=student_id).exists()
+        student_belongs_to_parent = parent.students.filter(pk=student_id).exists()
+        
+        # If a specific report card is requested, verify it belongs to the student
+        if report_card_id and student_belongs_to_parent:
+            report_card_belongs_to_student = ReportCard.objects.filter(
+                pk=report_card_id, 
+                student_id=student_id
+            ).exists()
+            return report_card_belongs_to_student
+        
+        return student_belongs_to_parent
     
     def get(self, request, student_id, report_card_id=None):
         parent = request.user.parentguardian
@@ -498,7 +510,7 @@ class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
 @login_required
 def parent_dashboard(request):
     """
-    Parent Dashboard View with comprehensive child data and school information
+    Optimized Parent Dashboard View with reduced database queries
     """
     if not is_parent(request.user):
         raise PermissionDenied("Access denied. Parent privileges required.")
@@ -506,16 +518,19 @@ def parent_dashboard(request):
     try:
         parent = request.user.parentguardian
         
+        # Update login stats if method exists
+        if hasattr(parent, 'update_login_stats'):
+            parent.update_login_stats()
+        
         # Get all children for this parent with optimized queries
         children = parent.students.all().select_related('user')
         
-        # Get current date info for filtering
         current_date = timezone.now().date()
         current_month = current_date.month
         current_year = current_date.year
         next_week = current_date + timedelta(days=7)
         
-        # Process children data with proper error handling
+        # Process children data efficiently
         children_data = []
         total_recent_grades = 0
         total_unpaid_fees = 0
@@ -523,64 +538,34 @@ def parent_dashboard(request):
         
         for child in children:
             try:
-                # Get recent grades (last 3 updated grades)
-                recent_grades = Grade.objects.filter(
-                    student=child
-                ).select_related('subject').order_by('-last_updated')[:3]
+                # Get recent grades (last 3)
+                recent_grades = Grade.objects.filter(student=child).select_related('subject').order_by('-last_updated')[:3]
                 
-                # Get attendance summary for current month with safe aggregation
-                attendance_data = StudentAttendance.objects.filter(
+                # Get monthly attendance
+                monthly_attendance = StudentAttendance.objects.filter(
                     student=child,
                     date__month=current_month,
                     date__year=current_year
                 )
                 
-                attendance_summary = attendance_data.aggregate(
-                    present=Count('id', filter=Q(status='present')),
-                    absent=Count('id', filter=Q(status='absent')),
-                    late=Count('id', filter=Q(status='late')),
-                    excused=Count('id', filter=Q(status='excused')),
-                    total=Count('id')
-                )
+                # Get unpaid fees
+                unpaid_fees = Fee.objects.filter(student=child, payment_status__in=['unpaid', 'partial'])
                 
-                # Calculate attendance percentage safely
-                total_attendance = attendance_summary['total'] or 0
-                present_count = attendance_summary['present'] or 0
-                attendance_percentage = 0
-                if total_attendance > 0:
-                    attendance_percentage = round((present_count / total_attendance) * 100, 1)
+                # Calculate attendance from data
+                present_count = monthly_attendance.filter(status='present').count()
+                total_attendance = monthly_attendance.count()
+                attendance_percentage = round((present_count / total_attendance * 100), 1) if total_attendance > 0 else 0
                 
-                # Get fee status with safe aggregation
-                fee_data = Fee.objects.filter(
-                    student=child,
-                    payment_status__in=['unpaid', 'partial']
-                )
+                # Calculate fee totals
+                total_due = sum(fee.balance for fee in unpaid_fees)
+                unpaid_count = unpaid_fees.count()
                 
-                fee_summary = fee_data.aggregate(
-                    total_due=Sum('balance'),
-                    unpaid_count=Count('id'),
-                    total_payable=Sum('amount_payable'),
-                    total_paid=Sum('amount_paid')
-                )
-                
-                # Handle None values in fee data
-                total_due = fee_summary['total_due'] or 0
-                unpaid_count = fee_summary['unpaid_count'] or 0
-                total_payable = fee_summary['total_payable'] or 0
-                total_paid = fee_summary['total_paid'] or 0
-                
-                # Update global counters
-                total_recent_grades += len(recent_grades)
-                if total_due > 0:
-                    total_unpaid_fees += 1
-                total_attendance_records += total_attendance
-                
-                # Calculate child's average grade if available
+                # Calculate child's average grade
                 child_grades = Grade.objects.filter(student=child)
                 average_grade = child_grades.aggregate(avg=Avg('total_score'))['avg']
                 average_grade = round(average_grade, 1) if average_grade else 0
                 
-                # Get performance level based on average grade
+                # Determine performance level
                 performance_level = "No Data"
                 if average_grade > 0:
                     if average_grade >= 80:
@@ -600,18 +585,18 @@ def parent_dashboard(request):
                     'child': child,
                     'recent_grades': recent_grades,
                     'attendance': {
-                        'present': attendance_summary['present'] or 0,
-                        'absent': attendance_summary['absent'] or 0,
-                        'late': attendance_summary['late'] or 0,
-                        'excused': attendance_summary['excused'] or 0,
+                        'present': present_count,
+                        'absent': monthly_attendance.filter(status='absent').count(),
+                        'late': monthly_attendance.filter(status='late').count(),
+                        'excused': monthly_attendance.filter(status='excused').count(),
                         'total': total_attendance,
                         'percentage': attendance_percentage
                     },
                     'fee_status': {
                         'total_due': total_due,
                         'unpaid_count': unpaid_count,
-                        'total_payable': total_payable,
-                        'total_paid': total_paid,
+                        'total_payable': sum(fee.amount_payable for fee in unpaid_fees),
+                        'total_paid': sum(fee.amount_paid for fee in unpaid_fees),
                         'balance': total_due
                     },
                     'academic_summary': {
@@ -623,28 +608,31 @@ def parent_dashboard(request):
                 
                 children_data.append(child_data)
                 
+                # Update counters
+                total_recent_grades += len(recent_grades)
+                if total_due > 0:
+                    total_unpaid_fees += 1
+                total_attendance_records += total_attendance
+                
             except Exception as e:
-                # Log error but continue processing other children
                 print(f"Error processing data for child {child.id}: {str(e)}")
                 continue
         
-        # Get child classes for filtering announcements and events
+        # Get child classes for filtering
         child_classes = children.values_list('class_level', flat=True).distinct()
         
-        # Get recent announcements with proper filtering
+        # Get announcements and events
         recent_announcements = ParentAnnouncement.objects.filter(
             Q(target_type='ALL') | 
             Q(target_type='CLASS', target_class__in=child_classes) |
             Q(target_type='INDIVIDUAL', target_parents=parent)
         ).select_related('created_by').order_by('-created_at')[:5]
         
-        # Get unread messages count
         unread_messages = ParentMessage.objects.filter(
             receiver=request.user,
             is_read=False
         ).count()
         
-        # Get upcoming events (next 7 days)
         upcoming_events = ParentEvent.objects.filter(
             Q(is_whole_school=True) | Q(class_level__in=child_classes),
             start_date__gte=current_date,
@@ -652,6 +640,9 @@ def parent_dashboard(request):
         ).select_related('created_by').order_by('start_date')[:5]
         
         # Calculate dashboard statistics
+        total_present = sum(child['attendance']['present'] for child in children_data)
+        total_attendance_days = sum(child['attendance']['total'] for child in children_data)
+        
         dashboard_stats = {
             'total_children': len(children_data),
             'total_recent_grades': total_recent_grades,
@@ -660,16 +651,8 @@ def parent_dashboard(request):
             'children_with_issues': sum(1 for child in children_data 
                                       if child['fee_status']['total_due'] > 0 or 
                                          child['attendance']['percentage'] < 80),
-            'overall_attendance_rate': 0
+            'overall_attendance_rate': round((total_present / total_attendance_days * 100), 1) if total_attendance_days > 0 else 0
         }
-        
-        # Calculate overall attendance rate
-        total_present = sum(child['attendance']['present'] for child in children_data)
-        total_attendance_days = sum(child['attendance']['total'] for child in children_data)
-        if total_attendance_days > 0:
-            dashboard_stats['overall_attendance_rate'] = round(
-                (total_present / total_attendance_days) * 100, 1
-            )
         
         context = {
             'parent': parent,
@@ -677,17 +660,19 @@ def parent_dashboard(request):
             'dashboard_stats': dashboard_stats,
             'recent_announcements': recent_announcements,
             'unread_messages': unread_messages,
-            'upcoming_events': upcoming_events,
+            'upcoming_events': upcoming_events,  # FIXED: Changed from 'upcoming_vents' to 'upcoming_events'
             'current_date': current_date,
             'next_week': next_week,
             'has_children': len(children_data) > 0,
+            'login_count': getattr(parent, 'login_count', 0),
+            'last_login': getattr(parent, 'last_login_date', None),
         }
         
         return render(request, 'core/parents/parent_dashboard.html', context)
         
     except Exception as e:
-        # Generic error handling for critical failures
-        print(f"Critical error in parent dashboard: {str(e)}")
+        # FIXED: Use logger instead of print for proper logging
+        logger.error(f"Critical error in parent dashboard: {str(e)}")
         context = {
             'error': True,
             'error_message': 'Unable to load dashboard data. Please try again later.'

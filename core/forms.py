@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.conf import settings
 from django.apps import apps
+from .utils import is_teacher
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,6 @@ logger = logging.getLogger(__name__)
 
 # ===== STUDENT FORMS =====
 
-
-# forms.py - Updated StudentRegistrationForm
 class StudentRegistrationForm(forms.ModelForm):
     username = forms.CharField(
         label='Username',
@@ -71,7 +70,7 @@ class StudentRegistrationForm(forms.ModelForm):
     )
     phone_number = forms.CharField(
         max_length=10,
-        required=False,  # Made optional
+        required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': '0245478847',
@@ -87,12 +86,36 @@ class StudentRegistrationForm(forms.ModelForm):
         ]
     )
     
+    # PARENT SELECTION FIELD
+    parents = forms.ModelMultipleChoiceField(
+        queryset=ParentGuardian.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={
+            'class': 'form-control select2-multiple',
+            'data-placeholder': 'Select existing parents (optional)',
+            'style': 'width: 100%'
+        }),
+        help_text="Optional: Assign existing parents to this student"
+    )
+    
+    # Option to create parent account during student registration
+    create_parent_account = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input',
+            'id': 'create_parent_account'
+        }),
+        label="Create parent account for guardians"
+    )
+    
     class Meta:
         model = Student
         fields = [
             'first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender', 
             'nationality', 'ethnicity', 'religion', 'place_of_birth', 
-            'residential_address', 'profile_picture', 'class_level', 'username', 'email', 'phone_number'
+            'residential_address', 'profile_picture', 'class_level', 
+            'username', 'email', 'phone_number', 'parents', 'create_parent_account'
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={
@@ -146,27 +169,62 @@ class StudentRegistrationForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+        
         # Make only essential fields required
-        self.fields['first_name'].required = False  # Made optional
-        self.fields['middle_name'].required = False  # Made optional
-        self.fields['last_name'].required = False  # Made optional
-        self.fields['date_of_birth'].required = False  # Made optional
-        self.fields['gender'].required = True  # Keep required
-        self.fields['nationality'].required = False  # Made optional
-        self.fields['ethnicity'].required = False  # Made optional
-        self.fields['religion'].required = False  # Made optional
-        self.fields['place_of_birth'].required = False  # Made optional
-        self.fields['residential_address'].required = False  # Made optional
-        self.fields['class_level'].required = True  # Keep required
-        self.fields['phone_number'].required = False  # Made optional
-        self.fields['profile_picture'].required = False  # Made optional
+        self.fields['first_name'].required = False
+        self.fields['middle_name'].required = False
+        self.fields['last_name'].required = False
+        self.fields['date_of_birth'].required = False
+        self.fields['gender'].required = True
+        self.fields['nationality'].required = False
+        self.fields['ethnicity'].required = False
+        self.fields['religion'].required = False
+        self.fields['place_of_birth'].required = False
+        self.fields['residential_address'].required = False
+        self.fields['class_level'].required = True
+        self.fields['phone_number'].required = False
+        self.fields['profile_picture'].required = False
+        
+        # Setup parents field
+        self.fields['parents'].queryset = ParentGuardian.objects.filter(
+            user__is_active=True
+        ).select_related('user').order_by('user__last_name', 'user__first_name')
+        
+        # FIXED: Set initial parents for existing students using the correct relationship
+        if self.instance and self.instance.pk:
+            try:
+                # Try multiple possible relationship names
+                if hasattr(self.instance, 'parents'):
+                    # If ManyToMany relationship with related_name='parents'
+                    self.fields['parents'].initial = self.instance.parents.all()
+                elif hasattr(self.instance, 'parentguardian_set'):
+                    # Default Django reverse relationship
+                    self.fields['parents'].initial = self.instance.parentguardian_set.all()
+                elif hasattr(self.instance, 'guardians'):
+                    # Alternative custom name
+                    self.fields['parents'].initial = self.instance.guardians.all()
+                else:
+                    # Fallback: Query ParentGuardian directly based on the actual relationship
+                    # This depends on how your ParentGuardian model is defined
+                    parents = ParentGuardian.objects.filter(students=self.instance)
+                    self.fields['parents'].initial = parents
+            except Exception as e:
+                # If any error occurs, log it and set empty queryset
+                logger.warning(f"Error setting initial parents for student {self.instance.pk}: {e}")
+                self.fields['parents'].initial = ParentGuardian.objects.none()
     
     def clean_username(self):
         username = self.cleaned_data.get('username')
         if username:
-            # Check if username already exists
-            if User.objects.filter(username=username).exists():
+            # Check if username already exists (excluding current instance for updates)
+            query = User.objects.filter(username=username)
+            if self.instance and self.instance.pk and hasattr(self.instance, 'user'):
+                query = query.exclude(pk=self.instance.user.pk)
+            
+            if query.exists():
                 raise ValidationError("A user with this username already exists.")
             
             # Validate username format
@@ -179,11 +237,21 @@ class StudentRegistrationForm(forms.ModelForm):
     
     def clean_date_of_birth(self):
         dob = self.cleaned_data.get('date_of_birth')
-        # Remove age validation to accept any age
         if dob:
             today = date.today()
             if dob > today:
                 raise ValidationError("Date of birth cannot be in the future.")
+            
+            # Validate minimum age (at least 4 years old for school)
+            min_age = 4
+            max_age = 25
+            age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            
+            if age < min_age:
+                raise ValidationError(f"Student must be at least {min_age} years old.")
+            if age > max_age:
+                raise ValidationError(f"Student age cannot exceed {max_age} years.")
+                
         return dob
     
     def clean_phone_number(self):
@@ -193,19 +261,67 @@ class StudentRegistrationForm(forms.ModelForm):
             phone_number = phone_number.replace(' ', '').replace('-', '')
             if len(phone_number) != 10 or not phone_number.startswith('0'):
                 raise ValidationError("Phone number must be exactly 10 digits starting with 0")
+            
+            # Check if phone number is already in use by another student
+            if self.instance and self.instance.pk:
+                existing = Student.objects.filter(phone_number=phone_number).exclude(pk=self.instance.pk)
+            else:
+                existing = Student.objects.filter(phone_number=phone_number)
+                
+            if existing.exists():
+                raise ValidationError("This phone number is already associated with another student.")
         return phone_number
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            email = email.lower().strip()
+            
+            # Check if email already exists (excluding current instance for updates)
+            query = User.objects.filter(email=email)
+            if self.instance and self.instance.pk and hasattr(self.instance, 'user'):
+                query = query.exclude(pk=self.instance.user.pk)
+            
+            if query.exists():
+                raise ValidationError("A user with this email already exists.")
+        return email
     
     def clean(self):
         cleaned_data = super().clean()
         password1 = cleaned_data.get('password1')
         password2 = cleaned_data.get('password2')
         email = cleaned_data.get('email')
+        create_parent_account = cleaned_data.get('create_parent_account')
         
-        if password1 and password2 and password1 != password2:
-            raise ValidationError("Passwords don't match")
+        # Password validation
+        if password1 and password2:
+            if password1 != password2:
+                self.add_error('password2', "Passwords don't match")
+            
+            # Additional password strength validation
+            if len(password1) < 8:
+                self.add_error('password1', "Password must be at least 8 characters long.")
+            if not any(char.isdigit() for char in password1):
+                self.add_error('password1', "Password must contain at least one number.")
+            if not any(char.isalpha() for char in password1):
+                self.add_error('password1', "Password must contain at least one letter.")
         
-        if email and User.objects.filter(email=email).exists():
-            raise ValidationError("A user with this email already exists.")
+        # Email validation
+        if not email:
+            self.add_error('email', "Email address is required.")
+        
+        # Validate that at least first name or last name is provided
+        first_name = cleaned_data.get('first_name', '').strip()
+        last_name = cleaned_data.get('last_name', '').strip()
+        
+        if not first_name and not last_name:
+            self.add_error('first_name', "Either first name or last name is required.")
+            self.add_error('last_name', "Either first name or last name is required.")
+        
+        # Validate parent account creation requirements
+        if create_parent_account:
+            # Check if parent information would be needed (you might want to add parent fields)
+            pass
         
         return cleaned_data
     
@@ -216,36 +332,71 @@ class StudentRegistrationForm(forms.ModelForm):
         if student.phone_number:
             student.phone_number = student.phone_number.replace(' ', '').replace('-', '')
         
-        # Create user account
-        username = self.cleaned_data['username']
-        email = self.cleaned_data['email']
-        password = self.cleaned_data['password1']
+        # Check if this is a new student or updating existing
+        is_new_student = not student.pk
         
-        # Use provided names or generate from username if not provided
-        first_name = self.cleaned_data.get('first_name', '').strip()
-        last_name = self.cleaned_data.get('last_name', '').strip()
-        
-        if not first_name:
-            first_name = "Student"
-        if not last_name:
-            last_name = username
-        
-        # Create user
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        
-        student.user = user
+        if is_new_student:
+            # Create user account for new student
+            username = self.cleaned_data['username']
+            email = self.cleaned_data['email']
+            password = self.cleaned_data['password1']
+            
+            # Use provided names or generate from username if not provided
+            first_name = self.cleaned_data.get('first_name', '').strip()
+            last_name = self.cleaned_data.get('last_name', '').strip()
+            
+            if not first_name:
+                first_name = "Student"
+            if not last_name:
+                last_name = username
+            
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            student.user = user
+        else:
+            # Update existing user account
+            if hasattr(student, 'user') and student.user:
+                user = student.user
+                # Update user fields if they changed
+                if 'email' in self.cleaned_data:
+                    user.email = self.cleaned_data['email']
+                if 'first_name' in self.cleaned_data:
+                    user.first_name = self.cleaned_data.get('first_name', user.first_name)
+                if 'last_name' in self.cleaned_data:
+                    user.last_name = self.cleaned_data.get('last_name', user.last_name)
+                
+                # Update password if provided
+                if 'password1' in self.cleaned_data and self.cleaned_data['password1']:
+                    user.set_password(self.cleaned_data['password1'])
+                
+                user.save()
         
         if commit:
             student.save()
+            self.save_m2m()  # This saves the many-to-many relationships like 'parents'
             
+            # Handle parent assignments
+            if 'parents' in self.cleaned_data:
+                try:
+                    # FIXED: Use the correct relationship name
+                    if hasattr(student, 'parents'):
+                        student.parents.set(self.cleaned_data['parents'])
+                    else:
+                        # Fallback: Use the actual relationship from ParentGuardian model
+                        # This depends on how your ParentGuardian model defines the relationship
+                        for parent in self.cleaned_data['parents']:
+                            parent.students.add(student)
+                except Exception as e:
+                    logger.error(f"Error assigning parents to student {student.pk}: {e}")
+                    # Don't raise exception here to avoid losing the student creation
+        
         return student
-
 
 
 class SubjectForm(forms.ModelForm):
@@ -297,6 +448,9 @@ class SubjectForm(forms.ModelForm):
             self.instance.code = self.instance.generate_subject_code()
         return super().save(commit=commit)
 
+
+
+#Student Profile
 class StudentProfileForm(forms.ModelForm):
     phone_number = forms.CharField(
         max_length=10,
@@ -316,12 +470,26 @@ class StudentProfileForm(forms.ModelForm):
         ]
     )
     
+    # ADD READ-ONLY PARENT DISPLAY
+    current_parents = forms.ModelMultipleChoiceField(
+        queryset=ParentGuardian.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={
+            'class': 'form-control',
+            'disabled': 'disabled',
+            'size': '3'
+        }),
+        label="Current Parents/Guardians",
+        help_text="Parents/guardians assigned to you (contact admin to modify)"
+    )
+    
     class Meta:
         model = Student
         fields = [
             'first_name', 'middle_name', 'last_name', 'date_of_birth', 
             'gender', 'profile_picture', 'residential_address', 'nationality',
-            'ethnicity', 'religion', 'place_of_birth', 'phone_number'
+            'ethnicity', 'religion', 'place_of_birth', 'phone_number',
+            'current_parents'  # ADDED
         ]
         widgets = {
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -337,6 +505,31 @@ class StudentProfileForm(forms.ModelForm):
             'profile_picture': forms.FileInput(attrs={'class': 'form-control'}),
         }
     
+    def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        
+        # Set current parents for display
+        if self.instance and self.instance.pk:
+            parents = self.instance.parentguardian_set.all()
+            self.fields['current_parents'].queryset = parents
+            self.fields['current_parents'].initial = parents
+            
+            # Create display values with relationship info
+            parent_choices = []
+            for parent in parents:
+                display_name = f"{parent.user.get_full_name()} ({parent.get_relationship_display()})"
+                if parent.phone_number:
+                    display_name += f" - {parent.phone_number}"
+                parent_choices.append((parent.id, display_name))
+            
+            self.fields['current_parents'].choices = parent_choices
+        
+        # Make it read-only
+        self.fields['current_parents'].widget.attrs['readonly'] = True
+        self.fields['current_parents'].widget.attrs['class'] += ' bg-light'
+    
     def clean_phone_number(self):
         phone_number = self.cleaned_data.get('phone_number')
         if phone_number:
@@ -345,6 +538,7 @@ class StudentProfileForm(forms.ModelForm):
             if len(phone_number) != 10 or not phone_number.startswith('0'):
                 raise ValidationError("Phone number must be exactly 10 digits starting with 0")
         return phone_number
+
 
 
 # ===== TEACHER FORMS =====
@@ -410,6 +604,8 @@ class TeacherRegistrationForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
             self.fields['username'].required = False
@@ -568,15 +764,227 @@ class ClassAssignmentForm(forms.ModelForm):
 
 
 
+
+#Student Parent Assignment Form
+class StudentParentAssignmentForm(forms.Form):
+    """Form for assigning parents to students"""
+    
+    parents = forms.ModelMultipleChoiceField(
+        queryset=ParentGuardian.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={
+            'class': 'form-control select2-multiple',
+            'data-placeholder': 'Select parents to assign...',
+            'style': 'width: 100%'
+        }),
+        help_text="Select existing parents to assign to this student"
+    )
+    
+    create_new_parent = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input',
+            'id': 'create_new_parent_toggle'
+        }),
+        label="Create new parent/guardian"
+    )
+    
+    # Updated: Split full name into first_name and last_name
+    new_parent_first_name = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'First name'
+        }),
+        label="First Name"
+    )
+    
+    new_parent_last_name = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Last name'
+        }),
+        label="Last Name"
+    )
+    
+    new_parent_relationship = forms.ChoiceField(
+        choices=ParentGuardian.RELATIONSHIP_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Relationship"
+    )
+    
+    new_parent_phone = forms.CharField(
+        max_length=10,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '0241234567',
+            'pattern': r'0\d{9}'
+        }),
+        label="Phone Number",
+        help_text="10-digit number starting with 0"
+    )
+    
+    new_parent_email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'parent@example.com'
+        }),
+        label="Email Address"
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.student = kwargs.pop('student', None)
+        super().__init__(*args, **kwargs)
+        
+        # Filter to active parents
+        self.fields['parents'].queryset = ParentGuardian.objects.filter(
+            user__is_active=True
+        ).select_related('user').order_by('user__last_name', 'user__first_name')
+        
+        # FIX: Use the correct relationship name 'parents'
+        if self.student:
+            self.fields['parents'].initial = self.student.parents.all()
+
+    def clean_new_parent_phone(self):
+        phone = self.cleaned_data.get('new_parent_phone')
+        if phone:
+            # Remove any spaces or dashes
+            phone = phone.replace(' ', '').replace('-', '')
+            if len(phone) != 10 or not phone.startswith('0'):
+                raise ValidationError("Phone number must be exactly 10 digits starting with 0")
+            
+            # Check if phone already exists
+            if ParentGuardian.objects.filter(phone_number=phone).exists():
+                raise ValidationError("A parent with this phone number already exists")
+        
+        return phone
+
+    def clean_new_parent_email(self):
+        email = self.cleaned_data.get('new_parent_email')
+        if email:
+            email = email.lower()
+            if not re.match(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', email):
+                raise ValidationError("Please enter a valid email address.")
+            
+            # Check if email already exists
+            if User.objects.filter(email=email).exists():
+                raise ValidationError("This email is already associated with an existing user account.")
+        
+        return email
+
+    def clean(self):
+        cleaned_data = super().clean()
+        create_new = cleaned_data.get('create_new_parent')
+        new_parent_first_name = cleaned_data.get('new_parent_first_name')
+        new_parent_last_name = cleaned_data.get('new_parent_last_name')
+        new_parent_phone = cleaned_data.get('new_parent_phone')
+        new_parent_relationship = cleaned_data.get('new_parent_relationship')
+        
+        if create_new:
+            # Validate required fields for new parent creation
+            if not new_parent_first_name:
+                self.add_error('new_parent_first_name', 'First name is required when creating a new parent')
+            
+            if not new_parent_last_name:
+                self.add_error('new_parent_last_name', 'Last name is required when creating a new parent')
+            
+            if not new_parent_phone:
+                self.add_error('new_parent_phone', 'Phone number is required when creating a new parent')
+            
+            if not new_parent_relationship:
+                self.add_error('new_parent_relationship', 'Relationship is required when creating a new parent')
+            
+            # Validate that at least one parent is being assigned (existing or new)
+            selected_parents = cleaned_data.get('parents', [])
+            if not selected_parents and not (new_parent_first_name and new_parent_last_name and new_parent_phone):
+                raise ValidationError("Please either select existing parents or create a new parent.")
+        
+        return cleaned_data
+
+    def save(self):
+        """Save parent assignments"""
+        if not self.student:
+            return None
+            
+        # Assign selected existing parents
+        selected_parents = self.cleaned_data.get('parents', [])
+        self.student.parents.set(selected_parents)
+        
+        # Create new parent if requested
+        if self.cleaned_data.get('create_new_parent'):
+            try:
+                # Get form data
+                first_name = self.cleaned_data['new_parent_first_name'].strip()
+                last_name = self.cleaned_data['new_parent_last_name'].strip()
+                clean_phone = self.cleaned_data['new_parent_phone'].replace(' ', '').replace('-', '')
+                relationship = self.cleaned_data['new_parent_relationship']
+                email = self.cleaned_data.get('new_parent_email', '').strip()
+                
+                # Generate username from names
+                base_username = f"{first_name.lower()}.{last_name.lower()}".replace(' ', '')
+                
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                
+                # Create user account
+                user = User.objects.create_user(
+                    username=username,
+                    password='temp123',  # Temporary password
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email
+                )
+                
+                # Create parent guardian record
+                new_parent = ParentGuardian.objects.create(
+                    user=user,
+                    relationship=relationship,
+                    phone_number=clean_phone,
+                    email=email,
+                    account_status='active'  # Auto-activate new parent accounts
+                )
+                
+                # Add student to the new parent
+                new_parent.students.add(self.student)
+                
+                # Log the creation
+                logger.info(f"Created new parent {new_parent} for student {self.student}")
+                
+            except Exception as e:
+                logger.error(f"Error creating new parent for student {self.student}: {str(e)}")
+                raise ValidationError(f"Error creating new parent: {str(e)}")
+        
+        return self.student
+
+
 # ===== PARENT FORMS =====
 
 class ParentGuardianAddForm(forms.ModelForm):
-    full_name = forms.CharField(
-        max_length=200, 
+    # Remove full_name field and add first_name, last_name
+    first_name = forms.CharField(
+        max_length=100, 
         required=True, 
-        label="Full Name",
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., John Doe'})
+        label="First Name",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., John'})
     )
+    
+    last_name = forms.CharField(
+        max_length=100, 
+        required=True, 
+        label="Last Name",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Doe'})
+    )
+    
     phone_number = forms.CharField(
         max_length=10,
         required=True,
@@ -598,9 +1006,9 @@ class ParentGuardianAddForm(forms.ModelForm):
     class Meta:
         model = ParentGuardian
         fields = [
-            'full_name', 'relationship', 'phone_number', 'email', 
+            'relationship', 'phone_number', 'email', 
             'occupation', 'address', 'is_emergency_contact', 'emergency_contact_priority'
-        ]
+        ]  # Removed full_name from here
         widgets = {
             'occupation': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Teacher, Engineer'}),
             'relationship': forms.Select(attrs={'class': 'form-control'}),
@@ -640,18 +1048,11 @@ class ParentGuardianAddForm(forms.ModelForm):
         if parent.phone_number:
             parent.phone_number = parent.phone_number.replace(' ', '').replace('-', '')
         
-        full_name = self.cleaned_data['full_name'].strip()
-        name_parts = full_name.split()
-        
-        if len(name_parts) >= 2:
-            first_name = name_parts[0]
-            last_name = ' '.join(name_parts[1:])
-        else:
-            first_name = full_name
-            last_name = full_name
-        
-        username = self.generate_username()
+        first_name = self.cleaned_data['first_name'].strip()
+        last_name = self.cleaned_data['last_name'].strip()
         email = self.cleaned_data.get('email', '')
+        
+        username = self.generate_username(first_name, last_name, email)
         
         user = User.objects.create_user(
             username=username,
@@ -675,20 +1076,17 @@ class ParentGuardianAddForm(forms.ModelForm):
         
         return parent
     
-    def generate_username(self):
-        phone = self.cleaned_data.get('phone_number', '')
-        clean_phone = ''.join(filter(str.isdigit, phone)) if phone else ''
-        
-        base_username = f"parent_{clean_phone}" if clean_phone else f"parent_{int(timezone.now().timestamp())}"
+    def generate_username(self, first_name, last_name, email):
+        """Generate username from first name, last name, and email"""
+        base_username = f"{first_name.lower()}.{last_name.lower()}".replace(' ', '')
         
         username = base_username
         counter = 1
         while User.objects.filter(username=username).exists():
-            username = f"{base_username}_{counter}"
+            username = f"{base_username}{counter}"
             counter += 1
         
         return username
-
 
 # ===== ATTENDANCE FORMS =====
 
@@ -760,6 +1158,8 @@ class AttendancePeriodForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         self.fields['term'].queryset = AcademicTerm.objects.filter(is_active=True)
         
@@ -912,6 +1312,8 @@ class StudentAssignmentForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set required=False for fields that can be blank
         self.fields['score'].required = False
@@ -982,6 +1384,8 @@ class TeacherGradingForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         
         # Set max score based on assignment
@@ -1279,10 +1683,6 @@ class AttendanceFilterForm(forms.Form):
 
 # ===== GRADE FORMS =====
 
-# In core/forms.py - FIX THE GradeEntryForm CLASS
-
-# In core/forms.py - Update the GradeEntryForm class
-
 class GradeEntryForm(forms.ModelForm):
     class_level = forms.ChoiceField(
         choices=CLASS_LEVEL_CHOICES,
@@ -1457,53 +1857,100 @@ class GradeEntryForm(forms.ModelForm):
 
     def clean(self):
         """
-        Comprehensive validation including class_assignment handling
+        Comprehensive validation for grade entry including class level matching
         """
         cleaned_data = super().clean()
-        
-        # If there are already field errors, don't proceed with cross-field validation
-        if self.errors:
-            return cleaned_data
-            
         student = cleaned_data.get('student')
-        subject = cleaned_data.get('subject')
         class_level = cleaned_data.get('class_level')
+        subject = cleaned_data.get('subject')
         academic_year = cleaned_data.get('academic_year')
         term = cleaned_data.get('term')
-        
-        # Basic field validation
-        if not all([student, subject, class_level, academic_year, term]):
-            return cleaned_data
-        
-        # DEBUG: Log the values we're working with
-        print(f"DEBUG GradeEntryForm clean: Student: {student}, Subject: {subject}, Class Level: {class_level}, Academic Year: {academic_year}")
-        
-        # Handle class assignment - with enhanced error handling
-        try:
-            class_assignment = self.get_or_create_class_assignment(
-                class_level, subject, academic_year
-            )
+    
+        print(f"DEBUG GradeEntryForm clean: Student: {student} ({student.class_level if student else 'None'}), "
+              f"Selected Class Level: {class_level}, Subject: {subject}, "
+              f"Academic Year: {academic_year}, Term: {term}")
+
+        # Validate student-class level match (CRITICAL FIX)
+        if student and class_level:
+            if student.class_level != class_level:
+                student_class_display = student.get_class_level_display()
+                selected_class_display = dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
             
-            if class_assignment:
-                # Set the class_assignment on the instance
-                self.instance.class_assignment = class_assignment
-                print(f"DEBUG: Successfully assigned class_assignment: {class_assignment}")
-            else:
-                # Provide more detailed error information
-                error_msg = self.get_detailed_class_assignment_error(class_level, subject, academic_year)
-                raise ValidationError(error_msg)
-                
-        except Exception as e:
-            print(f"DEBUG: Error in class assignment handling: {str(e)}")
-            raise ValidationError(f"Error setting up class assignment: {str(e)}")
-        
+                raise ValidationError({
+                    'class_level': (
+                        f'Cannot assign {selected_class_display} to student {student.get_full_name()} '
+                        f'who is currently in {student_class_display}. '
+                        f'Please select the correct class level ({student_class_display}) for this student.'
+                    )
+                })
+    
+        # Validate subject availability for class level
+        if class_level and subject:
+            available_subjects = self.get_available_subjects_for_class_level(class_level)
+            if subject not in available_subjects:
+                raise ValidationError({
+                    'subject': (
+                        f'Subject "{subject.name}" is not available for {dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)}. '
+                        f'Please select a subject that is taught in this class level.'
+                    )
+                })
+    
         # Check for duplicate grades
-        self.validate_no_duplicate_grade(student, subject, academic_year, term)
+        if student and subject and academic_year and term:
+            existing_grade = Grade.objects.filter(
+                student=student,
+                subject=subject,
+                academic_year=academic_year,
+                term=term
+            ).exists()
         
-        # Validate scores don't exceed 100%
-        self.validate_total_score(cleaned_data)
-        
+            if existing_grade and not self.instance.pk:  # Only for new grades, not updates
+                raise ValidationError({
+                    '__all__': (
+                        f'A grade already exists for {student.get_full_name()} in {subject.name} '
+                        f'for {academic_year} Term {term}. Please update the existing grade instead.'
+                    )
+                })
+    
         return cleaned_data
+
+    def get_available_subjects_for_class_level(self, class_level):
+        """Get subjects available for a specific class level based on user role"""
+        try:
+            # Import is_teacher here to avoid circular imports
+            from .utils import is_teacher
+            
+            if hasattr(self, 'user') and is_teacher(self.user):
+                # For teachers, only show subjects they teach for that class level
+                return Subject.objects.filter(
+                    classassignment__class_level=class_level,
+                    classassignment__teacher=self.user.teacher,
+                    classassignment__is_active=True,
+                    is_active=True
+                ).distinct()
+            else:
+                # For admins, show all active subjects for that class level
+                return Subject.objects.filter(
+                    classassignment__class_level=class_level,
+                    classassignment__is_active=True,
+                    is_active=True
+                ).distinct()
+        except Exception as e:
+            print(f"DEBUG: Error getting available subjects: {e}")
+            return Subject.objects.none()
+
+    def clean_class_level(self):
+        """Additional validation for class level field"""
+        class_level = self.cleaned_data.get('class_level')
+        student = self.cleaned_data.get('student')
+        
+        if student and class_level and student.class_level != class_level:
+            # This should be caught in clean(), but added here for extra safety
+            raise ValidationError(
+                f'Class level must match student\'s current class ({student.get_class_level_display()})'
+            )
+        
+        return class_level
 
     def get_detailed_class_assignment_error(self, class_level, subject, academic_year):
         """Provide detailed error information about why class assignment failed"""
@@ -1663,8 +2110,34 @@ class GradeEntryForm(forms.ModelForm):
 
     def save(self, commit=True):
         """
-        Save the grade with calculated fields
+        Save the grade with calculated fields and auto-create class assignment
         """
+        # Ensure class_level is set from student if not already set
+        if self.instance.student and not self.instance.class_level:
+            self.instance.class_level = self.instance.student.class_level
+            print(f"DEBUG: Auto-set class_level to {self.instance.class_level} from student")
+        
+        # Auto-create class_assignment if not set
+        if (not self.instance.class_assignment_id and 
+            self.instance.student and 
+            self.instance.subject and 
+            self.instance.academic_year):
+            
+            try:
+                class_assignment = self.get_or_create_class_assignment(
+                    self.instance.class_level,
+                    self.instance.subject,
+                    self.instance.academic_year.replace('/', '-')
+                )
+                
+                if class_assignment:
+                    self.instance.class_assignment = class_assignment
+                    print(f"DEBUG: Auto-assigned class_assignment: {class_assignment}")
+                else:
+                    print("DEBUG: Could not create class assignment")
+            except Exception as e:
+                print(f"DEBUG: Error creating class assignment in save: {e}")
+        
         # Calculate total score and grades
         self.instance.calculate_total_score()
         self.instance.determine_grades()
@@ -1674,7 +2147,6 @@ class GradeEntryForm(forms.ModelForm):
             self.instance.recorded_by = self.user
     
         return super().save(commit=commit)
-
 
 class BulkGradeUploadForm(forms.Form):
     assignment = forms.ModelChoiceField(
@@ -2622,6 +3094,8 @@ class FeeDiscountForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default dates
         self.fields['start_date'].initial = timezone.now().date()
@@ -2729,6 +3203,8 @@ class FeeFilterForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set current academic year as default
         current_year = timezone.now().year
@@ -2797,6 +3273,8 @@ class FeeStatusReportForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default date range to current term
         self.fields['start_date'].initial = timezone.now().date().replace(day=1)
@@ -2851,6 +3329,8 @@ class BulkFeeGenerationForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default values
         current_year = timezone.now().year
@@ -2925,6 +3405,8 @@ class BillGenerationForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         current_year = timezone.now().year
         self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
@@ -3067,6 +3549,8 @@ class BillFilterForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set current academic year as default
         current_year = timezone.now().year
@@ -3097,6 +3581,8 @@ class BillUpdateForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Don't allow changing status to paid if there's still balance
         if self.instance and self.instance.balance > 0:
@@ -3175,6 +3661,8 @@ class DateRangeForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default date range (last 30 days)
         self.fields['start_date'].initial = timezone.now().date() - timezone.timedelta(days=30)
@@ -3278,6 +3766,40 @@ class ReportCardForm(forms.ModelForm):
                 )
 
         return cleaned_data
+    
+class ReportCardSelectionForm(forms.Form):
+    student = forms.ModelChoiceField(
+        queryset=Student.objects.filter(is_active=True),
+        required=True,
+        empty_label="Select a student...",
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'student-select'})
+    )
+    academic_year = forms.ChoiceField(
+        choices=[],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'academic-year-select'})
+    )
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'term-select'})
+    )
+    view_as = forms.ChoiceField(
+        choices=[('web', 'Web View'), ('pdf', 'PDF Download')],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'view-as-select'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        # Populate academic years dynamically
+        current_year = timezone.now().year
+        academic_years = []
+        for year in range(current_year - 2, current_year + 1):
+            academic_years.append((f"{year}/{year+1}", f"{year}/{year+1}"))
+        self.fields['academic_year'].choices = academic_years
 
 # ===== ANNOUNCEMENT FORMS =====
 
@@ -3456,6 +3978,8 @@ class FeeFilterForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         if not self.data.get('academic_year'):
             current_year = timezone.now().year
@@ -3508,6 +4032,8 @@ class AuditLogFilterForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default date range to last 30 days
         self.fields['start_date'].initial = timezone.now().date() - timedelta(days=30)
@@ -3595,6 +4121,8 @@ class FeeStatusReportForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set current academic year as default
         current_year = timezone.now().year
@@ -3940,6 +4468,8 @@ class TimetableForm(forms.ModelForm):
         }
         
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         current_year = timezone.now().year
         next_year = current_year + 1
@@ -4011,6 +4541,8 @@ class TimetableFilterForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         
         # Set current academic year as default
@@ -4134,6 +4666,8 @@ class BudgetForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set current academic year as default
         current_year = timezone.now().year
@@ -4198,7 +4732,7 @@ class UserBlockForm(forms.Form):
         return reason
 
 class MaintenanceModeForm(forms.Form):
-    """Form for enabling/disabling maintenance mode"""
+    """Form for enabling/disabling maintenance mode with admin bypass options"""
     MAINTENANCE_CHOICES = [
         ('enable', 'Enable Maintenance Mode'),
         ('disable', 'Disable Maintenance Mode'),
@@ -4217,6 +4751,23 @@ class MaintenanceModeForm(forms.Form):
         }),
         help_text="Optional custom message to display during maintenance"
     )
+    allow_staff_access = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input'
+        }),
+        help_text="Allow all staff users to access the system during maintenance"
+    )
+    allow_superuser_access = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input'
+        }),
+        help_text="Allow all superusers to access the system during maintenance"
+    )
+
 
 class UserSearchForm(forms.Form):
     """Form for searching users to block/unblock"""
@@ -4310,6 +4861,8 @@ class BulkFeeImportForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set current academic year as default
         current_year = timezone.now().year
@@ -4418,6 +4971,8 @@ class BulkFeeUpdateForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default due date to 30 days from now
         self.fields['new_due_date'].initial = timezone.now().date() + timedelta(days=30)
@@ -4537,6 +5092,8 @@ class BulkFeeCreationForm(forms.Form):
     )
     
     def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         # Set default values
         current_year = timezone.now().year
@@ -4583,4 +5140,11 @@ class BulkFeeCreationForm(forms.Form):
         if due_date and due_date < timezone.now().date():
             raise ValidationError("Due date cannot be in the past")
         return due_date
-    
+
+
+
+
+
+
+
+

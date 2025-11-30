@@ -8,67 +8,7 @@ from django.db.models import Avg, Sum, Count, Q
 from django.contrib import messages
 import logging
 from datetime import datetime, timedelta
-
-# Import models directly to avoid circular imports
-from core.models import (
-    Student, Teacher, Subject, AuditLog, ClassAssignment, 
-    Assignment, StudentAssignment, Grade, Fee, ParentGuardian, 
-    ParentAnnouncement, ParentMessage, Bill, BillPayment,
-    StudentAttendance, ParentEvent, AcademicTerm
-)
-
-logger = logging.getLogger(__name__)
-
-# Permission functions
-def is_admin(user):
-    return user.is_authenticated and (user.is_staff or user.is_superuser)
-
-def is_teacher(user):
-    return user.is_authenticated and hasattr(user, 'teacher')
-
-def is_student(user):
-    return user.is_authenticated and hasattr(user, 'student')
-
-def is_parent(user):
-    return user.is_authenticated and hasattr(user, 'parentguardian')
-
-# Utility functions for grade views
-def get_current_academic_year():
-    """Get current academic year in YYYY/YYYY format"""
-    now = timezone.now()
-    year = now.year
-    # Assuming academic year runs from September to August
-    if now.month >= 9:  # September or later
-        return f"{year}/{year + 1}"
-    else:  # January to August
-        return f"{year - 1}/{year}"
-
-def get_class_level_choices():
-    """Return standardized class level choices"""
-    return (
-        ('P1', 'Primary 1'),
-        ('P2', 'Primary 2'), 
-        ('P3', 'Primary 3'),
-        ('P4', 'Primary 4'),
-        ('P5', 'Primary 5'),
-        ('P6', 'Primary 6'),
-        ('J1', 'JHS 1'),
-        ('J2', 'JHS 2'),
-        ('J3', 'JHS 3'),
-    )
-
-# Base views
-from django.shortcuts import render, redirect
-from django.http import Http404, JsonResponse
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.urls import reverse_lazy
-from django.core.exceptions import PermissionDenied
-from django.utils import timezone
-from django.db.models import Avg, Sum, Count, Q
-from django.contrib import messages
-import logging
-from datetime import datetime, timedelta
-
+from ..permissions import is_admin, is_teacher, is_student, is_parent
 # Import models directly to avoid circular imports
 from core.models import (
     Student, Teacher, Subject, AuditLog, ClassAssignment, 

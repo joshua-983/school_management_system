@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Parent Registration - School Management System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .student-selection {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+    }
+    .student-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid #f8f9fa;
+        cursor: pointer;
+    }
+    .student-item:hover {
+        background-color: #f8f9fa;
+    }
+    .student-item.selected {
+        background-color: #e7f1ff;
+        border-left: 3px solid #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="card-title mb-0">
+                    <i class="bi bi-person-plus-fill me-2"></i>
+                    Parent Registration
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-info-circle me-2"></i>Important Information
+                    </h6>
+                    <p class="mb-0">
+                        Register as a parent to access your children's academic information, 
+                        attendance records, fee statements, and communicate with teachers.
+                    </p>
+                </div>
+
+                <form method="post" novalidate id="parentRegistrationForm">
+                    {% csrf_token %}
+                    
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        <h6 class="alert-heading">Please correct the following errors:</h6>
+                        <ul class="mb-0">
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <!-- Personal Information -->
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">Personal Information</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                                            First Name *
+                                        </label>
+                                        {{ form.first_name }}
+                                        {% if form.first_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.first_name.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                                            Last Name *
+                                        </label>
+                                        {{ form.last_name }}
+                                        {% if form.last_name.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.last_name.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label">
+                                    Email Address *
+                                </label>
+                                {{ form.email }}
+                                <div class="form-text">This will be your username for login</div>
+                                {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.email.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.phone_number.id_for_label }}" class="form-label">
+                                    Phone Number *
+                                </label>
+                                {{ form.phone_number }}
+                                {% if form.phone_number.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.phone_number.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.relationship.id_for_label }}" class="form-label">
+                                    Relationship to Student *
+                                </label>
+                                {{ form.relationship }}
+                                {% if form.relationship.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.relationship.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Account & Student Information -->
+                        <div class="col-md-6">
+                            <h5 class="border-bottom pb-2 mb-3">Account & Student Information</h5>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.occupation.id_for_label }}" class="form-label">
+                                    Occupation
+                                </label>
+                                {{ form.occupation }}
+                                {% if form.occupation.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.occupation.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.address.id_for_label }}" class="form-label">
+                                    Address
+                                </label>
+                                {{ form.address }}
+                                {% if form.address.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.address.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Password Fields -->
+                            <div class="mb-3">
+                                <label for="{{ form.password1.id_for_label }}" class="form-label">
+                                    Password *
+                                </label>
+                                {{ form.password1 }}
+                                {% if form.password1.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password1.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="{{ form.password2.id_for_label }}" class="form-label">
+                                    Confirm Password *
+                                </label>
+                                {{ form.password2 }}
+                                {% if form.password2.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password2.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Emergency Contact -->
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    {{ form.is_emergency_contact }}
+                                    <label class="form-check-label" for="{{ form.is_emergency_contact.id_for_label }}">
+                                        Primary Emergency Contact
+                                    </label>
+                                </div>
+                                <div class="form-text">
+                                    This parent will be contacted first in case of emergencies
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Student Selection Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2 mb-3">Student Selection</h5>
+                            <p class="text-muted">
+                                Select the student(s) you are a parent/guardian for. 
+                                You can select multiple students if you have multiple children in the school.
+                            </p>
+
+                            <!-- Student Search -->
+                            <div class="mb-3">
+                                <label class="form-label">Search Students</label>
+                                <input type="text" class="form-control" id="studentSearch" 
+                                       placeholder="Search by student name or ID...">
+                            </div>
+
+                            <!-- Student List -->
+                            <div class="student-selection mb-3" id="studentList">
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-arrow-repeat spinner"></i>
+                                    Loading students...
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="student_ids" id="selectedStudentIds" value="">
+
+                            <div class="alert alert-warning">
+                                <small>
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    You must select at least one student to complete registration.
+                                    If you cannot find your child, please contact the school administration.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terms Agreement -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                                <label class="form-check-label" for="agreeTerms">
+                                    I agree to the <a href="#" target="_blank">Terms of Service</a> and 
+                                    <a href="#" target="_blank">Privacy Policy</a>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <a href="{% url 'parent_login' %}" class="btn btn-outline-secondary me-md-2">
+                                    <i class="bi bi-arrow-left me-1"></i>
+                                    Back to Login
+                                </a>
+                                <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <i class="bi bi-person-plus me-1"></i>
+                                    Register Parent Account
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const studentSearch = document.getElementById('studentSearch');
+        const studentList = document.getElementById('studentList');
+        const selectedStudentIds = document.getElementById('selectedStudentIds');
+        const form = document.getElementById('parentRegistrationForm');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        let selectedStudents = new Set();
+        let allStudents = [];
+
+        // Load students
+        function loadStudents() {
+            fetch('/api/students/active/')  // You'll need to create this API endpoint
+                .then(response => response.json())
+                .then(data => {
+                    allStudents = data;
+                    renderStudents(data);
+                })
+                .catch(error => {
+                    studentList.innerHTML = `
+                        <div class="text-center text-danger">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Error loading students. Please refresh the page.
+                        </div>
+                    `;
+                });
+        }
+
+        // Render students list
+        function renderStudents(students) {
+            if (students.length === 0) {
+                studentList.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="bi bi-search me-1"></i>
+                        No students found matching your search.
+                    </div>
+                `;
+                return;
+            }
+
+            studentList.innerHTML = students.map(student => `
+                <div class="student-item ${selectedStudents.has(student.id) ? 'selected' : ''}" 
+                     data-student-id="${student.id}">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               ${selectedStudents.has(student.id) ? 'checked' : ''}
+                               onchange="toggleStudent('${student.id}', '${student.full_name}', this.checked)">
+                        <label class="form-check-label">
+                            <strong>${student.full_name}</strong> 
+                            <span class="text-muted">(${student.student_id})</span><br>
+                            <small class="text-muted">
+                                Class: ${student.class_level} | 
+                                Gender: ${student.gender}
+                            </small>
+                        </label>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Search functionality
+        studentSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const filteredStudents = allStudents.filter(student => 
+                student.full_name.toLowerCase().includes(searchTerm) ||
+                student.student_id.toLowerCase().includes(searchTerm)
+            );
+            renderStudents(filteredStudents);
+        });
+
+        // Toggle student selection
+        window.toggleStudent = function(studentId, studentName, isSelected) {
+            if (isSelected) {
+                selectedStudents.add(studentId);
+            } else {
+                selectedStudents.delete(studentId);
+            }
+            
+            selectedStudentIds.value = Array.from(selectedStudents).join(',');
+            renderStudents(allStudents.filter(student => 
+                student.full_name.toLowerCase().includes(studentSearch.value.toLowerCase()) ||
+                student.student_id.toLowerCase().includes(studentSearch.value.toLowerCase())
+            ));
+
+            // Update submit button state
+            updateSubmitButton();
+        };
+
+        // Update submit button state
+        function updateSubmitButton() {
+            const hasStudents = selectedStudents.size > 0;
+            const termsAgreed = document.getElementById('agreeTerms').checked;
+            
+            submitBtn.disabled = !hasStudents || !termsAgreed;
+            
+            if (!hasStudents) {
+                submitBtn.title = 'Please select at least one student';
+            } else if (!termsAgreed) {
+                submitBtn.title = 'Please agree to the terms and conditions';
+            } else {
+                submitBtn.title = '';
+            }
+        }
+
+        // Terms agreement listener
+        document.getElementById('agreeTerms').addEventListener('change', updateSubmitButton);
+
+        // Form submission validation
+        form.addEventListener('submit', function(e) {
+            if (selectedStudents.size === 0) {
+                e.preventDefault();
+                alert('Please select at least one student.');
+                return false;
+            }
+            
+            if (!document.getElementById('agreeTerms').checked) {
+                e.preventDefault();
+                alert('Please agree to the terms and conditions.');
+                return false;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="bi bi-arrow-repeat spinner"></i> Registering...';
+        });
+
+        // Initial load
+        loadStudents();
+        updateSubmitButton();
+    });
+</script>
+{% endblock %}

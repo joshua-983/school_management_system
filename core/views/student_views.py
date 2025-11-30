@@ -1,17 +1,21 @@
 from django.db.models import Q, Count, Avg, Sum
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView, FormView
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.utils import timezone
 from datetime import timedelta
+from django.db import transaction
+from django.shortcuts import get_object_or_404, redirect
+import logging
 
 from .base_views import *
-from ..forms import StudentProfileForm, StudentRegistrationForm
-from ..models import Student, ClassAssignment, StudentAttendance, Fee, Grade, AcademicTerm, StudentAssignment, Timetable
+from ..forms import StudentProfileForm, StudentRegistrationForm, StudentParentAssignmentForm
+from ..models import Student, ClassAssignment, StudentAttendance, Fee, Grade, AcademicTerm, StudentAssignment, Timetable, FeePayment, Bill, BillPayment, BillItem, FeeInstallment, FeeDiscount
 
+logger = logging.getLogger(__name__)
 
 CLASS_LEVEL_CHOICES = [
     ('P1', 'Primary 1'),
@@ -25,7 +29,6 @@ CLASS_LEVEL_CHOICES = [
     ('J3', 'JHS 3'),
 ]
 
-@method_decorator(cache_page(60*15), name='dispatch')
 class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Student
     template_name = 'core/students/student_list.html'
@@ -35,10 +38,18 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # Get ALL students without any caching for debugging
+        queryset = Student.objects.all()
+        
         class_level = self.request.GET.get('class_level')
         if class_level:
             queryset = queryset.filter(class_level=class_level)
+        
+        # DEBUG: Print detailed student information
+        print(f"🔍 [STUDENT LIST DEBUG] Total students in database: {queryset.count()}")
+        students_info = list(queryset.values_list('id', 'student_id', 'first_name', 'last_name', 'class_level', 'is_active'))
+        print(f"🔍 [STUDENT LIST DEBUG] Students in queryset: {students_info}")
+        
         return queryset
     
     def get_context_data(self, **kwargs):
@@ -66,12 +77,16 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             item['class_level']: item['count'] for item in class_distribution
         }
         
+        # DEBUG: Print context data
+        print(f"🔍 [STUDENT LIST DEBUG] Context total_students: {context['total_students']}")
+        print(f"🔍 [STUDENT LIST DEBUG] Students in context: {list(context['students'].values_list('id', 'student_id'))}")
+        
         return context
 
 
 class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
-    template_name = 'core/students/student_detail.html'  # Add 'templates/'
+    template_name = 'core/students/student_detail.html'
     context_object_name = 'student'
     
     def test_func(self):
@@ -90,10 +105,78 @@ class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         student = self.get_object()
+        
+        # Attendance statistics
         context['present_count'] = student.attendances.filter(status='present').count()
         context['absent_count'] = student.attendances.filter(status='absent').count()
         context['total_count'] = student.attendances.count()
+        
+        # Parent information
+        context['parents'] = student.parents.all().select_related('user')
+        context['parent_form'] = StudentParentAssignmentForm(student=self.object)
+        context['can_manage_parents'] = is_admin(self.request.user)
+        
+        # Parent statistics
+        context['parents_with_accounts'] = student.parents.filter(user__isnull=False).count()
+        context['active_parents'] = student.parents.filter(account_status='active').count()
+        
         return context
+    
+    def post(self, request, *args, **kwargs):
+        """Handle parent management actions"""
+        if not is_admin(request.user):
+            raise PermissionDenied("Only admins can manage parents")
+        
+        self.object = self.get_object()
+        action = request.POST.get('action')
+        
+        if action == 'add_parent':
+            return self.add_parent(request)
+        elif action == 'remove_parent':
+            return self.remove_parent(request)
+        elif action == 'create_parent':
+            return self.create_parent(request)
+        
+        messages.error(request, 'Invalid action')
+        return redirect('student_detail', pk=self.object.pk)
+    
+    def add_parent(self, request):
+        """Add existing parent to student"""
+        parent_id = request.POST.get('parent_id')
+        try:
+            parent = ParentGuardian.objects.get(pk=parent_id)
+            self.object.parents.add(parent)
+            messages.success(request, f'Added {parent.get_user_full_name()} as parent')
+        except ParentGuardian.DoesNotExist:
+            messages.error(request, 'Parent not found')
+        
+        return redirect('student_detail', pk=self.object.pk)
+    
+    def remove_parent(self, request):
+        """Remove parent from student"""
+        parent_id = request.POST.get('parent_id')
+        try:
+            parent = ParentGuardian.objects.get(pk=parent_id)
+            self.object.parents.remove(parent)
+            messages.success(request, f'Removed {parent.get_user_full_name()} from parents')
+        except ParentGuardian.DoesNotExist:
+            messages.error(request, 'Parent not found')
+        
+        return redirect('student_detail', pk=self.object.pk)
+    
+    def create_parent(self, request):
+        """Create new parent for student"""
+        form = StudentParentAssignmentForm(request.POST, student=self.object)
+        if form.is_valid():
+            try:
+                form.save()
+                messages.success(request, 'Parent created and linked successfully')
+            except Exception as e:
+                messages.error(request, f'Error creating parent: {str(e)}')
+        else:
+            messages.error(request, 'Please correct the errors in the form')
+        
+        return redirect('student_detail', pk=self.object.pk)
 
 class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Student
@@ -104,14 +187,84 @@ class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
+    def get_form_kwargs(self):
+        """Add request to form kwargs for parent creation"""
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request
+        return kwargs
+    
+    def get_context_data(self, **kwargs):
+        """Add parent statistics to context"""
+        context = super().get_context_data(**kwargs)
+        # Add parent statistics for the template
+        context['total_parents'] = ParentGuardian.objects.count()
+        context['active_parents'] = ParentGuardian.objects.filter(account_status='active').count()
+        return context
+    
     def form_valid(self, form):
         try:
-            response = super().form_valid(form)
-            messages.success(self.request, f'Student {self.object.get_full_name()} created successfully!')
-            return response
+            with transaction.atomic():
+                # Save the student first
+                self.object = form.save()
+                
+                # Handle parent creation/linking
+                create_parent_account = form.cleaned_data.get('create_parent_account', False)
+                selected_parents = form.cleaned_data.get('parents', [])
+                
+                # Link selected existing parents
+                if selected_parents:
+                    self.object.parents.set(selected_parents)
+                    messages.info(self.request, f'Linked {len(selected_parents)} existing parents to student')
+                
+                # Create new parent account if requested
+                if create_parent_account:
+                    self.create_parent_from_student(form)
+                
+                messages.success(self.request, f'Student {self.object.get_full_name()} created successfully!')
+                return redirect(self.get_success_url())
+                
         except Exception as e:
             messages.error(self.request, f'Error creating student: {str(e)}')
             return self.form_invalid(form)
+    
+    def create_parent_from_student(self, form):
+        """Create a parent account based on student information"""
+        try:
+            student = self.object
+            
+            # Generate parent email if not provided in form
+            parent_email = form.cleaned_data.get('parent_email')
+            if not parent_email:
+                parent_email = f"parent.{student.student_id}@school.edu.gh"
+            
+            # Generate parent phone if not provided
+            parent_phone = form.cleaned_data.get('parent_phone')
+            if not parent_phone:
+                parent_phone = "0240000000"  # Default placeholder
+            
+            # Create parent record
+            parent = ParentGuardian.objects.create(
+                relationship=form.cleaned_data.get('parent_relationship', 'G'),
+                email=parent_email,
+                phone_number=parent_phone,
+                account_status='pending'
+            )
+            
+            # Link parent to student
+            parent.students.add(student)
+            
+            # Create user account for parent
+            if parent_email and parent_email != "parent.{student.student_id}@school.edu.gh":
+                try:
+                    parent.create_user_account()
+                    messages.info(self.request, f'Created parent account for {parent_email}')
+                except Exception as e:
+                    messages.warning(self.request, f'Could not create user account for parent: {str(e)}')
+            
+            messages.success(self.request, 'Parent account created successfully')
+            
+        except Exception as e:
+            messages.error(self.request, f'Error creating parent account: {str(e)}')
     
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
@@ -140,86 +293,168 @@ class StudentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def test_func(self):
         return is_admin(self.request.user)
     
+    def get_object(self, queryset=None):
+        """Override to handle already deleted students"""
+        try:
+            obj = super().get_object(queryset)
+            print(f"🔍 [DELETE DEBUG] StudentDeleteView.get_object() - Found student: ID={obj.id}, Name={obj.get_full_name()}, StudentID={obj.student_id}")
+            return obj
+        except Student.DoesNotExist:
+            print(f"🔍 [DELETE DEBUG] StudentDeleteView.get_object() - Student with pk={self.kwargs.get('pk')} does not exist")
+            return None
+    
+    def get(self, request, *args, **kwargs):
+        """Handle GET requests for delete confirmation"""
+        print(f"🔍 [DELETE DEBUG] StudentDeleteView.get() - Processing GET request for student deletion")
+        self.object = self.get_object()
+        if self.object is None:
+            messages.error(request, 'Student not found or already deleted.')
+            return redirect('student_list')
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
+    
     def delete(self, request, *args, **kwargs):
+        print(f"🔍 [DELETE DEBUG] StudentDeleteView.delete() - Starting deletion process")
+        
         try:
             self.object = self.get_object()
+            
+            # If student doesn't exist, just redirect
+            if self.object is None:
+                print(f"🔍 [DELETE DEBUG] Student object is None - student already deleted")
+                messages.info(request, 'Student was already deleted.')
+                return redirect('student_list')
+            
             student_id = self.object.student_id
             student_name = self.object.get_full_name()
+            student_db_id = self.object.id
             
-            print(f"Starting deletion process for student: {student_name} ({student_id})")
+            print(f"🚀 [DELETE DEBUG] Starting safe deletion process for student:")
+            print(f"   - Database ID: {student_db_id}")
+            print(f"   - Student ID: {student_id}")
+            print(f"   - Name: {student_name}")
             
-            # USE RAW SQL TO BYPASS ALL DATABASE SCHEMA ISSUES
-            from django.db import connection
+            # Verify student exists in database before starting deletion
+            pre_deletion_check = Student.objects.filter(id=student_db_id).exists()
+            print(f"🔍 [DELETE DEBUG] Pre-deletion database check - Student exists: {pre_deletion_check}")
             
-            with connection.cursor() as cursor:
-                student_id_param = [self.object.id]
+            if not pre_deletion_check:
+                messages.error(request, 'Student not found in database.')
+                return redirect('student_list')
+            
+            # Use Django ORM with transaction safety
+            with transaction.atomic():
+                print(f"🔍 [DELETE DEBUG] Transaction started")
                 
-                # DELETE IN CORRECT ORDER TO RESPECT FOREIGN KEY CONSTRAINTS
+                # Get all related objects first with counts
+                student_fees = Fee.objects.filter(student=self.object)
+                student_bills = Bill.objects.filter(student=self.object)
+                student_grades = Grade.objects.filter(student=self.object)
+                student_assignments = StudentAssignment.objects.filter(student=self.object)
+                student_attendance = StudentAttendance.objects.filter(student=self.object)
+                student_discounts = FeeDiscount.objects.filter(student=self.object)
                 
-                # 1. First delete FeePayment records (they depend on Fee and Bill)
-                cursor.execute("DELETE FROM core_feepayment WHERE fee_id IN (SELECT id FROM core_fee WHERE student_id = %s)", student_id_param)
-                cursor.execute("DELETE FROM core_feepayment WHERE bill_id IN (SELECT id FROM core_bill WHERE student_id = %s)", student_id_param)
-                print("✅ Deleted FeePayment records")
+                print(f"🔍 [DELETE DEBUG] Related records found:")
+                print(f"   - Fees: {student_fees.count()}")
+                print(f"   - Bills: {student_bills.count()}")
+                print(f"   - Grades: {student_grades.count()}")
+                print(f"   - Assignments: {student_assignments.count()}")
+                print(f"   - Attendance: {student_attendance.count()}")
+                print(f"   - Discounts: {student_discounts.count()}")
                 
-                # 2. Delete BillPayment records (they depend on Bill)
-                cursor.execute("DELETE FROM core_billpayment WHERE bill_id IN (SELECT id FROM core_bill WHERE student_id = %s)", student_id_param)
-                print("✅ Deleted BillPayment records")
+                # Delete in proper order to respect foreign key constraints
                 
-                # 3. Delete BillItem records (they depend on Bill)
-                cursor.execute("DELETE FROM core_billitem WHERE bill_id IN (SELECT id FROM core_bill WHERE student_id = %s)", student_id_param)
-                print("✅ Deleted BillItem records")
+                # 1. Delete FeePayment records
+                fee_payments = FeePayment.objects.filter(
+                    Q(fee__in=student_fees) | Q(bill__in=student_bills)
+                )
+                fee_payments_count = fee_payments.count()
+                fee_payments.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {fee_payments_count} FeePayment records")
                 
-                # 4. Delete FeeInstallment records (they depend on Fee)
-                cursor.execute("DELETE FROM core_feeinstallment WHERE fee_id IN (SELECT id FROM core_fee WHERE student_id = %s)", student_id_param)
-                print("✅ Deleted FeeInstallment records")
+                # 2. Delete BillPayment records
+                bill_payments = BillPayment.objects.filter(bill__in=student_bills)
+                bill_payments_count = bill_payments.count()
+                bill_payments.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {bill_payments_count} BillPayment records")
+                
+                # 3. Delete BillItem records
+                bill_items = BillItem.objects.filter(bill__in=student_bills)
+                bill_items_count = bill_items.count()
+                bill_items.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {bill_items_count} BillItem records")
+                
+                # 4. Delete FeeInstallment records
+                fee_installments = FeeInstallment.objects.filter(fee__in=student_fees)
+                fee_installments_count = fee_installments.count()
+                fee_installments.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {fee_installments_count} FeeInstallment records")
                 
                 # 5. Delete FeeDiscount records
-                cursor.execute("DELETE FROM core_feediscount WHERE student_id = %s", student_id_param)
-                print("✅ Deleted FeeDiscount records")
+                fee_discounts_count = student_discounts.count()
+                student_discounts.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {fee_discounts_count} FeeDiscount records")
                 
                 # 6. Delete Bill records
-                cursor.execute("DELETE FROM core_bill WHERE student_id = %s", student_id_param)
-                print("✅ Deleted Bill records")
+                bills_count = student_bills.count()
+                student_bills.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {bills_count} Bill records")
                 
                 # 7. Delete Fee records
-                cursor.execute("DELETE FROM core_fee WHERE student_id = %s", student_id_param)
-                print("✅ Deleted Fee records")
+                fees_count = student_fees.count()
+                student_fees.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {fees_count} Fee records")
                 
                 # 8. Delete Grade records
-                cursor.execute("DELETE FROM core_grade WHERE student_id = %s", student_id_param)
-                print("✅ Deleted Grade records")
+                grades_count = student_grades.count()
+                student_grades.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {grades_count} Grade records")
                 
                 # 9. Delete StudentAssignment records
-                cursor.execute("DELETE FROM core_studentassignment WHERE student_id = %s", student_id_param)
-                print("✅ Deleted StudentAssignment records")
+                assignments_count = student_assignments.count()
+                student_assignments.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {assignments_count} StudentAssignment records")
                 
                 # 10. Delete StudentAttendance records
-                cursor.execute("DELETE FROM core_studentattendance WHERE student_id = %s", student_id_param)
-                print("✅ Deleted StudentAttendance records")
+                attendance_count = student_attendance.count()
+                student_attendance.delete()
+                print(f"✅ [DELETE DEBUG] Deleted {attendance_count} StudentAttendance records")
                 
-                # 11. Delete many-to-many relationships
-                cursor.execute("DELETE FROM core_student_parentguardian WHERE student_id = %s", student_id_param)
-                print("✅ Deleted parent relationships")
+                # 11. Clear many-to-many relationships
+                parent_count = self.object.parentguardian_set.count()
+                self.object.parentguardian_set.clear()
+                print(f"✅ [DELETE DEBUG] Cleared {parent_count} parent relationships")
                 
                 # 12. Finally delete the student
-                cursor.execute("DELETE FROM core_student WHERE id = %s", student_id_param)
-                print(f"✅ Successfully deleted student: {student_name} ({student_id})")
-            
+                print(f"🔍 [DELETE DEBUG] About to delete student record...")
+                result = super().delete(request, *args, **kwargs)
+                print(f"✅ [DELETE DEBUG] Successfully deleted student: {student_name} ({student_id})")
+                
+                # Verify deletion
+                post_deletion_check = Student.objects.filter(id=student_db_id).exists()
+                print(f"🔍 [DELETE DEBUG] Post-deletion check - Student still exists: {post_deletion_check}")
+                
+                if post_deletion_check:
+                    print(f"❌ [DELETE DEBUG] Student deletion failed - student still exists in database!")
+                    raise Exception("Student deletion failed - record still exists")
+                
+            print(f"🎉 [DELETE DEBUG] Student deletion completed successfully")
             messages.success(request, f'Student {student_name} ({student_id}) deleted successfully')
+            return result
             
         except Exception as e:
             error_msg = f'Error deleting student: {str(e)}'
-            print(f"❌ {error_msg}")
+            print(f"❌ [DELETE DEBUG] {error_msg}")
+            import traceback
+            print(f"❌ [DELETE DEBUG] Traceback: {traceback.format_exc()}")
             messages.error(request, error_msg)
             return redirect('student_list')
-        
-        return redirect(self.success_url)
 
 
 # student profile view
 class StudentProfileView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Student
-    form_class = StudentProfileForm  # You'll need to create this form
+    form_class = StudentProfileForm
     template_name = 'core/students/student_profile.html'
     
     def test_func(self):
@@ -256,7 +491,7 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = StudentAttendance
     template_name = 'core/students/student_attendance.html'
     context_object_name = 'attendances'
-    paginate_by = 20  # Add pagination
+    paginate_by = 20
     
     def test_func(self):
         return is_student(self.request.user)
@@ -279,7 +514,7 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         )
         
         # Calculate percentages for the stats
-        total = attendance_stats['total'] or 1  # Avoid division by zero
+        total = attendance_stats['total'] or 1
         attendance_stats['present_percentage'] = round((attendance_stats['present'] / total) * 100)
         attendance_stats['absent_percentage'] = round((attendance_stats['absent'] / total) * 100)
         attendance_stats['late_percentage'] = round((attendance_stats['late'] / total) * 100)
@@ -293,7 +528,7 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         ).values('month').annotate(
             present=Count('id', filter=Q(status='present')),
             total=Count('id')
-        ).order_by('-month')[:6]  # Last 6 months
+        ).order_by('-month')[:6]
         
         # Calculate percentages for monthly summary
         for month in monthly_summary:
@@ -326,14 +561,14 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         current_date = timezone.now().date()
         
         # Check consecutive days from today backwards
-        for i in range(30):  # Check up to 30 days back
+        for i in range(30):
             check_date = current_date - timedelta(days=i)
             day_attendance = recent_attendances.filter(date=check_date).first()
             
             if day_attendance and day_attendance.status == 'present':
                 streak += 1
             else:
-                break  # Streak broken
+                break
         
         return streak
 
@@ -407,12 +642,15 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         context = super().get_context_data(**kwargs)
         student = self.request.user.student
         
+        # DEBUG: Print student information
+        print(f"🔍 [DASHBOARD DEBUG] Loading dashboard for student: {student.get_full_name()} (ID: {student.id})")
+        
         # Get current academic year and term
         current_year = timezone.now().year
         academic_year = f"{current_year}/{current_year + 1}"
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         
-        # ENHANCED: Get assignments with better organization
+        # Get assignments with better organization
         assignments = StudentAssignment.objects.filter(
             student=student
         ).select_related(
@@ -421,7 +659,7 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'assignment__class_assignment'
         ).order_by('assignment__due_date')
         
-        # ENHANCED: Categorize assignments for better UX
+        # Categorize assignments for better UX
         today = timezone.now()
         context['overdue_assignments'] = [
             sa for sa in assignments 
@@ -457,7 +695,7 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         graded_assignments = len([a for a in assignments if a.status == 'GRADED'])
         due_soon_assignments = len(context['due_soon_assignments'])
         
-        # IMPROVED FEE SECTION - Comprehensive fee data
+        # Comprehensive fee data
         fees = Fee.objects.filter(student=student).select_related('category')
         
         # Calculate fee totals with proper handling of None values
@@ -601,7 +839,7 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'average_grade': round(average_grade, 1),
             'recent_grades': recent_grades,
             
-            # IMPROVED FEE DATA - Comprehensive fee information
+            # Fee data
             'fee_status': fee_status,
             'fee_status_class': fee_status_class,
             'fee_status_icon': fee_status_icon,
@@ -629,3 +867,69 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         })
         
         return context
+
+
+class ReportCardFormView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/report_card_form.html'
+    
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class StudentParentManagementView(LoginRequiredMixin, UserPassesTestMixin, FormView):
+    """Enhanced view for managing student-parent relationships"""
+    template_name = 'core/students/student_parent_management.html'
+    form_class = StudentParentAssignmentForm
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['student'] = self.get_student()
+        return kwargs
+    
+    def get_student(self):
+        """Get the student object"""
+        return get_object_or_404(Student, pk=self.kwargs['pk'])
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.get_student()
+        
+        # Get all parents (for linking existing ones)
+        all_parents = ParentGuardian.objects.all().select_related('user')
+        
+        context.update({
+            'student': student,
+            'current_parents': student.parents.all().select_related('user'),
+            'available_parents': all_parents.exclude(id__in=student.parents.values_list('id', flat=True)),
+            'parent_stats': {
+                'total': all_parents.count(),
+                'with_accounts': all_parents.filter(user__isnull=False).count(),
+                'active': all_parents.filter(account_status='active').count(),
+            }
+        })
+        return context
+    
+    def form_valid(self, form):
+        student = self.get_student()
+        try:
+            with transaction.atomic():
+                result = form.save()
+                
+                if result:
+                    messages.success(self.request, f'Parent assignments updated successfully for {student.get_full_name()}')
+                else:
+                    messages.info(self.request, 'No changes made to parent assignments')
+                    
+                return redirect('student_detail', pk=student.pk)
+                
+        except Exception as e:
+            logger.error(f"Error updating parent assignments: {str(e)}")
+            messages.error(self.request, f'Error updating parent assignments: {str(e)}')
+            return self.form_invalid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('student_detail', kwargs={'pk': self.kwargs['pk']})
+

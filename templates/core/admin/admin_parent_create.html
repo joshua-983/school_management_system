@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Parent Account - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-person-plus me-2 text-primary"></i>
+            Create Parent Account
+        </h1>
+        <div class="btn-group">
+            <a href="{% url 'parent_management_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Parent Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="parentForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row">
+                            <!-- Personal Information -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">Personal Information</h6>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">First Name *</label>
+                                    {{ form.first_name }}
+                                    {% if form.first_name.errors %}
+                                    <div class="text-danger small">{{ form.first_name.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Last Name *</label>
+                                    {{ form.last_name }}
+                                    {% if form.last_name.errors %}
+                                    <div class="text-danger small">{{ form.last_name.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Email *</label>
+                                    {{ form.email }}
+                                    {% if form.email.errors %}
+                                    <div class="text-danger small">{{ form.email.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Phone Number *</label>
+                                    {{ form.phone_number }}
+                                    {% if form.phone_number.errors %}
+                                    <div class="text-danger small">{{ form.phone_number.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">Additional Information</h6>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Relationship</label>
+                                    {{ form.relationship }}
+                                    {% if form.relationship.errors %}
+                                    <div class="text-danger small">{{ form.relationship.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Occupation</label>
+                                    {{ form.occupation }}
+                                    {% if form.occupation.errors %}
+                                    <div class="text-danger small">{{ form.occupation.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Address</label>
+                                    {{ form.address }}
+                                    {% if form.address.errors %}
+                                    <div class="text-danger small">{{ form.address.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="mb-3 form-check">
+                                    {{ form.is_emergency_contact }}
+                                    <label class="form-check-label">Is Emergency Contact</label>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Emergency Contact Priority</label>
+                                    {{ form.emergency_contact_priority }}
+                                    {% if form.emergency_contact_priority.errors %}
+                                    <div class="text-danger small">{{ form.emergency_contact_priority.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Student Selection -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">Student Association</h6>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Associated Students *</label>
+                                    {{ form.students }}
+                                    {% if form.students.errors %}
+                                    <div class="text-danger small">{{ form.students.errors }}</div>
+                                    {% endif %}
+                                    <div class="form-text">Select one or more students to associate with this parent</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Account Options -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">Account Options</h6>
+                                
+                                <div class="mb-3 form-check">
+                                    {{ form.create_user_account }}
+                                    <label class="form-check-label">Create User Account for Parent Login</label>
+                                </div>
+                                
+                                <div id="accountFields" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Username</label>
+                                                {{ form.username }}
+                                                <div class="form-text">Leave blank to auto-generate from name</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Password</label>
+                                                {{ form.password }}
+                                                <div class="form-text">Leave blank to auto-generate random password</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3 form-check">
+                                    {{ form.send_activation_email }}
+                                    <label class="form-check-label">Send Activation Email</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Create Parent Account
+                            </button>
+                            <a href="{% url 'parent_management_dashboard' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-1"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Quick Tips
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6>Creating Parent Accounts</h6>
+                        <ul class="mb-0">
+                            <li>Select at least one student to associate with the parent</li>
+                            <li>Enable "Create User Account" to allow parent login</li>
+                            <li>Auto-generated passwords will be emailed to parents</li>
+                            <li>Parents can update their profiles after first login</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <h6>Important Notes</h6>
+                        <ul class="mb-0">
+                            <li>Email addresses must be unique</li>
+                            <li>Phone numbers must be 10 digits starting with 0</li>
+                            <li>Emergency contacts receive priority notifications</li>
+                            <li>Parents can be associated with multiple students</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle account fields based on checkbox
+    const createAccountCheckbox = document.getElementById('id_create_user_account');
+    const accountFields = document.getElementById('accountFields');
+    
+    function toggleAccountFields() {
+        if (createAccountCheckbox.checked) {
+            accountFields.style.display = 'block';
+        } else {
+            accountFields.style.display = 'none';
+        }
+    }
+    
+    createAccountCheckbox.addEventListener('change', toggleAccountFields);
+    toggleAccountFields(); // Initial state
+    
+    // Initialize Select2 for student selection
+    if (typeof $ !== 'undefined') {
+        $('#id_students').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select students...',
+            allowClear: true
+        });
+    }
+});
+</script>
+{% endblock %}

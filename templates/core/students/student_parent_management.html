@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Parents - {{ student.get_full_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="bi bi-people-fill me-2"></i>
+                        Manage Parents/Guardians for {{ student.get_full_name }}
+                    </h4>
+                    <p class="text-muted mb-0">Student ID: {{ student.student_id }} | Class: {{ student.get_class_level_display }}</p>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="parentAssignmentForm">
+                        {% csrf_token %}
+                        
+                        <!-- Existing Parents Selection -->
+                        <div class="mb-4">
+                            <h5 class="mb-3">
+                                <i class="bi bi-list-check me-2"></i>Select Existing Parents
+                            </h5>
+                            <div class="form-group">
+                                {{ form.parents.label_tag }}
+                                {{ form.parents }}
+                                {% if form.parents.help_text %}
+                                <small class="form-text text-muted">{{ form.parents.help_text }}</small>
+                                {% endif %}
+                                {% if form.parents.errors %}
+                                <div class="alert alert-danger mt-2">
+                                    {{ form.parents.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Create New Parent Option -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                {{ form.create_new_parent }}
+                                <label class="form-check-label" for="{{ form.create_new_parent.id_for_label }}">
+                                    <strong>{{ form.create_new_parent.label }}</strong>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">Check this to create a new parent/guardian</small>
+                        </div>
+
+                        <!-- New Parent Fields (Initially Hidden) -->
+                        <div id="newParentFields" class="border rounded p-3 mb-4" style="display: none;">
+                            <h5 class="mb-3 text-primary">
+                                <i class="bi bi-person-plus me-2"></i>New Parent Information
+                            </h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        {{ form.new_parent_full_name.label_tag }}
+                                        {{ form.new_parent_full_name }}
+                                        {% if form.new_parent_full_name.errors %}
+                                        <div class="alert alert-danger mt-2">
+                                            {{ form.new_parent_full_name.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        {{ form.new_parent_relationship.label_tag }}
+                                        {{ form.new_parent_relationship }}
+                                        {% if form.new_parent_relationship.errors %}
+                                        <div class="alert alert-danger mt-2">
+                                            {{ form.new_parent_relationship.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        {{ form.new_parent_phone.label_tag }}
+                                        {{ form.new_parent_phone }}
+                                        {% if form.new_parent_phone.help_text %}
+                                        <small class="form-text text-muted">{{ form.new_parent_phone.help_text }}</small>
+                                        {% endif %}
+                                        {% if form.new_parent_phone.errors %}
+                                        <div class="alert alert-danger mt-2">
+                                            {{ form.new_parent_phone.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        {{ form.new_parent_email.label_tag }}
+                                        {{ form.new_parent_email }}
+                                        {% if form.new_parent_email.errors %}
+                                        <div class="alert alert-danger mt-2">
+                                            {{ form.new_parent_email.errors }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Parents Display -->
+                        {% if current_parents %}
+                        <div class="mb-4">
+                            <h5 class="mb-3">
+                                <i class="bi bi-people me-2"></i>Currently Assigned Parents
+                            </h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Relationship</th>
+                                            <th>Phone</th>
+                                            <th>Email</th>
+                                            <th>Emergency Contact</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for parent in current_parents %}
+                                        <tr>
+                                            <td>{{ parent.user.get_full_name }}</td>
+                                            <td>
+                                                <span class="badge bg-secondary">{{ parent.get_relationship_display }}</span>
+                                            </td>
+                                            <td>{{ parent.phone_number|default:"-" }}</td>
+                                            <td>{{ parent.email|default:"-" }}</td>
+                                            <td>
+                                                {% if parent.is_emergency_contact %}
+                                                <span class="badge bg-success">Yes</span>
+                                                {% else %}
+                                                <span class="badge bg-light text-dark">No</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{% url 'student_detail' student.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left me-1"></i>Back to Student Details
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i>Save Parent Assignments
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle new parent fields
+    const toggleCheckbox = document.getElementById('{{ form.create_new_parent.id_for_label }}');
+    const newParentFields = document.getElementById('newParentFields');
+    
+    function toggleNewParentFields() {
+        if (toggleCheckbox.checked) {
+            newParentFields.style.display = 'block';
+            // Make new parent fields required
+            document.getElementById('{{ form.new_parent_full_name.id_for_label }}').required = true;
+            document.getElementById('{{ form.new_parent_phone.id_for_label }}').required = true;
+        } else {
+            newParentFields.style.display = 'none';
+            // Make new parent fields not required
+            document.getElementById('{{ form.new_parent_full_name.id_for_label }}').required = false;
+            document.getElementById('{{ form.new_parent_phone.id_for_label }}').required = false;
+        }
+    }
+    
+    toggleCheckbox.addEventListener('change', toggleNewParentFields);
+    toggleNewParentFields(); // Initial state
+    
+    // Initialize Select2 for parent selection
+    if (typeof $ !== 'undefined') {
+        $('.select2-multiple').select2({
+            placeholder: "Select parents...",
+            allowClear: true
+        });
+    }
+});
+</script>
+{% endblock %}

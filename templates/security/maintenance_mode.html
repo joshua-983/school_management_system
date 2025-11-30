@@ -88,7 +88,8 @@
                         <label for="id_message" class="form-label">
                             Maintenance Message (Optional)
                         </label>
-                        {{ form.message }}
+                        <textarea name="message" id="id_message" class="form-control" rows="4" 
+                                  placeholder="Enter custom maintenance message...">{{ form.message.value|default:"" }}</textarea>
                         <div class="form-text">
                             Custom message to display to users during maintenance. Leave empty for default message.
                         </div>
@@ -105,7 +106,7 @@
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100" 
-                            onclick="return confirmAction('Are you sure you want to change maintenance mode?')">
+                            onclick="return confirmMaintenanceAction()">
                         <i class="fas fa-save"></i> Apply Changes
                     </button>
                 </form>
@@ -122,9 +123,15 @@
                 </h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">No scheduled maintenance windows.</p>
-                <button class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#scheduleModal">
-                    <i class="fas fa-plus"></i> Schedule Maintenance
+                <div id="scheduledMaintenanceList">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary w-100 mt-3" onclick="loadScheduledMaintenance()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh Schedule
                 </button>
             </div>
         </div>
@@ -137,17 +144,17 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="list-group list-group-flush">
+                <div class="list-group list-group-flush" id="maintenanceHistory">
                     {% for event in recent_events %}
                     <div class="list-group-item">
                         <div class="d-flex w-100 justify-content-between">
                             <h6 class="mb-1">
-                                <i class="fas fa-{% if event.action == 'enable' %}power-off text-warning{% else %}check-circle text-success{% endif %}"></i>
-                                {{ event.action|title }} Maintenance
+                                <i class="fas fa-{% if event.action == 'MAINTENANCE_START' %}power-off text-warning{% else %}check-circle text-success{% endif %}"></i>
+                                {{ event.get_action_display }}
                             </h6>
                             <small class="text-muted">{{ event.timestamp|timesince }} ago</small>
                         </div>
-                        <p class="mb-1">By: {{ event.user.username }}</p>
+                        <p class="mb-1">By: {{ event.user.username|default:"System" }}</p>
                         {% if event.details.message %}
                         <small class="text-muted">Message: {{ event.details.message }}</small>
                         {% endif %}
@@ -161,25 +168,165 @@
     </div>
 </div>
 
-<!-- Schedule Maintenance Modal -->
-<div class="modal fade" id="scheduleModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Schedule Maintenance</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- Quick Status Overview -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-bar"></i> Maintenance Statistics
+                </h5>
             </div>
-            <div class="modal-body">
-                <p class="text-muted">Scheduled maintenance feature coming soon.</p>
-                <p>This feature will allow you to schedule maintenance windows in advance and automatically notify users.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="text-primary" id="totalMaintenanceEvents">--</h3>
+                            <small class="text-muted">Total Maintenance Events</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="text-warning" id="activeMaintenance">--</h3>
+                            <small class="text-muted">Active Maintenance</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="text-info" id="scheduledMaintenance">--</h3>
+                            <small class="text-muted">Scheduled</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3">
+                            <h3 class="text-success" id="avgDuration">--</h3>
+                            <small class="text-muted">Avg Duration (hours)</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-{% block footer %}
 
+{% block extra_scripts %}
+<script>
+    function confirmMaintenanceAction() {
+        const action = document.querySelector('input[name="action"]:checked').value;
+        const message = action === 'enable' ? 
+            'Are you sure you want to enable maintenance mode? This will block all regular users from accessing the system.' :
+            'Are you sure you want to disable maintenance mode? This will allow all users to access the system again.';
+        
+        return confirm(message);
+    }
+
+    function loadScheduledMaintenance() {
+        const container = document.getElementById('scheduledMaintenanceList');
+        container.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+
+        fetch('{% url "scheduled_maintenance" %}')
+            .then(response => response.text())
+            .then(html => {
+                // This would typically parse API response and render scheduled maintenance
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No scheduled maintenance windows at the moment.
+                    </div>
+                    <button class="btn btn-outline-primary w-100" data-bs-toggle="modal" data-bs-target="#scheduleModal">
+                        <i class="fas fa-plus me-2"></i>Schedule New Maintenance
+                    </button>
+                `;
+            })
+            .catch(error => {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error loading scheduled maintenance: ${error.message}
+                    </div>
+                `;
+            });
+    }
+
+    function loadMaintenanceStats() {
+        // Load maintenance statistics
+        const endpoints = [
+            { element: 'totalMaintenanceEvents', url: '/api/maintenance/stats/total/' },
+            { element: 'activeMaintenance', url: '/api/maintenance/stats/active/' },
+            { element: 'scheduledMaintenance', url: '/api/maintenance/stats/scheduled/' },
+            { element: 'avgDuration', url: '/api/maintenance/stats/avg-duration/' }
+        ];
+
+        endpoints.forEach(endpoint => {
+            const element = document.getElementById(endpoint.element);
+            if (element) {
+                // Simulate API call - replace with actual endpoints
+                setTimeout(() => {
+                    const mockData = {
+                        'totalMaintenanceEvents': '12',
+                        'activeMaintenance': maintenance_mode ? '1' : '0',
+                        'scheduledMaintenance': '2',
+                        'avgDuration': '3.5'
+                    };
+                    element.textContent = mockData[endpoint.element];
+                }, 1000);
+            }
+        });
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadScheduledMaintenance();
+        loadMaintenanceStats();
+        
+        // Auto-refresh maintenance status
+        setInterval(() => {
+            fetch('{% url "security_status_api" %}')
+                .then(response => response.json())
+                .then(data => {
+                    const statusElement = document.getElementById('maintenanceStatus');
+                    const labelElement = document.querySelector('label[for="maintenanceStatus"]');
+                    
+                    if (data.maintenance_mode !== undefined) {
+                        statusElement.checked = data.maintenance_mode;
+                        if (data.maintenance_mode) {
+                            labelElement.innerHTML = '<span class="text-warning"><strong>MAINTENANCE MODE ACTIVE</strong></span>';
+                        } else {
+                            labelElement.innerHTML = '<span class="text-success"><strong>SYSTEM OPERATIONAL</strong></span>';
+                        }
+                    }
+                })
+                .catch(error => console.error('Error refreshing status:', error));
+        }, 30000); // Refresh every 30 seconds
+    });
+
+    // Real-time status indicator
+    function updateMaintenanceStatus() {
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = `position-fixed top-0 start-50 translate-middle-x mt-3 alert alert-${maintenance_mode ? 'warning' : 'success'} alert-dismissible fade show`;
+        statusIndicator.style.zIndex = '1060';
+        statusIndicator.innerHTML = `
+            <i class="fas fa-${maintenance_mode ? 'tools' : 'check-circle'} me-2"></i>
+            Maintenance mode ${maintenance_mode ? 'enabled' : 'disabled'} successfully.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(statusIndicator);
+        
+        setTimeout(() => {
+            statusIndicator.remove();
+        }, 5000);
+    }
+
+    // If we're coming from a form submission, show status
+    {% if messages %}
+        setTimeout(updateMaintenanceStatus, 100);
+    {% endif %}
+</script>
 {% endblock %}

@@ -1,0 +1,848 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Parent Creation - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="bi bi-people-fill me-2 text-primary"></i>
+            Bulk Parent Creation
+        </h1>
+        <div class="btn-group">
+            <a href="{% url 'parent_management_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>
+                Back to Dashboard
+            </a>
+            <a href="{% url 'admin_parent_create' %}" class="btn btn-outline-primary">
+                <i class="bi bi-person-plus me-1"></i>
+                Single Parent
+            </a>
+        </div>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12">
+                    <div class="steps">
+                        <div class="step active" id="step1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Upload CSV</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Review Data</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Confirm & Create</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 1: Upload CSV -->
+    <div class="card mb-4" id="step1-content">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-cloud-upload me-2"></i>
+                Step 1: Upload CSV File
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-lg-8">
+                    <form method="post" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <p class="mb-0">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Upload CSV File</label>
+                            <div class="upload-area border-2 border-dashed rounded p-5 text-center" id="uploadArea">
+                                <i class="bi bi-file-earmark-spreadsheet display-4 text-muted mb-3"></i>
+                                <h5>Drag & Drop your CSV file here</h5>
+                                <p class="text-muted mb-3">or click to browse</p>
+                                {{ form.csv_file }}
+                                <div class="form-text">
+                                    Supported format: CSV (Comma Separated Values)
+                                </div>
+                            </div>
+                            {% if form.csv_file.errors %}
+                            <div class="text-danger small mt-2">{{ form.csv_file.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            {{ form.send_invites }}
+                            <label class="form-check-label fw-bold">
+                                Send invitation emails to new parents
+                            </label>
+                            <div class="form-text">
+                                Parents will receive an email with login instructions
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="uploadBtn" disabled>
+                                <i class="bi bi-upload me-2"></i>
+                                Upload & Validate
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="downloadTemplate">
+                                <i class="bi bi-download me-2"></i>
+                                Download Template
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="col-lg-4">
+                    <!-- CSV Template Guide -->
+                    <div class="card bg-light">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                CSV Format Guide
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small mb-3">Your CSV should include these columns:</p>
+                            
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Column</th>
+                                        <th>Required</th>
+                                        <th>Example</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>first_name</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>John</td>
+                                    </tr>
+                                    <tr>
+                                        <td>last_name</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>Doe</td>
+                                    </tr>
+                                    <tr>
+                                        <td>email</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>john.doe@email.com</td>
+                                    </tr>
+                                    <tr>
+                                        <td>phone_number</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>0241234567</td>
+                                    </tr>
+                                    <tr>
+                                        <td>relationship</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>Father/Mother/Guardian</td>
+                                    </tr>
+                                    <tr>
+                                        <td>occupation</td>
+                                        <td><span class="badge bg-warning">No</span></td>
+                                        <td>Teacher</td>
+                                    </tr>
+                                    <tr>
+                                        <td>address</td>
+                                        <td><span class="badge bg-warning">No</span></td>
+                                        <td>123 Main St</td>
+                                    </tr>
+                                    <tr>
+                                        <td>student_ids</td>
+                                        <td><span class="badge bg-success">Yes</span></td>
+                                        <td>STUD2024P1001,STUD2024P1002</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="alert alert-info small">
+                                <strong>Note:</strong> Student IDs should be comma-separated if multiple students.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Review Data (Initially Hidden) -->
+    <div class="card mb-4 d-none" id="step2-content">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-eye me-2"></i>
+                Step 2: Review & Validate Data
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Please review the data below before proceeding. Invalid records will be highlighted.
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="reviewTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Relationship</th>
+                            <th>Students</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reviewTableBody">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">Validation Summary</h6>
+                            <div id="validationSummary">
+                                <!-- Validation summary will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-success btn-lg" id="proceedToStep3" disabled>
+                            <i class="bi bi-check-circle me-2"></i>
+                            Proceed to Create Accounts
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="backToStep1">
+                            <i class="bi bi-arrow-left me-2"></i>
+                            Back to Upload
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Confirm & Create (Initially Hidden) -->
+    <div class="card mb-4 d-none" id="step3-content">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-check-circle me-2"></i>
+                Step 3: Confirm & Create Accounts
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">
+                <i class="bi bi-info-circle me-2"></i>
+                Ready to create parent accounts. Review the final summary below.
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-white bg-primary">
+                        <div class="card-body text-center">
+                            <h4 class="card-title" id="totalValidCount">0</h4>
+                            <p class="card-text">Valid Records</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-warning">
+                        <div class="card-body text-center">
+                            <h4 class="card-title" id="totalWarningCount">0</h4>
+                            <p class="card-text">Warnings</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-danger">
+                        <div class="card-body text-center">
+                            <h4 class="card-title" id="totalErrorCount">0</h4>
+                            <p class="card-text">Errors</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-white bg-info">
+                        <div class="card-body text-center">
+                            <h4 class="card-title" id="totalStudentsCount">0</h4>
+                            <p class="card-text">Students Linked</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="confirmCreation">
+                <label class="form-check-label fw-bold" for="confirmCreation">
+                    I confirm that I want to create these parent accounts
+                </label>
+            </div>
+
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="button" class="btn btn-success btn-lg" id="createAccountsBtn" disabled>
+                    <i class="bi bi-people-fill me-2"></i>
+                    Create Parent Accounts
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="backToStep2">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to Review
+                </button>
+            </div>
+
+            <!-- Progress Bar for Creation Process -->
+            <div class="mt-4 d-none" id="creationProgress">
+                <div class="progress mb-3" style="height: 25px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" 
+                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="creationProgressBar">
+                        <span class="progress-text">0%</span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="mb-1" id="progressText">Creating accounts...</p>
+                    <small class="text-muted" id="progressDetail">Please wait while we create the parent accounts</small>
+                </div>
+            </div>
+
+            <!-- Results Display -->
+            <div class="mt-4 d-none" id="creationResults">
+                <div class="alert alert-success" id="successAlert">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <strong>Success!</strong> <span id="successMessage"></span>
+                </div>
+                <div class="alert alert-warning d-none" id="warningAlert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> <span id="warningMessage"></span>
+                </div>
+                <div class="d-grid gap-2">
+                    <a href="{% url 'parent_management_dashboard' %}" class="btn btn-primary">
+                        <i class="bi bi-speedometer me-2"></i>
+                        Go to Parent Dashboard
+                    </a>
+                    <button type="button" class="btn btn-outline-primary" id="createMoreBtn">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        Create More Parents
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+}
+
+.step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 60%;
+    width: 80%;
+    height: 2px;
+    background-color: #dee2e6;
+    z-index: 1;
+}
+
+.step.active:not(:last-child)::after {
+    background-color: #0d6efd;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #dee2e6;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    z-index: 2;
+}
+
+.step.active .step-number {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    text-align: center;
+}
+
+.step.active .step-label {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.upload-area {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.upload-area.dragover {
+    border-color: #198754;
+    background-color: #e8f5e8;
+}
+
+#id_csv_file {
+    display: none;
+}
+
+.progress-text {
+    font-weight: 600;
+}
+
+.table tbody tr.error-row {
+    background-color: #f8d7da;
+}
+
+.table tbody tr.warning-row {
+    background-color: #fff3cd;
+}
+
+.table tbody tr.success-row {
+    background-color: #d1edff;
+}
+
+.badge-valid {
+    background-color: #198754;
+}
+
+.badge-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-error {
+    background-color: #dc3545;
+}
+
+.creation-log {
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.log-entry {
+    padding: 2px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.log-success {
+    color: #198754;
+}
+
+.log-warning {
+    color: #ffc107;
+}
+
+.log-error {
+    color: #dc3545;
+}
+
+.log-info {
+    color: #0dcaf0;
+}
+</style>
+{% endblock %}
+
+{% block footer %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const uploadArea = document.getElementById('uploadArea');
+    const csvFileInput = document.getElementById('id_csv_file');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const downloadTemplateBtn = document.getElementById('downloadTemplate');
+    const step1Content = document.getElementById('step1-content');
+    const step2Content = document.getElementById('step2-content');
+    const step3Content = document.getElementById('step3-content');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+
+    // Upload area click handler
+    uploadArea.addEventListener('click', function() {
+        csvFileInput.click();
+    });
+
+    // Drag and drop functionality
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', function() {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            csvFileInput.files = files;
+            updateUploadButton();
+        }
+    });
+
+    // File input change handler
+    csvFileInput.addEventListener('change', updateUploadButton);
+
+    function updateUploadButton() {
+        if (csvFileInput.files.length > 0) {
+            const fileName = csvFileInput.files[0].name;
+            uploadArea.innerHTML = `
+                <i class="bi bi-file-earmark-check display-4 text-success mb-3"></i>
+                <h5>${fileName}</h5>
+                <p class="text-muted mb-3">File selected successfully</p>
+                ${csvFileInput.outerHTML}
+                <div class="form-text">
+                    Click to select a different file
+                </div>
+            `;
+            uploadBtn.disabled = false;
+        } else {
+            uploadArea.innerHTML = `
+                <i class="bi bi-file-earmark-spreadsheet display-4 text-muted mb-3"></i>
+                <h5>Drag & Drop your CSV file here</h5>
+                <p class="text-muted mb-3">or click to browse</p>
+                ${csvFileInput.outerHTML}
+                <div class="form-text">
+                    Supported format: CSV (Comma Separated Values)
+                </div>
+            `;
+            uploadBtn.disabled = true;
+        }
+    }
+
+    // Download template
+    downloadTemplateBtn.addEventListener('click', function() {
+        const csvContent = `first_name,last_name,email,phone_number,relationship,occupation,address,student_ids
+John,Doe,john.doe@email.com,0241234567,Father,Teacher,123 Main St Accra,STUD2024P1001
+Jane,Smith,jane.smith@email.com,0247654321,Mother,Doctor,456 Oak Ave Kumasi,STUD2024P1002
+Michael,Brown,michael.b@email.com,0249876543,Father,Engineer,789 Pine Rd Takoradi,STUD2024P1001,STUD2024P1003
+Sarah,Johnson,sarah.j@email.com,0244567890,Mother,Accountant,321 Elm St Cape Coast,STUD2024P1004`;
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'parent_import_template.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    });
+
+    // Form submission handler
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        
+        // Show loading state
+        uploadBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Validating...';
+        uploadBtn.disabled = true;
+
+        // Simulate validation (replace with actual API call)
+        simulateValidation(formData);
+    });
+
+    function simulateValidation(formData) {
+        // This would be replaced with actual API call to validate CSV
+        setTimeout(() => {
+            // Simulate validation results
+            const validationResults = {
+                valid: true,
+                totalRecords: 4,
+                validRecords: 3,
+                warnings: 1,
+                errors: 0,
+                data: [
+                    {
+                        first_name: 'John',
+                        last_name: 'Doe',
+                        email: 'john.doe@email.com',
+                        phone_number: '0241234567',
+                        relationship: 'Father',
+                        occupation: 'Teacher',
+                        address: '123 Main St Accra',
+                        student_ids: 'STUD2024P1001',
+                        status: 'valid',
+                        message: 'Ready to create'
+                    },
+                    {
+                        first_name: 'Jane',
+                        last_name: 'Smith',
+                        email: 'jane.smith@email.com',
+                        phone_number: '0247654321',
+                        relationship: 'Mother',
+                        occupation: 'Doctor',
+                        address: '456 Oak Ave Kumasi',
+                        student_ids: 'STUD2024P1002',
+                        status: 'valid',
+                        message: 'Ready to create'
+                    },
+                    {
+                        first_name: 'Michael',
+                        last_name: 'Brown',
+                        email: 'michael.b@email.com',
+                        phone_number: '0249876543',
+                        relationship: 'Father',
+                        occupation: 'Engineer',
+                        address: '789 Pine Rd Takoradi',
+                        student_ids: 'STUD2024P1001,STUD2024P1003',
+                        status: 'valid',
+                        message: 'Ready to create'
+                    },
+                    {
+                        first_name: 'Sarah',
+                        last_name: 'Johnson',
+                        email: 'sarah.j@email.com',
+                        phone_number: '02445678901', // Invalid phone
+                        relationship: 'Mother',
+                        occupation: 'Accountant',
+                        address: '321 Elm St Cape Coast',
+                        student_ids: 'STUD2024P1004',
+                        status: 'warning',
+                        message: 'Phone number too long'
+                    }
+                ]
+            };
+
+            displayValidationResults(validationResults);
+            navigateToStep(2);
+            
+            // Reset upload button
+            uploadBtn.innerHTML = '<i class="bi bi-upload me-2"></i>Upload & Validate';
+            uploadBtn.disabled = false;
+        }, 2000);
+    }
+
+    function displayValidationResults(results) {
+        const tableBody = document.getElementById('reviewTableBody');
+        const validationSummary = document.getElementById('validationSummary');
+        
+        // Clear previous results
+        tableBody.innerHTML = '';
+        
+        // Populate table
+        results.data.forEach((record, index) => {
+            const row = document.createElement('tr');
+            row.className = record.status === 'error' ? 'error-row' : 
+                           record.status === 'warning' ? 'warning-row' : 'success-row';
+            
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${record.first_name}</td>
+                <td>${record.last_name}</td>
+                <td>${record.email}</td>
+                <td>${record.phone_number}</td>
+                <td>${record.relationship}</td>
+                <td>${record.student_ids}</td>
+                <td>
+                    <span class="badge badge-${record.status}">
+                        ${record.status === 'valid' ? '✓ Valid' : 
+                          record.status === 'warning' ? '⚠ Warning' : '✗ Error'}
+                    </span>
+                    <small class="d-block text-muted">${record.message}</small>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
+
+        // Update validation summary
+        validationSummary.innerHTML = `
+            <div class="mb-2">
+                <strong>Total Records:</strong> ${results.totalRecords}
+            </div>
+            <div class="mb-2 text-success">
+                <strong>Valid Records:</strong> ${results.validRecords}
+            </div>
+            <div class="mb-2 text-warning">
+                <strong>Warnings:</strong> ${results.warnings}
+            </div>
+            <div class="mb-2 text-danger">
+                <strong>Errors:</strong> ${results.errors}
+            </div>
+        `;
+
+        // Enable/disable proceed button
+        document.getElementById('proceedToStep3').disabled = results.validRecords === 0;
+    }
+
+    // Navigation functions
+    function navigateToStep(stepNumber) {
+        // Hide all steps
+        step1Content.classList.add('d-none');
+        step2Content.classList.add('d-none');
+        step3Content.classList.add('d-none');
+        
+        // Remove active class from all steps
+        step1.classList.remove('active');
+        step2.classList.remove('active');
+        step3.classList.remove('active');
+        
+        // Show target step and set active
+        if (stepNumber === 1) {
+            step1Content.classList.remove('d-none');
+            step1.classList.add('active');
+        } else if (stepNumber === 2) {
+            step2Content.classList.remove('d-none');
+            step2.classList.add('active');
+        } else if (stepNumber === 3) {
+            step3Content.classList.remove('d-none');
+            step3.classList.add('active');
+            updateStep3Summary();
+        }
+    }
+
+    function updateStep3Summary() {
+        // This would be populated with actual data from validation
+        document.getElementById('totalValidCount').textContent = '3';
+        document.getElementById('totalWarningCount').textContent = '1';
+        document.getElementById('totalErrorCount').textContent = '0';
+        document.getElementById('totalStudentsCount').textContent = '4';
+    }
+
+    // Navigation event listeners
+    document.getElementById('proceedToStep3').addEventListener('click', function() {
+        navigateToStep(3);
+    });
+
+    document.getElementById('backToStep1').addEventListener('click', function() {
+        navigateToStep(1);
+    });
+
+    document.getElementById('backToStep2').addEventListener('click', function() {
+        navigateToStep(2);
+    });
+
+    // Confirm creation checkbox
+    document.getElementById('confirmCreation').addEventListener('change', function() {
+        document.getElementById('createAccountsBtn').disabled = !this.checked;
+    });
+
+    // Create accounts button
+    document.getElementById('createAccountsBtn').addEventListener('click', function() {
+        createParentAccounts();
+    });
+
+    // Create more button
+    document.getElementById('createMoreBtn').addEventListener('click', function() {
+        location.reload();
+    });
+
+    function createParentAccounts() {
+        const createBtn = document.getElementById('createAccountsBtn');
+        const progressSection = document.getElementById('creationProgress');
+        const progressBar = document.getElementById('creationProgressBar');
+        const progressText = document.getElementById('progressText');
+        const progressDetail = document.getElementById('progressDetail');
+        
+        // Show progress
+        createBtn.disabled = true;
+        progressSection.classList.remove('d-none');
+        
+        // Simulate creation process
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += 10;
+            if (progress <= 100) {
+                progressBar.style.width = `${progress}%`;
+                progressBar.setAttribute('aria-valuenow', progress);
+                progressBar.querySelector('.progress-text').textContent = `${progress}%`;
+                
+                // Update progress messages
+                if (progress < 30) {
+                    progressText.textContent = 'Validating data...';
+                    progressDetail.textContent = 'Checking for duplicates and validation rules';
+                } else if (progress < 60) {
+                    progressText.textContent = 'Creating user accounts...';
+                    progressDetail.textContent = 'Setting up parent login credentials';
+                } else if (progress < 90) {
+                    progressText.textContent = 'Linking students...';
+                    progressDetail.textContent = 'Associating parents with their children';
+                } else {
+                    progressText.textContent = 'Finalizing...';
+                    progressDetail.textContent = 'Completing account setup';
+                }
+            } else {
+                clearInterval(interval);
+                showCreationResults();
+            }
+        }, 300);
+    }
+
+    function showCreationResults() {
+        const progressSection = document.getElementById('creationProgress');
+        const resultsSection = document.getElementById('creationResults');
+        const successAlert = document.getElementById('successAlert');
+        const warningAlert = document.getElementById('warningAlert');
+        
+        progressSection.classList.add('d-none');
+        resultsSection.classList.remove('d-none');
+        
+        // Simulate results
+        successAlert.querySelector('#successMessage').textContent = 
+            '3 parent accounts created successfully!';
+        warningAlert.querySelector('#warningMessage').textContent = 
+            '1 record had warnings but was processed.';
+        warningAlert.classList.remove('d-none');
+    }
+
+    // Initialize
+    updateUploadButton();
+});
+</script>
+{% endblock %}

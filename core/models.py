@@ -21,8 +21,11 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.db.models import Q, Count, Avg, Sum
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.utils.translation import gettext_lazy as _  # ADD THIS LINE
-from django.utils.deprecation import MiddlewareMixin
+from django.utils.translation import gettext_lazy as _
+
+from django.core.files.storage import default_storage
+from django.db.models.functions import ExtractYear, ExtractMonth
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -582,6 +585,8 @@ class Teacher(models.Model):
 
 # ===== PARENT/GUARDIAN MANAGEMENT =====
 
+# In core/models.py - Update ParentGuardian model
+
 class ParentGuardian(models.Model):
     RELATIONSHIP_CHOICES = [
         ('F', 'Father'),
@@ -613,6 +618,23 @@ class ParentGuardian(models.Model):
         default=1, 
         validators=[MinValueValidator(1), MaxValueValidator(5)]
     )
+    
+    # NEW FIELDS FOR ACCOUNT MANAGEMENT
+    account_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending Activation'),
+            ('active', 'Active'),
+            ('inactive', 'Inactive'),
+            ('suspended', 'Suspended'),
+        ],
+        default='pending'
+    )
+    last_login_date = models.DateTimeField(null=True, blank=True)
+    login_count = models.PositiveIntegerField(default=0)
+    account_created = models.DateTimeField(auto_now_add=True)
+    account_updated = models.DateTimeField(auto_now=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -632,6 +654,60 @@ class ParentGuardian(models.Model):
             return self.user.get_full_name()
         return "No User Account"
     
+    def has_active_account(self):
+        """Check if parent has an active user account"""
+        return self.user is not None and self.account_status == 'active'
+    
+    def can_login(self):
+        """Check if parent can login"""
+        return self.has_active_account() and self.account_status == 'active'
+    
+    def get_children(self):
+        """Get all children/students associated with this parent"""
+        return self.students.all()
+    
+    def get_children_count(self):
+        """Get number of children"""
+        return self.students.count()
+    
+    def update_login_stats(self):
+        """Update login statistics"""
+        if self.user:
+            self.last_login_date = timezone.now()
+            self.login_count += 1
+            self.save(update_fields=['last_login_date', 'login_count', 'account_updated'])
+    
+    def create_user_account(self, password=None):
+        """Create a user account for this parent"""
+        if self.user:
+            return self.user  # Account already exists
+            
+        if not self.email:
+            raise ValueError("Email is required to create a user account")
+        
+        # Generate username from email
+        base_username = self.email.split('@')[0]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Create user
+        user = User.objects.create_user(
+            username=username,
+            email=self.email,
+            password=password or User.objects.make_random_password(),
+            first_name="Parent",  # Will be updated with actual data
+            last_name=self.email.split('@')[0]
+        )
+        
+        self.user = user
+        self.account_status = 'active'
+        self.save()
+        
+        return user
+
     def clean(self):
         # Validate email uniqueness
         if self.email:
@@ -652,31 +728,46 @@ class ParentGuardian(models.Model):
             # Update the field with cleaned value
             self.phone_number = cleaned_phone
 
+
 @receiver(post_save, sender=ParentGuardian)
-def create_parent_user(sender, instance, created, **kwargs):
-    """Automatically create a user account for parents with email"""
+def handle_parent_user_account(sender, instance, created, **kwargs):
+    """
+    Automatically create user account for parents with email
+    Enhanced version with better error handling
+    """
     if created and instance.email and not instance.user:
         try:
+            # Check if user already exists with this email
             user = User.objects.filter(email=instance.email).first()
-            if not user:
-                base_username = instance.email.split('@')[0]
-                username = base_username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
+            if user:
+                # Link existing user
+                instance.user = user
+                instance.account_status = 'active'
+                instance.save(update_fields=['user', 'account_status'])
+            else:
+                # Create new user account
+                instance.create_user_account()
                 
-                user = User.objects.create_user(
-                    username=username,
-                    email=instance.email,
-                    password=User.objects.make_random_password(),
-                    first_name="Parent",
-                    last_name=instance.email.split('@')[0]
-                )
-            instance.user = user
-            instance.save(update_fields=['user'])
+                # Send activation email (you can implement this)
+                # send_parent_account_activation_email(instance)
+                
         except Exception as e:
             logger.error(f"Error creating user for parent {instance.email}: {e}")
+            # Don't raise exception to prevent save failure
+
+@receiver(post_save, sender=User)
+def update_parent_login_stats(sender, instance, **kwargs):
+    """
+    Update parent login statistics when user logs in
+    """
+    try:
+        if hasattr(instance, 'parentguardian'):
+            parent = instance.parentguardian
+            parent.update_login_stats()
+    except ParentGuardian.DoesNotExist:
+        pass
+
+
 
 # ===== PARENT COMMUNICATION MODELS =====
 
@@ -1011,7 +1102,6 @@ class AttendanceSummary(models.Model):
 
 # ===== GRADE MANAGEMENT =====
 
-
 # In core/models.py - Complete updated Grade class
 class Grade(models.Model):
     """
@@ -1056,7 +1146,13 @@ class Grade(models.Model):
     # Model Fields
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='grades')
     subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='grades')
-    class_assignment = models.ForeignKey('ClassAssignment', on_delete=models.CASCADE, related_name='grades')
+    class_assignment = models.ForeignKey(
+        'ClassAssignment', 
+        on_delete=models.CASCADE, 
+        related_name='grades',
+        null=True,  # FIXED: Allow null initially
+        blank=True  # FIXED: Allow blank in forms
+    )
     academic_year = models.CharField(
         max_length=9, 
         validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Academic year must be in format YYYY/YYYY')]
@@ -1153,6 +1249,16 @@ class Grade(models.Model):
         help_text="Additional comments or notes about the grade"
     )
     
+    # NEW: Class level field to help with class assignment creation
+    class_level = models.CharField(
+        max_length=2,
+        choices=CLASS_LEVEL_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="Class Level",
+        help_text="Student's class level (auto-set from student)"
+    )
+    
     # Audit fields
     recorded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1224,8 +1330,9 @@ class Grade(models.Model):
             if not self.subject_id:
                 errors['subject'] = 'Subject is required'
             
-            if not self.class_assignment_id:
-                errors['class_assignment'] = 'Class assignment is required'
+            # FIXED: Don't require class_assignment in clean() - handle in save()
+            # if not self.class_assignment_id:
+            #     errors['class_assignment'] = 'Class assignment is required'
             
             # Validate academic year format and logic
             if self.academic_year:
@@ -1311,12 +1418,12 @@ class Grade(models.Model):
             if self._is_term_locked():
                 errors['__all__'] = 'Cannot modify grades for locked academic term'
             
-            # Validate class assignment consistency
-            if (self.student_id and self.class_assignment_id and 
+            # FIXED: Only validate class assignment if it exists
+            if (self.class_assignment_id and self.student_id and 
                 self.student.class_level != self.class_assignment.class_level):
                 errors['class_assignment'] = 'Class assignment does not match student class level'
             
-            if (self.subject_id and self.class_assignment_id and 
+            if (self.class_assignment_id and self.subject_id and 
                 self.subject != self.class_assignment.subject):
                 errors['class_assignment'] = 'Class assignment does not match subject'
             
@@ -1422,6 +1529,57 @@ class Grade(models.Model):
             logger.error(f"Error in safe total score calculation: {str(e)}")
             return None
 
+    def get_or_create_class_assignment(self):
+        """
+        Find or create a class assignment for this grade
+        """
+        from django.db import transaction
+        
+        # Use class_level from the grade or fall back to student's class level
+        target_class_level = self.class_level or (self.student.class_level if self.student else None)
+        
+        if not target_class_level:
+            raise ValueError("Cannot create class assignment: No class level specified")
+        
+        # Try to find existing class assignment
+        class_assignment = ClassAssignment.objects.filter(
+            class_level=target_class_level,
+            subject=self.subject,
+            academic_year=self.academic_year.replace('/', '-'),
+            is_active=True
+        ).first()
+        
+        if class_assignment:
+            print(f"DEBUG: Found existing class assignment: {class_assignment}")
+            return class_assignment
+        
+        # Create new class assignment if none exists
+        print(f"DEBUG: Creating new class assignment for {target_class_level}, {self.subject}, {self.academic_year}")
+        
+        # Find an available teacher for this subject and class level
+        available_teacher = Teacher.objects.filter(
+            subjects=self.subject,
+            is_active=True
+        ).first()
+        
+        if not available_teacher:
+            # If no teacher found, use the first active teacher
+            available_teacher = Teacher.objects.filter(is_active=True).first()
+        
+        if available_teacher:
+            with transaction.atomic():
+                class_assignment = ClassAssignment.objects.create(
+                    class_level=target_class_level,
+                    subject=self.subject,
+                    teacher=available_teacher,
+                    academic_year=self.academic_year.replace('/', '-'),
+                    is_active=True
+                )
+                print(f"DEBUG: Created new class assignment: {class_assignment}")
+                return class_assignment
+        
+        raise ValueError("No available teacher found for class assignment")
+
     @transaction.atomic
     def save(self, *args, **kwargs):
         """
@@ -1431,6 +1589,21 @@ class Grade(models.Model):
         try:
             # Pre-save validation
             is_new = self.pk is None
+            
+            # FIXED: Set class_level from student if not set
+            if self.student and not self.class_level:
+                self.class_level = self.student.class_level
+                print(f"DEBUG: Auto-set class_level to {self.class_level} from student")
+            
+            # FIXED: Auto-create class_assignment if not set
+            if not self.class_assignment_id and self.student and self.subject and self.academic_year:
+                try:
+                    self.class_assignment = self.get_or_create_class_assignment()
+                    print(f"DEBUG: Auto-created class_assignment: {self.class_assignment}")
+                except Exception as e:
+                    print(f"DEBUG: Could not auto-create class assignment: {e}")
+                    # Don't fail the save - class_assignment can be set later
+                    logger.warning(f"Could not auto-create class assignment: {e}")
             
             # Run full validation
             self.full_clean()
@@ -1911,7 +2084,6 @@ class Grade(models.Model):
             'exam': float(self.exam_score) if self.exam_score else 0.0,
             'total': float(self.total_score) if self.total_score else 0.0,
         }
-
 
 class SchoolConfiguration(models.Model):
     GRADING_SYSTEM_CHOICES = [
@@ -3122,8 +3294,6 @@ class ReportCard(models.Model):
 
 # ===== NOTIFICATION SYSTEM =====
 
-# In core/models.py - Update the Notification class
-
 class Notification(models.Model):
     NOTIFICATION_TYPES = [
         ('GRADE', 'Grade Update'),
@@ -3175,6 +3345,33 @@ class Notification(models.Model):
         from django.urls import reverse
         return reverse('notification_list')
     
+    @classmethod
+    def get_unread_count_for_user(cls, user):
+        """
+        Get unread notification count for a specific user
+        FIXED: Handles both User objects and request objects safely
+        """
+        try:
+            # Handle different object types safely
+            if hasattr(user, 'is_authenticated'):
+                # It's a User object
+                if not user or not user.is_authenticated:
+                    return 0
+            elif hasattr(user, 'user'):
+                # It's a request object, extract the user
+                user = user.user
+                if not user or not user.is_authenticated:
+                    return 0
+            else:
+                # Unknown type or None, return 0
+                return 0
+            
+            return cls.objects.filter(recipient=user, is_read=False).count()
+            
+        except Exception as e:
+            logger.error(f"Error getting unread count: {str(e)}")
+            return 0
+    
     def mark_as_read(self):
         """Mark notification as read and send WebSocket update"""
         if not self.is_read:
@@ -3197,7 +3394,7 @@ class Notification(models.Model):
                     'type': 'notification_update',
                     'action': 'single_read',
                     'notification_id': self.id,
-                    'unread_count': self.get_unread_count_for_user()
+                    'unread_count': self.get_unread_count_for_user(self.recipient)  # ✅ FIXED
                 }
             )
         except Exception as e:
@@ -3213,7 +3410,8 @@ class Notification(models.Model):
             async_to_sync(channel_layer.group_send)(
                 f'notifications_{self.recipient.id}',
                 {
-                    'type': 'new_notification',
+                    'type': 'notification_update',
+                    'action': 'new_notification',
                     'notification': {
                         'id': self.id,
                         'title': self.title,
@@ -3222,18 +3420,11 @@ class Notification(models.Model):
                         'created_at': self.created_at.isoformat(),
                         'is_read': self.is_read,
                     },
-                    'unread_count': self.get_unread_count_for_user()
+                    'unread_count': self.get_unread_count_for_user(self.recipient)  # ✅ FIXED
                 }
             )
         except Exception as e:
             logger.error(f"WebSocket new notification failed: {str(e)}")
-    
-    @classmethod
-    def get_unread_count_for_user(cls, user):
-        """Get unread notification count for a specific user"""
-        if not user or not user.is_authenticated:
-            return 0
-        return cls.objects.filter(recipient=user, is_read=False).count()
     
     @classmethod
     def create_notification(cls, recipient, title, message, notification_type="GENERAL", link=None, related_object=None):
@@ -3261,60 +3452,6 @@ class Notification(models.Model):
         except Exception as e:
             logger.error(f"Failed to create notification: {str(e)}")
             return None
-    
-    def send_new_notification_ws(self):
-        """Send WebSocket notification when a new notification is created"""
-        try:
-            from channels.layers import get_channel_layer
-            from asgiref.sync import async_to_sync
-            
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f'notifications_{self.recipient.id}',
-                {
-                    'type': 'notification_update',
-                    'action': 'new_notification',
-                    'notification': {
-                        'id': self.id,
-                        'title': self.title,
-                        'message': self.message,
-                        'notification_type': self.notification_type,
-                        'created_at': self.created_at.isoformat(),
-                        'is_read': self.is_read,
-                    },
-                    'unread_count': self.get_unread_count_for_user(self.recipient)  # FIXED: Pass user argument
-                }
-            )
-        except Exception as e:
-            logger.error(f"WebSocket new notification failed: {str(e)}")
-    
-    def mark_as_read(self):
-        """Mark notification as read and send WebSocket update"""
-        if not self.is_read:
-            self.is_read = True
-            self.save(update_fields=['is_read'])
-            self.send_websocket_update()
-            return True
-        return False
-    
-    def send_websocket_update(self):
-        """Send WebSocket update for this notification"""
-        try:
-            from channels.layers import get_channel_layer
-            from asgiref.sync import async_to_sync
-            
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(
-                f'notifications_{self.recipient.id}',
-                {
-                    'type': 'notification_update',
-                    'action': 'single_read',
-                    'notification_id': self.id,
-                    'unread_count': self.get_unread_count_for_user(self.recipient)  # FIXED: Pass user argument
-                }
-            )
-        except Exception as e:
-            logger.error(f"WebSocket update failed for notification {self.id}: {str(e)}")
     
     def save(self, *args, **kwargs):
         """Override save to handle WebSocket notifications"""
@@ -4040,6 +4177,8 @@ class Expense(models.Model):
             logger.error(f"Error updating budget tracking: {e}")
 
 
+# Add this to your SECURITY MODELS section (around the end of your file)
+
 # ===== SECURITY MODELS =====
 
 class UserProfile(models.Model):
@@ -4126,6 +4265,96 @@ class UserProfile(models.Model):
         )
 
 
+
+# In core/models.py - Update the MaintenanceMode model
+class MaintenanceMode(models.Model):
+    """Model to track system maintenance mode"""
+    is_active = models.BooleanField(default=False)
+    message = models.TextField(blank=True, help_text="Message to display to users during maintenance")
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    allowed_ips = models.TextField(blank=True, help_text="Comma-separated list of IPs allowed during maintenance")
+    
+    # NEW: Allow specific users to bypass maintenance mode
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='maintenance_bypass_users',
+        help_text="Users who can access the system during maintenance"
+    )
+    
+    # NEW: Allow all staff users to bypass
+    allow_staff_access = models.BooleanField(
+        default=True,
+        help_text="Allow all staff users to access the system during maintenance"
+    )
+    
+    # NEW: Allow all superusers to bypass  
+    allow_superuser_access = models.BooleanField(
+        default=True,
+        help_text="Allow all superusers to access the system during maintenance"
+    )
+    
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Maintenance Mode'
+        verbose_name_plural = 'Maintenance Mode'
+    
+    def __str__(self):
+        return f"Maintenance Mode - {'Active' if self.is_active else 'Inactive'}"
+    
+    def is_currently_active(self):
+        """Check if maintenance is currently active based on time window"""
+        if not self.is_active:
+            return False
+        
+        now = timezone.now()
+        if self.start_time and now < self.start_time:
+            return False
+        if self.end_time and now > self.end_time:
+            return False
+            
+        return True
+    
+    def can_user_bypass(self, user):
+        """Check if user can bypass maintenance mode"""
+        if not user or not user.is_authenticated:
+            return False
+            
+        # Superusers can always bypass if allowed
+        if self.allow_superuser_access and user.is_superuser:
+            return True
+            
+        # Staff users can bypass if allowed
+        if self.allow_staff_access and user.is_staff:
+            return True
+            
+        # Specific allowed users can bypass
+        if self.allowed_users.filter(id=user.id).exists():
+            return True
+            
+        return False
+    
+    @classmethod
+    def get_current_maintenance(cls):
+        """Get the current maintenance mode instance"""
+        return cls.objects.filter(is_active=True).first()
+    
+    @classmethod
+    def can_user_access(cls, user):
+        """Check if user can access the system (bypass maintenance)"""
+        maintenance = cls.get_current_maintenance()
+        
+        # No active maintenance - everyone can access
+        if not maintenance or not maintenance.is_currently_active():
+            return True
+            
+        # Check if user can bypass maintenance
+        return maintenance.can_user_bypass(user)
+
 class ScheduledMaintenance(models.Model):
     """Model for scheduled maintenance windows"""
     MAINTENANCE_TYPES = [
@@ -4177,62 +4406,35 @@ def create_user_profile(sender, instance, created, **kwargs):
 def save_user_profile(sender, instance, **kwargs):
     if hasattr(instance, 'profile'):
         instance.profile.save()
-# Add these to your existing models in core/models.py
 
-class BulkFeeImport(models.Model):
-    """Track bulk fee import operations"""
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-    ]
-    
-    file_name = models.CharField(max_length=255)
-    file_type = models.CharField(max_length=10, choices=[('excel', 'Excel'), ('csv', 'CSV')])
-    total_records = models.PositiveIntegerField(default=0)
-    successful_records = models.PositiveIntegerField(default=0)
-    failed_records = models.PositiveIntegerField(default=0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    errors = models.JSONField(default=dict, blank=True, null=True)
-    academic_year = models.CharField(max_length=9)
-    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = 'Bulk Fee Import'
-        verbose_name_plural = 'Bulk Fee Imports'
-    
-    def __str__(self):
-        return f"Bulk Import - {self.file_name} - {self.status}"
 
-class BulkFeeOperation(models.Model):
-    """Track bulk fee operations like updates, creations, etc."""
-    OPERATION_TYPES = [
-        ('create', 'Bulk Create'),
-        ('update', 'Bulk Update'),
-        ('status_update', 'Status Update'),
-        ('amount_adjustment', 'Amount Adjustment'),
-        ('due_date_update', 'Due Date Update'),
-    ]
-    
-    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
-    description = models.TextField()
-    total_affected = models.PositiveIntegerField(default=0)
-    successful_operations = models.PositiveIntegerField(default=0)
-    failed_operations = models.PositiveIntegerField(default=0)
-    parameters = models.JSONField(default=dict, blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = 'Bulk Fee Operation'
-        verbose_name_plural = 'Bulk Fee Operations'
-    
-    def __str__(self):
-        return f"{self.get_operation_type_display()} - {self.created_at}"
-    
+# ===== UTILITY FUNCTIONS =====
+
+def create_notification(recipient, title, message, notification_type="GENERAL", link=None, related_object=None):
+    """Utility function to create notifications"""
+    from .models import Notification
+    return Notification.create_notification(
+        recipient=recipient,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        link=link,
+        related_object=related_object
+    )
+
+def is_admin(user):
+    """Check if user is admin"""
+    return user.is_staff or user.is_superuser
+
+def is_student(user):
+    """Check if user is a student"""
+    return hasattr(user, 'student')
+
+def is_teacher(user):
+    """Check if user is a teacher"""
+    return hasattr(user, 'teacher')
+
+def is_parent(user):
+    """Check if user is a parent"""
+    return hasattr(user, 'parentguardian')
+

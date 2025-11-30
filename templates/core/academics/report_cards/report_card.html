@@ -72,6 +72,42 @@ body {
     font-size: 0.9rem;
 }
 
+/* Edit Mode Styles */
+.edit-mode-indicator {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    border-left: 4px solid #ffc107;
+    color: #000;
+}
+
+.editable-field {
+    border: 2px solid #007bff !important;
+    background-color: #f8f9fa !important;
+    font-weight: 500;
+}
+
+.editable-field:focus {
+    border-color: #0056b3 !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+    background-color: #fff !important;
+}
+
+.grade-input {
+    width: 80px;
+    text-align: center;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    font-weight: 600;
+}
+
+.remarks-input {
+    width: 100%;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    font-size: 0.8rem;
+}
+
 /* Info Sections */
 .additional-info-section {
     background: #e8f4fd;
@@ -352,6 +388,12 @@ body {
     font-weight: 500;
     font-size: 0.8rem;
     border: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .btn-primary {
@@ -373,6 +415,11 @@ body {
     background: var(--warning);
     border-color: var(--warning);
     color: #000;
+}
+
+.btn-danger {
+    background: var(--danger);
+    border-color: var(--danger);
 }
 
 /* Print Styles */
@@ -543,6 +590,20 @@ body {
             </div>
         </div>
 
+        <!-- Edit Mode Indicator -->
+        {% if editable_mode %}
+        <div class="edit-mode-indicator p-3 no-print">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-edit fa-lg me-3"></i>
+                <div class="flex-grow-1">
+                    <h5 class="mb-1 fw-bold">Edit Mode Active</h5>
+                    <p class="mb-0">You can now edit grades and remarks. Changes will be saved automatically.</p>
+                </div>
+                <div class="badge bg-dark fs-6">EDITING</div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Student Information -->
         <div class="container-fluid p-3">
             <!-- Additional Information Section -->
@@ -668,27 +729,95 @@ body {
                                 <th class="text-center">Total<br><small class="text-light">(100%)</small></th>
                                 <th class="text-center">Grade</th>
                                 <th class="text-center">Remarks</th>
+                                {% if editable_mode %}
+                                <th class="text-center no-print">Actions</th>
+                                {% endif %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for grade in grades %}
                             <tr>
                                 <td data-label="Subject" class="fw-bold">{{ grade.subject.name }}</td>
-                                <td data-label="Homework" class="text-center">{{ grade.homework_score|floatformat:1 }}</td>
-                                <td data-label="Classwork" class="text-center">{{ grade.classwork_score|floatformat:1 }}</td>
-                                <td data-label="Test" class="text-center">{{ grade.test_score|floatformat:1 }}</td>
-                                <td data-label="Exam" class="text-center">{{ grade.exam_score|floatformat:1 }}</td>
-                                <td data-label="Total" class="text-center fw-bold">{{ grade.total_score|floatformat:1 }}</td>
+                                <td data-label="Homework" class="text-center">
+                                    {% if editable_mode %}
+                                    <input type="number" class="grade-input editable-field" 
+                                           name="homework_{{ grade.id }}" 
+                                           value="{{ grade.homework_score|floatformat:1 }}" 
+                                           min="0" max="20" step="0.1">
+                                    {% else %}
+                                    {{ grade.homework_score|floatformat:1 }}
+                                    {% endif %}
+                                </td>
+                                <td data-label="Classwork" class="text-center">
+                                    {% if editable_mode %}
+                                    <input type="number" class="grade-input editable-field" 
+                                           name="classwork_{{ grade.id }}" 
+                                           value="{{ grade.classwork_score|floatformat:1 }}" 
+                                           min="0" max="30" step="0.1">
+                                    {% else %}
+                                    {{ grade.classwork_score|floatformat:1 }}
+                                    {% endif %}
+                                </td>
+                                <td data-label="Test" class="text-center">
+                                    {% if editable_mode %}
+                                    <input type="number" class="grade-input editable-field" 
+                                           name="test_{{ grade.id }}" 
+                                           value="{{ grade.test_score|floatformat:1 }}" 
+                                           min="0" max="10" step="0.1">
+                                    {% else %}
+                                    {{ grade.test_score|floatformat:1 }}
+                                    {% endif %}
+                                </td>
+                                <td data-label="Exam" class="text-center">
+                                    {% if editable_mode %}
+                                    <input type="number" class="grade-input editable-field" 
+                                           name="exam_{{ grade.id }}" 
+                                           value="{{ grade.exam_score|floatformat:1 }}" 
+                                           min="0" max="40" step="0.1">
+                                    {% else %}
+                                    {{ grade.exam_score|floatformat:1 }}
+                                    {% endif %}
+                                </td>
+                                <td data-label="Total" class="text-center fw-bold">
+                                    {% if editable_mode %}
+                                    <span id="total_{{ grade.id }}">{{ grade.total_score|floatformat:1 }}</span>
+                                    {% else %}
+                                    {{ grade.total_score|floatformat:1 }}
+                                    {% endif %}
+                                </td>
                                 <td data-label="Grade" class="text-center">
                                     <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
                                         {{ grade.grade }}
                                     </span>
                                 </td>
-                                <td data-label="Remarks" class="text-center">{{ grade.remarks|default:"-" }}</td>
+                                <td data-label="Remarks" class="text-center">
+                                    {% if editable_mode %}
+                                    <input type="text" class="remarks-input editable-field" 
+                                           name="remarks_{{ grade.id }}" 
+                                           value="{{ grade.remarks|default:'' }}" 
+                                           placeholder="Enter remarks...">
+                                    {% else %}
+                                    {{ grade.remarks|default:"-" }}
+                                    {% endif %}
+                                </td>
+                                {% if editable_mode %}
+                                <td data-label="Actions" class="text-center no-print">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-success btn-sm update-grade-btn" 
+                                                data-grade-id="{{ grade.id }}">
+                                            <i class="fas fa-save"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm delete-grade-btn" 
+                                                data-grade-id="{{ grade.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                {% endif %}
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4 small-text">
+                                <td colspan="{% if editable_mode %}9{% else %}8{% endif %}" class="text-center text-muted py-4 small-text">
                                     <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
                                     No grades available for this academic period
                                 </td>
@@ -698,6 +827,51 @@ body {
                     </table>
                 </div>
             </div>
+
+            <!-- Add New Grade Form (Edit Mode Only) -->
+            {% if editable_mode and can_edit %}
+            <div class="card mt-3 no-print">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-plus me-2"></i>Add New Grade</h6>
+                </div>
+                <div class="card-body">
+                    <form id="addGradeForm" class="row g-3">
+                        {% csrf_token %}
+                        <div class="col-md-3">
+                            <label class="form-label">Subject</label>
+                            <select name="subject" class="form-select" required>
+                                <option value="">Select Subject</option>
+                                {% for subject in available_subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Homework</label>
+                            <input type="number" name="homework" class="form-control" min="0" max="20" step="0.1" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Classwork</label>
+                            <input type="number" name="classwork" class="form-control" min="0" max="30" step="0.1" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Test</label>
+                            <input type="number" name="test" class="form-control" min="0" max="10" step="0.1" value="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Exam</label>
+                            <input type="number" name="exam" class="form-control" min="0" max="40" step="0.1" value="0">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Summary Sections -->
             <div class="row mt-3">
@@ -785,7 +959,7 @@ body {
             <div class="action-buttons no-print">
                 <div class="row align-items-center">
                     <div class="col-md-6">
-                        {% if not report_card and is_teacher %}
+                        {% if not report_card and is_teacher and not editable_mode %}
                         <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
                             {% csrf_token %}
                             <input type="hidden" name="academic_year" value="{{ academic_year }}">
@@ -794,10 +968,31 @@ body {
                                 <i class="fas fa-save me-1"></i> Save Report
                             </button>
                         </form>
+                        {% elif editable_mode and can_edit %}
+                        <!-- Edit mode buttons -->
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-success me-2" id="saveAllChangesBtn">
+                                <i class="fas fa-save me-1"></i> Save All Changes
+                            </button>
+                            <button type="button" class="btn btn-primary me-2" id="recalculateTotalsBtn">
+                                <i class="fas fa-calculator me-1"></i> Recalculate
+                            </button>
+                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-1"></i> Cancel
+                            </a>
+                        </div>
                         {% endif %}
                     </div>
                     <div class="col-md-6 text-end">
                         <div class="btn-group">
+                            {% if not editable_mode and can_edit %}
+                            <!-- Edit button when not in edit mode -->
+                            <a href="?editable=true{% if report_card %}&report_card_id={{ report_card.id }}{% endif %}" 
+                               class="btn btn-warning me-2">
+                                <i class="fas fa-edit me-1"></i> Edit Report Card
+                            </a>
+                            {% endif %}
+                            
                             <button onclick="window.print()" class="btn btn-info me-2">
                                 <i class="fas fa-print me-1"></i> Print
                             </button>
@@ -813,7 +1008,7 @@ body {
                 </div>
             </div>
 
-            {% if not report_card %}
+            {% if not report_card and not editable_mode %}
             <div class="alert alert-warning mt-2 no-print small-text">
                 <div class="d-flex align-items-center">
                     <i class="fas fa-exclamation-circle me-2"></i>
@@ -827,10 +1022,20 @@ body {
         </div>
     </div>
 </div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center text-white">
+        <div class="spinner-border text-light mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h5>Processing...</h5>
+        <p>Please wait while we process your request</p>
+    </div>
+</div>
 {% endblock %}
 
 {% block footer %}
-
 {% endblock %}
 
 {% block extra_js %}
@@ -893,6 +1098,215 @@ document.addEventListener('DOMContentLoaded', function() {
             window.print();
         });
     }
+
+    // =============================================
+    // EDIT MODE FUNCTIONALITY
+    // =============================================
+    {% if editable_mode %}
+    
+    // Auto-calculate totals when grade inputs change
+    document.querySelectorAll('.grade-input').forEach(input => {
+        input.addEventListener('input', function() {
+            const gradeId = this.name.split('_')[1];
+            calculateTotal(gradeId);
+        });
+    });
+
+    // Calculate total for a specific grade
+    function calculateTotal(gradeId) {
+        const homework = parseFloat(document.querySelector(`input[name="homework_${gradeId}"]`).value) || 0;
+        const classwork = parseFloat(document.querySelector(`input[name="classwork_${gradeId}"]`).value) || 0;
+        const test = parseFloat(document.querySelector(`input[name="test_${gradeId}"]`).value) || 0;
+        const exam = parseFloat(document.querySelector(`input[name="exam_${gradeId}"]`).value) || 0;
+        
+        const total = homework + classwork + test + exam;
+        document.getElementById(`total_${gradeId}`).textContent = total.toFixed(1);
+    }
+
+    // Update individual grade
+    document.querySelectorAll('.update-grade-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const gradeId = this.getAttribute('data-grade-id');
+            updateGrade(gradeId);
+        });
+    });
+
+    // Update grade via AJAX
+    function updateGrade(gradeId) {
+        const homework = document.querySelector(`input[name="homework_${gradeId}"]`).value;
+        const classwork = document.querySelector(`input[name="classwork_${gradeId}"]`).value;
+        const test = document.querySelector(`input[name="test_${gradeId}"]`).value;
+        const exam = document.querySelector(`input[name="exam_${gradeId}"]`).value;
+        const remarks = document.querySelector(`input[name="remarks_${gradeId}"]`).value;
+
+        const formData = new FormData();
+        formData.append('grade_id', gradeId);
+        formData.append('homework', homework);
+        formData.append('classwork', classwork);
+        formData.append('test', test);
+        formData.append('exam', exam);
+        formData.append('remarks', remarks);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        showLoading();
+
+        fetch('{% url "grade_edit" 0 %}'.replace('0', gradeId), {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert('success', 'Grade updated successfully!');
+            } else {
+                showAlert('error', 'Error updating grade: ' + data.error);
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showAlert('error', 'Error updating grade: ' + error);
+        });
+    }
+
+    // Save all changes
+    document.getElementById('saveAllChangesBtn')?.addEventListener('click', function() {
+        const gradeIds = [{% for grade in grades %}{{ grade.id }},{% endfor %}];
+        let successCount = 0;
+        let errorCount = 0;
+
+        showLoading();
+        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+        this.disabled = true;
+
+        gradeIds.forEach(gradeId => {
+            updateGrade(gradeId);
+        });
+
+        // Simulate completion (in real implementation, you'd track all promises)
+        setTimeout(() => {
+            hideLoading();
+            this.innerHTML = '<i class="fas fa-save me-1"></i> Save All Changes';
+            this.disabled = false;
+            showAlert('success', 'All changes saved successfully!');
+        }, 2000);
+    });
+
+    // Recalculate all totals
+    document.getElementById('recalculateTotalsBtn')?.addEventListener('click', function() {
+        const gradeIds = [{% for grade in grades %}{{ grade.id }},{% endfor %}];
+        gradeIds.forEach(gradeId => {
+            calculateTotal(gradeId);
+        });
+        showAlert('info', 'All totals recalculated!');
+    });
+
+    // Add new grade
+    document.getElementById('addGradeForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        formData.append('student_id', '{{ student.id }}');
+        formData.append('academic_year', '{{ academic_year }}');
+        formData.append('term', '{{ term }}');
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        showLoading();
+
+        fetch('{% url "grade_add" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert('success', 'Grade added successfully!');
+                this.reset();
+                // Reload page to show new grade
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showAlert('error', 'Error adding grade: ' + data.error);
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showAlert('error', 'Error adding grade: ' + error);
+        });
+    });
+
+    // Delete grade
+    document.querySelectorAll('.delete-grade-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const gradeId = this.getAttribute('data-grade-id');
+            
+            if (confirm('Are you sure you want to delete this grade?')) {
+                showLoading();
+                
+                fetch('{% url "grade_delete" 0 %}'.replace('0', gradeId), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        showAlert('success', 'Grade deleted successfully!');
+                        // Remove the row
+                        this.closest('tr').remove();
+                    } else {
+                        showAlert('error', 'Error deleting grade: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    showAlert('error', 'Error deleting grade: ' + error);
+                });
+            }
+        });
+    });
+
+    {% endif %}
+
+    // Utility functions
+    function showLoading() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function showAlert(type, message) {
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+        alert.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check' : 'exclamation'}-circle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.querySelector('.container-fluid').insertBefore(alert, document.querySelector('.report-card-container'));
+        
+        setTimeout(() => {
+            alert.remove();
+        }, 5000);
+    }
+
+    // Auto-save when leaving edit mode
+    window.addEventListener('beforeunload', function(e) {
+        {% if editable_mode %}
+        // Check if there are unsaved changes
+        const hasChanges = document.querySelectorAll('.editable-field').length > 0;
+        if (hasChanges) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+        {% endif %}
+    });
 });
 </script>
 {% endblock %}

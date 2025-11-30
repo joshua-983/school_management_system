@@ -130,7 +130,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge bg-{{ event.get_severity_color }}">
+                                    <span class="badge bg-{% if event.severity == 'CRITICAL' %}danger{% elif event.severity == 'HIGH' %}warning{% elif event.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">
                                         {{ event.get_severity_display }}
                                     </span>
                                 </td>
@@ -309,10 +309,6 @@
 </div>
 {% endblock %}
 
-{% block footer %}
-
-{% endblock %}
-
 {% block extra_scripts %}
 <script>
     // Load initial stats
@@ -331,5 +327,79 @@
             }
         });
     });
+
+    // Enhanced security stats update
+    function updateSecurityStats() {
+        fetch('{% url "security_stats_api" %}')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update stats cards
+                if (data.today_logins !== undefined) {
+                    const todayLoginsElement = document.getElementById('today-logins');
+                    if (todayLoginsElement) {
+                        todayLoginsElement.textContent = data.today_logins;
+                    }
+                }
+                if (data.blocked_users !== undefined) {
+                    const blockedUsersElement = document.getElementById('blocked-users-count');
+                    if (blockedUsersElement) {
+                        blockedUsersElement.textContent = data.blocked_users;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error updating security stats:', error);
+                // Fallback to static values
+                document.getElementById('today-logins').textContent = '0';
+            });
+    }
+
+    // Update stats every 30 seconds
+    setInterval(updateSecurityStats, 30000);
+
+    // Real-time notifications
+    function checkSecurityNotifications() {
+        fetch('{% url "security_notifications_api" %}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.events && data.events.length > 0) {
+                    showNotification('New security events detected', 'warning');
+                }
+            })
+            .catch(error => console.error('Error checking notifications:', error));
+    }
+
+    function showNotification(message, type = 'info') {
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        const container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.appendChild(toast);
+        document.body.appendChild(container);
+        
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        // Remove after hide
+        toast.addEventListener('hidden.bs.toast', () => {
+            container.remove();
+        });
+    }
+
+    // Check for notifications every minute
+    setInterval(checkSecurityNotifications, 60000);
 </script>
 {% endblock %}

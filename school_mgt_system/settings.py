@@ -52,7 +52,7 @@ DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
-    'django.contrib.sessions',
+    'django.contrib.sessions',  # Required for sessions
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
@@ -106,22 +106,22 @@ if IS_PRODUCTION:
 # Core middleware
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # For static files
-    'corsheaders.middleware.CorsMiddleware',  # CORS support
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'core.middleware.session_middleware.SessionProtectionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',  # FIXED: Use standard CSRF middleware
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django_otp.middleware.OTPMiddleware',  # Two-factor authentication
-    'axes.middleware.AxesMiddleware',  # Login attempt tracking
+    'django_otp.middleware.OTPMiddleware',
+    'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.SecurityHeadersMiddleware',  # FIXED: Correct import path
+    'core.middleware.SecurityHeadersMiddleware',
     'core.middleware.MaintenanceModeMiddleware',
     'core.middleware.UserBlockMiddleware',
-    'core.middleware.RateLimitMiddleware',  # ADDED: Rate limiting
+    'core.middleware.RateLimitMiddleware',
 ]
-
 # Conditional middleware
 if DEBUG_TOOLBAR and not IS_TESTING:
     MIDDLEWARE.insert(0, 'debug_toolbar.middleware.DebugToolbarMiddleware')
@@ -132,7 +132,14 @@ if IS_PRODUCTION and config('CSP_ENABLED', default=True, cast=bool):
 
 # ==================== URL CONFIGURATION ====================
 ROOT_URLCONF = 'school_mgt_system.urls'
-ASGI_APPLICATION = 'school_mgt_system.asgi.application'
+
+# Daphne ASGI configuration with timeout fixes
+if not IS_TESTING:
+    ASGI_APPLICATION = 'school_mgt_system.asgi.application'
+    # Daphne settings to prevent timeout warnings
+    DAPHNE_TIMEOUT = 60  # Increase timeout to 60 seconds
+    DAPHNE_WORKERS = 1   # Reduce workers to prevent resource conflicts
+
 WSGI_APPLICATION = 'school_mgt_system.wsgi.application'
 
 # Site framework
@@ -277,12 +284,15 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-# Improved Whitenoise configuration
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# Improved Whitenoise configuration for ASGI compatibility
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-# Add this for better ASGI static file handling
+# Enhanced Whitenoise settings for better ASGI performance
 WHITENOISE_MAX_AGE = 31536000  # 1 year
 WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG  # Auto-refresh in development
+WHITENOISE_ROOT = BASE_DIR / 'static' / 'root'
+
 # Static files finders
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
@@ -324,13 +334,35 @@ GUARDIAN_GET_INIT_ANONYMOUS_USER = 'accounts.models.get_anonymous_user_instance'
 ANONYMOUS_USER_NAME = None
 
 # ==================== SESSION CONFIGURATION ====================
-SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
-SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=1209600, cast=int)
+# FIXED: Enhanced session configuration to prevent corruption
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Most stable backend
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 SESSION_COOKIE_NAME = 'school_mgt_sessionid'
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_SAVE_EVERY_REQUEST = False  # Reduce session writes to prevent corruption
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# Session serialization - use JSON for better compatibility
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
+
+# Session cleanup configuration
+SESSION_CLEANUP_INTERVAL = timedelta(days=1)
+
+# Add session cookie secure settings based on environment
+if IS_PRODUCTION or IS_STAGING:
+    SESSION_COOKIE_SECURE = True
+else:
+    SESSION_COOKIE_SECURE = False
+
+# Session cookie path
+SESSION_COOKIE_PATH = '/'
+
+# Prevent session fixation attacks
+SESSION_COOKIE_HTTPONLY = True
+
+# Reduce session data size
+SESSION_DATA_SIZE_LIMIT = 4096  # 4KB limit
 
 # ==================== SECURITY HEADERS CONFIGURATION ====================
 # Security middleware settings
@@ -387,18 +419,16 @@ SERVER_EMAIL = config('SERVER_EMAIL', default='admin@school.edu.gh')
 REDIS_HOST = 'redis' if (IS_DOCKER or IS_DOCKER_COMPOSE) else 'localhost'
 REDIS_URL = f"redis://{REDIS_HOST}:6379"
 
-# TEMPORARY FIX: Use dummy cache for local development
+# SIMPLIFIED CACHE CONFIGURATION: Use single cache backend
 if not (IS_DOCKER or IS_DOCKER_COMPOSE):
-    print("🔧 Using dummy cache for local development")
+    print("🔧 Using local memory cache for development")
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-        },
-        "sessions": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "school-mgt-cache",
+            "TIMEOUT": 300,  # 5 minutes
         }
     }
-    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels.layers.InMemoryChannelLayer"
@@ -426,14 +456,6 @@ else:
                 "KEY_PREFIX": "school_mgt",
                 "VERSION": 1,
                 "TIMEOUT": 3600,
-            },
-            "sessions": {
-                "BACKEND": "django_redis.cache.RedisCache",
-                "LOCATION": config('REDIS_URL', default=f"{REDIS_URL}/2"),
-                "OPTIONS": {
-                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                },
-                "KEY_PREFIX": "school_mgt_sessions",
             }
         }
     except ImportError:
@@ -443,26 +465,22 @@ else:
                 "default": {
                     "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
                     "LOCATION": "school-mgt-cache",
-                },
-                "sessions": {
-                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-                    "LOCATION": "school-mgt-sessions",
                 }
             }
 
-# Session cache alias
-SESSION_CACHE_ALIAS = "sessions"
-
 # ==================== CHANNEL LAYERS ====================
 if not (IS_DOCKER or IS_DOCKER_COMPOSE):
-    # Use InMemoryChannelLayer for local development
+    # Use InMemoryChannelLayer for local development with better settings
     CHANNEL_LAYERS = {
         "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer"
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+            "CONFIG": {
+                "capacity": 1000,
+            }
         }
     }
 else:
-    # Use Redis for Docker environment
+    # Use Redis for Docker environment with optimized settings
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -470,6 +488,12 @@ else:
                 "hosts": [config('REDIS_URL', default="redis://redis:6379/3")],
                 "capacity": 1500,
                 "expiry": 10,
+                "group_expiry": 60,
+                "channel_capacity": {
+                    "http.request": 200,
+                    "http.response!*": 100,
+                    "websocket.send!*": 20,
+                },
             },
         }
     }
@@ -585,12 +609,28 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # ==================== AXES (LOGIN SECURITY) ====================
 AXES_ENABLED = True
-AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_FAILURE_LIMIT = 5  # Lock after 5 failed attempts
+AXES_COOLOFF_TIME = timedelta(minutes=15)  # 15 minutes lockout
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_PARAMETERS = ['username']
-AXES_LOCKOUT_TEMPLATE = 'accounts/lockout.html'
+AXES_LOCKOUT_PARAMETERS = ['username']  # Lock by username only
+AXES_LOCKOUT_TEMPLATE = 'security/user_blocked.html'
 AXES_VERBOSE = True
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = True
+AXES_USERNAME_FORM_FIELD = 'username'
+AXES_PASSWORD_FORM_FIELD = 'password'
+
+# Custom Axes handler
+AXES_HANDLER = 'core.axes_handlers.CustomAxesHandler'
+
+# Axes cache configuration (use default cache)
+AXES_CACHE = 'default'
+
+# Authentication backends - Axes MUST be first
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesBackend',  # Must be first
+    'django.contrib.auth.backends.ModelBackend',
+    'guardian.backends.ObjectPermissionBackend',
+]
 
 # ==================== LOGGING CONFIGURATION ====================
 # Create logs directory first
@@ -607,6 +647,10 @@ LOGGING = {
         },
         'simple': {
             'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+        'daphne': {
+            'format': '{levelname} {asctime} {name} - Daphne: {message}',
             'style': '{',
         },
     },
@@ -648,6 +692,14 @@ LOGGING = {
             'backupCount': 3,
             'formatter': 'verbose',
         },
+        'daphne_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOGS_DIR / 'daphne.log',
+            'maxBytes': 1024 * 1024 * 5,
+            'backupCount': 3,
+            'formatter': 'daphne',
+        },
         'mail_admins': {
             'level': 'ERROR',
             'filters': ['require_debug_false'],
@@ -671,6 +723,11 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
+        'django.server': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         'core': {
             'handlers': ['console', 'file', 'error_file'],
             'level': 'DEBUG' if DEBUG else 'INFO',
@@ -684,6 +741,21 @@ LOGGING = {
         'celery': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
+            'propagate': False,
+        },
+        'channels': {
+            'handlers': ['console', 'daphne_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'daphne': {
+            'handlers': ['console', 'daphne_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'asyncio': {
+            'handlers': ['console', 'daphne_file'],
+            'level': 'WARNING',
             'propagate': False,
         },
     },
@@ -784,20 +856,9 @@ COMPRESS_JS_FILTERS = [
     'compressor.filters.jsmin.JSMinFilter',
 ]
 
-
-# ==================== SESSION FIX ====================
-# Clear any corrupted sessions
-SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
-
-# Add session serialization fix
-SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
-
-# Session cookie settings for security
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_SAMESITE = 'Lax'
+# ==================== SESSION FIXES ====================
+# REMOVED: The automatic session clearing from settings.py since it doesn't work
+# Run manual session clearing instead using the methods below
 
 # ==================== TEST CONFIGURATION ====================
 if IS_TESTING:
@@ -865,3 +926,8 @@ print(f"✅ Settings loaded - Environment: {ENVIRONMENT}, Debug: {DEBUG}")
 print(f"✅ Docker: {IS_DOCKER}")
 print(f"✅ Database: {DATABASES['default']['ENGINE']}")
 print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
+print(f"✅ Session Engine: {SESSION_ENGINE}")
+print(f"✅ Static Storage: {STATICFILES_STORAGE}")
+
+# settings.py
+EMERGENCY_BYPASS_KEY = 'your-secret-emergency-key-here'

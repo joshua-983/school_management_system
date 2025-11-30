@@ -1,507 +1,728 @@
-{% extends 'base.html' %}
+{% extends 'security/base.html' %}
 {% load static %}
 
-{% block title %}Lockout Management - Security Dashboard{% endblock %}
+{% block title %}Lockout Management - Security Management{% endblock %}
+
+{% block page_title %}Lockout Management{% endblock %}
+
+{% block page_subtitle %}Manage user account lockouts and failed login attempts{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <button class="btn btn-outline-success" onclick="refreshLockedUsers()">
+        <i class="fas fa-sync-alt me-2"></i>Refresh
+    </button>
+    <button class="btn btn-outline-danger" onclick="unlockAllUsers()" {% if not axes_installed %}disabled{% endif %}>
+        <i class="fas fa-unlock-alt me-2"></i>Unlock All
+    </button>
+</div>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h1 class="h3 mb-1">🔓 Lockout Management</h1>
-                    <p class="text-muted mb-0">Manage user account lockouts and security blocks</p>
+<!-- Hidden URL data for JavaScript -->
+<div id="urls-data" 
+     data-unlock-user-url="{% url 'unlock_user_api' 'USERNAME_PLACEHOLDER' %}"
+     data-locked-users-url="{% url 'locked_users_api' %}"
+     data-unlock-all-url="{% url 'unlock_all_users_api' %}"
+     style="display: none;"></div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card security-table">
+            <div class="card-header {% if axes_installed %}bg-primary{% else %}bg-warning{% endif %} text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-user-lock me-2"></i>
+                    {% if axes_installed %}Locked Users{% else %}Lockout Management Unavailable{% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if not axes_installed %}
+                <!-- Axes Not Installed Warning -->
+                <div class="alert alert-warning">
+                    <h4><i class="fas fa-exclamation-triangle me-2"></i>django-axes Not Installed</h4>
+                    <p class="mb-2">The lockout management feature requires django-axes to be installed and configured.</p>
+                    <div class="mt-3">
+                        <h6>To enable lockout management:</h6>
+                        <ol class="mb-0">
+                            <li>Install django-axes: <code>pip install django-axes</code></li>
+                            <li>Add 'axes' to INSTALLED_APPS in settings.py</li>
+                            <li>Run migrations: <code>python manage.py migrate axes</code></li>
+                            <li>Configure Axes in your settings (see documentation)</li>
+                        </ol>
+                    </div>
+                    {% if error %}
+                    <div class="mt-3">
+                        <strong>Error Details:</strong>
+                        <code class="d-block mt-1 p-2 bg-light border rounded">{{ error }}</code>
+                    </div>
+                    {% endif %}
                 </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" onclick="refreshLockedUsers()">
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                {% elif error %}
+                <!-- General Error -->
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-exclamation-circle me-2"></i>Error Loading Lockout Data</h4>
+                    <p class="mb-0">{{ error }}</p>
+                </div>
+                {% else %}
+                <!-- System Status -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card stat-card info-card">
+                            <div class="card-body text-center">
+                                <h3 class="text-info mb-0" id="totalLockedUsers">{{ locked_users_count }}</h3>
+                                <small class="text-muted">Currently Locked</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card warning-card">
+                            <div class="card-body text-center">
+                                <h3 class="text-warning mb-0" id="recentLockouts">{{ recent_lockouts.count }}</h3>
+                                <small class="text-muted">Recent (Last 24h)</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card">
+                            <div class="card-body text-center">
+                                <h3 class="text-primary mb-0" id="failedAttemptsToday">{{ total_attempts_today }}</h3>
+                                <small class="text-muted">Attempts Today</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card success-card">
+                            <div class="card-body text-center">
+                                <h3 class="text-success mb-0" id="unlockedCount">0</h3>
+                                <small class="text-muted">Unlocked This Session</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search and Filters -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchLockedUsers" placeholder="Search locked users...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="searchLockedUsers()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="btn-group float-end">
+                            <button class="btn btn-outline-info" onclick="exportLockedUsers()">
+                                <i class="fas fa-download me-2"></i>Export
+                            </button>
+                            <button class="btn btn-outline-warning" onclick="showLockoutSettings()">
+                                <i class="fas fa-cog me-2"></i>Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Locked Users Table -->
+                <div class="table-responsive">
+                    <table class="table table-hover" id="lockedUsersTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Username</th>
+                                <th>IP Address</th>
+                                <th>Failures</th>
+                                <th>Locked At</th>
+                                <th>Duration</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lockedUsersBody">
+                            <!-- Data will be loaded via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading locked users...</span>
+                    </div>
+                    <p class="text-muted mt-2">Loading locked users...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="text-center py-5" style="display: none;">
+                    <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                    <h4 class="text-success">No Locked Users</h4>
+                    <p class="text-muted">All user accounts are currently accessible.</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="errorState" class="text-center py-5" style="display: none;">
+                    <i class="fas fa-exclamation-triangle fa-4x text-danger mb-3"></i>
+                    <h4 class="text-danger" id="errorTitle">Error Loading Data</h4>
+                    <p class="text-muted" id="errorMessage">Unable to load locked users data.</p>
+                    <button class="btn btn-primary mt-2" onclick="loadLockedUsers()">
+                        <i class="fas fa-redo me-2"></i>Try Again
                     </button>
-                    <button class="btn btn-success" onclick="showUnlockModal()">
-                        <i class="bi bi-unlock"></i> Unlock User
-                    </button>
                 </div>
+                {% endif %}
             </div>
-        </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-primary text-white">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-0" id="lockedUsersCount">0</h4>
-                            <p class="mb-0">Currently Locked</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <i class="bi bi-person-lock fs-1"></i>
-                        </div>
-                    </div>
-                </div>
+            {% if axes_installed and not error %}
+            <div class="card-footer text-muted">
+                <small>
+                    <i class="fas fa-info-circle me-1"></i>
+                    Last updated: <span id="lastUpdatedTime">Never</span> | 
+                    Axes Lockout System: <span id="axesStatus" class="badge bg-success">Active</span>
+                </small>
             </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-warning text-dark">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-0" id="todayAttempts">0</h4>
-                            <p class="mb-0">Today's Attempts</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <i class="bi bi-shield-exclamation fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-0" id="recentLockouts">0</h4>
-                            <p class="mb-0">Recent Lockouts</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <i class="bi bi-clock-history fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-dark text-white">
-                <div class="card-body">
-                    <div class="d-flex align-items-center">
-                        <div class="flex-grow-1">
-                            <h4 class="mb-0" id="lastUpdated">--:--</h4>
-                            <p class="mb-0">Last Updated</p>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <i class="bi bi-activity fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">🚀 Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="d-grid">
-                                <button class="btn btn-outline-success btn-lg" onclick="showUnlockModal()">
-                                    <i class="bi bi-unlock me-2"></i>
-                                    Unlock Specific User
-                                </button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="d-grid">
-                                <button class="btn btn-outline-warning btn-lg" onclick="unlockAllUsers()">
-                                    <i class="bi bi-unlock-fill me-2"></i>
-                                    Unlock All Users
-                                </button>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="d-grid">
-                                <button class="btn btn-outline-info btn-lg" onclick="refreshLockedUsers()">
-                                    <i class="bi bi-arrow-clockwise me-2"></i>
-                                    Refresh Data
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Locked Users Table -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-person-lock-fill me-2"></i>
-                        Currently Locked Users
-                        <span class="badge bg-danger ms-2" id="tableCountBadge">0</span>
-                    </h5>
-                    <div class="d-flex align-items-center">
-                        <span class="text-muted me-3" id="lastUpdateTime">Last update: --:--</span>
-                        <div class="spinner-border spinner-border-sm text-primary me-2" id="loadingSpinner" style="display: none;"></div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="lockedUsersTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Username</th>
-                                    <th>IP Address</th>
-                                    <th>Failed Attempts</th>
-                                    <th>Locked Since</th>
-                                    <th>Duration</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="lockedUsersTableBody">
-                                <!-- Dynamic content will be loaded here -->
-                                <tr id="loadingRow">
-                                    <td colspan="7" class="text-center py-4">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Loading...</span>
-                                        </div>
-                                        <p class="mt-2 text-muted">Loading locked users...</p>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <!-- Empty State -->
-                    <div id="emptyState" class="text-center py-5" style="display: none;">
-                        <div class="mb-3">
-                            <i class="bi bi-check-circle-fill text-success fs-1"></i>
-                        </div>
-                        <h4 class="text-muted">No Locked Users</h4>
-                        <p class="text-muted">All user accounts are currently accessible.</p>
-                    </div>
-                </div>
-            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-<!-- Unlock User Modal -->
-<div class="modal fade" id="unlockUserModal" tabindex="-1">
+<!-- Unlock Confirmation Modal -->
+<div class="modal fade" id="unlockConfirmModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-unlock me-2"></i>
-                    Unlock User Account
-                </h5>
+                <h5 class="modal-title">Confirm Unlock</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label for="usernameInput" class="form-label">Username</label>
-                    <input type="text" class="form-control" id="usernameInput" 
-                           placeholder="Enter username to unlock" required>
-                    <div class="form-text">Enter the exact username of the locked account.</div>
+                <p id="unlockConfirmMessage">Are you sure you want to unlock this user?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This will remove all lockout restrictions and allow the user to attempt login again.
                 </div>
-                <div id="unlockResult"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" onclick="performUnlock()">
-                    <i class="bi bi-unlock me-1"></i>
-                    Unlock User
-                </button>
+                <button type="button" class="btn btn-primary" id="confirmUnlockBtn">Yes, Unlock User</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Success Toast -->
-<div class="toast-container position-fixed top-0 end-0 p-3">
-    <div id="successToast" class="toast align-items-center text-bg-success border-0" role="alert">
-        <div class="d-flex">
-            <div class="toast-body" id="successToastMessage">
-                Operation completed successfully!
+<!-- Unlock All Confirmation Modal -->
+<div class="modal fade" id="unlockAllConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Unlock All Users</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <div class="modal-body">
+                <p>Are you sure you want to unlock ALL locked users?</p>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This will remove lockout restrictions from ALL currently locked users and allow them to attempt login again.
+                </div>
+                <p class="text-muted"><strong id="unlockAllCount">0</strong> users will be unlocked.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmUnlockAllBtn">Yes, Unlock All Users</button>
+            </div>
         </div>
     </div>
 </div>
 
-<style>
-.card {
-    border: none;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    transition: all 0.3s ease;
-}
+<!-- Lockout Settings Modal -->
+<div class="modal fade" id="lockoutSettingsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Lockout Settings</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    These settings are configured in your Django settings file. Current configuration:
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6>Failure Limits</h6>
+                                <p><strong>Max Attempts:</strong> <code>5</code></p>
+                                <p><strong>Cool-off Time:</strong> <code>15 minutes</code></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <h6>System Status</h6>
+                                <p><strong>Axes Installed:</strong> <span class="badge bg-success">Yes</span></p>
+                                <p><strong>Backend Active:</strong> <span class="badge bg-success">Yes</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    To modify these settings, update your <code>settings.py</code> file and restart the application.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-.card:hover {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.04);
-}
-
-.badge-recent {
-    background: linear-gradient(135deg, #dc3545, #c82333);
-    color: white;
-}
-
-.badge-normal {
-    background: linear-gradient(135deg, #6c757d, #495057);
-    color: white;
-}
-
-.btn-action {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-}
-</style>
-
+{% block extra_scripts %}
+{% if axes_installed and not error %}
 <script>
-// Global variables
-let lockedUsersData = [];
+    let lockedUsersData = [];
+    let unlockedCount = 0;
 
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    loadLockedUsers();
-    setInterval(loadLockedUsers, 30000); // Refresh every 30 seconds
-});
+    // URL helper functions
+    function getUnlockUserUrl(username) {
+        return `/security/api/unlock-user/${encodeURIComponent(username)}/`;
+    }
 
-// Load locked users data - FIXED URL
-function loadLockedUsers() {
-    showLoading(true);
-    
-    // FIXED: Use the correct URL path from your urls.py
-    fetch('{% url "locked_users_api" %}')
+    function getLockedUsersUrl() {
+        return '/security/api/locked-users/';
+    }
+
+    function getUnlockAllUrl() {
+        return '/security/api/unlock-all-users/';
+    }
+
+    // SIMPLIFIED CSRF Token helper function
+    function getCsrfToken() {
+        // Get from meta tag (most reliable method)
+        const csrfMetaTag = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMetaTag) {
+            return csrfMetaTag.getAttribute('content');
+        }
+        
+        // Fallback: Get from cookie
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        
+        return cookieValue;
+    }
+
+    // Load locked users on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadLockedUsers();
+        
+        // Set up auto-refresh every 30 seconds
+        setInterval(loadLockedUsers, 30000);
+    });
+
+    // Load locked users from API
+    function loadLockedUsers() {
+        showLoadingState();
+        
+        fetch(getLockedUsersUrl())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Locked users data:', data);
+                if (data.success) {
+                    lockedUsersData = data.locked_users || [];
+                    renderLockedUsers(lockedUsersData);
+                    updateStats(data);
+                    hideErrorState();
+                } else {
+                    showErrorState('Failed to load data', data.error || 'Unknown error occurred');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading locked users:', error);
+                showErrorState('Network Error', 'Failed to fetch locked users data. Check console for details.');
+            });
+    }
+
+    // Render locked users table
+    function renderLockedUsers(users) {
+        const tbody = document.getElementById('lockedUsersBody');
+        const emptyState = document.getElementById('emptyState');
+        const loadingState = document.getElementById('loadingState');
+        
+        loadingState.style.display = 'none';
+        
+        if (users.length === 0) {
+            tbody.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        tbody.innerHTML = users.map(user => `
+            <tr class="${user.is_recent ? 'table-warning' : ''}">
+                <td>
+                    <strong>${escapeHtml(user.username)}</strong>
+                    ${user.is_recent ? '<span class="badge bg-warning ms-1">Recent</span>' : ''}
+                </td>
+                <td><code>${escapeHtml(user.ip_address || 'Unknown')}</code></td>
+                <td>
+                    <span class="badge bg-danger">${user.failures} failures</span>
+                </td>
+                <td>${escapeHtml(user.locked_at)}</td>
+                <td>${escapeHtml(user.time_locked)}</td>
+                <td>
+                    <span class="badge bg-${user.is_locked ? 'danger' : 'secondary'}">
+                        ${user.is_locked ? 'Locked' : 'Expired'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-success" onclick="unlockUser('${escapeHtml(user.username)}')" 
+                                title="Unlock User" ${user.is_locked ? '' : 'disabled'}>
+                            <i class="fas fa-unlock"></i>
+                        </button>
+                        <button class="btn btn-outline-info" onclick="viewUserDetails('${escapeHtml(user.username)}')" 
+                                title="View Details">
+                            <i class="fas fa-info-circle"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Update statistics
+    function updateStats(data) {
+        document.getElementById('totalLockedUsers').textContent = data.total_locked || 0;
+        document.getElementById('recentLockouts').textContent = data.locked_users ? 
+            data.locked_users.filter(user => user.is_recent).length : 0;
+        document.getElementById('lastUpdatedTime').textContent = data.last_updated || 'Just now';
+        document.getElementById('unlockedCount').textContent = unlockedCount;
+    }
+
+    // Unlock a specific user
+    function unlockUser(username) {
+        const modal = new bootstrap.Modal(document.getElementById('unlockConfirmModal'));
+        const message = document.getElementById('unlockConfirmMessage');
+        const confirmBtn = document.getElementById('confirmUnlockBtn');
+        
+        message.textContent = `Are you sure you want to unlock user "${username}"?`;
+        
+        // Remove existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Add new event listener
+        newConfirmBtn.addEventListener('click', function() {
+            performUnlockUser(username);
+            modal.hide();
+        });
+        
+        modal.show();
+    }
+
+    // Perform the unlock API call
+    function performUnlockUser(username) {
+        console.log(`Attempting to unlock user: ${username}`);
+        showToast(`Unlocking user ${username}...`, 'info');
+        
+        const unlockUrl = getUnlockUserUrl(username);
+        const csrfToken = getCsrfToken();
+        
+        console.log(`CSRF Token: ${csrfToken ? 'Present' : 'Missing'}`);
+        
+        if (!csrfToken) {
+            showToast('CSRF token missing. Please refresh the page and try again.', 'error');
+            return;
+        }
+        
+        fetch(unlockUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
         .then(response => {
             console.log('Response status:', response.status);
-            console.log('Response URL:', response.url);
-            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('API response data:', data);
-            if (data.success) {
-                updateDashboard(data);
-                updateTable(data.locked_users);
-            } else {
-                showError('Failed to load locked users: ' + data.error);
-            }
-            showLoading(false);
-        })
-        .catch(error => {
-            console.error('Fetch error:', error);
-            showError('Failed to load locked users: ' + error.message);
-            showLoading(false);
-        });
-}
-
-// Update dashboard statistics
-function updateDashboard(data) {
-    document.getElementById('lockedUsersCount').textContent = data.total_locked;
-    document.getElementById('lastUpdated').textContent = data.last_updated ? data.last_updated.split(' ')[1] : '--:--';
-    document.getElementById('lastUpdateTime').textContent = 'Last update: ' + (data.last_updated || '--:--');
-    document.getElementById('tableCountBadge').textContent = data.total_locked;
-    
-    // Update today's attempts (you might want to add this to your API)
-    document.getElementById('todayAttempts').textContent = data.total_locked; // Placeholder
-    document.getElementById('recentLockouts').textContent = data.total_locked; // Placeholder
-}
-
-// Update the locked users table
-function updateTable(users) {
-    const tableBody = document.getElementById('lockedUsersTableBody');
-    const emptyState = document.getElementById('emptyState');
-    const loadingRow = document.getElementById('loadingRow');
-    
-    // Hide loading row
-    if (loadingRow) {
-        loadingRow.style.display = 'none';
-    }
-    
-    if (!users || users.length === 0) {
-        tableBody.style.display = 'none';
-        emptyState.style.display = 'block';
-        return;
-    }
-    
-    tableBody.style.display = 'table-row-group';
-    emptyState.style.display = 'none';
-    
-    tableBody.innerHTML = '';
-    
-    users.forEach(user => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-person-circle me-2 text-muted"></i>
-                    <strong>${escapeHtml(user.username)}</strong>
-                </div>
-            </td>
-            <td>
-                <code class="text-muted">${escapeHtml(user.ip_address)}</code>
-            </td>
-            <td>
-                <span class="badge bg-danger">${user.failures} attempts</span>
-            </td>
-            <td>
-                <small>${escapeHtml(user.locked_at)}</small>
-            </td>
-            <td>
-                <span class="text-muted">${escapeHtml(user.time_locked)}</span>
-            </td>
-            <td>
-                <span class="badge ${user.is_recent ? 'badge-recent' : 'badge-normal'}">
-                    ${user.is_recent ? 'Recent' : 'Ongoing'}
-                </span>
-            </td>
-            <td>
-                <button class="btn btn-outline-success btn-sm btn-action" 
-                        onclick="unlockSingleUser('${escapeHtml(user.username)}')"
-                        title="Unlock this user">
-                    <i class="bi bi-unlock"></i>
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
-}
-
-// Show unlock modal
-function showUnlockModal() {
-    document.getElementById('usernameInput').value = '';
-    document.getElementById('unlockResult').innerHTML = '';
-    const modal = new bootstrap.Modal(document.getElementById('unlockUserModal'));
-    modal.show();
-}
-
-// Perform unlock for specific user
-function performUnlock() {
-    const username = document.getElementById('usernameInput').value.trim();
-    if (!username) {
-        showModalError('Please enter a username');
-        return;
-    }
-    
-    unlockSingleUser(username, true);
-}
-
-// Unlock single user - FIXED URL
-function unlockSingleUser(username, closeModal = false) {
-    // FIXED: Use Django URL template tag with parameter replacement
-    const url = '{% url "unlock_user_api" "USERNAME_PLACEHOLDER" %}'.replace('USERNAME_PLACEHOLDER', encodeURIComponent(username));
-    
-    fetch(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                showSuccess(data.message);
-                if (closeModal) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('unlockUserModal'));
-                    modal.hide();
+                if (response.status === 403) {
+                    throw new Error('CSRF verification failed. Please refresh the page.');
                 }
-                loadLockedUsers(); // Refresh the table
-            } else {
-                showModalError(data.error);
-            }
-        })
-        .catch(error => {
-            showModalError('Network error: ' + error.message);
-        });
-}
-
-// Unlock all users - FIXED URL
-function unlockAllUsers() {
-    if (!confirm('Are you sure you want to unlock ALL locked users? This action cannot be undone.')) {
-        return;
-    }
-    
-    // FIXED: Use correct URL
-    fetch('{% url "unlock_all_users_api" %}')
-        .then(response => {
-            if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
+            console.log('Unlock response:', data);
             if (data.success) {
-                showSuccess(data.message);
-                loadLockedUsers(); // Refresh the table
+                showToast(data.message, 'success');
+                unlockedCount++;
+                loadLockedUsers();
             } else {
-                showError(data.error);
+                showToast(data.error || 'Failed to unlock user', 'error');
             }
         })
         .catch(error => {
-            showError('Network error: ' + error.message);
+            console.error('Error unlocking user:', error);
+            showToast('Error unlocking user: ' + error.message, 'error');
         });
-}
+    }
 
-// Refresh locked users
-function refreshLockedUsers() {
-    loadLockedUsers();
-    showSuccess('Data refreshed successfully');
-}
-
-// Utility functions
-function showLoading(show) {
-    document.getElementById('loadingSpinner').style.display = show ? 'inline-block' : 'none';
-}
-
-function showSuccess(message) {
-    const toast = new bootstrap.Toast(document.getElementById('successToast'));
-    document.getElementById('successToastMessage').textContent = message;
-    toast.show();
-}
-
-function showError(message) {
-    // Create a temporary error alert
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-    errorDiv.style.zIndex = '9999';
-    errorDiv.innerHTML = `
-        <strong>Error:</strong> ${escapeHtml(message)}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    document.body.appendChild(errorDiv);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (errorDiv.parentNode) {
-            errorDiv.remove();
+    // Unlock all users
+    function unlockAllUsers() {
+        const modal = new bootstrap.Modal(document.getElementById('unlockAllConfirmModal'));
+        const countElement = document.getElementById('unlockAllCount');
+        const confirmBtn = document.getElementById('confirmUnlockAllBtn');
+        
+        const lockedCount = lockedUsersData.filter(user => user.is_locked).length;
+        countElement.textContent = lockedCount;
+        
+        if (lockedCount === 0) {
+            showToast('No locked users to unlock', 'info');
+            return;
         }
-    }, 5000);
-}
+        
+        // Remove existing event listeners
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        // Add new event listener
+        newConfirmBtn.addEventListener('click', function() {
+            performUnlockAllUsers();
+            modal.hide();
+        });
+        
+        modal.show();
+    }
 
-function showModalError(message) {
-    document.getElementById('unlockResult').innerHTML = `
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            ${escapeHtml(message)}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-}
+    // Perform unlock all API call
+    function performUnlockAllUsers() {
+        console.log('Attempting to unlock all users');
+        showToast('Unlocking all users...', 'info');
+        
+        const csrfToken = getCsrfToken();
+        
+        if (!csrfToken) {
+            showToast('CSRF token missing. Please refresh the page and try again.', 'error');
+            return;
+        }
+        
+        fetch(getUnlockAllUrl(), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            console.log('Unlock all response status:', response.status);
+            if (!response.ok) {
+                if (response.status === 403) {
+                    throw new Error('CSRF verification failed. Please refresh the page.');
+                }
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Unlock all response:', data);
+            if (data.success) {
+                showToast(data.message, 'success');
+                unlockedCount += data.unlocked_count || 0;
+                loadLockedUsers();
+            } else {
+                showToast(data.error || 'Failed to unlock users', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error unlocking all users:', error);
+            showToast('Error unlocking all users: ' + error.message, 'error');
+        });
+    }
 
-function escapeHtml(unsafe) {
-    if (!unsafe) return '';
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+    // View user details
+    function viewUserDetails(username) {
+        showToast(`Viewing details for ${username}...`, 'info');
+        const user = lockedUsersData.find(u => u.username === username);
+        if (user) {
+            alert(`User Details:\n\nUsername: ${user.username}\nIP Address: ${user.ip_address}\nFailures: ${user.failures}\nLocked At: ${user.locked_at}\nStatus: ${user.is_locked ? 'Locked' : 'Expired'}`);
+        }
+    }
+
+    // Refresh locked users
+    function refreshLockedUsers() {
+        showToast('Refreshing locked users...', 'info');
+        loadLockedUsers();
+    }
+
+    // Search locked users
+    function searchLockedUsers() {
+        const searchTerm = document.getElementById('searchLockedUsers').value.toLowerCase();
+        
+        if (!searchTerm) {
+            renderLockedUsers(lockedUsersData);
+            return;
+        }
+        
+        const filteredUsers = lockedUsersData.filter(user => 
+            user.username.toLowerCase().includes(searchTerm) ||
+            (user.ip_address && user.ip_address.toLowerCase().includes(searchTerm))
+        );
+        
+        renderLockedUsers(filteredUsers);
+    }
+
+    // Export locked users
+    function exportLockedUsers() {
+        showToast('Preparing export...', 'info');
+        
+        if (lockedUsersData.length === 0) {
+            showToast('No data to export', 'warning');
+            return;
+        }
+        
+        // Create CSV content
+        const headers = ['Username', 'IP Address', 'Failures', 'Locked At', 'Duration', 'Status'];
+        const csvContent = [
+            headers.join(','),
+            ...lockedUsersData.map(user => [
+                `"${user.username}"`,
+                `"${user.ip_address || 'Unknown'}"`,
+                user.failures,
+                `"${user.locked_at}"`,
+                `"${user.time_locked}"`,
+                `"${user.is_locked ? 'Locked' : 'Expired'}"`
+            ].join(','))
+        ].join('\n');
+        
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `locked_users_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showToast('Export completed successfully', 'success');
+    }
+
+    // Show lockout settings
+    function showLockoutSettings() {
+        const modal = new bootstrap.Modal(document.getElementById('lockoutSettingsModal'));
+        modal.show();
+    }
+
+    // UI State Management
+    function showLoadingState() {
+        document.getElementById('loadingState').style.display = 'block';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'none';
+    }
+
+    function showErrorState(title, message) {
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('errorState').style.display = 'block';
+        document.getElementById('errorTitle').textContent = title;
+        document.getElementById('errorMessage').textContent = message;
+    }
+
+    function hideErrorState() {
+        document.getElementById('errorState').style.display = 'none';
+    }
+
+    // Utility functions
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return unsafe.toString()
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function showToast(message, type = 'info') {
+        // Use SecuritySystem if available, otherwise fallback
+        if (window.SecuritySystem && window.SecuritySystem.showToast) {
+            window.SecuritySystem.showToast(message, type);
+        } else {
+            // Fallback implementation
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                             type === 'success' ? 'alert-success' : 
+                             type === 'warning' ? 'alert-warning' : 'alert-info';
+            
+            const toast = document.createElement('div');
+            toast.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle'} me-2"></i>
+                    <div>${message}</div>
+                    <button type="button" class="btn-close ms-2" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+    }
+
+    // Add event listener for search input
+    document.getElementById('searchLockedUsers').addEventListener('input', function() {
+        if (this.value === '') {
+            renderLockedUsers(lockedUsersData);
+        }
+    });
+
+    // Add Enter key support for search
+    document.getElementById('searchLockedUsers').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchLockedUsers();
+        }
+    });
 </script>
+
+<style>
+    #lockedUsersTable tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    
+    .table-warning {
+        background-color: rgba(255, 193, 7, 0.1) !important;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+</style>
+{% endif %}
 {% endblock %}

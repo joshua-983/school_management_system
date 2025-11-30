@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Parent Management Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>Parent Management</h1>
+                <div class="btn-group">
+                    <a href="{% url 'admin_parent_create' %}" class="btn btn-primary">
+                        <i class="bi bi-person-plus"></i> Create Parent Account
+                    </a>
+                    <a href="{% url 'bulk_parent_creation' %}" class="btn btn-success">
+                        <i class="bi bi-people"></i> Bulk Create Parents
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Total Parents</div>
+                            <div class="h5 mb-0">{{ total_parents|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-people fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Active Parents</div>
+                            <div class="h5 mb-0">{{ active_parents|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-person-check fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">Pending Activation</div>
+                            <div class="h5 mb-0">{{ pending_parents|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-clock-history fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-xs font-weight-bold text-uppercase mb-1">With Accounts</div>
+                            <div class="h5 mb-0">{{ parents_with_accounts|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-person-badge fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Parents -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Recent Parent Registrations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Students</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for parent in recent_parents %}
+                                <tr>
+                                    <td>{{ parent.get_user_full_name }}</td>
+                                    <td>{{ parent.email|default:"No email" }}</td>
+                                    <td>
+                                        {% for student in parent.students.all %}
+                                        <span class="badge bg-secondary">{{ student.get_full_name }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if parent.account_status == 'active' %}success{% elif parent.account_status == 'pending' %}warning{% else %}danger{% endif %}">
+                                            {{ parent.get_account_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            {% if parent.account_status != 'active' %}
+                                            <a href="{% url 'activate_parent_account' parent.id %}" class="btn btn-success btn-sm">
+                                                Activate
+                                            </a>
+                                            {% endif %}
+                                            <a href="#" class="btn btn-info btn-sm">View</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No parents found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'admin_parent_create' %}" class="btn btn-primary">
+                            <i class="bi bi-person-plus"></i> Create Single Parent
+                        </a>
+                        <a href="{% url 'bulk_parent_creation' %}" class="btn btn-success">
+                            <i class="bi bi-people"></i> Bulk Create Parents
+                        </a>
+                        <a href="{% url 'parent_directory' %}" class="btn btn-info">
+                            <i class="bi bi-list-ul"></i> View All Parents
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parents Needing Attention -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Needs Attention</h5>
+                </div>
+                <div class="card-body">
+                    {% for parent in parents_needing_attention %}
+                    <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ parent.get_user_full_name }}</strong>
+                            <br>
+                            <small>{{ parent.get_account_status_display }}</small>
+                        </div>
+                        <a href="{% url 'activate_parent_account' parent.id %}" class="btn btn-sm btn-success">
+                            Activate
+                        </a>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No parents need attention</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+
+{% endblock %}

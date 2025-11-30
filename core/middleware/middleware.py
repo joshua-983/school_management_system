@@ -216,3 +216,22 @@ class MaintenanceModeMiddleware:
                 return render(request, 'security/maintenance.html', status=503)
         
         return self.get_response(request)
+
+class NotificationMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        return response
+
+    def process_template_response(self, request, response):
+        """Add unread notification count to template context"""
+        if hasattr(response, 'context_data') and request.user.is_authenticated:
+            try:
+                from core.models import Notification
+                unread_count = Notification.get_unread_count_for_user(request.user)
+                response.context_data['unread_notifications_count'] = unread_count
+            except Exception:
+                response.context_data['unread_notifications_count'] = 0
+        return response

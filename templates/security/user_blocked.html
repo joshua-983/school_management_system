@@ -35,6 +35,12 @@
         .blocked-body {
             padding: 40px 30px;
         }
+        .contact-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -62,14 +68,37 @@
                         to resolve this issue.
                     </small>
                 </div>
+
+                <div class="contact-info">
+                    <h6 class="mb-2"><i class="fas fa-phone"></i> Contact Support</h6>
+                    <p class="mb-1 small">Email: admin@school.edu.gh</p>
+                    <p class="mb-0 small">Phone: +233 XX XXX XXXX</p>
+                </div>
                 
                 <div class="mt-4">
-                    <a href="{% url 'home' %}" class="btn btn-primary me-2">
+                    <!-- Safe URL handling with fallbacks -->
+                    {% url 'home' as home_url %}
+                    {% if home_url %}
+                    <a href="{{ home_url }}" class="btn btn-primary me-2">
                         <i class="fas fa-home"></i> Return Home
                     </a>
-                    <a href="{% url 'logout' %}" class="btn btn-outline-secondary">
+                    {% else %}
+                    <a href="/" class="btn btn-primary me-2">
+                        <i class="fas fa-home"></i> Return Home
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Safe logout URL with JavaScript fallback -->
+                    {% url 'logout' as logout_url %}
+                    {% if logout_url %}
+                    <a href="{{ logout_url }}" class="btn btn-outline-secondary">
                         <i class="fas fa-sign-out-alt"></i> Logout
                     </a>
+                    {% else %}
+                    <button onclick="performLogout()" class="btn btn-outline-secondary">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -77,5 +106,40 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function performLogout() {
+            // Simple logout function that redirects to home
+            window.location.href = '/';
+        }
+        
+        // Alternative: If you have CSRF protection, use this:
+        function performCsrfLogout() {
+            fetch('/accounts/logout/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+            }).then(() => {
+                window.location.href = '/';
+            });
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
 </body>
 </html>

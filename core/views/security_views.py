@@ -1,5 +1,5 @@
-# core/views/security_views.py - COMPLETELY FIXED
-from core.models import SecurityEvent, AuditAlertRule
+# core/views/security_views.py - COMPLETELY UPDATED
+from core.models import SecurityEvent, AuditAlertRule, UserProfile, AuditLog, ScheduledMaintenance, User, MaintenanceMode
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -13,23 +13,45 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 import json
+import logging
 
-from core.models import UserProfile, AuditLog, ScheduledMaintenance, User
 from core.forms import UserBlockForm, MaintenanceModeForm, UserSearchForm, ScheduledMaintenanceForm
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 def is_security_admin(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
 
 @user_passes_test(is_security_admin)
 def security_dashboard(request):
+    # Create audit log for dashboard access
+    try:
+        AuditLog.objects.create(
+            user=request.user,
+            action='ACCESS',
+            model_name='SecurityDashboard',
+            object_id=0,
+            details={'action': 'viewed_security_dashboard', 'path': request.path},
+            ip_address=get_client_ip(request)
+        )
+    except Exception as e:
+        logger.error(f"Failed to create audit log for security dashboard: {e}")
+    
     # Get security statistics
     total_users = User.objects.filter(is_active=True).count()
     blocked_users = UserProfile.objects.filter(is_blocked=True).count()
     
-    # FIXED: SecurityEvent uses 'created_at', AuditLog uses 'timestamp'
+    # Get maintenance mode status from database
+    try:
+        maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+        maintenance_mode = maintenance.is_active if maintenance else False
+    except Exception as e:
+        logger.error(f"Error getting maintenance mode: {e}")
+        maintenance_mode = False
+    
     recent_security_events = SecurityEvent.objects.all().order_by('-created_at')[:5]
     
-    # FIXED: AuditLog uses 'timestamp' field
     recent_blocks = AuditLog.objects.filter(
         model_name='User',
         action__in=['BLOCK', 'UNBLOCK']
@@ -39,7 +61,7 @@ def security_dashboard(request):
         'active_tab': 'security_dashboard',
         'total_users': total_users,
         'blocked_users': blocked_users,
-        'maintenance_mode': getattr(settings, 'MAINTENANCE_MODE', False),
+        'maintenance_mode': maintenance_mode,
         'recent_security_events': recent_security_events,
         'recent_blocks': recent_blocks,
     }
@@ -109,7 +131,7 @@ class UserManagementView(View):
             elif user_type == 'staff':
                 users = users.filter(is_staff=True)
         
-        return users.order_by('username')[:50]  # Limit results
+        return users.order_by('username')[:50]
 
 
 class BlockUserView(View):
@@ -169,15 +191,23 @@ class BlockUserView(View):
 
 
 class MaintenanceModeView(View):
-    """View for enabling/disabling maintenance mode"""
+    """View for enabling/disabling maintenance mode using database model"""
     
     @method_decorator(login_required)
     @method_decorator(staff_member_required)
     def get(self, request):
         form = MaintenanceModeForm()
-        maintenance_mode = getattr(settings, 'MAINTENANCE_MODE', False)
         
-        # FIXED: AuditLog uses 'timestamp' field
+        # Get current maintenance mode from database
+        try:
+            maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+            maintenance_mode = maintenance.is_active if maintenance else False
+            current_message = maintenance.message if maintenance else ""
+        except Exception as e:
+            logger.error(f"Error getting maintenance mode: {e}")
+            maintenance_mode = False
+            current_message = ""
+        
         recent_events = AuditLog.objects.filter(
             action__in=['MAINTENANCE_START', 'MAINTENANCE_END']
         ).order_by('-timestamp')[:10]
@@ -185,6 +215,7 @@ class MaintenanceModeView(View):
         context = {
             'form': form,
             'maintenance_mode': maintenance_mode,
+            'current_message': current_message,
             'recent_events': recent_events,
             'active_tab': 'maintenance_mode',
         }
@@ -199,43 +230,62 @@ class MaintenanceModeView(View):
             action = form.cleaned_data['action']
             message = form.cleaned_data.get('message', '')
             
-            # In a real implementation, you'd save this to database or settings
-            # For now, we'll use a simple approach
-            if action == 'enable':
-                # Enable maintenance mode
-                settings.MAINTENANCE_MODE = True
-                if message:
-                    settings.MAINTENANCE_MESSAGE = message
-                messages.success(request, 'Maintenance mode has been enabled.')
+            try:
+                if action == 'enable':
+                    # Enable maintenance mode
+                    maintenance, created = MaintenanceMode.objects.get_or_create(
+                        defaults={
+                            'is_active': True,
+                            'message': message,
+                            'created_by': request.user
+                        }
+                    )
+                    if not created:
+                        maintenance.is_active = True
+                        maintenance.message = message
+                        maintenance.created_by = request.user
+                        maintenance.save()
+                    
+                    messages.success(request, 'Maintenance mode has been enabled.')
+                    
+                    # Log the action
+                    AuditLog.log_action(
+                        user=request.user,
+                        action='MAINTENANCE_START',
+                        model_name='System',
+                        object_id=0,
+                        details={
+                            'message': message,
+                            'started_at': timezone.now().isoformat()
+                        }
+                    )
+                else:
+                    # Disable maintenance mode
+                    maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+                    if maintenance:
+                        maintenance.is_active = False
+                        maintenance.save()
+                        messages.success(request, 'Maintenance mode has been disabled.')
+                    else:
+                        messages.info(request, 'Maintenance mode was already disabled.')
+                    
+                    # Log the action
+                    AuditLog.log_action(
+                        user=request.user,
+                        action='MAINTENANCE_END',
+                        model_name='System',
+                        object_id=0,
+                        details={
+                            'ended_at': timezone.now().isoformat()
+                        }
+                    )
                 
-                # Log the action
-                AuditLog.log_action(
-                    user=request.user,
-                    action='MAINTENANCE_START',
-                    model_name='System',
-                    object_id=0,
-                    details={
-                        'message': message,
-                        'started_at': timezone.now().isoformat()
-                    }
-                )
-            else:
-                # Disable maintenance mode
-                settings.MAINTENANCE_MODE = False
-                messages.success(request, 'Maintenance mode has been disabled.')
+                return redirect('maintenance_mode')
                 
-                # Log the action
-                AuditLog.log_action(
-                    user=request.user,
-                    action='MAINTENANCE_END',
-                    model_name='System',
-                    object_id=0,
-                    details={
-                        'ended_at': timezone.now().isoformat()
-                    }
-                )
-            
-            return redirect('maintenance_mode')
+            except Exception as e:
+                logger.error(f"Error updating maintenance mode: {e}")
+                messages.error(request, f'Error updating maintenance mode: {str(e)}')
+                return self.get(request)
         else:
             messages.error(request, 'Invalid form data.')
             return self.get(request)
@@ -275,27 +325,50 @@ class ScheduledMaintenanceView(View):
 
 
 def maintenance_mode_page(request):
-    """View for maintenance mode page"""
-    message = getattr(settings, 'MAINTENANCE_MESSAGE', 'The system is currently under maintenance. Please check back later.')
+    """View for maintenance mode page with admin bypass"""
+    # Check if user can bypass maintenance mode
+    if request.user.is_authenticated:
+        try:
+            if MaintenanceMode.can_user_access(request.user):
+                # User can bypass maintenance - redirect to appropriate page
+                if request.user.is_staff or request.user.is_superuser:
+                    messages.info(request, '⚠️ Maintenance mode is active, but you have admin access.')
+                    return redirect('admin_dashboard')
+                else:
+                    return redirect('dashboard')
+        except Exception as e:
+            logger.error(f"Error checking maintenance bypass: {e}")
+    
+    # User cannot bypass - show maintenance page
+    try:
+        maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+        if maintenance and maintenance.is_currently_active():
+            message = maintenance.message
+        else:
+            # Fallback to settings
+            message = getattr(settings, 'MAINTENANCE_MESSAGE', 'The system is currently under maintenance. Please check back later.')
+    except Exception as e:
+        logger.error(f"Error checking maintenance mode: {e}")
+        message = getattr(settings, 'MAINTENANCE_MESSAGE', 'The system is currently under maintenance. Please check back later.')
     
     # Check for scheduled maintenance message
     try:
-        from core.models import ScheduledMaintenance
         scheduled_maintenance = ScheduledMaintenance.objects.filter(
             is_active=True
         ).first()
         
         if scheduled_maintenance and scheduled_maintenance.is_currently_active():
             message = scheduled_maintenance.message
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking scheduled maintenance: {e}")
         pass
     
     context = {
         'message': message,
         'maintenance_mode': True,
+        'user_can_bypass': False,  # If they reached here, they can't bypass
     }
     return render(request, 'security/maintenance.html', context)
-
 
 def user_blocked_page(request):
     """View for blocked user page"""
@@ -313,16 +386,23 @@ def security_stats_api(request):
     
     # Count today's logins
     today = timezone.now().date()
-    # FIXED: AuditLog uses 'timestamp' field
     today_logins = AuditLog.objects.filter(
         action='LOGIN',
         timestamp__date=today
     ).count()
     
+    # Get maintenance mode from database
+    try:
+        maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+        maintenance_mode = maintenance.is_active if maintenance else False
+    except Exception as e:
+        logger.error(f"Error getting maintenance mode for API: {e}")
+        maintenance_mode = False
+    
     return JsonResponse({
         'today_logins': today_logins,
         'blocked_users': UserProfile.objects.filter(is_blocked=True).count(),
-        'maintenance_mode': getattr(settings, 'MAINTENANCE_MODE', False)
+        'maintenance_mode': maintenance_mode
     })
 
 
@@ -355,6 +435,7 @@ def user_details_api(request, user_id):
             'user_type': get_user_type(user),
             'is_blocked': user.profile.is_blocked if hasattr(user, 'profile') else False,
             'block_reason': user.profile.blocked_reason if hasattr(user, 'profile') else None,
+            'blocked_at': user.profile.blocked_at.isoformat() if hasattr(user, 'profile') and user.profile.blocked_at else None,
             'last_login': user.last_login.isoformat() if user.last_login else None,
             'date_joined': user.date_joined.isoformat(),
         }
@@ -362,6 +443,9 @@ def user_details_api(request, user_id):
         return JsonResponse(data)
     except User.DoesNotExist:
         return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error getting user details: {e}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
 class RateLimitExceededView(View):
@@ -401,7 +485,6 @@ def security_events_api(request):
     if not request.user.is_staff:
         return JsonResponse({'error': 'Unauthorized'}, status=403)
     
-    # FIXED: AuditLog uses 'timestamp' field
     recent_events = AuditLog.objects.filter(
         action__in=['BLOCK', 'UNBLOCK', 'LOGIN_FAILED', 'MAINTENANCE_START', 'MAINTENANCE_END']
     ).order_by('-timestamp')[:20]
@@ -412,7 +495,7 @@ def security_events_api(request):
             'id': event.id,
             'action': event.action,
             'user': event.user.username if event.user else 'System',
-            'timestamp': event.timestamp.isoformat(),  # FIXED: Use timestamp
+            'timestamp': event.timestamp.isoformat(),
             'details': event.details,
             'ip_address': event.ip_address,
         })
@@ -426,7 +509,6 @@ def maintenance_details_api(request, maintenance_id):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
     
     try:
-        from .models import ScheduledMaintenance
         maintenance = ScheduledMaintenance.objects.get(id=maintenance_id)
         
         data = {
@@ -450,67 +532,33 @@ def maintenance_details_api(request, maintenance_id):
         return JsonResponse(data)
     except ScheduledMaintenance.DoesNotExist:
         return JsonResponse({'error': 'Maintenance not found'}, status=404)
-# ADD THIS FUNCTION TO FIX AUDIT LOG CREATION
-def get_client_ip(request):
-    """Get the client's IP address from request"""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
-    return ip
-
-# UPDATE THE security_dashboard FUNCTION
-@user_passes_test(is_security_admin)
-def security_dashboard(request):
-    # Create audit log for dashboard access - FIXED VERSION
-    try:
-        AuditLog.objects.create(
-            user=request.user,
-            action='ACCESS',
-            model_name='SecurityDashboard',
-            object_id=0,
-            details={'action': 'viewed_security_dashboard', 'path': request.path},
-            ip_address=get_client_ip(request)
-        )
     except Exception as e:
-        # Log error but don't break the dashboard
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Failed to create audit log for security dashboard: {e}")
-    
-    # Rest of your existing security_dashboard code...
-    total_users = User.objects.filter(is_active=True).count()
-    blocked_users = UserProfile.objects.filter(is_blocked=True).count()
-    
-    recent_security_events = SecurityEvent.objects.all().order_by('-created_at')[:5]
-    recent_blocks = AuditLog.objects.filter(
-        model_name='User',
-        action__in=['BLOCK', 'UNBLOCK']
-    ).order_by('-timestamp')[:10]
-    
-    context = {
-        'active_tab': 'security_dashboard',
-        'total_users': total_users,
-        'blocked_users': blocked_users,
-        'maintenance_mode': getattr(settings, 'MAINTENANCE_MODE', False),
-        'recent_security_events': recent_security_events,
-        'recent_blocks': recent_blocks,
-    }
-    
-    return render(request, 'security/dashboard.html', context)
+        logger.error(f"Error getting maintenance details: {e}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
-# ADD THESE FUNCTIONS TO FIX TEMPLATE COMPATIBILITY
+
 @user_passes_test(is_security_admin)
 def security_events(request):
-    """Simple security events view for template compatibility"""
+    """Security events view with proper context variables"""
     events = SecurityEvent.objects.all().order_by('-created_at')[:50]
+    
+    # Calculate counts for template
+    unresolved_count = events.filter(is_resolved=False).count()
+    critical_count = events.filter(severity='CRITICAL').count()
+    
+    # Count today's events
+    today = timezone.now().date()
+    today_count = events.filter(created_at__date=today).count()
     
     context = {
         'active_tab': 'security_events',
         'security_events': events,
+        'unresolved_count': unresolved_count,
+        'critical_count': critical_count,
+        'today_count': today_count,
     }
     return render(request, 'security/events.html', context)
+
 
 @user_passes_test(is_security_admin)
 def alert_rule_list(request):
@@ -524,22 +572,23 @@ def alert_rule_list(request):
     return render(request, 'security/alert_rules.html', context)
 
 
-# Add these functions to your security_views.py
-
 def security_status_api(request):
     """API endpoint for security system status"""
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'Authentication required'}, status=401)
     
-    # Get system health status
-    from core.models import SecurityEvent, AuditLog
-    from django.utils import timezone
-    from datetime import timedelta
-    
     # Check for recent security events (last 24 hours)
     recent_events = SecurityEvent.objects.filter(
         created_at__gte=timezone.now() - timedelta(hours=24)
     ).count()
+    
+    # Check maintenance mode status
+    try:
+        maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+        maintenance_mode = maintenance.is_active if maintenance else False
+    except Exception as e:
+        logger.error(f"Error checking maintenance mode for status API: {e}")
+        maintenance_mode = False
     
     # Check system health
     system_status = 'healthy'
@@ -558,6 +607,7 @@ def security_status_api(request):
         'status': 'success',
         'system_status': system_status,
         'threat_level': threat_level,
+        'maintenance_mode': maintenance_mode,
         'last_updated': timezone.now().isoformat(),
         'active_alerts': recent_events,
         'components': {
@@ -568,162 +618,181 @@ def security_status_api(request):
         }
     })
 
+
 def security_notifications_api(request):
     """API endpoint for security notifications (compatibility alias)"""
     return security_events_api(request)
 
-def security_stats_api(request):
-    """API endpoint for security statistics"""
-    if not request.user.is_authenticated:
-        return JsonResponse({'error': 'Authentication required'}, status=401)
-    
-    from core.models import SecurityEvent, AuditLog
-    from django.utils import timezone
-    from datetime import timedelta
-    
-    # Calculate stats for last 7 days
-    week_ago = timezone.now() - timedelta(days=7)
-    
-    total_events = SecurityEvent.objects.filter(created_at__gte=week_ago).count()
-    critical_events = SecurityEvent.objects.filter(
-        created_at__gte=week_ago, 
-        severity='CRITICAL'
-    ).count()
-    
-    # Get active alert rules count
-    active_rules = 5  # Default value
-    
-    return JsonResponse({
-        'total_events': total_events,
-        'critical_events': critical_events,
-        'active_rules': active_rules,
-        'threat_level': 'low' if critical_events == 0 else 'medium' if critical_events < 3 else 'high'
-    })
-
-
 
 # =============================================================================
-# AXES LOCKOUT MANAGEMENT - BEAUTIFUL ADMIN INTERFACE
+# AXES LOCKOUT MANAGEMENT - FIXED VERSION
 # =============================================================================
 
 @user_passes_test(lambda u: u.is_superuser)
 def axes_lockout_management(request):
     """Main lockout management dashboard"""
     try:
-        from axes.models import AccessAttempt
+        # Check if axes is installed
+        try:
+            from axes.models import AccessAttempt
+            axes_installed = True
+        except ImportError:
+            axes_installed = False
+            return render(request, 'security/lockout_management.html', {
+                'active_tab': 'lockout_management',
+                'axes_installed': False,
+                'error': 'django-axes is not installed. Please install it to use lockout management.'
+            })
+        
         # Get currently locked users
         locked_users = AccessAttempt.objects.filter(failures_since_start__gte=5)
         
         # Get recent lockout history (last 24 hours)
-        from django.utils import timezone
-        from datetime import timedelta
         recent_lockouts = AccessAttempt.objects.filter(
             attempt_time__gte=timezone.now() - timedelta(hours=24)
         ).order_by('-attempt_time')[:20]
+        
+        # Get total attempts today
+        total_attempts_today = AccessAttempt.objects.filter(
+            attempt_time__date=timezone.now().date()
+        ).count()
         
         context = {
             'active_tab': 'lockout_management',
             'locked_users_count': locked_users.count(),
             'recent_lockouts': recent_lockouts,
-            'total_attempts_today': AccessAttempt.objects.filter(
-                attempt_time__date=timezone.now().date()
-            ).count(),
+            'total_attempts_today': total_attempts_today,
+            'axes_installed': True,
         }
         return render(request, 'security/lockout_management.html', context)
         
     except Exception as e:
-        messages.error(request, f'Error loading lockout management: {str(e)}')
-        return redirect('security_dashboard')
+        logger.error(f'Error loading lockout management: {str(e)}')
+        
+        return render(request, 'security/lockout_management.html', {
+            'active_tab': 'lockout_management',
+            'axes_installed': False,
+            'error': f'Error loading lockout management: {str(e)}'
+        })
+
 
 @user_passes_test(lambda u: u.is_superuser)
-def unlock_user_api(request, username):
-    """API endpoint to unlock user"""
-    try:
-        from axes.models import AccessAttempt
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
-        # Check if user exists
-        user_exists = User.objects.filter(username=username).exists()
-        if not user_exists:
-            return JsonResponse({
-                'success': False, 
-                'error': f'User "{username}" not found in system'
-            })
-        
-        # Delete lockout records
-        deleted_count, _ = AccessAttempt.objects.filter(username=username).delete()
-        
-        # Log the action
-        AuditLog.log_action(
-            user=request.user,
-            action='AXES_UNLOCK',
-            model_name='User',
-            object_id=0,
-            details={
-                'unlocked_user': username,
-                'deleted_records': deleted_count,
-                'unlocked_by': request.user.username
-            }
-        )
-        
-        return JsonResponse({
-            'success': True, 
-            'message': f'✅ Successfully unlocked user "{username}"',
-            'details': f'Removed {deleted_count} lockout records',
-            'deleted_count': deleted_count
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False, 
-            'error': f'Error unlocking user: {str(e)}'
-        })
-
-@user_passes_test(lambda u: u.is_superuser)  
 def locked_users_api(request):
-    """API endpoint to get currently locked users"""
+    """API endpoint to get currently locked login attempts"""
     try:
         from axes.models import AccessAttempt
+        
         from django.utils import timezone
         
-        locked_users = AccessAttempt.objects.filter(failures_since_start__gte=5)
+        # Get locked login attempts (usernames with 5 or more failures within cooloff period)
+        locked_attempts = AccessAttempt.objects.filter(failures_since_start__gte=5)
         
-        users_data = []
-        for attempt in locked_users:
+        attempts_data = []
+        for attempt in locked_attempts:
             # Calculate time since lockout
             time_since_lockout = timezone.now() - attempt.attempt_time
             hours_locked = int(time_since_lockout.total_seconds() / 3600)
             minutes_locked = int((time_since_lockout.total_seconds() % 3600) / 60)
             
-            users_data.append({
-                'username': attempt.username,
-                'ip_address': attempt.ip_address,
-                'user_agent': attempt.user_agent[:50] + '...' if attempt.user_agent and len(attempt.user_agent) > 50 else attempt.user_agent,
+            # Check if still locked (within 15 minute cooloff)
+            is_locked = time_since_lockout.total_seconds() < 900  # 15 minutes
+            
+            attempts_data.append({
+                'username': attempt.username or 'Unknown',
+                'ip_address': attempt.ip_address or 'Unknown',
+                'user_agent': attempt.user_agent[:50] + '...' if attempt.user_agent and len(attempt.user_agent) > 50 else (attempt.user_agent or 'Unknown'),
                 'failures': attempt.failures_since_start,
-                'locked_at': attempt.attempt_time.strftime("%Y-%m-%d %H:%M:%S"),
+                'locked_at': attempt.attempt_time.strftime("%Y-%m-%d %H:%M:%S") if attempt.attempt_time else 'Unknown',
                 'time_locked': f"{hours_locked}h {minutes_locked}m",
                 'is_recent': time_since_lockout.total_seconds() < 3600,  # Less than 1 hour
+                'is_locked': is_locked,
             })
         
         return JsonResponse({
             'success': True,
-            'locked_users': users_data,
-            'total_locked': len(users_data),
-            'last_updated': timezone.now().strftime("%Y-%m-%d %H:%M:%S")
+            'locked_users': attempts_data,  # Keeping same key for frontend compatibility
+            'total_locked': len(attempts_data),
+            'last_updated': timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'axes_installed': True
         })
         
-    except Exception as e:
+    except ImportError:
         return JsonResponse({
             'success': False, 
-            'error': f'Error fetching locked users: {str(e)}'
+            'error': 'django-axes is not installed. Please install it to use lockout management.',
+            'axes_installed': False
+        })
+    except Exception as e:
+        logger.error(f'Error fetching locked login attempts: {str(e)}')
+        
+        return JsonResponse({
+            'success': False, 
+            'error': f'Error fetching locked login attempts: {str(e)}',
+            'axes_installed': False
         })
 
 @user_passes_test(lambda u: u.is_superuser)
-def unlock_all_users_api(request):
-    """API endpoint to unlock ALL locked users"""
+def unlock_user_api(request, username):
+    """API endpoint to unlock user - FIXED VERSION"""
     try:
         from axes.models import AccessAttempt
+        
+        logger.info(f"Unlock API called for username: {username}")
+        
+        # FIX: Don't check if user exists in User model
+        # Axes locks login attempts, not necessarily valid users
+        # Just delete the AccessAttempt records for this username
+        
+        # Delete lockout records for this username (login attempt)
+        deleted_count, _ = AccessAttempt.objects.filter(username=username).delete()
+        
+        logger.info(f"Deleted {deleted_count} lockout records for username: {username}")
+        
+        # Log the action
+        try:
+            AuditLog.log_action(
+                user=request.user,
+                action='AXES_UNLOCK',
+                model_name='User',
+                object_id=0,
+                details={
+                    'unlocked_username': username,
+                    'deleted_records': deleted_count,
+                    'unlocked_by': request.user.username
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to create audit log: {e}")
+        
+        return JsonResponse({
+            'success': True, 
+            'message': f'✅ Successfully unlocked login attempts for "{username}"',
+            'details': f'Removed {deleted_count} lockout records',
+            'deleted_count': deleted_count,
+            'axes_installed': True
+        })
+        
+    except ImportError:
+        return JsonResponse({
+            'success': False, 
+            'error': 'django-axes is not installed. Please install it to use lockout management.',
+            'axes_installed': False
+        })
+    except Exception as e:
+        logger.error(f'Error unlocking username {username}: {str(e)}')
+        
+        return JsonResponse({
+            'success': False, 
+            'error': f'Error unlocking username: {str(e)}'
+        })
+
+@user_passes_test(lambda u: u.is_superuser)  
+def unlock_all_users_api(request):
+    """API endpoint to unlock ALL locked users - SINGLE DEFINITION"""
+    try:
+        from axes.models import AccessAttempt
+        
+        logger.info("Unlock all users API called")
         
         # Get count before deletion
         locked_count = AccessAttempt.objects.filter(failures_since_start__gte=5).count()
@@ -731,41 +800,259 @@ def unlock_all_users_api(request):
         # Delete all lockout records
         deleted_count, _ = AccessAttempt.objects.all().delete()
         
+        logger.info(f"Deleted {deleted_count} lockout records, unlocked {locked_count} users")
+        
         # Log the action
-        AuditLog.log_action(
-            user=request.user,
-            action='AXES_UNLOCK_ALL',
-            model_name='System',
-            object_id=0,
-            details={
-                'unlocked_count': locked_count,
-                'deleted_records': deleted_count,
-                'unlocked_by': request.user.username
-            }
-        )
+        try:
+            AuditLog.log_action(
+                user=request.user,
+                action='AXES_UNLOCK_ALL',
+                model_name='System',
+                object_id=0,
+                details={
+                    'unlocked_count': locked_count,
+                    'deleted_records': deleted_count,
+                    'unlocked_by': request.user.username
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to create audit log: {e}")
         
         return JsonResponse({
             'success': True, 
             'message': f'✅ Successfully unlocked all users',
             'details': f'Removed {deleted_count} lockout records, unlocked {locked_count} users',
             'unlocked_count': locked_count,
-            'deleted_count': deleted_count
+            'deleted_count': deleted_count,
+            'axes_installed': True
         })
         
+    except ImportError:
+        return JsonResponse({
+            'success': False, 
+            'error': 'django-axes is not installed. Please install it to use lockout management.',
+            'axes_installed': False
+        })
     except Exception as e:
+        logger.error(f'Error unlocking all users: {str(e)}')
+        
         return JsonResponse({
             'success': False, 
             'error': f'Error unlocking all users: {str(e)}'
         })
 
 
+# =============================================================================
+# MAINTENANCE MODE MANAGEMENT FUNCTIONS
+# =============================================================================
+
+@user_passes_test(is_security_admin)
+def maintenance_mode_status_api(request):
+    """API endpoint to get current maintenance mode status"""
+    try:
+        maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+        
+        if maintenance:
+            data = {
+                'is_active': True,
+                'message': maintenance.message,
+                'started_at': maintenance.created_at.isoformat(),
+                'started_by': maintenance.created_by.username if maintenance.created_by else 'System',
+            }
+        else:
+            data = {
+                'is_active': False,
+                'message': '',
+                'started_at': None,
+                'started_by': None,
+            }
+        
+        return JsonResponse(data)
+    except Exception as e:
+        logger.error(f"Error getting maintenance mode status: {e}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
+@user_passes_test(is_security_admin)
+def maintenance_mode_history_api(request):
+    """API endpoint to get maintenance mode history"""
+    try:
+        maintenance_history = MaintenanceMode.objects.all().order_by('-created_at')[:20]
+        
+        history_data = []
+        for maintenance in maintenance_history:
+            history_data.append({
+                'id': maintenance.id,
+                'is_active': maintenance.is_active,
+                'message': maintenance.message,
+                'created_at': maintenance.created_at.isoformat(),
+                'created_by': maintenance.created_by.username if maintenance.created_by else 'System',
+                'updated_at': maintenance.updated_at.isoformat(),
+            })
+        
+        return JsonResponse({'history': history_data})
+    except Exception as e:
+        logger.error(f"Error getting maintenance mode history: {e}")
+        return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
+@user_passes_test(is_security_admin)
+def delete_maintenance_record(request, record_id):
+    """Delete a maintenance mode record"""
+    try:
+        maintenance = get_object_or_404(MaintenanceMode, id=record_id)
+        
+        # Don't allow deletion of active maintenance
+        if maintenance.is_active:
+            messages.error(request, 'Cannot delete an active maintenance record. Disable it first.')
+            return redirect('maintenance_mode')
+        
+        maintenance.delete()
+        messages.success(request, 'Maintenance record deleted successfully.')
+        return redirect('maintenance_mode')
+        
+    except Exception as e:
+        logger.error(f"Error deleting maintenance record: {e}")
+        messages.error(request, f'Error deleting maintenance record: {str(e)}')
+        return redirect('maintenance_mode')
 
 
+# =============================================================================
+# SECURITY HEALTH CHECK FUNCTIONS
+# =============================================================================
+
+@user_passes_test(is_security_admin)
+def security_health_check(request):
+    """Comprehensive security health check"""
+    try:
+        health_checks = {}
+        
+        # Check database connectivity
+        try:
+            User.objects.count()
+            health_checks['database'] = {'status': 'healthy', 'message': 'Database connection successful'}
+        except Exception as e:
+            health_checks['database'] = {'status': 'critical', 'message': f'Database error: {str(e)}'}
+        
+        # Check maintenance mode
+        try:
+            maintenance = MaintenanceMode.objects.filter(is_active=True).first()
+            health_checks['maintenance_mode'] = {
+                'status': 'active' if maintenance else 'inactive',
+                'message': f'Maintenance mode is {"active" if maintenance else "inactive"}'
+            }
+        except Exception as e:
+            health_checks['maintenance_mode'] = {'status': 'error', 'message': f'Error checking maintenance mode: {str(e)}'}
+        
+        # Check blocked users
+        try:
+            blocked_count = UserProfile.objects.filter(is_blocked=True).count()
+            health_checks['blocked_users'] = {
+                'status': 'warning' if blocked_count > 10 else 'healthy',
+                'message': f'{blocked_count} users currently blocked'
+            }
+        except Exception as e:
+            health_checks['blocked_users'] = {'status': 'error', 'message': f'Error checking blocked users: {str(e)}'}
+        
+        # Check recent security events
+        try:
+            recent_events = SecurityEvent.objects.filter(
+                created_at__gte=timezone.now() - timedelta(hours=24)
+            ).count()
+            health_checks['recent_events'] = {
+                'status': 'warning' if recent_events > 5 else 'healthy',
+                'message': f'{recent_events} security events in last 24 hours'
+            }
+        except Exception as e:
+            health_checks['recent_events'] = {'status': 'error', 'message': f'Error checking security events: {str(e)}'}
+        
+        context = {
+            'active_tab': 'security_health',
+            'health_checks': health_checks,
+            'last_checked': timezone.now(),
+        }
+        
+        return render(request, 'security/health_check.html', context)
+        
+    except Exception as e:
+        logger.error(f"Error performing security health check: {e}")
+        messages.error(request, f'Error performing health check: {str(e)}')
+        return redirect('security_dashboard')
 
 
+def get_client_ip(request):
+    """Get the client's IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
 
+@never_cache
+def emergency_maintenance_bypass(request, secret_key=None):
+    """Emergency bypass for maintenance mode - use with caution"""
+    # Set a secret key in your settings for emergency access
+    expected_key = getattr(settings, 'EMERGENCY_BYPASS_KEY', 'emergency123')
+    
+    if request.method == 'POST':
+        secret_key = request.POST.get('secret_key')
+    
+    if secret_key == expected_key:
+        # Add user to session bypass
+        request.session['maintenance_bypass'] = True
+        request.session.set_expiry(3600)  # 1 hour expiration
+        messages.success(request, '⚠️ Emergency maintenance bypass activated for 1 hour. Use with caution!')
+        logger.warning(f"Emergency maintenance bypass activated by IP: {get_client_ip(request)}")
+        
+        # Redirect to appropriate dashboard
+        if request.user.is_authenticated:
+            if request.user.is_staff or request.user.is_superuser:
+                return redirect('admin_dashboard')
+            else:
+                return redirect('dashboard')
+        else:
+            return redirect('admin_login')
+    else:
+        if request.method == 'POST':
+            messages.error(request, 'Invalid emergency bypass key.')
+        # Show bypass form
+        return render(request, 'security/emergency_bypass.html')
+
+def clear_maintenance_bypass(request):
+    """Clear the maintenance bypass (for testing or when done)"""
+    if 'maintenance_bypass' in request.session:
+        del request.session['maintenance_bypass']
+        messages.success(request, 'Maintenance bypass cleared.')
+        logger.info(f"Maintenance bypass cleared by user: {request.user.username if request.user.is_authenticated else 'Anonymous'}")
+    else:
+        messages.info(request, 'No active maintenance bypass found.')
+    
+    # Redirect to appropriate page
+    if request.user.is_authenticated:
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect('admin_dashboard')
+        else:
+            return redirect('dashboard')
+    else:
+        return redirect('maintenance_mode_page')
+# Add this to the end of security_views.py (after all other functions)
+
+def clear_maintenance_bypass(request):
+    """Clear the maintenance bypass (for testing or when done)"""
+    if 'maintenance_bypass' in request.session:
+        del request.session['maintenance_bypass']
+        messages.success(request, 'Maintenance bypass cleared.')
+        logger.info(f"Maintenance bypass cleared by user: {request.user.username if request.user.is_authenticated else 'Anonymous'}")
+    else:
+        messages.info(request, 'No active maintenance bypass found.')
+    
+    # Redirect to appropriate page
+    if request.user.is_authenticated:
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect('admin_dashboard')
+        else:
+            return redirect('dashboard')
+    else:
+        return redirect('maintenance_mode_page')
 

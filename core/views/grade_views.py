@@ -1764,6 +1764,7 @@ class GradeUploadTemplateView(View):
 
 # In core/views/grade_views.py - Update GradeEntryView
 
+# In grade_views.py - Update GradeEntryView class
 class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
     form_class = GradeEntryForm
@@ -1773,40 +1774,82 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
 
+    def get_initial(self):
+        """Set initial data based on GET parameters with class level auto-matching"""
+        initial = super().get_initial()
+        student_id = self.request.GET.get('student')
+        subject_id = self.request.GET.get('subject')
+        
+        print(f"DEBUG GradeEntryView: GET params - student: {student_id}, subject: {subject_id}")
+        
+        if student_id:
+            try:
+                student = Student.objects.get(pk=student_id)
+                initial['student'] = student
+                # CRITICAL: Auto-set class level to match student's actual class
+                initial['class_level'] = student.class_level
+                print(f"DEBUG: Auto-setting class level to {student.class_level} for student {student.get_full_name()}")
+                
+                # Set current academic year if not provided
+                current_year = timezone.now().year
+                initial['academic_year'] = f"{current_year}/{current_year + 1}"
+                initial['term'] = 1  # Default to first term
+                
+            except (Student.DoesNotExist, ValueError) as e:
+                print(f"DEBUG: Error loading student {student_id}: {e}")
+                messages.warning(self.request, 'Selected student not found.')
+        
+        if subject_id:
+            try:
+                subject = Subject.objects.get(pk=subject_id)
+                initial['subject'] = subject
+                print(f"DEBUG: Setting subject to {subject.name}")
+            except (Subject.DoesNotExist, ValueError) as e:
+                print(f"DEBUG: Error loading subject {subject_id}: {e}")
+        
+        return initial
+
     def get_form_kwargs(self):
+        """Add user and ensure proper initial data"""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         
-        # Pass initial data if student is selected in GET parameters
+        # Ensure initial data is passed correctly for GET requests
         if self.request.method == 'GET':
-            initial = kwargs.get('initial', {})
-            student_id = self.request.GET.get('student')
-            if student_id:
-                try:
-                    student = Student.objects.get(pk=student_id)
-                    initial['student'] = student
-                    # Also set initial class_level based on student
-                    initial['class_level'] = student.class_level
-                except (Student.DoesNotExist, ValueError):
-                    pass
+            initial = self.get_initial()
             kwargs['initial'] = initial
+            print(f"DEBUG: Form kwargs initial - {initial}")
         
         return kwargs
 
     def get_context_data(self, **kwargs):
+        """Enhanced context with student and subject information"""
         context = super().get_context_data(**kwargs)
         
-        # Debug information for template
-        form = context.get('form')
-        if form and hasattr(form, 'fields') and 'subject' in form.fields:
-            subjects_count = form.fields['subject'].queryset.count()
-            print(f"DEBUG GradeEntryView: Form subjects count: {subjects_count}")
+        # Get selected student and subject for template context
+        student_id = self.request.GET.get('student')
+        subject_id = self.request.GET.get('subject')
         
-        # Get additional context for the template
+        selected_student = None
+        selected_subject = None
+        
+        if student_id:
+            try:
+                selected_student = Student.objects.get(pk=student_id)
+                print(f"DEBUG: Context - selected_student: {selected_student}")
+            except Student.DoesNotExist:
+                pass
+        
+        if subject_id:
+            try:
+                selected_subject = Subject.objects.get(pk=subject_id)
+                print(f"DEBUG: Context - selected_subject: {selected_subject}")
+            except Subject.DoesNotExist:
+                pass
+        
+        # Get available subjects based on user role for template display
         if is_teacher(self.request.user):
             teacher = self.request.user.teacher
-            
-            # Get subjects for display in template (using same logic as form)
             try:
                 class_assignments = ClassAssignment.objects.filter(
                     teacher=teacher,
@@ -1830,7 +1873,6 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             except Exception as e:
                 print(f"DEBUG GradeEntryView: Error getting available subjects: {e}")
                 available_subjects = Subject.objects.filter(is_active=True).order_by('name')
-                
         else:
             available_subjects = Subject.objects.filter(is_active=True).order_by('name')
         
@@ -1841,57 +1883,63 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                 is_active=True
             ).values_list('class_level', flat=True).distinct()
             
-            context['students'] = Student.objects.filter(
+            students = Student.objects.filter(
                 class_level__in=teacher_classes, 
                 is_active=True
             ).order_by('last_name', 'first_name')
         else:
-            context['students'] = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
+            students = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
         
         context.update({
+            'selected_student': selected_student,
+            'selected_subject': selected_subject,
             'available_subjects': available_subjects,
+            'students': students,
             'class_levels': CLASS_LEVEL_CHOICES,
             'is_teacher': is_teacher(self.request.user),
             'is_admin': is_admin(self.request.user),
         })
         
-        # Pre-select student if coming from student list
-        student_id = self.request.GET.get('student')
-        if student_id:
-            try:
-                context['selected_student'] = Student.objects.get(pk=student_id)
-            except Student.DoesNotExist:
-                pass
-        
-        # Debug output
         print(f"DEBUG GradeEntryView: Available subjects count: {available_subjects.count()}")
-        print(f"DEBUG GradeEntryView: Students count: {context['students'].count()}")
-        print(f"DEBUG GradeEntryView: Is teacher: {is_teacher(self.request.user)}")
-        print(f"DEBUG GradeEntryView: Is admin: {is_admin(self.request.user)}")
+        print(f"DEBUG GradeEntryView: Students count: {students.count()}")
+        print(f"DEBUG GradeEntryView: Selected student: {selected_student}")
+        print(f"DEBUG GradeEntryView: Selected subject: {selected_subject}")
                 
         return context
 
     @transaction.atomic
     def form_valid(self, form):
+        """
+        Handle form validation with class level enforcement
+        """
         try:
-            # Let the form handle all validation including:
-            # - class_assignment assignment
-            # - duplicate grade checking  
-            # - score validation
-            # - total score calculation
-            # - GES grade determination
+            # CRITICAL: Double-check that class level matches student's class
+            student = form.cleaned_data.get('student')
+            selected_class_level = form.cleaned_data.get('class_level')
+            
+            if student and selected_class_level and student.class_level != selected_class_level:
+                print(f"DEBUG: Class level mismatch detected! Student: {student.class_level}, Selected: {selected_class_level}")
+                form.add_error('class_level', 
+                    f'Class level must match student\'s current class ({student.get_class_level_display()})')
+                return self.form_invalid(form)
+            
+            # Force class level to match student (safety measure)
+            if student:
+                form.instance.class_level = student.class_level
+                print(f"DEBUG: Ensuring class level is set to {student.class_level} for student {student.get_full_name()}")
             
             # Set recorded_by user
             form.instance.recorded_by = self.request.user
             
-            # Save the form (this will trigger the form's save method which calculates scores)
+            # Let the form handle class assignment creation and grade calculation
             response = super().form_valid(form)
             
-            # Success message
+            # Success message with details
             messages.success(
                 self.request, 
-                f'Grade successfully recorded for {self.object.student.get_full_name()}! '
-                f'Total Score: {self.object.total_score} - {self.object.get_ges_grade_display()}'
+                f'✅ Grade successfully recorded for {self.object.student.get_full_name()}! '
+                f'Total Score: {self.object.total_score} - {self.object.get_ges_grade_display()} '
+                f'({self.object.subject.name}, {self.object.academic_year} Term {self.object.term})'
             )
             
             # Log the creation
@@ -1902,23 +1950,32 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
         except Exception as e:
             print(f"DEBUG GradeEntryView: Error saving grade: {str(e)}")
             logger.error(f"Error saving grade: {str(e)}", exc_info=True)
-            messages.error(self.request, 'Error saving grade. Please check the form and try again.')
+            messages.error(self.request, 
+                'Error saving grade. Please check that all information is correct and try again.')
             return self.form_invalid(form)
 
     def form_invalid(self, form):
-        """Enhanced form invalid handling with better error reporting"""
+        """Enhanced form invalid handling with specific error messages"""
         print(f"DEBUG GradeEntryView: Form invalid - Errors: {form.errors}")
         logger.warning(f"Grade entry form invalid - Errors: {form.errors}")
         
         # Add specific error messages for common issues
-        if 'class_assignment' in form.errors:
-            messages.error(self.request, "Class assignment error. Please verify the subject and class level combination.")
+        if 'class_level' in form.errors:
+            messages.error(self.request, 
+                "Class level error. Please ensure the class level matches the student's current class.")
         elif 'student' in form.errors:
-            messages.error(self.request, "Student selection error. Please verify the student exists and is active.")
+            messages.error(self.request, 
+                "Student selection error. Please verify the student exists and is active.")
         elif 'subject' in form.errors:
-            messages.error(self.request, "Subject selection error. Please verify the subject is available for this class.")
+            messages.error(self.request, 
+                "Subject selection error. Please verify the subject is available for this class level.")
         elif any(field in form.errors for field in ['classwork_score', 'homework_score', 'test_score', 'exam_score']):
-            messages.error(self.request, "Please check the score values. They must be within the allowed ranges.")
+            messages.error(self.request, 
+                "Please check the score values. They must be within the allowed ranges.")
+        elif '__all__' in form.errors:
+            # Show non-field errors
+            for error in form.errors['__all__']:
+                messages.error(self.request, error)
         else:
             messages.error(self.request, "Please correct the errors below.")
         
@@ -1937,7 +1994,7 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                     'student_name': self.object.student.get_full_name(),
                     'subject_id': self.object.subject.id,
                     'subject_name': self.object.subject.name,
-                    'class_level': self.object.student.class_level,
+                    'class_level': self.object.class_level,
                     'academic_year': self.object.academic_year,
                     'term': self.object.term,
                     'total_score': float(self.object.total_score) if self.object.total_score else 0,
@@ -1952,9 +2009,10 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                 },
                 ip_address=self._get_client_ip()
             )
+            print(f"DEBUG: Grade creation logged for {self.object.student.get_full_name()}")
             
         except Exception as e:
-            print(f"DEBUG GradeEntryView: Failed to log grade creation: {str(e)}")
+            print(f"DEBUG: Failed to log grade creation: {str(e)}")
             logger.error(f"Failed to log grade creation: {str(e)}")
 
     def _get_client_ip(self):
