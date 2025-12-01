@@ -37,3 +37,38 @@ def can_bypass_maintenance(user):
         return maintenance and maintenance.can_user_bypass(user)
     except:
         return False
+
+@register.filter
+def action_badge_color(action):
+    """
+    Return Bootstrap badge color based on action type for audit logs
+    """
+    color_map = {
+        'CREATE': 'success',
+        'UPDATE': 'info', 
+        'DELETE': 'danger',
+        'LOGIN': 'primary',
+        'LOGOUT': 'secondary',
+        'READ': 'warning',
+        'SECURITY': 'dark',
+        'VIEW': 'light',
+        'EXPORT': 'success',
+        'IMPORT': 'info',
+        'BLOCK': 'danger',
+        'UNBLOCK': 'success',
+        'PASSWORD_CHANGE': 'warning',
+        'PERMISSION_CHANGE': 'info',
+    }
+    return color_map.get(action, 'secondary')
+
+@register.filter
+def model_badge_color(model_name):
+    """
+    Return consistent badge color for model names
+    """
+    colors = ['primary', 'success', 'info', 'warning', 'danger', 'dark', 'secondary']
+    if not model_name:
+        return 'secondary'
+    # Simple hash for consistent coloring
+    hash_val = sum(ord(c) for c in model_name)
+    return colors[hash_val % len(colors)]

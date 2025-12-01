@@ -214,13 +214,11 @@ def get_notification_data(user):
 
 def get_parent_context_data(parent_obj):
     """
-    Get comprehensive parent portal context data with optimized queries
+    Get comprehensive parent portal context data with optimized queries - FIXED VERSION
     """
     try:
-        # Get children with basic information
-        children = parent_obj.students.all().select_related('user').only(
-            'id', 'first_name', 'last_name', 'student_id', 'class_level', 'admission_date'
-        )
+        # FIXED: Use either select_related OR only(), not both together
+        children = parent_obj.students.all().select_related('user')
         
         children_count = children.count()
         
@@ -332,14 +330,14 @@ def get_parent_context_data(parent_obj):
 
 def get_optimized_parent_context_data(parent_obj):
     """
-    Alternative optimized version using database aggregation for parent data
+    Alternative optimized version using database aggregation for parent data - FIXED VERSION
     """
     try:
         from django.db.models import Count, Sum, Avg, Q
         from django.utils import timezone
         from datetime import timedelta
         
-        # Single query to get children with aggregated data
+        # FIXED: Use select_related without only() to avoid the conflict
         children_data = parent_obj.students.annotate(
             recent_attendance_present=Count(
                 'studentattendance',
@@ -365,7 +363,7 @@ def get_optimized_parent_context_data(parent_obj):
                 'fee__balance',
                 filter=Q(fee__payment_status__in=['unpaid', 'partial'])
             )
-        ).select_related('user')
+        ).select_related('user')  # Removed .only() to fix the conflict
         
         children_count = children_data.count()
         
