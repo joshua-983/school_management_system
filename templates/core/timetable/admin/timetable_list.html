@@ -1,0 +1,823 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Timetable Management - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.timetable-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.timetable-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+}
+.action-btns .btn {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 2px;
+}
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+    color: #6c757d;
+}
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: #dee2e6;
+}
+.day-indicator {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+.modal-lg-custom {
+    max-width: 800px;
+}
+.filter-card {
+    background: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+}
+
+/* FIX: Modal dropdown z-index issues */
+.modal.show .select2-container--open {
+    z-index: 1061 !important;
+}
+
+.modal.show .dropdown-menu {
+    z-index: 1061 !important;
+}
+
+.modal .form-select {
+    position: relative;
+    z-index: 1;
+}
+
+.modal-content {
+    position: relative;
+    z-index: 1060;
+}
+
+/* Form floating labels */
+.form-floating > .form-select {
+    padding-top: 1.625rem;
+    padding-bottom: 0.625rem;
+}
+
+.form-floating > label {
+    opacity: 0.65;
+    transform: scale(.85) translateY(-0.5rem) translateX(0.15rem);
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label,
+.form-floating > .form-select ~ label {
+    opacity: 1;
+    color: var(--bs-primary);
+}
+
+/* Checkbox card styling */
+.form-check.card {
+    transition: all 0.2s ease;
+    border-color: var(--bs-border-color);
+}
+
+.form-check.card:hover {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.form-check.card .form-check-input:checked ~ .card-body {
+    background-color: rgba(var(--bs-primary-rgb), 0.05);
+    border-left: 3px solid var(--bs-primary);
+}
+
+/* Modal animations */
+.modal.fade .modal-dialog {
+    transform: translateY(-50px);
+    transition: transform 0.3s ease-out;
+}
+
+.modal.show .modal-dialog {
+    transform: translateY(0);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .form-check.card .card-body {
+        padding: 0.75rem !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">Timetable Management</h1>
+                    <p class="text-muted mb-0">Manage all class timetables across the school</p>
+                </div>
+                <div class="btn-group">
+                    <a href="{% url 'timetable_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Create Timetable
+                    </a>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#generateModal">
+                        <i class="fas fa-calendar-plus me-2"></i>Generate Weekly
+                    </button>
+                    <button type="button" class="btn btn-info" id="exportBtn">
+                        <i class="fas fa-download me-2"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card timetable-card border-start border-primary border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Timetables</h6>
+                            <h4 class="mb-0">{{ timetables.count }}</h4>
+                        </div>
+                        <div class="avatar avatar-lg bg-primary">
+                            <i class="fas fa-calendar-alt fa-2x text-white"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card timetable-card border-start border-success border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Active Timetables</h6>
+                            <h4 class="mb-0">{{ timetables|length }}</h4>
+                        </div>
+                        <div class="avatar avatar-lg bg-success">
+                            <i class="fas fa-check-circle fa-2x text-white"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card timetable-card border-start border-warning border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Classes Covered</h6>
+                            <h4 class="mb-0">{{ class_levels|length }}</h4>
+                        </div>
+                        <div class="avatar avatar-lg bg-warning">
+                            <i class="fas fa-chalkboard-teacher fa-2x text-white"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card timetable-card border-start border-info border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">This Week</h6>
+                            <h4 class="mb-0">{{ timetables.count }}</h4>
+                        </div>
+                        <div class="avatar avatar-lg bg-info">
+                            <i class="fas fa-calendar-week fa-2x text-white"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card filter-card">
+                <div class="card-body">
+                    <h6 class="card-title mb-3"><i class="fas fa-filter me-2"></i>Filter Timetables</h6>
+                    <form method="get" class="row g-3">
+                        <div class="col-xl-3 col-md-6">
+                            <label class="form-label">Class Level</label>
+                            <select name="class_level" class="form-select" id="classFilter">
+                                <option value="">All Classes</option>
+                                {% for code, name in class_levels %}
+                                    <option value="{{ code }}" {% if request.GET.class_level == code %}selected{% endif %}>
+                                        {{ name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-xl-3 col-md-6">
+                            <label class="form-label">Academic Year</label>
+                            <select name="academic_year" class="form-select" id="yearFilter">
+                                <option value="">All Years</option>
+                                {% for year in academic_years %}
+                                    <option value="{{ year }}" {% if request.GET.academic_year == year %}selected{% endif %}>
+                                        {{ year }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label class="form-label">Term</label>
+                            <select name="term" class="form-select" id="termFilter">
+                                <option value="">All Terms</option>
+                                <option value="1" {% if request.GET.term == "1" %}selected{% endif %}>Term 1</option>
+                                <option value="2" {% if request.GET.term == "2" %}selected{% endif %}>Term 2</option>
+                                <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
+                            </select>
+                        </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label class="form-label">Day</label>
+                            <select name="day_of_week" class="form-select" id="dayFilter">
+                                <option value="">All Days</option>
+                                <option value="0" {% if request.GET.day_of_week == "0" %}selected{% endif %}>Monday</option>
+                                <option value="1" {% if request.GET.day_of_week == "1" %}selected{% endif %}>Tuesday</option>
+                                <option value="2" {% if request.GET.day_of_week == "2" %}selected{% endif %}>Wednesday</option>
+                                <option value="3" {% if request.GET.day_of_week == "3" %}selected{% endif %}>Thursday</option>
+                                <option value="4" {% if request.GET.day_of_week == "4" %}selected{% endif %}>Friday</option>
+                                <option value="5" {% if request.GET.day_of_week == "5" %}selected{% endif %}>Saturday</option>
+                            </select>
+                        </div>
+                        <div class="col-xl-2 col-md-4 d-flex align-items-end">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i>Filter
+                                </button>
+                                <a href="{% url 'timetable_list' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-redo me-1"></i>Reset
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timetable List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card timetable-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">All Timetables</h5>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showInactive">
+                        <label class="form-check-label" for="showInactive">Show Inactive</label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if timetables %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="timetableTable">
+                            <thead>
+                                <tr>
+                                    <th width="50">Day</th>
+                                    <th>Class</th>
+                                    <th>Academic Year</th>
+                                    <th>Term</th>
+                                    <th>Periods</th>
+                                    <th>Last Updated</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for timetable in timetables %}
+                                <tr class="timetable-row {% if not timetable.is_active %}table-secondary{% endif %}">
+                                    <td>
+                                        <div class="day-indicator bg-{% if timetable.day_of_week == 0 %}primary{% elif timetable.day_of_week == 1 %}success{% elif timetable.day_of_week == 2 %}warning{% elif timetable.day_of_week == 3 %}info{% elif timetable.day_of_week == 4 %}danger{% else %}secondary{% endif %} text-white">
+                                            {{ timetable.day_of_week|add:"1" }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <strong>{{ timetable.get_class_level_display }}</strong>
+                                        <div class="text-muted small">{{ timetable.get_day_of_week_display }}</div>
+                                    </td>
+                                    <td>{{ timetable.academic_year }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">Term {{ timetable.term }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-2">{{ timetable.entries.count }}</span>
+                                            {% if timetable.entries.count > 0 %}
+                                            <div class="progress flex-grow-1" style="height: 6px;">
+                                                <div class="progress-bar bg-success" style="width: {% widthratio timetable.entries.count 10 100 %}%"></div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted small">{{ timetable.updated_at|date:"d M Y" }}</span>
+                                    </td>
+                                    <td>
+                                        {% if timetable.is_active %}
+                                            <span class="status-badge badge bg-success rounded-pill">
+                                                <i class="fas fa-circle me-1"></i>Active
+                                            </span>
+                                        {% else %}
+                                            <span class="status-badge badge bg-secondary rounded-pill">
+                                                <i class="fas fa-circle me-1"></i>Inactive
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end action-btns">
+                                        <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-sm btn-info" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-sm btn-warning" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{% url 'timetable_delete' timetable.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-calendar-times"></i>
+                        <h4 class="mb-2">No Timetables Found</h4>
+                        <p class="text-muted mb-4">Create your first timetable or adjust your filters</p>
+                        <a href="{% url 'timetable_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create First Timetable
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if timetables.has_other_pages %}
+                <div class="card-footer">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if timetables.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ timetables.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for i in timetables.paginator.page_range %}
+                                {% if timetables.number == i %}
+                                <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                                {% elif i > timetables.number|add:'-3' and i < timetables.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ i }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ i }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if timetables.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ timetables.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generate Weekly Modal - FIXED VERSION -->
+<div class="modal fade" id="generateModal" tabindex="-1" aria-labelledby="generateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg">
+            <!-- Modal Header -->
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="generateModalLabel">
+                    <i class="fas fa-calendar-plus me-2"></i>Generate Weekly Timetable
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="modal-body p-4">
+                <form method="post" action="{% url 'generate_weekly_timetable' %}" id="generateForm" class="needs-validation" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="alert alert-primary bg-light border-primary mb-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle fa-2x text-primary me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Generate Weekly Timetables</h6>
+                                <p class="mb-0 small">
+                                    This will create timetables for all selected days of the week. 
+                                    You can edit each day individually later.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-4">
+                        <!-- Class Level -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select name="class_level" class="form-select" id="generateClass" required style="position: relative; z-index: 1;">
+                                    <option value="">Select Class</option>
+                                    {% for code, name in class_levels %}
+                                        <option value="{{ code }}">{{ name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="generateClass" class="fw-semibold">
+                                    <i class="fas fa-users me-1"></i> Class Level *
+                                </label>
+                                <div class="form-text">Select which class to generate timetable for</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Term -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select name="term" class="form-select" id="generateTerm" required style="position: relative; z-index: 1;">
+                                    <option value="1" {% if default_term == 1 %}selected{% endif %}>Term 1</option>
+                                    <option value="2" {% if default_term == 2 %}selected{% endif %}>Term 2</option>
+                                    <option value="3" {% if default_term == 3 %}selected{% endif %}>Term 3</option>
+                                </select>
+                                <label for="generateTerm" class="fw-semibold">
+                                    <i class="fas fa-calendar-alt me-1"></i> Term *
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Year -->
+                        <div class="col-md-12">
+                            <div class="form-floating">
+                                <input type="text" name="academic_year" class="form-control" 
+                                       value="{{ default_academic_year }}" required
+                                       pattern="\d{4}/\d{4}" 
+                                       placeholder="YYYY/YYYY" 
+                                       id="generateYear">
+                                <label for="generateYear" class="fw-semibold">
+                                    <i class="fas fa-calendar me-1"></i> Academic Year *
+                                </label>
+                                <div class="form-text">Format: YYYY/YYYY (e.g., 2024/2025)</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Days Selection -->
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold mb-3">
+                                <i class="fas fa-calendar-day me-1"></i> Days to Generate
+                            </label>
+                            <div class="row g-3">
+                                {% for day_num, day_name in day_choices %}
+                                <div class="col-md-4 col-sm-6">
+                                    <div class="form-check card border">
+                                        <div class="card-body p-3">
+                                            <input class="form-check-input day-checkbox" type="checkbox" 
+                                                   id="day{{ day_num }}" value="{{ day_num }}" checked
+                                                   style="width: 1.2em; height: 1.2em;">
+                                            <label class="form-check-label d-flex align-items-center ms-2" for="day{{ day_num }}">
+                                                {% if day_num == 5 %}
+                                                <span class="badge bg-secondary me-2">
+                                                    <i class="fas fa-calendar-check"></i>
+                                                </span>
+                                                {% elif day_num == 0 %}
+                                                <span class="badge bg-primary me-2">
+                                                    <i class="fas fa-calendar"></i>
+                                                </span>
+                                                {% elif day_num == 1 %}
+                                                <span class="badge bg-success me-2">
+                                                    <i class="fas fa-calendar"></i>
+                                                </span>
+                                                {% elif day_num == 2 %}
+                                                <span class="badge bg-warning me-2">
+                                                    <i class="fas fa-calendar"></i>
+                                                </span>
+                                                {% elif day_num == 3 %}
+                                                <span class="badge bg-info me-2">
+                                                    <i class="fas fa-calendar"></i>
+                                                </span>
+                                                {% elif day_num == 4 %}
+                                                <span class="badge bg-danger me-2">
+                                                    <i class="fas fa-calendar"></i>
+                                                </span>
+                                                {% endif %}
+                                                <span class="fw-medium">{{ day_name }}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <!-- Quick Selection Buttons -->
+                            <div class="mt-3 d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllDays">
+                                    <i class="fas fa-check-circle me-1"></i> Select All
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllDays">
+                                    <i class="fas fa-times-circle me-1"></i> Deselect All
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" id="selectWeekdays">
+                                    <i class="fas fa-building me-1"></i> Weekdays Only
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Summary -->
+                        <div class="col-md-12">
+                            <div class="card bg-light border-0 mt-3">
+                                <div class="card-body">
+                                    <h6 class="card-title mb-3">
+                                        <i class="fas fa-clipboard-list me-2"></i>Generation Summary
+                                    </h6>
+                                    <div class="row small">
+                                        <div class="col-md-6">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="text-muted">Selected Class:</span>
+                                                <span class="fw-medium" id="selectedClassSummary">None</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="text-muted">Academic Year:</span>
+                                                <span class="fw-medium" id="selectedYearSummary">{{ default_academic_year }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="text-muted">Term:</span>
+                                                <span class="fw-medium" id="selectedTermSummary">Term {{ default_term }}</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span class="text-muted">Days Selected:</span>
+                                                <span class="fw-medium" id="selectedDaysSummary">6</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="submit" form="generateForm" class="btn btn-primary" id="generateBtn">
+                    <i class="fas fa-magic me-2"></i> Generate Timetables
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Show/hide inactive timetables
+    $('#showInactive').change(function() {
+        $('.timetable-row.table-secondary').toggle(this.checked);
+    });
+
+    // Export functionality
+    $('#exportBtn').click(function() {
+        const filters = {
+            class: $('#classFilter').val(),
+            year: $('#yearFilter').val(),
+            term: $('#termFilter').val(),
+            day: $('#dayFilter').val()
+        };
+        
+        let exportUrl = "{% url 'timetable_list' %}?export=true";
+        if (filters.class) exportUrl += '&class_level=' + filters.class;
+        if (filters.year) exportUrl += '&academic_year=' + filters.year;
+        if (filters.term) exportUrl += '&term=' + filters.term;
+        if (filters.day) exportUrl += '&day_of_week=' + filters.day;
+        
+        window.location.href = exportUrl;
+    });
+
+    // Table row click for view
+    $('.timetable-row').click(function(e) {
+        if (!$(e.target).closest('.action-btns').length) {
+            window.location.href = $(this).find('.btn-info').attr('href');
+        }
+    });
+
+    // Initialize tooltips
+    $('[title]').tooltip();
+
+    // Search functionality
+    $('#searchInput').on('keyup', function() {
+        const value = $(this).val().toLowerCase();
+        $('.timetable-row').filter(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+        });
+    });
+
+    // ========== GENERATE WEEKLY MODAL FUNCTIONALITY ==========
+    
+    // Select all days
+    $('#selectAllDays').click(function() {
+        $('.day-checkbox').prop('checked', true);
+        updateDaysSummary();
+    });
+    
+    // Deselect all days
+    $('#deselectAllDays').click(function() {
+        $('.day-checkbox').prop('checked', false);
+        updateDaysSummary();
+    });
+    
+    // Select weekdays only (Monday to Friday)
+    $('#selectWeekdays').click(function() {
+        $('.day-checkbox').prop('checked', false);
+        $('.day-checkbox').each(function() {
+            var dayNum = parseInt($(this).val());
+            if (dayNum >= 0 && dayNum <= 4) { // Monday(0) to Friday(4)
+                $(this).prop('checked', true);
+            }
+        });
+        updateDaysSummary();
+    });
+    
+    // Update summary when class changes
+    $('#generateClass').change(function() {
+        var selectedClass = $(this).find('option:selected').text();
+        $('#selectedClassSummary').text(selectedClass || 'None');
+    });
+    
+    // Update summary when year changes
+    $('#generateYear').on('input', function() {
+        var year = $(this).val();
+        if (year && /^\d{4}\/\d{4}$/.test(year)) {
+            $('#selectedYearSummary').text(year);
+        }
+    });
+    
+    // Update summary when term changes
+    $('#generateTerm').change(function() {
+        var term = $(this).find('option:selected').text();
+        $('#selectedTermSummary').text(term);
+    });
+    
+    // Update days summary when checkboxes change
+    $('.day-checkbox').change(updateDaysSummary);
+    
+    function updateDaysSummary() {
+        var checkedCount = $('.day-checkbox:checked').length;
+        $('#selectedDaysSummary').text(checkedCount);
+    }
+    
+    // Initialize summary
+    updateDaysSummary();
+    $('#generateClass').trigger('change');
+    $('#generateTerm').trigger('change');
+    
+    // Generate form validation
+    $('#generateForm').submit(function(e) {
+        const classLevel = $('#generateClass').val();
+        const academicYear = $('#generateYear').val();
+        const yearPattern = /^\d{4}\/\d{4}$/;
+        const checkedDays = $('.day-checkbox:checked').length;
+        
+        // Reset error states
+        $('.is-invalid').removeClass('is-invalid');
+        $('.invalid-feedback').remove();
+        
+        let hasError = false;
+        
+        if (!classLevel) {
+            $('#generateClass').addClass('is-invalid');
+            $('#generateClass').after('<div class="invalid-feedback">Please select a class level</div>');
+            hasError = true;
+        }
+        
+        if (!yearPattern.test(academicYear)) {
+            $('#generateYear').addClass('is-invalid');
+            $('#generateYear').after('<div class="invalid-feedback">Academic year must be in format YYYY/YYYY</div>');
+            hasError = true;
+        }
+        
+        if (checkedDays === 0) {
+            // Add error to days section
+            $('.form-check.card').first().closest('.row').before(
+                '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+                '<i class="fas fa-exclamation-triangle me-2"></i>' +
+                'Please select at least one day to generate timetables for.' +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>' +
+                '</div>'
+            );
+            hasError = true;
+        }
+        
+        if (hasError) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Show loading state
+        $('#generateBtn').html('<span class="spinner-border spinner-border-sm me-2"></span>Generating...');
+        $('#generateBtn').prop('disabled', true);
+    });
+    
+    // Remove validation on input
+    $('#generateClass, #generateYear').on('input change', function() {
+        $(this).removeClass('is-invalid');
+        $(this).next('.invalid-feedback').remove();
+    });
+    
+    // Modal show/hide events
+    $('#generateModal').on('show.bs.modal', function() {
+        // Reset form when modal opens
+        $('#generateBtn').html('<i class="fas fa-magic me-2"></i> Generate Timetables');
+        $('#generateBtn').prop('disabled', false);
+        $('.alert-danger').remove();
+        $('.is-invalid').removeClass('is-invalid');
+        $('.invalid-feedback').remove();
+    });
+    
+    $('#generateModal').on('shown.bs.modal', function() {
+        // Focus on first input
+        $('#generateClass').focus();
+    });
+
+    // Fix for dropdowns appearing behind modal
+    $('.form-select').on('shown.bs.select', function() {
+        $(this).data('bs.select').$menu.css('z-index', '1061');
+    });
+
+    // Initialize Bootstrap validation
+    (function() {
+        'use strict'
+        var forms = document.querySelectorAll('.needs-validation')
+        Array.prototype.slice.call(forms).forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                }
+                form.classList.add('was-validated')
+            }, false)
+        })
+    })()
+});
+
+function showToast(message, type = 'info') {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : 'primary'} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `);
+    
+    $('#toastContainer').append(toast);
+    const bsToast = new bootstrap.Toast(toast[0]);
+    bsToast.show();
+    
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+{% endblock %}

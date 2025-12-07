@@ -1,0 +1,887 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}My Weekly Schedule - Teacher{% endblock %}
+
+{% block extra_css %}
+<style>
+.weekly-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+}
+.teacher-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.3);
+    overflow: hidden;
+}
+.teacher-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.weekly-grid {
+    display: grid;
+    grid-template-columns: 100px repeat(6, 1fr);
+    gap: 1px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.grid-header {
+    background: #495057;
+    color: white;
+    padding: 15px;
+    text-align: center;
+    font-weight: 600;
+}
+.time-slot-header {
+    background: #6c757d;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+.grid-cell {
+    background: white;
+    padding: 10px;
+    min-height: 80px;
+    border: none;
+    transition: all 0.2s ease;
+    position: relative;
+}
+.grid-cell:hover {
+    background: #f8f9fa;
+    transform: scale(1.02);
+    z-index: 1;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+.grid-cell.current {
+    background: rgba(25, 135, 84, 0.1);
+    border: 2px solid #198754;
+}
+.grid-cell.break {
+    background: #f8f9fa;
+}
+.period-chip {
+    background: #0d6efd;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+.period-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+}
+.period-chip.break {
+    background: #6c757d;
+}
+.period-chip.current {
+    background: #198754;
+    animation: pulse-chip 2s infinite;
+}
+@keyframes pulse-chip {
+    0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(25, 135, 84, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
+}
+.chip-time {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+.chip-subject {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.chip-class {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+.week-navigation {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+}
+.day-summary {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    transition: all 0.2s ease;
+}
+.day-summary:hover {
+    border-color: #0d6efd;
+    background: #f8f9fa;
+}
+.day-summary.today {
+    border-color: #198754;
+    background: rgba(25, 135, 84, 0.05);
+}
+.day-header {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e9ecef;
+}
+.day-periods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.day-period {
+    background: #e9ecef;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+}
+.stats-card {
+    border: none;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.stat-circle {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto;
+}
+.empty-day {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    margin: 5px;
+}
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 15px;
+    font-size: 0.85rem;
+}
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    margin-right: 5px;
+}
+.view-toggle {
+    display: flex;
+    gap: 5px;
+    background: #f8f9fa;
+    padding: 5px;
+    border-radius: 8px;
+}
+.view-btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #6c757d;
+    transition: all 0.2s ease;
+}
+.view-btn.active {
+    background: #0d6efd;
+    color: white;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card weekly-header">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center">
+                                <div class="teacher-avatar me-4">
+                                    {% if teacher.user.profile_picture %}
+                                    <img src="{{ teacher.user.profile_picture.url }}" alt="{{ teacher.user.get_full_name }}">
+                                    {% else %}
+                                    <div class="w-100 h-100 bg-primary d-flex align-items-center justify-content-center text-white">
+                                        {{ teacher.user.first_name|first }}{{ teacher.user.last_name|first }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <h1 class="h2 mb-1">{{ teacher.user.get_full_name }}</h1>
+                                    <p class="mb-2">Weekly Teaching Schedule</p>
+                                    <div class="d-flex align-items-center flex-wrap gap-2">
+                                        <span class="badge bg-light text-dark">
+                                            <i class="fas fa-chalkboard-teacher me-1"></i>{{ classes_teaching|length }} Classes
+                                        </span>
+                                        <span class="badge bg-light text-dark">
+                                            <i class="fas fa-book me-1"></i>{{ subjects_teaching|length }} Subjects
+                                        </span>
+                                        <span class="badge bg-light text-dark">
+                                            <i class="fas fa-clock me-1"></i>{{ total_periods }} Periods/Week
+                                        </span>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-user-check me-1"></i>{{ total_students }} Students
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <div class="btn-group mt-3 mt-md-0">
+                                <button class="btn btn-light" onclick="window.print()">
+                                    <i class="fas fa-print me-2"></i>Print
+                                </button>
+                                <a href="{% url 'teacher_timetable_view' %}" class="btn btn-light" onclick="window.print(); return false;">
+                                    <i class="fas fa-file-pdf me-2"></i>PDF
+                                </a>
+                                <button class="btn btn-light" id="exportCalendar">
+                                    <i class="fas fa-calendar-plus me-2"></i>Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Week Navigation -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="week-navigation">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <button class="btn btn-outline-primary" id="prevWeekBtn">
+                            <i class="fas fa-chevron-left me-2"></i>Previous Week
+                        </button>
+                    </div>
+                    <div class="text-center">
+                        <h4 class="mb-1" id="weekRange">Week of {{ week_start|date:"M d" }} - {{ week_end|date:"M d, Y" }}</h4>
+                        <p class="text-muted mb-0">Academic Year: {{ academic_year }} • Term {{ term }}</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-primary" id="nextWeekBtn">
+                            Next Week <i class="fas fa-chevron-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Toggle -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="view-toggle">
+                    <button class="view-btn active" data-view="grid">
+                        <i class="fas fa-th-large me-2"></i>Grid View
+                    </button>
+                    <button class="view-btn" data-view="list">
+                        <i class="fas fa-list me-2"></i>List View
+                    </button>
+                    <button class="view-btn" data-view="summary">
+                        <i class="fas fa-chart-bar me-2"></i>Summary
+                    </button>
+                </div>
+                <div class="legend">
+                    <span class="legend-item">
+                        <span class="legend-color bg-primary"></span>Class Period
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color bg-success"></span>Current Period
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color bg-secondary"></span>Break
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-color bg-warning"></span>Free Period
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid View -->
+    <div id="gridView" class="view-content">
+        <div class="weekly-grid">
+            <!-- Time Column Header -->
+            <div class="grid-header">Time</div>
+            {% for day_num, day_name in days_order %}
+            <div class="grid-header {% if day_num == today_day %}today-header{% endif %}">
+                {{ day_name }}
+            </div>
+            {% endfor %}
+
+            <!-- Time Slots -->
+            {% for slot in time_slots %}
+            <div class="time-slot-header">
+                {{ slot }}
+            </div>
+            
+            {% for day_num, day_name in days_order %}
+            {% with day_data=periods_by_day|dict_key:day_name %}
+                {% with periods=day_data|dict_key:forloop.parentloop.counter0 %}
+                <div class="grid-cell {% if periods and periods.is_current %}current{% endif %} {% if periods and periods.is_break %}break{% endif %}" 
+                     data-day="{{ day_num }}" data-period="{{ forloop.parentloop.counter0 }}">
+                    {% if periods %}
+                        {% if periods.periods %}
+                            {% for period in periods.periods %}
+                            <div class="period-chip {% if period.is_current %}current{% endif %} {% if period.is_break %}break{% endif %}"
+                                 data-bs-toggle="popover"
+                                 data-bs-html="true"
+                                 data-bs-content="
+                                    <strong>Subject:</strong> {{ period.subject }}<br>
+                                    <strong>Class:</strong> {{ period.class_level }}<br>
+                                    <strong>Time:</strong> {{ period.time }}<br>
+                                    <strong>Room:</strong> {{ period.classroom|default:'TBA' }}<br>
+                                    <strong>Students:</strong> {{ period.student_count }}
+                                 ">
+                                <div class="chip-time">{{ period.time_short }}</div>
+                                <div class="chip-subject">{{ period.subject_short }}</div>
+                                <div class="chip-class">{{ period.class_short }}</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="period-chip {% if periods.is_current %}current{% endif %} {% if periods.is_break %}break{% endif %}">
+                                <div class="chip-time">{{ periods.time_short }}</div>
+                                <div class="chip-subject">{{ periods.subject_short }}</div>
+                                <div class="chip-class">{{ periods.class_short }}</div>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        {% if forloop.parentloop.counter0 >= 2 and forloop.parentloop.counter0 <= 6 %}
+                        <div class="empty-day">
+                            <i class="fas fa-coffee text-muted"></i>
+                            <small>Free</small>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endwith %}
+            {% endwith %}
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- List View -->
+    <div id="listView" class="view-content" style="display: none;">
+        <div class="row">
+            {% for day_num, day_name in days_order %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="day-summary {% if day_num == today_day %}today{% endif %}">
+                    <div class="day-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">{{ day_name }}</h6>
+                            <span class="badge bg-primary">
+                                {% with day_periods=periods_by_day|dict_key:day_name %}
+                                    {% if day_periods %}
+                                        {{ day_periods|length }} periods
+                                    {% else %}
+                                        0 periods
+                                    {% endif %}
+                                {% endwith %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {% with day_periods=periods_by_day|dict_key:day_name %}
+                        {% if day_periods %}
+                            <div class="day-periods">
+                                {% for period_key, period in day_periods.items %}
+                                {% if period and period.subject %}
+                                <div class="period-chip-list mb-2 p-2 border rounded 
+                                         {% if period.is_current %}border-success bg-success bg-opacity-10{% endif %}"
+                                     onclick="showPeriodInfo(this)">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ period.time|default:period.time_short }}</strong>
+                                            <div class="small">{{ period.subject|default:period.subject_short }}</div>
+                                            <div class="small text-muted">{{ period.class_level|default:period.class_short }}</div>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-muted"></i>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="fas fa-umbrella-beach fa-2x mb-3"></i>
+                                <h6>No Classes</h6>
+                                <p class="small mb-0">Free day for planning</p>
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Summary View -->
+    <div id="summaryView" class="view-content" style="display: none;">
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <div class="stat-circle bg-primary text-white mb-3">
+                            {{ total_periods }}
+                        </div>
+                        <h5>Total Periods</h5>
+                        <p class="text-muted">This week</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <div class="stat-circle bg-success text-white mb-3">
+                            {{ classes_teaching|length }}
+                        </div>
+                        <h5>Classes</h5>
+                        <p class="text-muted">Teaching</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <div class="stat-circle bg-warning text-white mb-3">
+                            {{ total_hours }}
+                        </div>
+                        <h5>Teaching Hours</h5>
+                        <p class="text-muted">This week</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">Class Distribution</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="classDistributionChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Busiest Days</h6>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="dayDistributionChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly Summary -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Weekly Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <h2 class="text-primary mb-1">{{ busiest_day }}</h2>
+                                <p class="text-muted mb-0">Busiest Day</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <h2 class="text-success mb-1">{{ average_periods }}</h2>
+                                <p class="text-muted mb-0">Avg Periods/Day</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <h2 class="text-warning mb-1">{{ free_periods }}</h2>
+                                <p class="text-muted mb-0">Free Periods</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center p-3">
+                                <h2 class="text-info mb-1">{{ workload_score }}%</h2>
+                                <p class="text-muted mb-0">Workload Score</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Period Details Modal -->
+<div class="modal fade" id="periodDetailsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Period Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="periodDetailsContent">
+                <!-- Period details will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-primary" id="goToClassBtn">Go to Class</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+$(document).ready(function() {
+    let currentWeek = {{ current_week }};
+    
+    // View toggle
+    $('.view-btn').click(function() {
+        const view = $(this).data('view');
+        $('.view-btn').removeClass('active');
+        $(this).addClass('active');
+        $('.view-content').hide();
+        $(`#${view}View`).show();
+        
+        if (view === 'summary') {
+            initializeCharts();
+        }
+    });
+    
+    // Week navigation
+    $('#prevWeekBtn').click(function() {
+        currentWeek--;
+        loadWeekSchedule();
+    });
+    
+    $('#nextWeekBtn').click(function() {
+        currentWeek++;
+        loadWeekSchedule();
+    });
+    
+    // Export calendar
+    $('#exportCalendar').click(function() {
+        exportToCalendar();
+    });
+    
+    // Initialize popovers
+    $('[data-bs-toggle="popover"]').popover({
+        trigger: 'hover',
+        placement: 'top',
+        html: true,
+        container: 'body'
+    });
+    
+    // Highlight current periods
+    highlightCurrentPeriods();
+    setInterval(highlightCurrentPeriods, 60000);
+    
+    // Initialize charts for summary view
+    if ($('#summaryView').is(':visible')) {
+        initializeCharts();
+    }
+});
+
+function loadWeekSchedule() {
+    // Load week schedule via AJAX
+    $.ajax({
+        url: '{% url "teacher_timetable_view" %}',
+        data: { week: currentWeek },
+        success: function(response) {
+            updateWeekView(response);
+        }
+    });
+}
+
+function updateWeekView(data) {
+    $('#weekRange').text(`Week of ${data.week_start} - ${data.week_end}`);
+    // Update the grid with new data
+    // This would involve re-rendering the grid with the new schedule
+}
+
+function showPeriodInfo(element) {
+    // Extract period info from the clicked element
+    const periodInfo = $(element).find('div').html();
+    $('#periodDetailsContent').html(`
+        <div class="period-details">
+            <h6>Period Information</h6>
+            <div class="mb-3">
+                ${periodInfo}
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-6">
+                    <small class="text-muted">Duration:</small>
+                    <p class="mb-0">45 minutes</p>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">Status:</small>
+                    <p class="mb-0"><span class="badge bg-success">Scheduled</span></p>
+                </div>
+            </div>
+        </div>
+    `);
+    $('#goToClassBtn').attr('href', '#'); // Update with actual class URL
+    $('#periodDetailsModal').modal('show');
+}
+
+function highlightCurrentPeriods() {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    
+    $('.period-chip').removeClass('current');
+    $('.grid-cell').removeClass('current');
+    
+    $('.period-chip').each(function() {
+        const timeText = $(this).find('.chip-time').text();
+        if (timeText) {
+            const [startStr, endStr] = timeText.split(' - ');
+            
+            if (startStr && endStr) {
+                const startTime = convertTimeToMinutes(startStr.trim());
+                const endTime = convertTimeToMinutes(endStr.trim());
+                
+                if (startTime && endTime && currentTime >= startTime && currentTime <= endTime) {
+                    $(this).addClass('current');
+                    $(this).closest('.grid-cell').addClass('current');
+                }
+            }
+        }
+    });
+}
+
+function convertTimeToMinutes(timeStr) {
+    if (!timeStr) return null;
+    
+    // Handle time like "9:00 AM" or "14:30"
+    if (timeStr.includes('AM') || timeStr.includes('PM')) {
+        const [time, modifier] = timeStr.split(' ');
+        if (!time) return null;
+        
+        let [hours, minutes] = time.split(':').map(Number);
+        
+        if (modifier === 'PM' && hours < 12) hours += 12;
+        if (modifier === 'AM' && hours === 12) hours = 0;
+        
+        return hours * 60 + minutes;
+    } else {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    }
+}
+
+function exportToCalendar() {
+    // Generate ICS file for the weekly schedule
+    const icsContent = generateICalendar();
+    const blob = new Blob([icsContent], { type: 'text/calendar' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'teacher-schedule.ics';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    showToast('Calendar exported successfully!', 'success');
+}
+
+function generateICalendar() {
+    // Generate iCalendar format for all periods
+    let ics = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//School//Teacher Schedule//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+
+`;
+    
+    // Add events for each period
+    $('.period-chip:not(.break)').each(function(index) {
+        const subject = $(this).find('.chip-subject').text() || 'Class';
+        const classLevel = $(this).find('.chip-class').text() || 'General';
+        const time = $(this).find('.chip-time').text() || '9:00 AM - 9:45 AM';
+        
+        ics += `BEGIN:VEVENT
+UID:${Date.now()}-${index}@school
+DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+SUMMARY:${subject} - ${classLevel}
+DESCRIPTION:Teaching ${subject} to ${classLevel}
+LOCATION:School
+DTSTART:20241209T090000Z
+DTEND:20241209T094500Z
+END:VEVENT
+
+`;
+    });
+    
+    ics += `END:VCALENDAR`;
+    return ics;
+}
+
+function initializeCharts() {
+    // Class Distribution Chart
+    const classCtx = document.getElementById('classDistributionChart');
+    if (classCtx) {
+        new Chart(classCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: [{% for class in classes_teaching %}'{{ class }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+                datasets: [{
+                    data: [{% for count in class_counts %}{{ count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    backgroundColor: [
+                        '#0d6efd', '#198754', '#dc3545', '#fd7e14',
+                        '#6f42c1', '#20c997', '#6610f2', '#d63384'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+    
+    // Day Distribution Chart
+    const dayCtx = document.getElementById('dayDistributionChart');
+    if (dayCtx) {
+        new Chart(dayCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: [{% for day in days_order %}'{{ day.1|slice:":3" }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+                datasets: [{
+                    label: 'Periods',
+                    data: [{% for count in day_counts %}{{ count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    backgroundColor: '#0d6efd',
+                    borderColor: '#0a58ca',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+}
+
+function showToast(message, type = 'info') {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `);
+    
+    $('#toastContainer').append(toast);
+    const bsToast = new bootstrap.Toast(toast[0]);
+    bsToast.show();
+    
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+<!-- Print Styles -->
+<style media="print">
+@media print {
+    .navbar, .sidebar, .btn, .dropdown, .week-navigation, 
+    .view-toggle, .legend, .modal, .toast-container {
+        display: none !important;
+    }
+    
+    .weekly-header {
+        background: white !important;
+        color: black !important;
+        border: 2px solid #000 !important;
+    }
+    
+    .teacher-avatar {
+        border-color: #000 !important;
+    }
+    
+    .weekly-grid {
+        background: white !important;
+    }
+    
+    .grid-header {
+        background: #f8f9fa !important;
+        color: black !important;
+        border: 1px solid #000 !important;
+    }
+    
+    .time-slot-header {
+        background: #e9ecef !important;
+        color: black !important;
+    }
+    
+    .grid-cell {
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    .period-chip {
+        background: #f8f9fa !important;
+        color: black !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    body {
+        padding: 20px !important;
+        font-size: 10pt !important;
+    }
+}
+</style>
+{% endblock %}

@@ -157,7 +157,8 @@ from .views.timetable_views import (
     # Add new teacher timetable views
     TeacherTimetableListView, TeacherTimetableDetailView, TimetableUpdateView,
     # ADD MISSING timetable_calendar view import
-    TimetableCalendarView
+    TimetableCalendarView,  print_timetable, get_subjects_for_class, get_available_teachers,
+    calendar_data, day_events, event_details, export_calendar
 )
 
 from .views.notifications_views import (
@@ -619,12 +620,22 @@ urlpatterns = [
         path('create/', TimetableCreateView.as_view(), name='admin_timetable_create'),
         path('<int:pk>/', TimetableDetailView.as_view(), name='admin_timetable_detail'),
         path('<int:pk>/manage/', TimetableManageView.as_view(), name='admin_timetable_manage'),
+        path('<int:pk>/update/', TimetableUpdateView.as_view(), name='timetable_update'),
         path('<int:pk>/edit/', TimetableUpdateView.as_view(), name='admin_timetable_edit'),
         path('<int:pk>/delete/', TimetableDeleteView.as_view(), name='admin_timetable_delete'),
         path('ajax/entries/', get_timetable_entries, name='admin_timetable_ajax_entries'),
         path('generate-weekly/', generate_weekly_timetable, name='admin_generate_weekly_timetable'),
-        # ADD THE MISSING TIMETABLE CALENDAR URL
+        path('timetable/<int:pk>/print/', print_timetable, name='print_timetable'),
+        
         path('calendar/', TimetableCalendarView.as_view(), name='timetable_calendar'),
+        path('calendar/data/', calendar_data, name='calendar_data'),
+        path('calendar/day-events/', day_events, name='day_events'),
+        path('<int:pk>/print/', print_timetable, name='admin_print_timetable'),
+        path('calendar/event/<str:event_id>/', event_details, name='event_details'),
+        path('calendar/export/', export_calendar, name='export_calendar'),
+        path('ajax/get-subjects-for-class/<str:class_level>/', get_subjects_for_class, name='get_subjects_for_class'),
+        path('ajax/get-available-teachers/', get_available_teachers, name='get_available_teachers'),
+        
     ])),
     
     # Admin Time Slots

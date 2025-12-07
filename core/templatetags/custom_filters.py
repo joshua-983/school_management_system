@@ -126,3 +126,20 @@ def add_class(field, css_class):
 def get_type(value):
     """Get type of variable"""
     return type(value).__name__
+
+
+@register.filter(name='dict_key')
+def dict_key(dictionary, key):
+    """Get dictionary value by key, returns empty list if not found"""
+    if dictionary is None:
+        return []
+    return dictionary.get(key, [])
+
+# You already have get_item but let's make it consistent
+@register.filter
+def get_item(dictionary, key):
+    """Get dictionary item by key in templates"""
+    if dictionary is None:
+        return None
+    return dictionary.get(key)
+

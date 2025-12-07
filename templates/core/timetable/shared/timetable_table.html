@@ -1,0 +1,538 @@
+{% load static %}
+{% load timetable_filters %}
+
+<div class="timetable-table-container">
+    {% if timetable_data %}
+    <div class="table-responsive">
+        <table class="table table-bordered timetable-table">
+            <thead>
+                <tr>
+                    <th class="time-column">Time</th>
+                    {% for day in days %}
+                    <th class="day-column {% if day.is_today %}today-column{% endif %}">
+                        {{ day.name }}
+                        {% if day.date %}
+                        <div class="day-date">{{ day.date }}</div>
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for slot in time_slots %}
+                <tr class="time-slot-row {% if slot.is_current %}current-time-slot{% endif %}">
+                    <td class="time-cell">
+                        <div class="time-range">
+                            {{ slot.start_time|time:"g:i A" }} - {{ slot.end_time|time:"g:i A" }}
+                        </div>
+                        <div class="period-number">Period {{ slot.period_number }}</div>
+                        {% if slot.is_break %}
+                        <div class="break-indicator">
+                            <i class="fas fa-coffee"></i> {{ slot.break_name }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    
+                    {% for day in days %}
+                    {% with entries=timetable_data|dict_key:day.id|dict_key:slot.id %}
+                    <td class="period-cell {% if day.is_today and slot.is_current %}current-period-cell{% endif %} {% if entries.is_break %}break-cell{% endif %}"
+                        data-day="{{ day.id }}" 
+                        data-slot="{{ slot.id }}"
+                        data-period="{{ slot.period_number }}">
+                        
+                        {% if entries %}
+                            {% if entries.is_break %}
+                                <div class="break-period">
+                                    <i class="fas fa-coffee fa-lg mb-2"></i>
+                                    <h6 class="mb-1">{{ entries.break_name }}</h6>
+                                    <small class="text-muted">Break Time</small>
+                                </div>
+                            {% else %}
+                                <div class="class-period" 
+                                     data-bs-toggle="popover"
+                                     data-bs-html="true"
+                                     data-bs-content="
+                                        <strong>{{ entries.subject }}</strong><br>
+                                        Teacher: {{ entries.teacher }}<br>
+                                        {% if entries.classroom %}Room: {{ entries.classroom }}<br>{% endif %}
+                                        Time: {{ slot.start_time|time:'g:i A' }} - {{ slot.end_time|time:'g:i A' }}
+                                     "
+                                     onclick="{% if click_handler %}{{ click_handler }}('{{ entries.id }}'){% endif %}">
+                                    
+                                    <div class="subject-info">
+                                        <h6 class="subject-name mb-1">{{ entries.subject_short }}</h6>
+                                        <div class="teacher-name">{{ entries.teacher_short }}</div>
+                                    </div>
+                                    
+                                    <div class="period-details">
+                                        {% if entries.classroom %}
+                                        <div class="classroom-info">
+                                            <i class="fas fa-door-open"></i> {{ entries.classroom }}
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="period-time">
+                                            {{ slot.start_time|time:"g:i" }}-{{ slot.end_time|time:"g:i" }}
+                                        </div>
+                                    </div>
+                                    
+                                    {% if entries.attendance_percentage is not None %}
+                                    <div class="attendance-indicator mt-2">
+                                        <div class="progress" style="height: 4px;">
+                                            <div class="progress-bar bg-{{ entries.attendance_color }}" 
+                                                 style="width: {{ entries.attendance_percentage }}%"></div>
+                                        </div>
+                                        <small class="text-muted">{{ entries.attendance_percentage }}%</small>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if entries.has_assignment %}
+                                    <div class="assignment-indicator" title="Assignment due">
+                                        <i class="fas fa-tasks text-warning"></i>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="empty-period">
+                                <i class="fas fa-clock text-muted"></i>
+                                <small class="text-muted">Free</small>
+                            </div>
+                        {% endif %}
+                    </td>
+                    {% endwith %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-timetable text-center py-5">
+        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+        <h4>No Timetable Available</h4>
+        <p class="text-muted">No schedule has been created for this period.</p>
+        {% if can_create %}
+        <a href="{% url 'timetable_create' %}" class="btn btn-primary mt-2">
+            <i class="fas fa-plus me-2"></i>Create Timetable
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.timetable-table-container {
+    position: relative;
+}
+
+.timetable-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.timetable-table th {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    text-align: center;
+    padding: 15px 10px;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.timetable-table th.today-column {
+    background: #198754;
+    color: white;
+}
+
+.timetable-table .time-column {
+    background: #495057;
+    color: white;
+    width: 120px;
+    min-width: 120px;
+    position: sticky;
+    left: 0;
+    z-index: 9;
+    border-right: 2px solid #343a40;
+}
+
+.timetable-table .day-column {
+    min-width: 150px;
+}
+
+.day-date {
+    font-size: 0.8rem;
+    font-weight: normal;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.timetable-table th.today-column .day-date {
+    color: rgba(255,255,255,0.9);
+}
+
+.timetable-table td {
+    border: 1px solid #e9ecef;
+    padding: 10px;
+    vertical-align: top;
+    transition: all 0.2s ease;
+}
+
+.timetable-table td.time-cell {
+    background: #6c757d;
+    color: white;
+    position: sticky;
+    left: 0;
+    z-index: 8;
+    border-right: 2px solid #495057;
+    text-align: center;
+}
+
+.time-range {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.period-number {
+    font-size: 0.8rem;
+    opacity: 0.9;
+    margin-bottom: 4px;
+}
+
+.break-indicator {
+    font-size: 0.75rem;
+    background: rgba(255,255,255,0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+}
+
+.timetable-table tr.current-time-slot td {
+    background: rgba(25, 135, 84, 0.05);
+}
+
+.timetable-table td.current-period-cell {
+    background: rgba(25, 135, 84, 0.1) !important;
+    border: 2px solid #198754 !important;
+}
+
+.period-cell {
+    position: relative;
+    min-height: 100px;
+}
+
+.break-cell {
+    background: #f8f9fa !important;
+}
+
+.break-period {
+    text-align: center;
+    padding: 15px 5px;
+    color: #6c757d;
+}
+
+.break-period i {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.class-period {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 10px;
+    height: 100%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.class-period:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    border-color: #0d6efd;
+}
+
+.subject-info {
+    margin-bottom: 8px;
+}
+
+.subject-name {
+    font-weight: 600;
+    color: #212529;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.teacher-name {
+    font-size: 0.85rem;
+    color: #6c757d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.period-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 0.8rem;
+}
+
+.classroom-info {
+    color: #0d6efd;
+    background: rgba(13, 110, 253, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.period-time {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.attendance-indicator {
+    margin-top: 6px;
+}
+
+.assignment-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 0.8rem;
+}
+
+.empty-period {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6c757d;
+    padding: 20px 0;
+}
+
+.empty-period i {
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+}
+
+.empty-timetable {
+    padding: 40px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 2px dashed #dee2e6;
+}
+
+.empty-timetable i {
+    font-size: 4rem;
+}
+
+/* Compact view for printing */
+@media print {
+    .timetable-table {
+        font-size: 8pt;
+    }
+    
+    .timetable-table th,
+    .timetable-table td {
+        padding: 4px !important;
+    }
+    
+    .time-column {
+        width: 80px !important;
+        min-width: 80px !important;
+    }
+    
+    .day-column {
+        min-width: 100px !important;
+    }
+    
+    .class-period {
+        padding: 4px !important;
+    }
+    
+    .subject-name {
+        font-size: 0.85rem !important;
+        -webkit-line-clamp: 1 !important;
+    }
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .timetable-table-container {
+        overflow-x: auto;
+    }
+    
+    .timetable-table th,
+    .timetable-table td.time-cell {
+        position: static;
+    }
+    
+    .day-column {
+        min-width: 120px !important;
+    }
+    
+    .subject-name {
+        -webkit-line-clamp: 1 !important;
+    }
+}
+</style>
+
+<script>
+// Initialize popovers for class periods
+function initializeTimetablePopovers() {
+    const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+    const popoverList = [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl, {
+        trigger: 'hover',
+        placement: 'top',
+        html: true,
+        container: 'body'
+    }));
+    
+    // Also handle click for mobile
+    if (window.innerWidth < 768) {
+        document.querySelectorAll('.class-period').forEach(el => {
+            el.addEventListener('click', function(e) {
+                if (!e.target.closest('.assignment-indicator')) {
+                    const popover = bootstrap.Popover.getInstance(this);
+                    if (popover) {
+                        popover.toggle();
+                    }
+                }
+            });
+        });
+    }
+}
+
+// Highlight current period
+function highlightCurrentPeriod() {
+    const now = new Date();
+    const currentDay = now.getDay() - 1; // Adjust for Monday start
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    
+    // Remove current highlights
+    document.querySelectorAll('.current-time-slot, .current-period-cell').forEach(el => {
+        el.classList.remove('current-time-slot', 'current-period-cell');
+    });
+    
+    // Find current time slot
+    document.querySelectorAll('.time-slot-row').forEach(row => {
+        const timeText = row.querySelector('.time-range').textContent;
+        const [startStr, endStr] = timeText.split(' - ');
+        
+        if (startStr && endStr) {
+            const startTime = convertTimeToMinutes(startStr.trim());
+            const endTime = convertTimeToMinutes(endStr.trim());
+            
+            if (currentTime >= startTime && currentTime <= endTime) {
+                row.classList.add('current-time-slot');
+                
+                // Find today's cell in this row
+                const todayCell = row.querySelector(`[data-day="${currentDay}"]`);
+                if (todayCell) {
+                    todayCell.classList.add('current-period-cell');
+                }
+            }
+        }
+    });
+}
+
+function convertTimeToMinutes(timeStr) {
+    const [time, modifier] = timeStr.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+    
+    if (modifier === 'PM' && hours < 12) hours += 12;
+    if (modifier === 'AM' && hours === 12) hours = 0;
+    
+    return hours * 60 + minutes;
+}
+
+// Export timetable as image
+function exportTimetableAsImage() {
+    const container = document.querySelector('.timetable-table-container');
+    const fileName = 'timetable-' + new Date().toISOString().split('T')[0] + '.png';
+    
+    html2canvas(container, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true
+    }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    });
+}
+
+// Filter timetable by subject or teacher
+function filterTimetable(filterType, filterValue) {
+    const periods = document.querySelectorAll('.class-period');
+    
+    periods.forEach(period => {
+        const subject = period.querySelector('.subject-name').textContent.toLowerCase();
+        const teacher = period.querySelector('.teacher-name').textContent.toLowerCase();
+        const searchValue = filterValue.toLowerCase();
+        
+        let shouldShow = false;
+        
+        if (filterType === 'subject' && subject.includes(searchValue)) {
+            shouldShow = true;
+        } else if (filterType === 'teacher' && teacher.includes(searchValue)) {
+            shouldShow = true;
+        } else if (filterType === 'all' || searchValue === '') {
+            shouldShow = true;
+        }
+        
+        period.closest('.period-cell').style.display = shouldShow ? 'table-cell' : 'none';
+    });
+}
+
+// Initialize when document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeTimetablePopovers();
+    highlightCurrentPeriod();
+    
+    // Update current period every minute
+    setInterval(highlightCurrentPeriod, 60000);
+    
+    // Add filter functionality if filter elements exist
+    const subjectFilter = document.getElementById('subjectFilter');
+    const teacherFilter = document.getElementById('teacherFilter');
+    
+    if (subjectFilter) {
+        subjectFilter.addEventListener('input', function() {
+            filterTimetable('subject', this.value);
+        });
+    }
+    
+    if (teacherFilter) {
+        teacherFilter.addEventListener('input', function() {
+            filterTimetable('teacher', this.value);
+        });
+    }
+    
+    // Export button
+    const exportBtn = document.getElementById('exportTimetableBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportTimetableAsImage);
+    }
+});
+</script>

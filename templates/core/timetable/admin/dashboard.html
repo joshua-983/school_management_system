@@ -1,0 +1,818 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Timetable Dashboard - Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.dashboard-card {
+    border: none;
+    border-radius: 15px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+}
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+.card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+.stat-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+.trend-indicator {
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+}
+.trend-up {
+    color: #198754;
+}
+.trend-down {
+    color: #dc3545;
+}
+.trend-neutral {
+    color: #6c757d;
+}
+.quick-action-btn {
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    height: 100%;
+}
+.quick-action-btn:hover {
+    background: #f8f9fa;
+    border-color: #0d6efd;
+    transform: scale(1.02);
+}
+.action-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin: 0 auto 10px;
+}
+.recent-activity-item {
+    padding: 12px 0;
+    border-bottom: 1px solid #f1f3f4;
+    transition: background 0.2s ease;
+}
+.recent-activity-item:hover {
+    background: #f8f9fa;
+}
+.activity-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.activity-time {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+.timetable-progress {
+    height: 6px;
+    border-radius: 3px;
+}
+.schedule-calendar {
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.calendar-header {
+    background: #f8f9fa;
+    padding: 10px;
+    border-bottom: 1px solid #e9ecef;
+    font-weight: 600;
+}
+.calendar-day {
+    padding: 10px;
+    border-right: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;
+    min-height: 80px;
+}
+.calendar-day.current {
+    background: rgba(13, 110, 253, 0.05);
+    border-left: 3px solid #0d6efd;
+}
+.calendar-day.weekend {
+    background: #f8f9fa;
+}
+.calendar-day-header {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+.calendar-period {
+    font-size: 0.75rem;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chart-container {
+    height: 250px;
+    position: relative;
+}
+.empty-state {
+    padding: 40px;
+    text-align: center;
+    color: #6c757d;
+}
+.empty-state-icon {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 15px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-1">Timetable Dashboard</h1>
+                    <p class="text-muted mb-0">Overview of all timetable activities and statistics</p>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" 
+                            data-bs-toggle="dropdown">
+                        <i class="fas fa-calendar-alt me-2"></i>
+                        {% now "F Y" %}
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?period=today">Today</a></li>
+                        <li><a class="dropdown-item" href="?period=week">This Week</a></li>
+                        <li><a class="dropdown-item" href="?period=month" class="active">This Month</a></li>
+                        <li><a class="dropdown-item" href="?period=quarter">This Quarter</a></li>
+                        <li><a class="dropdown-item" href="?period=year">This Year</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card border-start border-primary border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Timetables</h6>
+                            <h3 class="mb-2">{{ total_timetables }}</h3>
+                            <div class="d-flex align-items-center">
+                                <span class="trend-indicator {% if timetable_growth > 0 %}trend-up{% elif timetable_growth < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                                    <i class="fas fa-chevron-{% if timetable_growth > 0 %}up{% else %}down{% endif %} me-1"></i>
+                                    {{ timetable_growth|abs }}% from last month
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-icon bg-primary">
+                            <i class="fas fa-calendar-alt text-white"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Active</small>
+                            <small>{{ active_timetables }}</small>
+                        </div>
+                        <div class="progress timetable-progress">
+                            <div class="progress-bar bg-primary" style="width: {% widthratio active_timetables total_timetables 100 %}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card border-start border-success border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-muted mb-1">Schedule Entries</h6>
+                            <h3 class="mb-2">{{ upcoming_entries }}</h3>
+                            <div class="d-flex align-items-center">
+                                <span class="trend-indicator trend-up">
+                                    <i class="fas fa-chevron-up me-1"></i>
+                                    12% from last week
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-icon bg-success">
+                            <i class="fas fa-clock text-white"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="stat-badge bg-success bg-opacity-10 text-success">
+                                <i class="fas fa-check-circle me-1"></i>{{ completed_periods }} completed
+                            </span>
+                            <span class="stat-badge bg-info bg-opacity-10 text-info">
+                                <i class="fas fa-spinner me-1"></i>{{ pending_periods }} pending
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card border-start border-warning border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-muted mb-1">Class Coverage</h6>
+                            <h3 class="mb-2">{{ class_coverage }}%</h3>
+                            <div class="d-flex align-items-center">
+                                <span class="trend-indicator {% if coverage_change > 0 %}trend-up{% elif coverage_change < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                                    <i class="fas fa-chevron-{% if coverage_change > 0 %}up{% else %}down{% endif %} me-1"></i>
+                                    {{ coverage_change|abs }}% change
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-icon bg-warning">
+                            <i class="fas fa-chalkboard-teacher text-white"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>{{ covered_classes }} of {{ total_classes }} classes</small>
+                        </div>
+                        <div class="progress timetable-progress">
+                            <div class="progress-bar bg-warning" style="width: {{ class_coverage }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card dashboard-card border-start border-info border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="text-muted mb-1">Teacher Utilization</h6>
+                            <h3 class="mb-2">{{ teacher_utilization }}%</h3>
+                            <div class="d-flex align-items-center">
+                                <span class="trend-indicator trend-up">
+                                    <i class="fas fa-chevron-up me-1"></i>
+                                    8% more engaged
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-icon bg-info">
+                            <i class="fas fa-users text-white"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between">
+                            <div class="text-center">
+                                <h6 class="mb-0">{{ active_teachers }}</h6>
+                                <small class="text-muted">Active</small>
+                            </div>
+                            <div class="text-center">
+                                <h6 class="mb-0">{{ total_teachers }}</h6>
+                                <small class="text-muted">Total</small>
+                            </div>
+                            <div class="text-center">
+                                <h6 class="mb-0">{{ avg_periods_per_teacher }}</h6>
+                                <small class="text-muted">Avg/Teacher</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-lg-8">
+            <!-- Weekly Calendar -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">This Week's Schedule</h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" id="prevWeek">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="mx-2" id="weekRange">Week {{ current_week }}</span>
+                        <button class="btn btn-sm btn-outline-primary" id="nextWeek">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="schedule-calendar">
+                        <div class="row g-0 calendar-header">
+                            <div class="col text-center">Time</div>
+                            <div class="col text-center">Mon</div>
+                            <div class="col text-center">Tue</div>
+                            <div class="col text-center">Wed</div>
+                            <div class="col text-center">Thu</div>
+                            <div class="col text-center">Fri</div>
+                            <div class="col text-center">Sat</div>
+                        </div>
+                        
+                        {% for timeslot in time_slots %}
+                        <div class="row g-0">
+                            <div class="col calendar-day" style="background: #f8f9fa;">
+                                <div class="calendar-day-header">
+                                    {{ timeslot.start_time|time:"g:i" }} - {{ timeslot.end_time|time:"g:i" }}
+                                </div>
+                                <small class="text-muted">Period {{ timeslot.period_number }}</small>
+                            </div>
+                            
+                            {% for day in days_of_week %}
+                            <div class="col calendar-day {% if day.is_today %}current{% endif %} {% if day.is_weekend %}weekend{% endif %}" 
+                                 data-day="{{ day.number }}" data-period="{{ timeslot.id }}">
+                                {% with entries=weekly_schedule|dict_key:day.number|dict_key:timeslot.id %}
+                                {% if entries %}
+                                    {% for entry in entries %}
+                                    <div class="calendar-period mb-1" 
+                                         style="background-color: {{ entry.subject_color|default:'#0d6efd' }}; color: white;"
+                                         data-bs-toggle="tooltip"
+                                         title="{{ entry.subject }} - {{ entry.teacher }}">
+                                        {{ entry.subject_abbr }}
+                                    </div>
+                                    {% endfor %}
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Quick Actions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-3 col-6">
+                                    <a href="{% url 'timetable_create' %}" class="quick-action-btn text-decoration-none">
+                                        <div class="action-icon bg-primary bg-opacity-10 text-primary">
+                                            <i class="fas fa-plus"></i>
+                                        </div>
+                                        <h6 class="mb-1">Create Timetable</h6>
+                                        <p class="small text-muted mb-0">Create new schedule</p>
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <a href="{% url 'generate_weekly_timetable' %}" class="quick-action-btn text-decoration-none">
+                                        <div class="action-icon bg-success bg-opacity-10 text-success">
+                                            <i class="fas fa-calendar-plus"></i>
+                                        </div>
+                                        <h6 class="mb-1">Generate Weekly</h6>
+                                        <p class="small text-muted mb-0">Auto-generate schedules</p>
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <a href="{% url 'timeslot_list' %}" class="quick-action-btn text-decoration-none">
+                                        <div class="action-icon bg-warning bg-opacity-10 text-warning">
+                                            <i class="fas fa-clock"></i>
+                                        </div>
+                                        <h6 class="mb-1">Manage Time Slots</h6>
+                                        <p class="small text-muted mb-0">Edit periods & breaks</p>
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <a href="#" class="quick-action-btn text-decoration-none" data-bs-toggle="modal" data-bs-target="#bulkActionsModal">
+                                        <div class="action-icon bg-info bg-opacity-10 text-info">
+                                            <i class="fas fa-cogs"></i>
+                                        </div>
+                                        <h6 class="mb-1">Bulk Actions</h6>
+                                        <p class="small text-muted mb-0">Multiple operations</p>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Distribution Chart -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Subject Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="subjectDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-lg-4">
+            <!-- Recent Activity -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Activity</h5>
+                    <a href="#" class="btn btn-sm btn-link">View All</a>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    {% if recent_activities %}
+                        {% for activity in recent_activities %}
+                        <div class="recent-activity-item">
+                            <div class="d-flex">
+                                <div class="activity-avatar me-3" 
+                                     style="background-color: {{ activity.user_color }}; color: white;">
+                                    {{ activity.user_initials }}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ activity.title }}</h6>
+                                    <p class="mb-1 small">{{ activity.description }}</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="activity-time">
+                                            <i class="fas fa-clock me-1"></i>{{ activity.time }}
+                                        </span>
+                                        <span class="badge bg-{{ activity.type_color }}">
+                                            {{ activity.type }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-history"></i>
+                            </div>
+                            <h6>No Recent Activity</h6>
+                            <p class="small text-muted">Activities will appear here</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Upcoming Changes -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Upcoming Changes</h5>
+                </div>
+                <div class="card-body">
+                    {% if upcoming_changes %}
+                        {% for change in upcoming_changes %}
+                        <div class="alert alert-{{ change.severity }} alert-dismissible fade show mb-2" role="alert">
+                            <div class="d-flex">
+                                <i class="fas fa-{{ change.icon }} me-2 mt-1"></i>
+                                <div>
+                                    <strong>{{ change.title }}</strong>
+                                    <div class="small">{{ change.date }}</div>
+                                    <div class="small mt-1">{{ change.description }}</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h6>No Pending Changes</h6>
+                            <p class="small text-muted">All schedules are up to date</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-primary">{{ classes_without_timetable }}</div>
+                            <div class="small text-muted">Classes Need Schedule</div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-success">{{ conflict_free_percentage }}%</div>
+                            <div class="small text-muted">Conflict Free</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="display-6 text-warning">{{ teacher_conflicts }}</div>
+                            <div class="small text-muted">Teacher Conflicts</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="display-6 text-info">{{ room_conflicts }}</div>
+                            <div class="small text-muted">Room Conflicts</div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="#" class="btn btn-outline-primary btn-sm w-100" id="runConflictCheck">
+                            <i class="fas fa-search me-2"></i>Check for Conflicts
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions Modal -->
+<div class="modal fade" id="bulkActionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Bulk Actions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Select Action</label>
+                    <select class="form-select" id="bulkActionSelect">
+                        <option value="">Choose an action...</option>
+                        <option value="activate">Activate Selected Timetables</option>
+                        <option value="deactivate">Deactivate Selected Timetables</option>
+                        <option value="copy">Copy to Another Term</option>
+                        <option value="export">Export Selected</option>
+                        <option value="delete">Delete Selected</option>
+                    </select>
+                </div>
+                
+                <div id="actionDetails" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Select Classes</label>
+                        <select class="form-select" multiple id="bulkClasses">
+                            {% for code, name in class_levels %}
+                            <option value="{{ code }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Academic Term</label>
+                        <select class="form-select" id="bulkTerm">
+                            <option value="1">Term 1</option>
+                            <option value="2">Term 2</option>
+                            <option value="3">Term 3</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="confirmBulkAction">
+                        <label class="form-check-label" for="confirmBulkAction">
+                            I confirm this action
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="executeBulkAction" disabled>Execute Action</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+$(document).ready(function() {
+    // Initialize tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    
+    // Week navigation
+    let currentWeek = {{ current_week }};
+    $('#prevWeek').click(function() {
+        currentWeek--;
+        updateWeekView();
+    });
+    
+    $('#nextWeek').click(function() {
+        currentWeek++;
+        updateWeekView();
+    });
+    
+    function updateWeekView() {
+        $('#weekRange').text(`Week ${currentWeek}`);
+        // In production, this would fetch new data via AJAX
+    }
+    
+    // Calendar day click
+    $('.calendar-day').click(function() {
+        const day = $(this).data('day');
+        const period = $(this).data('period');
+        
+        if (day && period) {
+            // Show period details or redirect to manage
+            window.location.href = `{% url 'timetable_list' %}?day_of_week=${day}`;
+        }
+    });
+    
+    // Bulk actions
+    $('#bulkActionSelect').change(function() {
+        const action = $(this).val();
+        if (action) {
+            $('#actionDetails').show();
+        } else {
+            $('#actionDetails').hide();
+        }
+    });
+    
+    $('#confirmBulkAction').change(function() {
+        $('#executeBulkAction').prop('disabled', !$(this).is(':checked'));
+    });
+    
+    $('#executeBulkAction').click(function() {
+        const action = $('#bulkActionSelect').val();
+        const classes = $('#bulkClasses').val();
+        const term = $('#bulkTerm').val();
+        
+        if (!action || !classes || classes.length === 0) {
+            showToast('Please select classes and confirm action', 'warning');
+            return;
+        }
+        
+        // Execute bulk action via AJAX
+        $.ajax({
+            url: '{% url "bulk_timetable_actions" %}',
+            type: 'POST',
+            data: {
+                csrfmiddlewaretoken: '{{ csrf_token }}',
+                action: action,
+                classes: classes,
+                term: term
+            },
+            success: function(response) {
+                showToast(response.message, 'success');
+                $('#bulkActionsModal').modal('hide');
+                // Refresh page or update stats
+                setTimeout(() => location.reload(), 1500);
+            },
+            error: function() {
+                showToast('Error executing bulk action', 'error');
+            }
+        });
+    });
+    
+    // Conflict check
+    $('#runConflictCheck').click(function() {
+        $(this).html('<span class="spinner-border spinner-border-sm me-2"></span>Checking...');
+        
+        $.ajax({
+            url: '{% url "check_timetable_conflicts" %}',
+            success: function(response) {
+                if (response.conflicts.length > 0) {
+                    showToast(`Found ${response.conflicts.length} conflicts`, 'warning');
+                    // Show conflicts in a modal or alert
+                } else {
+                    showToast('No conflicts found!', 'success');
+                }
+                $('#runConflictCheck').html('<i class="fas fa-search me-2"></i>Check for Conflicts');
+            },
+            error: function() {
+                showToast('Error checking conflicts', 'error');
+                $('#runConflictCheck').html('<i class="fas fa-search me-2"></i>Check for Conflicts');
+            }
+        });
+    });
+    
+    // Initialize chart
+    initializeChart();
+    
+    // Real-time updates
+    initializeRealTimeUpdates();
+});
+
+function initializeChart() {
+    const ctx = document.getElementById('subjectDistributionChart').getContext('2d');
+    
+    // Sample data - in production, this would come from the server
+    const subjects = [
+        'Mathematics', 'Science', 'English', 'History', 
+        'Geography', 'Computer', 'Arts', 'Physical Ed'
+    ];
+    
+    const periods = [12, 10, 8, 6, 5, 4, 3, 2];
+    const colors = [
+        '#0d6efd', '#198754', '#dc3545', '#fd7e14',
+        '#6f42c1', '#20c997', '#6610f2', '#d63384'
+    ];
+    
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: subjects,
+            datasets: [{
+                data: periods,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value} periods (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function initializeRealTimeUpdates() {
+    // Set up WebSocket or polling for real-time updates
+    // This is a placeholder for real-time functionality
+    setInterval(checkForUpdates, 30000); // Check every 30 seconds
+}
+
+function checkForUpdates() {
+    $.ajax({
+        url: '{% url "get_dashboard_updates" %}',
+        success: function(data) {
+            if (data.updates) {
+                // Update statistics
+                updateDashboardStats(data);
+            }
+        }
+    });
+}
+
+function updateDashboardStats(data) {
+    // Update statistics dynamically
+    if (data.total_timetables) {
+        $('#totalTimetablesStat').text(data.total_timetables);
+    }
+    // Add more stat updates as needed
+}
+
+function showToast(message, type = 'info') {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `);
+    
+    $('#toastContainer').append(toast);
+    const bsToast = new bootstrap.Toast(toast[0]);
+    bsToast.show();
+    
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+{% endblock %}

@@ -1,0 +1,440 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-card {
+    max-width: 800px;
+    margin: 0 auto;
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+.form-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.form-section-title {
+    color: #495057;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #dee2e6;
+}
+.day-preview {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.day-preview:hover {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+.day-preview.active {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.1);
+}
+.day-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+.day-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #212529;
+}
+.period-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.period-item {
+    padding: 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    background: white;
+}
+.period-item:hover {
+    background: #f8f9fa;
+}
+.time-indicator {
+    width: 60px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-12">
+            <div class="card form-card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-calendar-plus me-2"></i>{{ title }}</h5>
+                            <p class="mb-0 small opacity-75">Create or edit timetable details</p>
+                        </div>
+                        <a href="{% url 'timetable_list' %}" class="btn btn-light btn-sm">
+                            <i class="fas fa-arrow-left me-1"></i>Back to List
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="timetableForm" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Basic Information Section -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-info-circle me-2"></i>Basic Information
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.class_level.id_for_label }}" class="form-label">
+                                        Class Level <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.class_level }}
+                                    {% if form.class_level.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.class_level.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Select the class for this timetable</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.day_of_week.id_for_label }}" class="form-label">
+                                        Day of Week <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.day_of_week }}
+                                    {% if form.day_of_week.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.day_of_week.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Select the day for this schedule</div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.academic_year.id_for_label }}" class="form-label">
+                                        Academic Year <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.academic_year }}
+                                    {% if form.academic_year.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.academic_year.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <div class="form-text">Format: YYYY/YYYY (e.g., 2024/2025)</div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.term.id_for_label }}" class="form-label">
+                                        Term <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.term }}
+                                    {% if form.term.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.term.errors }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Day Preview Section -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-calendar-day me-2"></i>Day Preview
+                            </div>
+                            <div class="row g-3" id="dayPreviewContainer">
+                                <!-- Day previews will be populated by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Time Slots Preview -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-clock me-2"></i>Available Time Slots
+                            </div>
+                            <div id="timeSlotsList">
+                                <p class="text-muted">Time slots will be displayed after selecting day</p>
+                            </div>
+                        </div>
+
+                        <!-- Status Section -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="fas fa-toggle-on me-2"></i>Status
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch">
+                                        {{ form.is_active }}
+                                        <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                            Active Timetable
+                                        </label>
+                                    </div>
+                                    <div class="form-text">Inactive timetables won't be visible to teachers and students</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Errors -->
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                            <a href="{% url 'timetable_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>Save Timetable
+                                </button>
+                                <button type="button" class="btn btn-success" id="saveAndManageBtn">
+                                    <i class="fas fa-edit me-2"></i>Save & Manage Schedule
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Days of week data
+    const days = [
+        {id: 0, name: 'Monday'},
+        {id: 1, name: 'Tuesday'},
+        {id: 2, name: 'Wednesday'},
+        {id: 3, name: 'Thursday'},
+        {id: 4, name: 'Friday'},
+        {id: 5, name: 'Saturday'}
+    ];
+
+    // Initialize day previews
+    function initDayPreviews() {
+        const container = $('#dayPreviewContainer');
+        container.empty();
+        
+        days.forEach(day => {
+            const isActive = $('#id_day_of_week').val() == day.id;
+            container.append(`
+                <div class="col-md-4 col-lg-2">
+                    <div class="day-preview ${isActive ? 'active' : ''}" data-day="${day.id}">
+                        <div class="day-value">${day.name.substring(0, 3)}</div>
+                        <div class="day-label">Day ${day.id + 1}</div>
+                    </div>
+                </div>
+            `);
+        });
+    }
+
+    // Load time slots for selected day
+    function loadTimeSlots() {
+        const dayOfWeek = $('#id_day_of_week').val();
+        if (!dayOfWeek) return;
+        
+        $.ajax({
+            url: '{% url "get_timetable_entries" %}',
+            data: {
+                'day_of_week': dayOfWeek,
+                'class_level': $('#id_class_level').val(),
+                'academic_year': $('#id_academic_year').val(),
+                'term': $('#id_term').val()
+            },
+            success: function(data) {
+                if (data.entries && data.entries.length > 0) {
+                    let html = '<ul class="period-list">';
+                    data.entries.forEach(entry => {
+                        html += `
+                            <li class="period-item d-flex align-items-center">
+                                <div class="time-indicator">${entry.time_slot}</div>
+                                <div class="flex-grow-1 ms-3">
+                                    <strong>${entry.subject || 'Break'}</strong>
+                                    <div class="small text-muted">${entry.teacher || entry.break_name || ''}</div>
+                                </div>
+                            </li>
+                        `;
+                    });
+                    html += '</ul>';
+                    $('#timeSlotsList').html(html);
+                } else {
+                    $('#timeSlotsList').html(`
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No schedule exists for this day. You can add periods after saving.
+                        </div>
+                    `);
+                }
+            },
+            error: function() {
+                $('#timeSlotsList').html(`
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Unable to load existing schedule.
+                    </div>
+                `);
+            }
+        });
+    }
+
+    // Initialize on page load
+    initDayPreviews();
+    
+    // Day selection handler
+    $('#dayPreviewContainer').on('click', '.day-preview', function() {
+        const dayId = $(this).data('day');
+        $('#id_day_of_week').val(dayId);
+        $('.day-preview').removeClass('active');
+        $(this).addClass('active');
+        loadTimeSlots();
+    });
+
+    // Form field changes
+    $('#id_class_level, #id_academic_year, #id_term').change(function() {
+        loadTimeSlots();
+    });
+
+    // Academic year format validation
+    $('#id_academic_year').on('blur', function() {
+        const value = $(this).val();
+        const pattern = /^\d{4}\/\d{4}$/;
+        
+        if (value && !pattern.test(value)) {
+            $(this).addClass('is-invalid');
+            $(this).after('<div class="invalid-feedback">Please use format: YYYY/YYYY (e.g., 2024/2025)</div>');
+        } else {
+            $(this).removeClass('is-invalid');
+            $(this).next('.invalid-feedback').remove();
+        }
+    });
+
+    // Save and manage button
+    $('#saveAndManageBtn').click(function(e) {
+        e.preventDefault();
+        
+        // Validate form
+        const isValid = validateForm();
+        if (!isValid) return;
+        
+        // Submit form via AJAX
+        const formData = $('#timetableForm').serialize();
+        
+        $.ajax({
+            url: window.location.href,
+            type: 'POST',
+            data: formData,
+            beforeSend: function() {
+                $('#saveAndManageBtn').html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+                $('#saveAndManageBtn').prop('disabled', true);
+            },
+            success: function(response) {
+                if (response.success) {
+                    window.location.href = response.manage_url;
+                } else {
+                    showToast('Error saving timetable', 'error');
+                    $('#saveAndManageBtn').html('<i class="fas fa-edit me-2"></i>Save & Manage Schedule');
+                    $('#saveAndManageBtn').prop('disabled', false);
+                }
+            },
+            error: function() {
+                showToast('Network error. Please try again.', 'error');
+                $('#saveAndManageBtn').html('<i class="fas fa-edit me-2"></i>Save & Manage Schedule');
+                $('#saveAndManageBtn').prop('disabled', false);
+            }
+        });
+    });
+
+    // Form validation
+    function validateForm() {
+        let isValid = true;
+        
+        // Clear previous errors
+        $('.is-invalid').removeClass('is-invalid');
+        $('.invalid-feedback').remove();
+        
+        // Check required fields
+        const requiredFields = ['#id_class_level', '#id_day_of_week', '#id_academic_year', '#id_term'];
+        
+        requiredFields.forEach(field => {
+            if (!$(field).val()) {
+                $(field).addClass('is-invalid');
+                $(field).after(`<div class="invalid-feedback">This field is required</div>`);
+                isValid = false;
+            }
+        });
+        
+        // Validate academic year format
+        const academicYear = $('#id_academic_year').val();
+        const pattern = /^\d{4}\/\d{4}$/;
+        
+        if (academicYear && !pattern.test(academicYear)) {
+            $('#id_academic_year').addClass('is-invalid');
+            $('#id_academic_year').after('<div class="invalid-feedback">Please use format: YYYY/YYYY</div>');
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+
+    // Form submit handler
+    $('#timetableForm').submit(function(e) {
+        if (!validateForm()) {
+            e.preventDefault();
+            showToast('Please fix the errors in the form', 'error');
+        }
+    });
+
+    // Initialize tooltips
+    $('[title]').tooltip();
+});
+
+function showToast(message, type = 'info') {
+    const toast = $(`
+        <div class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : 'primary'} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `);
+    
+    $('#toastContainer').append(toast);
+    const bsToast = new bootstrap.Toast(toast[0]);
+    bsToast.show();
+    
+    toast.on('hidden.bs.toast', function() {
+        $(this).remove();
+    });
+}
+</script>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+{% endblock %}

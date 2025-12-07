@@ -1,0 +1,470 @@
+<!-- templates/core/timetable/print/timetable_print.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timetable - {{ timetable.get_class_level_display }} | {{ timetable.academic_year }}</title>
+    <style>
+        /* Print-specific styles */
+        @page {
+            size: A4 landscape;
+            margin: 1cm;
+        }
+        
+        @media print {
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+            
+            .print-header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 100px;
+                background: white;
+                z-index: 1000;
+            }
+            
+            .content {
+                margin-top: 120px;
+            }
+            
+            .table {
+                border-collapse: collapse;
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+            
+            .table th,
+            .table td {
+                border: 1px solid #dee2e6;
+                padding: 0.5rem;
+                vertical-align: top;
+            }
+            
+            .table th {
+                background-color: #f8f9fa;
+                font-weight: 600;
+                text-align: center;
+            }
+            
+            .header-info {
+                border-bottom: 2px solid #000;
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+            }
+            
+            .school-logo {
+                max-height: 60px;
+            }
+            
+            .period-time {
+                font-size: 0.8rem;
+                color: #666;
+            }
+            
+            .subject-cell {
+                min-height: 60px;
+                position: relative;
+            }
+            
+            .teacher-name {
+                font-size: 0.8rem;
+                color: #666;
+                position: absolute;
+                bottom: 2px;
+                right: 5px;
+            }
+            
+            .room-number {
+                font-size: 0.8rem;
+                color: #666;
+                position: absolute;
+                bottom: 2px;
+                left: 5px;
+            }
+            
+            .break-cell {
+                background-color: #f8f9fa !important;
+                text-align: center;
+                font-style: italic;
+                color: #666;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 0.8rem;
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding: 5px 0;
+                background: white;
+            }
+            
+            .watermark {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(-45deg);
+                font-size: 80px;
+                color: rgba(0,0,0,0.1);
+                z-index: -1;
+                pointer-events: none;
+            }
+            
+            /* Color coding for subjects */
+            .math { background-color: #e3f2fd !important; }
+            .science { background-color: #f3e5f5 !important; }
+            .english { background-color: #e8f5e9 !important; }
+            .history { background-color: #fff3e0 !important; }
+            .pe { background-color: #fce4ec !important; }
+            .art { background-color: #f3e5f5 !important; }
+            .computer { background-color: #e0f2f1 !important; }
+            .music { background-color: #fff8e1 !important; }
+        }
+        
+        /* Screen preview styles */
+        @media screen {
+            body {
+                background: #f5f5f5;
+                padding: 20px;
+            }
+            
+            .print-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                padding: 20px;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .print-controls {
+                background: #fff;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .btn-print {
+                background: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            
+            .btn-print:hover {
+                background: #45a049;
+            }
+        }
+        
+        /* Timetable grid */
+        .timetable-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(8, 1fr);
+            gap: 1px;
+            background: #ddd;
+            border: 1px solid #ddd;
+        }
+        
+        .grid-header {
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .time-slot {
+            background: #34495e;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .day-column {
+            background: #ecf0f1;
+        }
+        
+        .grid-cell {
+            background: white;
+            min-height: 80px;
+            padding: 5px;
+            position: relative;
+        }
+        
+        /* Legend */
+        .legend {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+        }
+        
+        .legend-item {
+            display: inline-block;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            margin-right: 5px;
+            vertical-align: middle;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-container">
+        <!-- Print Controls (hidden when printing) -->
+        <div class="print-controls no-print">
+            <div>
+                <h2 style="margin: 0;">Print Preview</h2>
+                <p style="margin: 5px 0 0 0; color: #666;">
+                    {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}
+                </p>
+            </div>
+            <div>
+                <button class="btn-print" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print Timetable
+                </button>
+                <button class="btn-print" onclick="window.close()" style="background: #6c757d; margin-left: 10px;">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Print Content -->
+        <div class="print-content">
+            <!-- Header -->
+            <div class="print-header">
+                <div class="header-info">
+                    <table width="100%">
+                        <tr>
+                            <td width="30%">
+                                {% if school.logo %}
+                                <img src="{{ school.logo.url }}" alt="School Logo" class="school-logo">
+                                {% else %}
+                                <h2 style="margin: 0;">{{ school.name|default:"SCHOOL NAME" }}</h2>
+                                {% endif %}
+                            </td>
+                            <td width="40%" style="text-align: center;">
+                                <h1 style="margin: 0 0 5px 0;">CLASS TIMETABLE</h1>
+                                <h3 style="margin: 0; color: #2c3e50;">
+                                    {{ timetable.get_class_level_display }}
+                                </h3>
+                                <p style="margin: 5px 0;">
+                                    Academic Year: {{ timetable.academic_year }} | Term: {{ timetable.term }}
+                                </p>
+                            </td>
+                            <td width="30%" style="text-align: right;">
+                                <p style="margin: 0;"><strong>Day:</strong> {{ timetable.get_day_of_week_display }}</p>
+                                <p style="margin: 5px 0;"><strong>Generated:</strong> {% now "F j, Y" %}</p>
+                                <p style="margin: 0;"><strong>Page:</strong> <span id="page-number">1</span></p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Watermark -->
+            <div class="watermark">
+                {{ school.name|default:"SCHOOL" }}
+            </div>
+
+            <!-- Main Content -->
+            <div class="content">
+                <!-- Timetable Table -->
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">Time</th>
+                            <th style="width: 15%;">Period</th>
+                            <th style="width: 25%;">Subject</th>
+                            <th style="width: 25%;">Teacher</th>
+                            <th style="width: 15%;">Room</th>
+                            <th style="width: 10%;">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in timetable.entries.all|dictsort:"time_slot.period_number" %}
+                        <tr>
+                            <td style="text-align: center;">
+                                {{ entry.time_slot.start_time|time:"H:i" }} - {{ entry.time_slot.end_time|time:"H:i" }}
+                            </td>
+                            <td style="text-align: center;">
+                                Period {{ entry.time_slot.period_number }}
+                                {% if entry.time_slot.is_break %}
+                                <br><small class="text-muted">Break</small>
+                                {% endif %}
+                            </td>
+                            <td class="subject-cell {{ entry.subject.name|lower|cut:' ' }}">
+                                {% if entry.is_break %}
+                                <div class="break-cell">
+                                    <strong>{{ entry.break_name|default:"BREAK" }}</strong>
+                                </div>
+                                {% else %}
+                                <strong>{{ entry.subject.name }}</strong>
+                                <br>
+                                <small>{{ entry.subject.code|default:"" }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not entry.is_break %}
+                                {{ entry.teacher.get_full_name }}
+                                <br>
+                                <small>{{ entry.teacher.department|default:"" }}</small>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td style="text-align: center;">
+                                {% if entry.is_break %}
+                                -
+                                {% else %}
+                                {{ entry.classroom|default:"TBA" }}
+                                {% endif %}
+                            </td>
+                            <td style="text-align: center;">
+                                {{ entry.time_slot.duration }} min
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 40px;">
+                                <i>No timetable entries scheduled for this day.</i>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <!-- Grid View -->
+                <div style="margin-top: 30px;">
+                    <h3 style="border-bottom: 2px solid #2c3e50; padding-bottom: 5px;">Graphical View</h3>
+                    <div class="timetable-grid">
+                        <!-- Time column -->
+                        <div class="grid-header">Time</div>
+                        {% for slot in time_slots %}
+                        <div class="time-slot">
+                            {{ slot.start_time|time:"H:i" }}<br>
+                            {{ slot.end_time|time:"H:i" }}
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Days columns -->
+                        {% for day in days %}
+                        <div class="grid-header">{{ day }}</div>
+                        {% for slot in time_slots %}
+                        <div class="grid-cell">
+                            <!-- In real app, populate with actual schedule -->
+                            <div style="font-size: 0.9rem; font-weight: bold;">
+                                {% if forloop.counter == 3 %}Math{% endif %}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #666;">
+                                {% if forloop.counter == 3 %}Room 302{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend">
+                    <h4 style="margin-top: 0;">Subject Color Codes</h4>
+                    <div class="legend-item"><span class="color-box math"></span> Mathematics</div>
+                    <div class="legend-item"><span class="color-box science"></span> Science</div>
+                    <div class="legend-item"><span class="color-box english"></span> English</div>
+                    <div class="legend-item"><span class="color-box history"></span> History</div>
+                    <div class="legend-item"><span class="color-box pe"></span> Physical Education</div>
+                    <div class="legend-item"><span class="color-box art"></span> Art & Design</div>
+                </div>
+
+                <!-- Notes Section -->
+                <div style="margin-top: 30px; padding: 15px; border: 1px dashed #ccc; background: #fffde7;">
+                    <h4 style="margin-top: 0; color: #f57c00;">Important Notes</h4>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>This timetable is effective from {{ timetable.academic_year }} Term {{ timetable.term }}</li>
+                        <li>Any changes will be communicated via official notices</li>
+                        <li>Students must be punctual for all classes</li>
+                        <li>Bring required materials for each subject</li>
+                        <li>Report timetable conflicts to the administration office</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <table width="100%">
+                    <tr>
+                        <td width="33%" style="text-align: left;">
+                            Generated by: {{ request.user.get_full_name }}
+                        </td>
+                        <td width="34%" style="text-align: center;">
+                            {{ school.name|default:"School Management System" }} • Page <span class="page-number">1</span> of <span class="page-total">1</span>
+                        </td>
+                        <td width="33%" style="text-align: right;">
+                            {% now "F j, Y H:i" %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Print functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update page numbers if multiple pages
+            updatePageNumbers();
+            
+            // Auto-print option (comment out if not needed)
+            // setTimeout(() => window.print(), 1000);
+        });
+        
+        function updatePageNumbers() {
+            const pages = document.querySelectorAll('.page-break').length + 1;
+            document.querySelectorAll('.page-total').forEach(el => {
+                el.textContent = pages;
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                window.print();
+            }
+            if (e.key === 'Escape') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>

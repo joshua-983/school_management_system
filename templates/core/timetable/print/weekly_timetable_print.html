@@ -1,0 +1,453 @@
+<!-- templates/core/timetable/print/weekly_timetable_print.html -->
+{% load static %}
+{% load custom_filters %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Timetable - {{ student.get_class_level_display }}</title>
+    <style>
+        /* Weekly Print Styles */
+        @page {
+            size: A4 landscape;
+            margin: 0.5cm;
+        }
+        
+        @media print {
+            body {
+                font-family: 'Arial', sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .weekly-timetable {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            
+            .weekly-timetable th,
+            .weekly-timetable td {
+                border: 1px solid #333;
+                padding: 8px;
+                vertical-align: top;
+                page-break-inside: avoid;
+            }
+            
+            .day-header {
+                background-color: #2c3e50 !important;
+                color: white !important;
+                text-align: center;
+                font-weight: bold;
+                height: 40px;
+            }
+            
+            .time-header {
+                background-color: #34495e !important;
+                color: white !important;
+                text-align: center;
+                font-weight: bold;
+                width: 80px;
+            }
+            
+            .period-cell {
+                min-height: 70px;
+                position: relative;
+                page-break-inside: avoid;
+            }
+            
+            .break-cell {
+                background-color: #f5f5f5 !important;
+                text-align: center;
+                font-style: italic;
+                color: #666;
+            }
+            
+            .subject-name {
+                font-weight: bold;
+                font-size: 14px;
+                margin-bottom: 3px;
+            }
+            
+            .teacher-name {
+                font-size: 11px;
+                color: #555;
+                position: absolute;
+                bottom: 5px;
+                left: 5px;
+            }
+            
+            .room-number {
+                font-size: 11px;
+                color: #555;
+                position: absolute;
+                bottom: 5px;
+                right: 5px;
+            }
+            
+            .time-slot {
+                font-size: 10px;
+                color: #777;
+                position: absolute;
+                top: 5px;
+                right: 5px;
+            }
+            
+            .color-coded {
+                border-left: 4px solid;
+            }
+            
+            .legend {
+                margin-top: 20px;
+                padding: 10px;
+                border: 1px solid #ccc;
+                background-color: #f9f9f9;
+                page-break-inside: avoid;
+            }
+            
+            .legend-item {
+                display: inline-block;
+                margin-right: 15px;
+                margin-bottom: 5px;
+            }
+            
+            .color-dot {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                margin-right: 5px;
+                vertical-align: middle;
+            }
+            
+            .footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 10px;
+                color: #666;
+                padding: 5px;
+                background: white;
+                border-top: 1px solid #ccc;
+            }
+            
+            /* Subject colors */
+            .subject-math { border-left-color: #3498db; background-color: #ebf5fb; }
+            .subject-science { border-left-color: #2ecc71; background-color: #eafaf1; }
+            .subject-english { border-left-color: #e74c3c; background-color: #fdedec; }
+            .subject-history { border-left-color: #f39c12; background-color: #fef5e7; }
+            .subject-pe { border-left-color: #9b59b6; background-color: #f4ecf7; }
+            .subject-art { border-left-color: #1abc9c; background-color: #e8f8f5; }
+            .subject-music { border-left-color: #d35400; background-color: #fbeee6; }
+            .subject-computer { border-left-color: #2c3e50; background-color: #ebedef; }
+        }
+        
+        /* Screen styles */
+        @media screen {
+            body {
+                background: #f0f0f0;
+                padding: 20px;
+            }
+            
+            .print-wrapper {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                padding: 20px;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .print-controls {
+                background: #fff;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .btn {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                margin-right: 10px;
+            }
+            
+            .btn-primary {
+                background: #3498db;
+                color: white;
+            }
+            
+            .btn-secondary {
+                background: #95a5a6;
+                color: white;
+            }
+            
+            /* Subject colors for screen */
+            .subject-math { border-left-color: #3498db; background-color: #ebf5fb; }
+            .subject-science { border-left-color: #2ecc71; background-color: #eafaf1; }
+            .subject-english { border-left-color: #e74c3c; background-color: #fdedec; }
+            .subject-history { border-left-color: #f39c12; background-color: #fef5e7; }
+            .subject-pe { border-left-color: #9b59b6; background-color: #f4ecf7; }
+            .subject-art { border-left-color: #1abc9c; background-color: #e8f8f5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-wrapper">
+        <!-- Print Controls -->
+        <div class="print-controls no-print">
+            <h2 style="margin: 0 0 10px 0;">Weekly Timetable - Print Preview</h2>
+            <p style="margin: 0 0 15px 0; color: #666;">
+                {{ student.get_class_level_display }} • {{ academic_year }} • Term {{ term }}
+            </p>
+            <div>
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="fas fa-print"></i> Print
+                </button>
+                <button class="btn btn-secondary" onclick="downloadPDF()">
+                    <i class="fas fa-download"></i> Save as PDF
+                </button>
+                <button class="btn btn-secondary" onclick="window.close()">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+
+        <!-- Print Content -->
+        <div class="print-content">
+            <!-- Header -->
+            <div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #2c3e50;">
+                <h1 style="margin: 0 0 5px 0; color: #2c3e50;">WEEKLY TIMETABLE</h1>
+                <h2 style="margin: 0 0 10px 0; color: #3498db;">{{ student.get_class_level_display }}</h2>
+                <p style="margin: 0; font-size: 14px;">
+                    <strong>Student:</strong> {{ student.get_full_name }} • 
+                    <strong>Academic Year:</strong> {{ academic_year }} • 
+                    <strong>Term:</strong> {{ term }}
+                </p>
+                <p style="margin: 5px 0 0 0; font-size: 13px; color: #666;">
+                    Generated on {% now "F j, Y" %} • Valid until further notice
+                </p>
+            </div>
+
+            <!-- Weekly Timetable -->
+            <table class="weekly-timetable">
+                <thead>
+                    <tr>
+                        <th class="time-header">Time</th>
+                        {% for day in days_order %}
+                        <th class="day-header">{{ day }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for slot in time_slots %}
+                    <tr>
+                        <td class="time-header">
+                            {{ slot.start_time|time:"H:i" }}<br>
+                            {{ slot.end_time|time:"H:i" }}
+                            <div style="font-size: 10px; margin-top: 3px;">
+                                Period {{ slot.period_number }}
+                            </div>
+                        </td>
+                        
+                        {% for day_name in days_order %}
+                        {% with day_entries=weekly_timetable|get_item:day_name %}
+                        <td class="period-cell 
+                            {% if day_entries %}
+                                {% for entry in day_entries %}
+                                    {% if forloop.parentloop.counter == slot.period_number and not entry.is_break %}
+                                        subject-{{ entry.subject.name|lower|cut:" " }} color-coded
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}">
+                            
+                            {% if day_entries %}
+                                {% for entry in day_entries %}
+                                    {% if forloop.parentloop.counter == slot.period_number %}
+                                        {% if entry.is_break %}
+                                            <div class="break-cell">
+                                                <strong>{{ entry.break_name|default:"BREAK" }}</strong>
+                                            </div>
+                                        {% else %}
+                                            <div class="subject-name">
+                                                {{ entry.subject.name }}
+                                            </div>
+                                            <div class="time-slot">
+                                                {{ entry.time_slot.start_time|time:"H:i" }}
+                                            </div>
+                                            <div class="teacher-name">
+                                                {{ entry.teacher.get_short_name }}
+                                            </div>
+                                            <div class="room-number">
+                                                {{ entry.classroom|default:"TBA" }}
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                {% empty %}
+                                    <div style="text-align: center; padding-top: 20px; color: #999;">
+                                        <i>No Class</i>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div style="text-align: center; padding-top: 20px; color: #999;">
+                                    <i>No Schedule</i>
+                                </div>
+                            {% endif %}
+                        </td>
+                        {% endwith %}
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Legend -->
+            <div class="legend">
+                <h4 style="margin: 0 0 10px 0;">Subject Legend</h4>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #3498db;"></span> Mathematics
+                </div>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #2ecc71;"></span> Science
+                </div>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #e74c3c;"></span> English
+                </div>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #f39c12;"></span> History
+                </div>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #9b59b6;"></span> Physical Education
+                </div>
+                <div class="legend-item">
+                    <span class="color-dot" style="background-color: #1abc9c;"></span> Art & Design
+                </div>
+            </div>
+
+            <!-- Student Information -->
+            <div style="margin-top: 20px; padding: 15px; border: 1px solid #ddd; background-color: #f8f9fa;">
+                <h4 style="margin: 0 0 10px 0;">Student Information</h4>
+                <table style="width: 100%; font-size: 12px;">
+                    <tr>
+                        <td style="width: 25%;"><strong>Name:</strong> {{ student.get_full_name }}</td>
+                        <td style="width: 25%;"><strong>Class:</strong> {{ student.get_class_level_display }}</td>
+                        <td style="width: 25%;"><strong>Roll Number:</strong> {{ student.roll_number|default:"N/A" }}</td>
+                        <td style="width: 25%;"><strong>Academic Year:</strong> {{ academic_year }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Class Teacher:</strong> {{ class_teacher|default:"To be assigned" }}</td>
+                        <td><strong>Term:</strong> {{ term }}</td>
+                        <td><strong>Generated On:</strong> {% now "F j, Y" %}</td>
+                        <td><strong>Valid From:</strong> {{ valid_from|default:"Immediately" }}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Important Notes -->
+            <div style="margin-top: 20px; padding: 15px; border: 1px solid #f39c12; background-color: #fef9e7;">
+                <h4 style="margin: 0 0 10px 0; color: #f39c12;">
+                    <i class="fas fa-exclamation-triangle"></i> Important Notes
+                </h4>
+                <ul style="margin: 0; padding-left: 20px; font-size: 11px;">
+                    <li>This timetable is subject to change. Please check notice board regularly.</li>
+                    <li>Students must arrive 5 minutes before each class.</li>
+                    <li>Bring required textbooks and materials for each subject.</li>
+                    <li>School uniform must be worn properly at all times.</li>
+                    <li>Report any timetable conflicts to the class teacher immediately.</li>
+                    <li>Keep this timetable in your school diary for reference.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            {{ school.name|default:"School Management System" }} • Weekly Timetable • 
+            Page <span class="page-number">1</span> of <span class="page-total">1</span> • 
+            Confidential
+        </div>
+    </div>
+
+    <script>
+        // PDF download simulation
+        function downloadPDF() {
+            alert('In a real application, this would generate and download a PDF file.');
+            // Real implementation: window.location.href = "{% url 'timetable_pdf' %}";
+        }
+        
+        // Auto-setup for printing
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add page numbers
+            const totalPages = Math.ceil(document.body.scrollHeight / 1123); // A4 height in points
+            document.querySelectorAll('.page-total').forEach(el => {
+                el.textContent = totalPages;
+            });
+            
+            // Add current page numbers
+            document.querySelectorAll('.page-number').forEach(el => {
+                el.textContent = '1'; // For single page, adjust if multi-page
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'p') {
+                    e.preventDefault();
+                    window.print();
+                }
+                if (e.key === 'Escape') {
+                    window.close();
+                }
+            });
+            
+            // Optional: Auto-print after 2 seconds (commented out)
+            // setTimeout(() => window.print(), 2000);
+        });
+        
+        // Add print success message
+        window.addEventListener('afterprint', function() {
+            if (window.matchMedia) {
+                const mediaQuery = window.matchMedia('print');
+                mediaQuery.addListener(function(mql) {
+                    if (!mql.matches) {
+                        console.log('Print completed or cancelled');
+                    }
+                });
+            }
+        });
+        
+        // Fix for empty CSS class names
+        function sanitizeClassName(name) {
+            return name.toLowerCase()
+                .replace(/[^a-z0-9]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+        }
+        
+        // Apply sanitized class names to subject cells
+        document.addEventListener('DOMContentLoaded', function() {
+            const cells = document.querySelectorAll('.period-cell[class*="subject-"]');
+            cells.forEach(cell => {
+                const classes = cell.className.split(' ');
+                const newClasses = classes.map(cls => {
+                    if (cls.startsWith('subject-')) {
+                        return 'subject-' + sanitizeClassName(cls.replace('subject-', ''));
+                    }
+                    return cls;
+                });
+                cell.className = newClasses.join(' ');
+            });
+        });
+    </script>
+</body>
+</html>

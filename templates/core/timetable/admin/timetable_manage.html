@@ -1,0 +1,1098 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Schedule - {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.schedule-builder {
+    min-height: 600px;
+}
+.time-column {
+    background: #f8f9fa;
+    border-right: 1px solid #dee2e6;
+    padding: 0;
+}
+.time-slot {
+    padding: 15px;
+    border-bottom: 1px solid #e9ecef;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+.time-slot.current {
+    background: rgba(13, 110, 253, 0.1);
+    border-left: 4px solid #0d6efd;
+}
+.time-label {
+    font-weight: 600;
+    color: #495057;
+}
+.period-number {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+.schedule-column {
+    padding: 0;
+}
+.period-dropzone {
+    height: 100px;
+    border-bottom: 1px solid #e9ecef;
+    padding: 10px;
+    transition: all 0.3s ease;
+}
+.period-dropzone.empty {
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+}
+.period-dropzone.drag-over {
+    background: rgba(13, 110, 253, 0.1);
+    border-color: #0d6efd;
+}
+.period-item {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 12px;
+    height: 100%;
+    cursor: move;
+    transition: all 0.3s ease;
+}
+.period-item:hover {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+.period-item.break {
+    background: #f8f9fa;
+    border-color: #6c757d;
+}
+.period-subject {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 5px;
+}
+.period-teacher {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 3px;
+}
+.period-classroom {
+    font-size: 0.75rem;
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 10px;
+    display: inline-block;
+}
+.subject-palette {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+.subject-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: move;
+    transition: all 0.2s ease;
+}
+.subject-card:hover {
+    transform: translateX(5px);
+    border-color: #0d6efd;
+}
+.subject-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+.teacher-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: white;
+}
+.break-card {
+    background: #f8f9fa;
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: move;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+.break-card:hover {
+    background: #e9ecef;
+    border-color: #495057;
+}
+.action-panel {
+    position: sticky;
+    top: 20px;
+    z-index: 100;
+}
+.tooltip-inner {
+    max-width: 300px;
+}
+.drag-handle {
+    cursor: move;
+    color: #6c757d;
+    padding: 5px;
+}
+.period-actions {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.period-item:hover .period-actions {
+    opacity: 1;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h1 class="h3 mb-1">Schedule Builder</h1>
+                            <p class="text-muted mb-0">
+                                {{ timetable.get_class_level_display }} • {{ timetable.get_day_of_week_display }} • 
+                                {{ timetable.academic_year }} • Term {{ timetable.term }}
+                            </p>
+                        </div>
+                        <div class="btn-group">
+                            <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-eye me-2"></i>Preview
+                            </a>
+                            <button type="button" class="btn btn-primary" id="saveSchedule">
+                                <i class="fas fa-save me-2"></i>Save Schedule
+                            </button>
+                            <button type="button" class="btn btn-success" id="saveAndExit">
+                                Save & Exit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Builder -->
+    <div class="row schedule-builder">
+        <!-- Left Panel - Subjects & Teachers -->
+        <div class="col-lg-3">
+            <div class="sticky-top" style="top: 20px;">
+                <!-- Subjects Palette -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-book me-2"></i>Available Subjects</h6>
+                    </div>
+                    <div class="card-body subject-palette" id="subjectPalette">
+                        <div class="mb-3">
+                            <input type="text" class="form-control form-control-sm" 
+                                   placeholder="Search subjects..." id="searchSubjects">
+                        </div>
+                        <div id="subjectsList">
+                            <!-- Subjects will be loaded via AJAX -->
+                            <div class="text-center py-4">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                                <p class="mt-2 text-muted">Loading subjects...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Break Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-coffee me-2"></i>Break Period</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="break-card" draggable="true" data-type="break" id="breakCard">
+                            <i class="fas fa-coffee fa-2x text-muted mb-2"></i>
+                            <h6 class="mb-1">Break Period</h6>
+                            <p class="small text-muted mb-0">Drag to schedule</p>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label small">Break Name</label>
+                            <input type="text" class="form-control form-control-sm" 
+                                   id="breakName" value="Break" placeholder="Enter break name">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-sm btn-outline-primary" id="clearAllBtn">
+                                <i class="fas fa-trash-alt me-2"></i>Clear All
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" id="autoScheduleBtn">
+                                <i class="fas fa-robot me-2"></i>Auto Schedule
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" id="copyFromDayBtn">
+                                <i class="fas fa-copy me-2"></i>Copy from Another Day
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" id="validateScheduleBtn">
+                                <i class="fas fa-check-circle me-2"></i>Validate Schedule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center - Schedule Builder -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Drag & Drop Schedule Builder</h6>
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-success me-3" id="periodsCount">0 periods scheduled</span>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="snapToGrid" checked>
+                            <label class="form-check-label" for="snapToGrid">Snap to Grid</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="row g-0 h-100">
+                        <!-- Time Column -->
+                        <div class="col-2 time-column">
+                            {% for timeslot in timeslots %}
+                            <div class="time-slot {% if forloop.first %}current{% endif %}" 
+                                 data-slot-id="{{ timeslot.id }}">
+                                <div>
+                                    <div class="period-number">Period {{ timeslot.period_number }}</div>
+                                    <div class="time-label">
+                                        {{ timeslot.start_time|time:"g:i" }}<br>
+                                        {{ timeslot.end_time|time:"g:i" }}
+                                    </div>
+                                    {% if timeslot.is_break %}
+                                    <small class="text-muted d-block mt-1">{{ timeslot.break_name }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Schedule Column -->
+                        <div class="col-10 schedule-column">
+                            {% for timeslot in timeslots %}
+                            <div class="period-dropzone empty" 
+                                 data-slot-id="{{ timeslot.id }}"
+                                 data-period="{{ timeslot.period_number }}"
+                                 id="dropzone-{{ timeslot.id }}">
+                                <!-- Period items will be placed here via drag & drop -->
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Teachers & Details -->
+        <div class="col-lg-3">
+            <div class="sticky-top" style="top: 20px;">
+                <!-- Selected Period Details -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Period Details</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="periodDetails">
+                            <div class="text-center py-4 text-muted">
+                                <i class="fas fa-hand-pointer fa-2x mb-3"></i>
+                                <p>Select a period to view details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Available Teachers -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-user-tie me-2"></i>Available Teachers</h6>
+                        <span class="badge bg-info" id="teachersCount">0</span>
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div class="mb-3">
+                            <input type="text" class="form-control form-control-sm" 
+                                   placeholder="Search teachers..." id="searchTeachers">
+                        </div>
+                        <div id="teachersList">
+                            <!-- Teachers will be loaded via AJAX -->
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Stats -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Schedule Statistics</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6 mb-3">
+                                <div class="stat-value text-primary" id="totalPeriods">0</div>
+                                <div class="stat-label small">Total Periods</div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <div class="stat-value text-success" id="classPeriods">0</div>
+                                <div class="stat-label small">Class Periods</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-value text-info" id="breakPeriods">0</div>
+                                <div class="stat-label small">Break Periods</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-value text-warning" id="emptyPeriods">{{ timeslots|length }}</div>
+                                <div class="stat-label small">Empty Slots</div>
+                            </div>
+                        </div>
+                        <div class="progress mt-3" style="height: 6px;">
+                            <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Period Edit Modal -->
+<div class="modal fade" id="editPeriodModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Period Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="periodForm">
+                    <input type="hidden" id="editSlotId">
+                    <input type="hidden" id="editEntryId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Period Type</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periodType" 
+                                   id="classPeriod" value="class" checked>
+                            <label class="form-check-label" for="classPeriod">
+                                Class Period
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="periodType" 
+                                   id="breakPeriod" value="break">
+                            <label class="form-check-label" for="breakPeriod">
+                                Break Period
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="classFields">
+                        <div class="mb-3">
+                            <label class="form-label">Subject</label>
+                            <select class="form-select" id="editSubject" required>
+                                <option value="">Select Subject</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Teacher</label>
+                            <select class="form-select" id="editTeacher" required>
+                                <option value="">Select Teacher</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Classroom</label>
+                            <input type="text" class="form-control" id="editClassroom" 
+                                   placeholder="e.g., Room 101">
+                        </div>
+                    </div>
+
+                    <div id="breakFields" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Break Name</label>
+                            <input type="text" class="form-control" id="editBreakName" 
+                                   value="Break" placeholder="Enter break name">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="deletePeriodBtn">Delete</button>
+                <button type="button" class="btn btn-primary" id="savePeriodBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Auto Schedule Modal -->
+<div class="modal fade" id="autoScheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Auto Schedule Assistant</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Schedule Pattern</label>
+                            <select class="form-select" id="schedulePattern">
+                                <option value="balanced">Balanced (Recommended)</option>
+                                <option value="morning_heavy">Morning Heavy</option>
+                                <option value="afternoon_heavy">Afternoon Heavy</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Break Placement</label>
+                            <select class="form-select" id="breakPlacement">
+                                <option value="auto">Auto (Every 2-3 periods)</option>
+                                <option value="mid_morning">Mid Morning (10:30 AM)</option>
+                                <option value="lunch">Lunch (12:30 PM)</option>
+                                <option value="custom_breaks">Custom Breaks</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Subject Distribution</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="distributeMath" checked>
+                                <label class="form-check-label" for="distributeMath">
+                                    Distribute Math/Language
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="avoidBackToBack" checked>
+                                <label class="form-check-label" for="avoidBackToBack">
+                                    Avoid Same Subject Back-to-Back
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="teacherConflicts" checked>
+                                <label class="form-check-label" for="teacherConflicts">
+                                    Prevent Teacher Conflicts
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This will generate a suggested schedule based on best practices. You can adjust it manually after.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="generateScheduleBtn">Generate Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let scheduleData = {};
+    let subjects = [];
+    let teachers = [];
+    let selectedPeriod = null;
+
+    // Initialize
+    loadSubjects();
+    loadTeachers();
+    loadExistingSchedule();
+
+    // Drag & Drop functionality
+    initializeDragAndDrop();
+
+    // Event Listeners
+    $('#saveSchedule').click(saveSchedule);
+    $('#saveAndExit').click(saveAndExit);
+    $('#clearAllBtn').click(clearAllPeriods);
+    $('#autoScheduleBtn').click(() => $('#autoScheduleModal').modal('show'));
+    $('#generateScheduleBtn').click(generateAutoSchedule);
+    $('#copyFromDayBtn').click(copyFromAnotherDay);
+    $('#validateScheduleBtn').click(validateSchedule);
+    $('#searchSubjects').on('input', filterSubjects);
+    $('#searchTeachers').on('input', filterTeachers);
+
+    // Period type toggle
+    $('input[name="periodType"]').change(function() {
+        if ($(this).val() === 'class') {
+            $('#classFields').show();
+            $('#breakFields').hide();
+        } else {
+            $('#classFields').hide();
+            $('#breakFields').show();
+        }
+    });
+
+    // Period details save
+    $('#savePeriodBtn').click(savePeriodDetails);
+
+    // Period delete
+    $('#deletePeriodBtn').click(deletePeriod);
+
+    // Functions
+    function loadSubjects() {
+        $.ajax({
+            url: '{% url "get_subjects_for_class" timetable.class_level %}',
+            success: function(data) {
+                subjects = data.subjects;
+                renderSubjects();
+                populateSubjectSelect();
+            }
+        });
+    }
+
+    function loadTeachers() {
+        $.ajax({
+            url: '{% url "get_available_teachers" %}',
+            data: { class_level: '{{ timetable.class_level }}' },
+            success: function(data) {
+                teachers = data.teachers;
+                renderTeachers();
+                populateTeacherSelect();
+            }
+        });
+    }
+
+    function loadExistingSchedule() {
+        $.ajax({
+            url: '{% url "get_timetable_entries" %}',
+            data: {
+                class_level: '{{ timetable.class_level }}',
+                day_of_week: '{{ timetable.day_of_week }}',
+                academic_year: '{{ timetable.academic_year }}',
+                term: '{{ timetable.term }}'
+            },
+            success: function(data) {
+                data.entries.forEach(entry => {
+                    scheduleData[entry.time_slot_id] = entry;
+                    renderPeriodInSlot(entry);
+                });
+                updateStatistics();
+            }
+        });
+    }
+
+    function initializeDragAndDrop() {
+        // Make subject cards draggable
+        $(document).on('dragstart', '.subject-card, #breakCard', function(e) {
+            const type = $(this).data('type');
+            const data = type === 'break' 
+                ? { type: 'break', breakName: $('#breakName').val() }
+                : { type: 'class', subjectId: $(this).data('subject-id') };
+            
+            e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(data));
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+        });
+
+        // Make period items draggable
+        $(document).on('dragstart', '.period-item', function(e) {
+            const slotId = $(this).closest('.period-dropzone').data('slot-id');
+            const data = scheduleData[slotId];
+            e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(data));
+            e.originalEvent.dataTransfer.effectAllowed = 'move';
+        });
+
+        // Dropzone handlers
+        $('.period-dropzone')
+            .on('dragover', function(e) {
+                e.preventDefault();
+                e.originalEvent.dataTransfer.dropEffect = 'move';
+                $(this).addClass('drag-over');
+            })
+            .on('dragleave', function() {
+                $(this).removeClass('drag-over');
+            })
+            .on('drop', function(e) {
+                e.preventDefault();
+                $(this).removeClass('drag-over');
+                
+                const slotId = $(this).data('slot-id');
+                const data = JSON.parse(e.originalEvent.dataTransfer.getData('text/plain'));
+                
+                if (data.type === 'break') {
+                    addBreakPeriod(slotId, data.breakName);
+                } else if (data.type === 'class') {
+                    showPeriodModal(slotId, data);
+                }
+            });
+
+        // Allow dropping on existing periods to replace
+        $(document).on('dragover', '.period-item', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.originalEvent.dataTransfer.dropEffect = 'move';
+            $(this).addClass('drag-over');
+        });
+
+        $(document).on('dragleave drop', '.period-item', function() {
+            $(this).removeClass('drag-over');
+        });
+
+        $(document).on('drop', '.period-item', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const slotId = $(this).closest('.period-dropzone').data('slot-id');
+            const data = JSON.parse(e.originalEvent.dataTransfer.getData('text/plain'));
+            
+            if (data.type === 'break') {
+                addBreakPeriod(slotId, data.breakName);
+            } else if (data.type === 'class') {
+                showPeriodModal(slotId, data);
+            }
+        });
+    }
+
+    function renderPeriodInSlot(entry) {
+        const slotId = entry.time_slot_id;
+        const dropzone = $(`#dropzone-${slotId}`);
+        
+        dropzone.removeClass('empty');
+        dropzone.html(`
+            <div class="period-item ${entry.is_break ? 'break' : ''}" 
+                 draggable="true"
+                 data-slot-id="${slotId}">
+                <div class="d-flex align-items-center h-100">
+                    <div class="drag-handle me-2">
+                        <i class="fas fa-arrows-alt"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        ${entry.is_break 
+                            ? `<h6 class="period-subject mb-0">
+                                 <i class="fas fa-coffee me-1"></i>${entry.break_name}
+                               </h6>
+                               <small class="text-muted">Break Period</small>`
+                            : `<h6 class="period-subject mb-1">${entry.subject_name}</h6>
+                               <div class="period-teacher">${entry.teacher_name}</div>
+                               ${entry.classroom 
+                                   ? `<span class="period-classroom">${entry.classroom}</span>` 
+                                   : ''}`
+                        }
+                    </div>
+                    <div class="period-actions">
+                        <button class="btn btn-sm btn-link text-muted edit-period" 
+                                title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `);
+        
+        // Add edit click handler
+        dropzone.find('.edit-period').click(function() {
+            showPeriodModal(slotId, entry);
+        });
+    }
+
+    function addBreakPeriod(slotId, breakName) {
+        const entry = {
+            time_slot_id: slotId,
+            is_break: true,
+            break_name: breakName || 'Break',
+            subject_name: null,
+            teacher_name: null,
+            classroom: null
+        };
+        
+        scheduleData[slotId] = entry;
+        renderPeriodInSlot(entry);
+        updateStatistics();
+        showToast('Break period added', 'success');
+    }
+
+    function showPeriodModal(slotId, data = null) {
+        selectedPeriod = slotId;
+        
+        if (data) {
+            $('#editSlotId').val(slotId);
+            $('#editEntryId').val(data.id || '');
+            
+            if (data.is_break) {
+                $('#breakPeriod').prop('checked', true);
+                $('#editBreakName').val(data.break_name);
+                $('#breakFields').show();
+                $('#classFields').hide();
+            } else {
+                $('#classPeriod').prop('checked', true);
+                $('#editSubject').val(data.subject_id || '');
+                $('#editTeacher').val(data.teacher_id || '');
+                $('#editClassroom').val(data.classroom || '');
+                $('#breakFields').hide();
+                $('#classFields').show();
+            }
+        } else {
+            $('#editSlotId').val(slotId);
+            $('#editEntryId').val('');
+            $('#classPeriod').prop('checked', true);
+            $('#editSubject').val('');
+            $('#editTeacher').val('');
+            $('#editClassroom').val('');
+            $('#editBreakName').val($('#breakName').val());
+            $('#breakFields').hide();
+            $('#classFields').show();
+        }
+        
+        $('#editPeriodModal').modal('show');
+    }
+
+    function savePeriodDetails() {
+        const slotId = $('#editSlotId').val();
+        const isBreak = $('#breakPeriod').is(':checked');
+        
+        let entry;
+        if (isBreak) {
+            entry = {
+                time_slot_id: slotId,
+                is_break: true,
+                break_name: $('#editBreakName').val(),
+                subject_name: null,
+                teacher_name: null,
+                classroom: null
+            };
+        } else {
+            const subjectId = $('#editSubject').val();
+            const teacherId = $('#editTeacher').val();
+            const subject = subjects.find(s => s.id == subjectId);
+            const teacher = teachers.find(t => t.id == teacherId);
+            
+            if (!subject || !teacher) {
+                showToast('Please select both subject and teacher', 'error');
+                return;
+            }
+            
+            entry = {
+                time_slot_id: slotId,
+                is_break: false,
+                subject_id: subjectId,
+                teacher_id: teacherId,
+                subject_name: subject.name,
+                teacher_name: teacher.name,
+                classroom: $('#editClassroom').val()
+            };
+        }
+        
+        scheduleData[slotId] = entry;
+        renderPeriodInSlot(entry);
+        updateStatistics();
+        
+        $('#editPeriodModal').modal('hide');
+        showToast('Period saved successfully', 'success');
+    }
+
+    function deletePeriod() {
+        const slotId = $('#editSlotId').val();
+        delete scheduleData[slotId];
+        
+        const dropzone = $(`#dropzone-${slotId}`);
+        dropzone.addClass('empty');
+        dropzone.html('');
+        
+        $('#editPeriodModal').modal('hide');
+        updateStatistics();
+        showToast('Period deleted', 'info');
+    }
+
+    function saveSchedule() {
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        
+        Object.keys(scheduleData).forEach(slotId => {
+            const entry = scheduleData[slotId];
+            formData.append(`timeslot_${slotId}_subject`, entry.subject_id || '');
+            formData.append(`timeslot_${slotId}_teacher`, entry.teacher_id || '');
+            formData.append(`timeslot_${slotId}_classroom`, entry.classroom || '');
+            formData.append(`timeslot_${slotId}_is_break`, entry.is_break);
+            formData.append(`timeslot_${slotId}_break_name`, entry.break_name || '');
+            if (entry.id) {
+                formData.append(`entry_${slotId}`, entry.id);
+            }
+        });
+        
+        $.ajax({
+            url: window.location.href,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            beforeSend: function() {
+                $('#saveSchedule').html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+            },
+            success: function(response) {
+                showToast('Schedule saved successfully!', 'success');
+                setTimeout(() => {
+                    $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule');
+                }, 1000);
+            },
+            error: function() {
+                showToast('Error saving schedule', 'error');
+                $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule');
+            }
+        });
+    }
+
+    function saveAndExit() {
+        saveSchedule();
+        setTimeout(() => {
+            window.location.href = "{% url 'timetable_detail' timetable.pk %}";
+        }, 1500);
+    }
+
+    function clearAllPeriods() {
+        if (confirm('Are you sure you want to clear all periods?')) {
+            $('.period-dropzone').addClass('empty').html('');
+            scheduleData = {};
+            updateStatistics();
+            showToast('All periods cleared', 'info');
+        }
+    }
+
+    function generateAutoSchedule() {
+        // This is a simplified auto-schedule generator
+        // In production, this would be more sophisticated
+        
+        clearAllPeriods();
+        
+        const timeSlots = $('.period-dropzone');
+        const subjectCount = Math.min(subjects.length, Math.floor(timeSlots.length * 0.7));
+        
+        // Distribute subjects
+        for (let i = 0; i < timeSlots.length; i++) {
+            const slotId = $(timeSlots[i]).data('slot-id');
+            
+            if (i % 3 === 2) {
+                // Every 3rd period is a break
+                addBreakPeriod(slotId, i < timeSlots.length / 2 ? 'Short Break' : 'Lunch Break');
+            } else if (i < subjectCount * 2) {
+                // Assign subjects
+                const subjectIndex = Math.floor(i / 2) % subjects.length;
+                const teacherIndex = Math.floor(Math.random() * teachers.length);
+                
+                const entry = {
+                    time_slot_id: slotId,
+                    is_break: false,
+                    subject_id: subjects[subjectIndex].id,
+                    teacher_id: teachers[teacherIndex].id,
+                    subject_name: subjects[subjectIndex].name,
+                    teacher_name: teachers[teacherIndex].name,
+                    classroom: `Room ${101 + subjectIndex}`
+                };
+                
+                scheduleData[slotId] = entry;
+                renderPeriodInSlot(entry);
+            }
+        }
+        
+        updateStatistics();
+        $('#autoScheduleModal').modal('hide');
+        showToast('Auto schedule generated', 'success');
+    }
+
+    function copyFromAnotherDay() {
+        // Implementation would involve selecting another day and copying its schedule
+        showToast('Feature coming soon!', 'info');
+    }
+
+    function validateSchedule() {
+        const errors = [];
+        
+        // Check for teacher conflicts
+        const teacherSlots = {};
+        Object.keys(scheduleData).forEach(slotId => {
+            const entry = scheduleData[slotId];
+            if (!entry.is_break && entry.teacher_id) {
+                if (!teacherSlots[entry.teacher_id]) {
+                    teacherSlots[entry.teacher_id] = [];
+                }
+                teacherSlots[entry.teacher_id].push(slotId);
+            }
+        });
+        
+        // Check for consecutive same subjects
+        let prevSubjectId = null;
+        $('.period-dropzone').each(function() {
+            const slotId = $(this).data('slot-id');
+            const entry = scheduleData[slotId];
+            
+            if (entry && !entry.is_break) {
+                if (entry.subject_id === prevSubjectId) {
+                    errors.push(`Consecutive ${entry.subject_name} classes`);
+                }
+                prevSubjectId = entry.subject_id;
+            } else {
+                prevSubjectId = null;
+            }
+        });
+        
+        if (errors.length > 0) {
+            showToast(`Found ${errors.length} issues: ${errors.join(', ')}`, 'warning');
+        } else {
+            showToast('Schedule validation passed!', 'success');
+        }
+    }
+
+    function updateStatistics() {
+        const totalSlots = $('.period-dropzone').length;
+        const scheduledSlots = Object.keys(scheduleData).length;
+        const breakSlots = Object.values(scheduleData).filter(e => e.is_break).length;
+        const classSlots = scheduledSlots - breakSlots;
+        const emptySlots = totalSlots - scheduledSlots;
+        
+        $('#periodsCount').text(`${scheduledSlots} periods scheduled`);
+        $('#totalPeriods').text(scheduledSlots);
+        $('#classPeriods').text(classSlots);
+        $('#breakPeriods').text(breakSlots);
+        $('#emptyPeriods').text(emptySlots);
+        $('#progressBar').css('width', `${(scheduledSlots / totalSlots) * 100}%`);
+        $('#teachersCount').text(teachers.length);
+    }
+
+    function renderSubjects() {
+        const container = $('#subjectsList');
+        container.empty();
+        
+        subjects.forEach(subject => {
+            container.append(`
+                <div class="subject-card" draggable="true" 
+                     data-type="class" data-subject-id="${subject.id}"
+                     title="${subject.name} - ${subject.code}">
+                    <div class="d-flex align-items-center">
+                        <span class="subject-color" style="background-color: ${subject.color || '#6c757d'}"></span>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-0">${subject.name}</h6>
+                            <small class="text-muted">${subject.code}</small>
+                        </div>
+                        <i class="fas fa-grip-vertical text-muted"></i>
+                    </div>
+                </div>
+            `);
+        });
+    }
+
+    function renderTeachers() {
+        const container = $('#teachersList');
+        container.empty();
+        
+        teachers.forEach(teacher => {
+            const initials = teacher.name.split(' ').map(n => n[0]).join('');
+            container.append(`
+                <div class="d-flex align-items-center mb-2 teacher-item" 
+                     data-teacher-id="${teacher.id}">
+                    <div class="teacher-avatar me-2" 
+                         style="background-color: ${getColorForString(teacher.name)}">
+                        ${initials}
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-0 small">${teacher.name}</h6>
+                        <small class="text-muted">${teacher.subjects.join(', ')}</small>
+                    </div>
+                </div>
+            `);
+        });
+    }
+
+    function populateSubjectSelect() {
+        const select = $('#editSubject');
+        select.empty();
+        select.append('<option value="">Select Subject</option>');
+        subjects.forEach(subject => {
+            select.append(`<option value="${subject.id}">${subject.name}</option>`);
+        });
+    }
+
+    function populateTeacherSelect() {
+        const select = $('#editTeacher');
+        select.empty();
+        select.append('<option value="">Select Teacher</option>');
+        teachers.forEach(teacher => {
+            select.append(`<option value="${teacher.id}">${teacher.name}</option>`);
+        });
+    }
+
+    function filterSubjects() {
+        const search = $('#searchSubjects').val().toLowerCase();
+        $('.subject-card').each(function() {
+            const text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(search));
+        });
+    }
+
+    function filterTeachers() {
+        const search = $('#searchTeachers').val().toLowerCase();
+        $('.teacher-item').each(function() {
+            const text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(search));
+        });
+    }
+
+    function getColorForString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const colors = [
+            '#0d6efd', '#198754', '#dc3545', '#fd7e14', 
+            '#6f42c1', '#20c997', '#6610f2', '#d63384'
+        ];
+        return colors[Math.abs(hash) % colors.length];
+    }
+
+    function showToast(message, type = 'info') {
+        const toast = $(`
+            <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+        `);
+        
+        $('#toastContainer').append(toast);
+        const bsToast = new bootstrap.Toast(toast[0]);
+        bsToast.show();
+        
+        toast.on('hidden.bs.toast', function() {
+            $(this).remove();
+        });
+    }
+});
+</script>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+{% endblock %}

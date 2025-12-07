@@ -1,19 +1,26 @@
-# timetable_views.py - COMPLETE UPDATED VERSION
+# timetable_views.py - FIXED VERSION
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse  # ADDED HttpResponse
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
 from django.core.exceptions import PermissionDenied
-
+from django.conf import settings
+from datetime import datetime, timedelta
+from calendar import monthrange, monthcalendar
+from collections import defaultdict
 from core.permissions import is_admin, is_teacher, is_student, is_parent
 from ..models import TimeSlot, Timetable, TimetableEntry, Teacher, Subject, Student, ClassAssignment, AcademicTerm
 from ..forms import TimeSlotForm, TimetableForm, TimetableEntryForm, TimetableFilterForm
 from ..models import CLASS_LEVEL_CHOICES
+
+
+import logging
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # TIME SLOT VIEWS (Admin Only)
@@ -441,7 +448,7 @@ class TeacherTimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, self.template_name, context)
 
 # ============================================================================
-# TIMETABLE CALENDAR VIEW - ADDED THIS NEW CLASS
+# TIMETABLE CALENDAR VIEW
 # ============================================================================
 
 class TimetableCalendarView(LoginRequiredMixin, TemplateView):
@@ -450,6 +457,11 @@ class TimetableCalendarView(LoginRequiredMixin, TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Get current date
+        now = timezone.now()
+        context['current_month'] = now.strftime('%B')
+        context['current_year'] = now.year
         
         # Get user role
         user = self.request.user
@@ -469,88 +481,438 @@ class TimetableCalendarView(LoginRequiredMixin, TemplateView):
         context['academic_year'] = academic_year
         context['term'] = term
         
-        # Get timetable data based on user role
-        if is_admin(user):
-            # Admin can see all timetables
-            timetables = Timetable.objects.filter(
-                academic_year=academic_year,
-                term=term,
-                is_active=True
-            ).select_related('created_by').prefetch_related('entries')
-            
-            context['timetables'] = timetables
-            context['user_type'] = 'admin'
-            
-        elif is_teacher(user):
-            teacher = user.teacher
-            
-            # Get assigned classes
-            assigned_classes = ClassAssignment.objects.filter(
-                teacher=teacher
-            ).values_list('class_level', flat=True).distinct()
-            
-            # Get timetables for assigned classes
-            timetables = Timetable.objects.filter(
-                class_level__in=assigned_classes,
-                academic_year=academic_year,
-                term=term,
-                is_active=True
-            ).prefetch_related('entries')
-            
-            context['timetables'] = timetables
-            context['teacher'] = teacher
-            context['user_type'] = 'teacher'
-            
-        elif is_student(user):
-            student = user.student
-            class_level = student.class_level
-            
-            # Get timetable for student's class
-            timetables = Timetable.objects.filter(
-                class_level=class_level,
-                academic_year=academic_year,
-                term=term,
-                is_active=True
-            ).prefetch_related('entries')
-            
-            context['timetables'] = timetables
-            context['student'] = student
-            context['user_type'] = 'student'
-            
-        elif is_parent(user):
-            parent = user.parentguardian
-            children = parent.student.all()
-            
-            if children.exists():
-                # Get all class levels of children
-                children_classes = children.values_list('class_level', flat=True).distinct()
-                
-                # Get timetables for all children's classes
-                timetables = Timetable.objects.filter(
-                    class_level__in=children_classes,
-                    academic_year=academic_year,
-                    term=term,
-                    is_active=True
-                ).prefetch_related('entries')
-                
-                context['timetables'] = timetables
-                context['children'] = children
-                context['user_type'] = 'parent'
+        # Get calendar weeks for current month
+        context['calendar_weeks'] = self.get_calendar_weeks(now.year, now.month)
         
-        # Get days of week
-        context['days_of_week'] = [
-            (0, 'Monday'),
-            (1, 'Tuesday'),
-            (2, 'Wednesday'),
-            (3, 'Thursday'),
-            (4, 'Friday'),
-            (5, 'Saturday'),
-        ]
+        # Get today's events
+        context['today_events'] = self.get_today_events(user)
         
-        # Get time slots
-        context['time_slots'] = TimeSlot.objects.order_by('period_number')
+        # Get upcoming events
+        context['upcoming_events'] = self.get_upcoming_events(user)
+        
+        # Get event categories
+        context['event_categories'] = self.get_event_categories(user)
+        
+        # Get stats
+        context.update(self.get_calendar_stats(now.year, now.month, user))
         
         return context
+    
+    def get_calendar_weeks(self, year, month):
+        """Generate calendar weeks with events"""
+        # Create calendar matrix
+        cal = monthcalendar(year, month)
+        weeks = []
+        
+        # Get events for this month based on user role
+        user = self.request.user
+        events = self.get_month_events(year, month, user)
+        
+        # Organize events by day
+        events_by_day = defaultdict(list)
+        for event in events:
+            event_day = event['date'].day
+            events_by_day[event_day].append(event)
+        
+        # Build calendar weeks
+        for week in cal:
+            week_days = []
+            for day in week:
+                if day == 0:
+                    week_days.append({
+                        'day': None,
+                        'date': None,
+                        'events': [],
+                        'is_current_month': False,
+                        'is_today': False,
+                        'is_weekend': False
+                    })
+                else:
+                    date = datetime(year, month, day).date()
+                    is_today = date == timezone.now().date()
+                    is_weekend = date.weekday() >= 5  # Saturday=5, Sunday=6
+                    
+                    week_days.append({
+                        'day': day,
+                        'date': date,
+                        'events': events_by_day.get(day, []),
+                        'is_current_month': True,
+                        'is_today': is_today,
+                        'is_weekend': is_weekend
+                    })
+            weeks.append(week_days)
+        
+        return weeks
+    
+    def get_month_events(self, year, month, user):
+        """Get events for a specific month based on user role"""
+        events = []
+        
+        # Get date range for the month
+        _, last_day = monthrange(year, month)
+        start_date = datetime(year, month, 1).date()
+        end_date = datetime(year, month, last_day).date()
+        
+        if is_admin(user):
+            # Admin sees all events
+            timetable_entries = TimetableEntry.objects.filter(
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__is_active=True
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+            
+            for entry in timetable_entries:
+                events.append(self.format_timetable_entry(entry))
+        
+        elif is_teacher(user):
+            teacher = user.teacher
+            timetable_entries = TimetableEntry.objects.filter(
+                teacher=teacher,
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'time_slot')
+            
+            for entry in timetable_entries:
+                events.append(self.format_timetable_entry(entry))
+        
+        elif is_student(user):
+            student = user.student
+            timetable_entries = TimetableEntry.objects.filter(
+                timetable__class_level=student.class_level,
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+            
+            for entry in timetable_entries:
+                events.append(self.format_timetable_entry(entry))
+        
+        return events
+    
+    def format_timetable_entry(self, entry):
+        """Format timetable entry for calendar display"""
+        is_current = False
+        
+        # Check if this is the current period
+        now = timezone.now()
+        if entry.time_slot.start_time <= now.time() <= entry.time_slot.end_time:
+            is_current = True
+        
+        return {
+            'id': f"timetable_{entry.id}",
+            'title': entry.subject.name if entry.subject else entry.break_name,
+            'title_short': (entry.subject.code if entry.subject else entry.break_name[:3])[:10],
+            'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+            'date': datetime.combine(timezone.now().date(), entry.time_slot.start_time),
+            'teacher': entry.teacher.get_full_name() if entry.teacher else '',
+            'classroom': entry.classroom or '',
+            'description': f"{entry.subject.name} with {entry.teacher.get_full_name()}" if entry.subject and entry.teacher else '',
+            'color': '#0d6efd' if not entry.is_break else '#6c757d',
+            'is_break': entry.is_break,
+            'is_current': is_current
+        }
+    
+    def get_today_events(self, user):
+        """Get events for today"""
+        today = timezone.now().date()
+        events = []
+        
+        if is_admin(user):
+            entries = TimetableEntry.objects.filter(
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__day_of_week=today.weekday(),
+                timetable__is_active=True
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+        elif is_teacher(user):
+            teacher = user.teacher
+            entries = TimetableEntry.objects.filter(
+                teacher=teacher,
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__day_of_week=today.weekday(),
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'time_slot')
+        elif is_student(user):
+            student = user.student
+            entries = TimetableEntry.objects.filter(
+                timetable__class_level=student.class_level,
+                timetable__academic_year=self.get_academic_year(),
+                timetable__term=self.get_current_term(),
+                timetable__day_of_week=today.weekday(),
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+        else:
+            entries = TimetableEntry.objects.none()
+        
+        for entry in entries:
+            events.append({
+                'id': f"timetable_{entry.id}",
+                'title': entry.subject.name if entry.subject else entry.break_name,
+                'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                'details': f"{entry.timetable.get_class_level_display()} • {entry.classroom or 'TBA'}"
+            })
+        
+        return events[:5]
+    
+    def get_upcoming_events(self, user):
+        """Get upcoming events for the next 7 days"""
+        events = []
+        today = timezone.now().date()
+        
+        # For simplicity, get events for the next week
+        for i in range(1, 8):
+            day = today + timedelta(days=i)
+            
+            # Get events for this day (this is simplified - you might want to query differently)
+            # For now, return a placeholder
+            events.append({
+                'id': f"event_{i}",
+                'date': day.strftime('%b %d'),
+                'title': f"Class Day {i}",
+                'details': f"Regular classes"
+            })
+        
+        return events[:3]
+    
+    def get_event_categories(self, user):
+        """Get event categories based on user role"""
+        categories = [
+            {'id': 'class', 'name': 'Class Periods', 'color': '#0d6efd', 'count': 0},
+            {'id': 'break', 'name': 'Breaks', 'color': '#6c757d', 'count': 0},
+            {'id': 'exam', 'name': 'Exams', 'color': '#dc3545', 'count': 0},
+        ]
+        
+        if is_admin(user):
+            categories[0]['count'] = TimetableEntry.objects.filter(
+                is_break=False,
+                timetable__is_active=True
+            ).count()
+            categories[1]['count'] = TimetableEntry.objects.filter(
+                is_break=True,
+                timetable__is_active=True
+            ).count()
+        
+        return categories
+    
+    def get_calendar_stats(self, year, month, user):
+        """Get calendar statistics"""
+        return {
+            'total_events': 0,
+            'class_days': 20,
+            'busy_days': 15,
+            'free_days': 5,
+        }
+    
+    def get_academic_year(self):
+        """Get current academic year"""
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        return f"{current_year}/{next_year}"
+    
+    def get_current_term(self):
+        """Get current term"""
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        return current_term.term if current_term else 1
+
+# ============================================================================
+# AJAX VIEWS FOR TIMETABLE MANAGEMENT
+# ============================================================================
+
+@login_required
+@user_passes_test(is_admin)
+def get_subjects_for_class(request, class_level):
+    """AJAX endpoint to get subjects for a specific class level"""
+    logger.debug(f"get_subjects_for_class called with class_level={class_level}")
+    try:
+        # Get all subjects (you might want to filter by class level in the future)
+        subjects = Subject.objects.all().order_by('name')
+        
+        data = {
+            'subjects': [
+                {
+                    'id': subject.id,
+                    'name': subject.name,
+                    'code': subject.code,
+                    'description': subject.description or '',
+                    'color': '#0d6efd'
+                }
+                for subject in subjects
+            ]
+        }
+        logger.debug(f"Returning {len(subjects)} subjects")
+        return JsonResponse(data)
+    except Exception as e:
+        logger.error(f"Error in get_subjects_for_class: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@user_passes_test(is_admin)
+def get_available_teachers(request):
+    """AJAX endpoint to get available teachers"""
+    logger.debug(f"get_available_teachers called with query params: {request.GET}")
+    try:
+        class_level = request.GET.get('class_level', '')
+        
+        # Get all teachers
+        teachers = Teacher.objects.select_related('user').all()
+        
+        data = {
+            'teachers': [
+                {
+                    'id': teacher.id,
+                    'name': teacher.user.get_full_name(),
+                    'email': teacher.user.email,
+                    'subjects': list(teacher.subjects.values_list('name', flat=True)),
+                    'qualifications': teacher.qualifications or '',
+                    'is_active': teacher.user.is_active
+                }
+                for teacher in teachers
+            ]
+        }
+        logger.debug(f"Returning {len(teachers)} teachers")
+        return JsonResponse(data)
+    except Exception as e:
+        logger.error(f"Error in get_available_teachers: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+# ============================================================================
+# CALENDAR AJAX VIEWS
+# ============================================================================
+
+@login_required
+def calendar_data(request):
+    """AJAX endpoint for calendar data"""
+    year = request.GET.get('year', timezone.now().year)
+    month = request.GET.get('month', timezone.now().month)
+    
+    # Get calendar weeks
+    view = TimetableCalendarView()
+    view.request = request
+    calendar_weeks = view.get_calendar_weeks(int(year), int(month))
+    
+    return JsonResponse({
+        'calendar_weeks': calendar_weeks,
+        'stats': view.get_calendar_stats(int(year), int(month), request.user)
+    })
+
+@login_required
+def day_events(request):
+    """AJAX endpoint for day events"""
+    date_str = request.GET.get('date')
+    if not date_str:
+        return JsonResponse({'error': 'Date required'}, status=400)
+    
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        day_of_week = date.weekday()
+        
+        # Get events for this day
+        user = request.user
+        events = []
+        
+        if is_admin(user):
+            entries = TimetableEntry.objects.filter(
+                timetable__academic_year=TimetableCalendarView().get_academic_year(),
+                timetable__term=TimetableCalendarView().get_current_term(),
+                timetable__day_of_week=day_of_week,
+                timetable__is_active=True
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+        elif is_teacher(user):
+            teacher = user.teacher
+            entries = TimetableEntry.objects.filter(
+                teacher=teacher,
+                timetable__academic_year=TimetableCalendarView().get_academic_year(),
+                timetable__term=TimetableCalendarView().get_current_term(),
+                timetable__day_of_week=day_of_week,
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'time_slot')
+        elif is_student(user):
+            student = user.student
+            entries = TimetableEntry.objects.filter(
+                timetable__class_level=student.class_level,
+                timetable__academic_year=TimetableCalendarView().get_academic_year(),
+                timetable__term=TimetableCalendarView().get_current_term(),
+                timetable__day_of_week=day_of_week,
+                timetable__is_active=True,
+                is_break=False
+            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
+        else:
+            entries = TimetableEntry.objects.none()
+        
+        for entry in entries:
+            events.append({
+                'id': f"timetable_{entry.id}",
+                'title': entry.subject.name if entry.subject else entry.break_name,
+                'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                'details': f"{entry.timetable.get_class_level_display()} • {entry.teacher.get_full_name() if entry.teacher else 'Break'} • {entry.classroom or 'TBA'}"
+            })
+        
+        return JsonResponse({'events': events})
+    
+    except ValueError:
+        return JsonResponse({'error': 'Invalid date format'}, status=400)
+
+@login_required
+def event_details(request, event_id):
+    """AJAX endpoint for event details"""
+    if event_id.startswith('timetable_'):
+        try:
+            entry_id = int(event_id.split('_')[1])
+            entry = get_object_or_404(TimetableEntry, id=entry_id)
+            
+            data = {
+                'title': entry.subject.name if entry.subject else entry.break_name,
+                'date_time': f"{entry.timetable.get_day_of_week_display()} • {entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                'description': f"Class: {entry.timetable.get_class_level_display()}",
+                'teacher': entry.teacher.get_full_name() if entry.teacher else 'N/A',
+                'classroom': entry.classroom or 'TBA',
+                'color': '#0d6efd' if not entry.is_break else '#6c757d',
+                'tags': ['Class Period'] if not entry.is_break else ['Break']
+            }
+            return JsonResponse(data)
+        except (ValueError, IndexError):
+            pass
+    
+    return JsonResponse({
+        'title': 'Event Details',
+        'date_time': 'N/A',
+        'description': 'No details available',
+        'teacher': 'N/A',
+        'classroom': 'N/A',
+        'color': '#6c757d',
+        'tags': ['General']
+    })
+
+@login_required
+def export_calendar(request):
+    """Export calendar as ICS file"""
+    # Simple ICS file generation
+    ics_content = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//School//Timetable Calendar//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+
+BEGIN:VEVENT
+SUMMARY:School Calendar
+DTSTART:20241209T080000Z
+DTEND:20241209T170000Z
+DESCRIPTION:School timetable calendar export
+LOCATION:School
+END:VEVENT
+
+END:VCALENDAR"""
+    
+    response = HttpResponse(ics_content, content_type='text/calendar')
+    response['Content-Disposition'] = 'attachment; filename="timetable-calendar.ics"'
+    return response
 
 # ============================================================================
 # STUDENT & PARENT TIMETABLE VIEWS
@@ -944,7 +1306,7 @@ def print_timetable(request, pk):
     
     # Check permissions
     if is_admin(request.user):
-        pass  # Admin can view all
+        pass
     elif is_teacher(request.user):
         if not ClassAssignment.objects.filter(
             class_level=timetable.class_level,

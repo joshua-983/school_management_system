@@ -1,0 +1,522 @@
+{% load static %}
+
+<div class="card filter-card mb-4">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Options</h6>
+    </div>
+    <div class="card-body">
+        <form method="get" id="timetableFilterForm" class="filter-form">
+            <div class="row g-3">
+                <!-- Class Level Filter -->
+                {% if show_class_filter %}
+                <div class="col-md-{% if show_term_filter %}3{% else %}4{% endif %}">
+                    <label class="form-label">Class Level</label>
+                    <select name="class_level" class="form-select filter-select" id="classLevelFilter">
+                        <option value="">All Classes</option>
+                        {% for code, name in class_levels %}
+                        <option value="{{ code }}" 
+                                {% if request.GET.class_level == code %}selected{% endif %}>
+                            {{ name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <!-- Academic Year Filter -->
+                <div class="col-md-{% if show_term_filter %}3{% else %}4{% endif %}">
+                    <label class="form-label">Academic Year</label>
+                    <select name="academic_year" class="form-select filter-select" id="academicYearFilter">
+                        <option value="">All Years</option>
+                        {% for year in academic_years %}
+                        <option value="{{ year }}" 
+                                {% if request.GET.academic_year == year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Term Filter -->
+                {% if show_term_filter %}
+                <div class="col-md-3">
+                    <label class="form-label">Term</label>
+                    <select name="term" class="form-select filter-select" id="termFilter">
+                        <option value="">All Terms</option>
+                        <option value="1" {% if request.GET.term == "1" %}selected{% endif %}>Term 1</option>
+                        <option value="2" {% if request.GET.term == "2" %}selected{% endif %}>Term 2</option>
+                        <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
+                    </select>
+                </div>
+                {% endif %}
+                
+                <!-- Day of Week Filter -->
+                {% if show_day_filter %}
+                <div class="col-md-3">
+                    <label class="form-label">Day</label>
+                    <select name="day_of_week" class="form-select filter-select" id="dayFilter">
+                        <option value="">All Days</option>
+                        <option value="0" {% if request.GET.day_of_week == "0" %}selected{% endif %}>Monday</option>
+                        <option value="1" {% if request.GET.day_of_week == "1" %}selected{% endif %}>Tuesday</option>
+                        <option value="2" {% if request.GET.day_of_week == "2" %}selected{% endif %}>Wednesday</option>
+                        <option value="3" {% if request.GET.day_of_week == "3" %}selected{% endif %}>Thursday</option>
+                        <option value="4" {% if request.GET.day_of_week == "4" %}selected{% endif %}>Friday</option>
+                        <option value="5" {% if request.GET.day_of_week == "5" %}selected{% endif %}>Saturday</option>
+                    </select>
+                </div>
+                {% endif %}
+                
+                <!-- Status Filter -->
+                {% if show_status_filter %}
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="is_active" class="form-select filter-select" id="statusFilter">
+                        <option value="">All Status</option>
+                        <option value="true" {% if request.GET.is_active == "true" %}selected{% endif %}>Active</option>
+                        <option value="false" {% if request.GET.is_active == "false" %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                {% endif %}
+                
+                <!-- Quick Date Filters -->
+                {% if show_date_filters %}
+                <div class="col-md-4">
+                    <label class="form-label">Quick Filters</label>
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm quick-filter" data-filter="today">
+                            Today
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm quick-filter" data-filter="week">
+                            This Week
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm quick-filter" data-filter="month">
+                            This Month
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Search Filter -->
+                {% if show_search_filter %}
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <div class="input-group">
+                        <input type="text" 
+                               name="search" 
+                               class="form-control filter-search" 
+                               placeholder="Search subjects, teachers..." 
+                               value="{{ request.GET.search|default:'' }}">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Action Buttons -->
+                <div class="col-md-{% if show_search_filter %}4{% else %}12{% endif %} d-flex align-items-end">
+                    <div class="btn-group w-100" role="group">
+                        <button type="submit" class="btn btn-primary filter-submit">
+                            <i class="fas fa-search me-2"></i>Apply Filters
+                        </button>
+                        <a href="{{ reset_url }}" class="btn btn-outline-secondary filter-reset">
+                            <i class="fas fa-redo me-2"></i>Reset
+                        </a>
+                        {% if show_export %}
+                        <button type="button" class="btn btn-outline-success filter-export" id="exportFiltered">
+                            <i class="fas fa-download me-2"></i>Export
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Advanced Filters (Collapsible) -->
+            {% if show_advanced_filters %}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <a class="btn btn-sm btn-link text-decoration-none p-0" 
+                       data-bs-toggle="collapse" 
+                       href="#advancedFilters" 
+                       role="button">
+                        <i class="fas fa-caret-down me-1"></i> Advanced Filters
+                    </a>
+                    
+                    <div class="collapse mt-2" id="advancedFilters">
+                        <div class="row g-3">
+                            <!-- Teacher Filter -->
+                            <div class="col-md-4">
+                                <label class="form-label">Teacher</label>
+                                <select name="teacher" class="form-select filter-select" id="teacherFilter">
+                                    <option value="">All Teachers</option>
+                                    {% for teacher in teachers %}
+                                    <option value="{{ teacher.id }}" 
+                                            {% if request.GET.teacher == teacher.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ teacher.get_full_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Subject Filter -->
+                            <div class="col-md-4">
+                                <label class="form-label">Subject</label>
+                                <select name="subject" class="form-select filter-select" id="subjectFilter">
+                                    <option value="">All Subjects</option>
+                                    {% for subject in subjects %}
+                                    <option value="{{ subject.id }}" 
+                                            {% if request.GET.subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ subject.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Time Range Filter -->
+                            <div class="col-md-4">
+                                <label class="form-label">Time Range</label>
+                                <div class="input-group">
+                                    <input type="time" 
+                                           name="time_start" 
+                                           class="form-control" 
+                                           value="{{ request.GET.time_start|default:'' }}">
+                                    <span class="input-group-text">to</span>
+                                    <input type="time" 
+                                           name="time_end" 
+                                           class="form-control" 
+                                           value="{{ request.GET.time_end|default:'' }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<style>
+.filter-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    background: #f8f9fa;
+}
+
+.filter-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px 20px;
+}
+
+.filter-card .card-body {
+    padding: 20px;
+}
+
+.filter-form .form-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.filter-select {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.filter-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.filter-search {
+    border-radius: 8px 0 0 8px;
+    border: 1px solid #ced4da;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+}
+
+.filter-search:focus {
+    border-color: #0d6efd;
+    box-shadow: none;
+}
+
+#clearSearch {
+    border-radius: 0 8px 8px 0;
+    border: 1px solid #ced4da;
+    border-left: none;
+    padding: 8px 15px;
+    transition: all 0.2s ease;
+}
+
+#clearSearch:hover {
+    background: #f8f9fa;
+    color: #dc3545;
+}
+
+.filter-submit {
+    border-radius: 8px 0 0 8px;
+    padding: 8px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.filter-reset {
+    border-radius: 0;
+    padding: 8px 20px;
+    transition: all 0.2s ease;
+}
+
+.filter-export {
+    border-radius: 0 8px 8px 0;
+    padding: 8px 20px;
+    transition: all 0.2s ease;
+}
+
+.filter-submit:hover,
+.filter-reset:hover,
+.filter-export:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+.quick-filter {
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.quick-filter:hover {
+    background: #0d6efd;
+    color: white;
+}
+
+.quick-filter.active {
+    background: #0d6efd;
+    color: white;
+}
+
+/* Advanced filters */
+#advancedFilters {
+    border-top: 1px solid #e9ecef;
+    padding-top: 15px;
+}
+
+#advancedFilters .form-label {
+    font-size: 0.85rem;
+}
+
+/* Active filter indicators */
+.filter-select:not([value=""]) {
+    border-color: #198754;
+    background-color: rgba(25, 135, 84, 0.05);
+}
+
+.filter-search:not(:placeholder-shown) {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .filter-card .card-body {
+        padding: 15px;
+    }
+    
+    .filter-form .row > div {
+        margin-bottom: 15px;
+    }
+    
+    .filter-submit,
+    .filter-reset,
+    .filter-export {
+        padding: 8px 10px;
+        font-size: 0.85rem;
+    }
+    
+    .btn-group.w-100 {
+        flex-wrap: wrap;
+    }
+    
+    .btn-group.w-100 .btn {
+        flex: 1;
+        min-width: 100px;
+        margin-bottom: 5px;
+    }
+}
+
+@media print {
+    .filter-card {
+        display: none !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize filter functionality
+    const filterForm = document.getElementById('timetableFilterForm');
+    const filterSelects = document.querySelectorAll('.filter-select');
+    const filterSearch = document.querySelector('.filter-search');
+    const clearSearchBtn = document.getElementById('clearSearch');
+    const quickFilterBtns = document.querySelectorAll('.quick-filter');
+    const exportBtn = document.getElementById('exportFiltered');
+    
+    // Auto-submit on select change (optional)
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            if (this.dataset.autoSubmit === 'true') {
+                filterForm.submit();
+            }
+        });
+    });
+    
+    // Clear search button
+    if (clearSearchBtn && filterSearch) {
+        clearSearchBtn.addEventListener('click', function() {
+            filterSearch.value = '';
+            filterForm.submit();
+        });
+    }
+    
+    // Quick filter buttons
+    quickFilterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const filterType = this.dataset.filter;
+            
+            // Remove active class from all quick filters
+            quickFilterBtns.forEach(b => b.classList.remove('active'));
+            
+            // Add active class to clicked button
+            this.classList.add('active');
+            
+            // Calculate date ranges
+            const today = new Date();
+            let startDate, endDate;
+            
+            switch(filterType) {
+                case 'today':
+                    startDate = today.toISOString().split('T')[0];
+                    endDate = startDate;
+                    break;
+                case 'week':
+                    const firstDay = new Date(today.setDate(today.getDate() - today.getDay() + 1));
+                    const lastDay = new Date(today.setDate(today.getDate() - today.getDay() + 7));
+                    startDate = firstDay.toISOString().split('T')[0];
+                    endDate = lastDay.toISOString().split('T')[0];
+                    break;
+                case 'month':
+                    const firstDayMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    const lastDayMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                    startDate = firstDayMonth.toISOString().split('T')[0];
+                    endDate = lastDayMonth.toISOString().split('T')[0];
+                    break;
+            }
+            
+            // Add hidden inputs for date range
+            removeExistingDateInputs();
+            
+            if (startDate && endDate) {
+                const startInput = document.createElement('input');
+                startInput.type = 'hidden';
+                startInput.name = 'start_date';
+                startInput.value = startDate;
+                filterForm.appendChild(startInput);
+                
+                const endInput = document.createElement('input');
+                endInput.type = 'hidden';
+                endInput.name = 'end_date';
+                endInput.value = endDate;
+                filterForm.appendChild(endInput);
+            }
+            
+            // Submit form
+            filterForm.submit();
+        });
+    });
+    
+    function removeExistingDateInputs() {
+        const existingStart = filterForm.querySelector('input[name="start_date"]');
+        const existingEnd = filterForm.querySelector('input[name="end_date"]');
+        
+        if (existingStart) existingStart.remove();
+        if (existingEnd) existingEnd.remove();
+    }
+    
+    // Export filtered data
+    if (exportBtn) {
+        exportBtn.addEventListener('click', function() {
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams();
+            
+            // Convert form data to URL parameters
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    params.append(key, value);
+                }
+            }
+            
+            // Redirect to export endpoint
+            window.location.href = `${window.location.pathname}export/?${params.toString()}`;
+        });
+    }
+    
+    // Highlight active filters
+    function highlightActiveFilters() {
+        filterSelects.forEach(select => {
+            if (select.value) {
+                select.classList.add('active-filter');
+            } else {
+                select.classList.remove('active-filter');
+            }
+        });
+        
+        if (filterSearch && filterSearch.value) {
+            filterSearch.classList.add('active-filter');
+        } else if (filterSearch) {
+            filterSearch.classList.remove('active-filter');
+        }
+    }
+    
+    // Initialize
+    highlightActiveFilters();
+    
+    // Form validation
+    filterForm.addEventListener('submit', function(e) {
+        const timeStart = document.querySelector('input[name="time_start"]');
+        const timeEnd = document.querySelector('input[name="time_end"]');
+        
+        if (timeStart && timeEnd && timeStart.value && timeEnd.value) {
+            if (timeStart.value >= timeEnd.value) {
+                e.preventDefault();
+                alert('Start time must be before end time');
+                timeStart.focus();
+                return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    // Preserve scroll position on form submit
+    let scrollPosition = 0;
+    
+    filterForm.addEventListener('submit', function() {
+        scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+        sessionStorage.setItem('scrollPosition', scrollPosition);
+    });
+    
+    // Restore scroll position on page load
+    const savedPosition = sessionStorage.getItem('scrollPosition');
+    if (savedPosition) {
+        window.scrollTo(0, parseInt(savedPosition));
+        sessionStorage.removeItem('scrollPosition');
+    }
+});
+</script>
