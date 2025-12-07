@@ -1,0 +1,126 @@
+<!-- core/templates/core/timetable/teacher_timetable_detail.html -->
+{% extends 'base.html' %}
+
+{% block title %}Timetable - {{ timetable.get_class_level_display }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>
+                    <i class="bi bi-calendar-week me-2"></i>
+                    {{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }}
+                </h2>
+                <div class="btn-group">
+                    <button onclick="window.print()" class="btn btn-outline-primary">
+                        <i class="bi bi-printer me-1"></i> Print
+                    </button>
+                    {% if is_admin %}
+                    <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-primary">
+                        <i class="bi bi-pencil me-1"></i> Edit
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timetable Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Class Level:</strong>
+                            <span class="badge bg-primary">{{ timetable.get_class_level_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Day:</strong>
+                            <span class="badge bg-secondary">{{ timetable.get_day_of_week_display }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Academic Year:</strong>
+                            {{ timetable.academic_year }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Term:</strong>
+                            Term {{ timetable.term }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Daily Schedule</h5>
+                </div>
+                <div class="card-body">
+                    {% if entries %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Period</th>
+                                    <th>Subject</th>
+                                    <th>Teacher</th>
+                                    <th>Classroom</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in entries %}
+                                <tr class="{% if entry.is_break %}table-warning{% endif %}">
+                                    <td>
+                                        {{ entry.time_slot.start_time|time:"H:i" }} - {{ entry.time_slot.end_time|time:"H:i" }}
+                                    </td>
+                                    <td>
+                                        {% if entry.is_break %}
+                                        <span class="badge bg-warning">Break</span>
+                                        {% else %}
+                                        {{ entry.time_slot.get_period_number_display }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if entry.is_break %}
+                                        {{ entry.break_name|default:entry.time_slot.break_name }}
+                                        {% else %}
+                                        {{ entry.subject.name }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if not entry.is_break %}
+                                        {{ entry.teacher.get_full_name }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if not entry.is_break %}
+                                        {{ entry.classroom|default:"-" }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-calendar-x display-1 text-muted"></i>
+                        <p class="text-muted mt-3">No periods scheduled for this day</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

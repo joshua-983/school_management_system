@@ -1,3 +1,4 @@
+# core/signals.py
 from django.db.models.signals import post_save, post_delete, pre_save, m2m_changed
 from django.dispatch import receiver
 from django.db.models import Sum
@@ -8,6 +9,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,153 @@ def send_websocket_notification(recipient_id, notification_type, title, message,
         logger.debug(f"WebSocket notification sent to user {recipient_id}")
     except Exception as e:
         logger.error(f"WebSocket notification failed: {str(e)}")
+
+# ===== TIMETABLE GROUP ASSIGNMENT SIGNALS =====
+
+@receiver(post_save, sender='core.Teacher')
+def assign_teacher_to_timetable_group(sender, instance, created, **kwargs):
+    """Automatically assign teacher users to Timetable Teacher group"""
+    try:
+        if created and instance.user:
+            from django.contrib.auth.models import Group
+            teacher_group = Group.objects.filter(name='Timetable Teacher').first()
+            if teacher_group:
+                teacher_group.user_set.add(instance.user)
+                logger.info(f"Teacher {instance.user.get_full_name()} added to Timetable Teacher group")
+                
+                # Log audit for group assignment
+                request = getattr(instance, '_request', None)
+                user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+                if user and user.is_authenticated:
+                    log_audit('GROUP_ASSIGN', instance, user, request)
+                    
+    except Exception as e:
+        logger.error(f"Error assigning teacher to timetable group: {str(e)}")
+
+@receiver(post_save, sender='core.Student')
+def assign_student_to_timetable_group(sender, instance, created, **kwargs):
+    """Automatically assign student users to Timetable Student group"""
+    try:
+        if created and instance.user:
+            from django.contrib.auth.models import Group
+            student_group = Group.objects.filter(name='Timetable Student').first()
+            if student_group:
+                student_group.user_set.add(instance.user)
+                logger.info(f"Student {instance.get_full_name()} added to Timetable Student group")
+                
+                # Log audit for group assignment
+                request = getattr(instance, '_request', None)
+                user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+                if user and user.is_authenticated:
+                    log_audit('GROUP_ASSIGN', instance, user, request)
+                    
+    except Exception as e:
+        logger.error(f"Error assigning student to timetable group: {str(e)}")
+
+@receiver(post_save, sender='core.ParentGuardian')
+def assign_parent_to_timetable_group(sender, instance, created, **kwargs):
+    """Automatically assign parent users to Timetable Parent group"""
+    try:
+        if created and instance.user:
+            from django.contrib.auth.models import Group
+            parent_group = Group.objects.filter(name='Timetable Parent').first()
+            if parent_group:
+                parent_group.user_set.add(instance.user)
+                logger.info(f"Parent {instance.get_user_full_name()} added to Timetable Parent group")
+                
+                # Log audit for group assignment
+                request = getattr(instance, '_request', None)
+                user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+                if user and user.is_authenticated:
+                    log_audit('GROUP_ASSIGN', instance, user, request)
+                    
+    except Exception as e:
+        logger.error(f"Error assigning parent to timetable group: {str(e)}")
+
+@receiver(post_save, sender='auth.User')
+def handle_user_is_staff_change(sender, instance, **kwargs):
+    """Automatically add staff users to Timetable Admin group if they're not already in a timetable group"""
+    try:
+        from django.contrib.auth.models import Group
+        
+        # Check if user is staff and not already in any timetable group
+        if instance.is_staff:
+            timetable_groups = Group.objects.filter(name__startswith='Timetable')
+            user_timetable_groups = instance.groups.filter(id__in=timetable_groups)
+            
+            if not user_timetable_groups.exists():
+                admin_group = Group.objects.filter(name='Timetable Admin').first()
+                if admin_group:
+                    admin_group.user_set.add(instance)
+                    logger.info(f"Staff user {instance.get_full_name()} automatically added to Timetable Admin group")
+                    
+    except Exception as e:
+        logger.error(f"Error handling user staff status change: {str(e)}")
+
+@receiver(m2m_changed, sender='auth.Group')
+def handle_user_group_change(sender, instance, action, pk_set, **kwargs):
+    """Handle when user groups are changed - manage staff status and audit logging"""
+    try:
+        if action in ['post_add', 'post_remove', 'post_clear']:
+            from django.contrib.auth.models import Group
+            
+            # Check if user was added to Timetable Admin group
+            if action == 'post_add' and pk_set:
+                admin_group = Group.objects.filter(name='Timetable Admin', id__in=pk_set).first()
+                if admin_group:
+                    # Ensure user has staff status
+                    if not instance.is_staff:
+                        instance.is_staff = True
+                        instance.save()
+                        logger.info(f"User {instance.get_full_name()} granted staff status after being added to Timetable Admin group")
+                    
+                    # Log audit for group assignment
+                    from core.models import AuditLog
+                    AuditLog.objects.create(
+                        user=instance,
+                        action='GROUP_ASSIGN',
+                        model_name='auth.User',
+                        object_id=str(instance.pk),
+                        details={
+                            'group': 'Timetable Admin',
+                            'action': 'added',
+                            'staff_status_granted': True
+                        }
+                    )
+            
+            # Check if user was removed from Timetable Admin group
+            elif action == 'post_remove' and pk_set:
+                admin_group = Group.objects.filter(name='Timetable Admin', id__in=pk_set).first()
+                if admin_group:
+                    # Check if user is in any other admin groups
+                    other_admin_groups = instance.groups.filter(
+                        name__in=['Timetable Admin', 'Administrators']
+                    )
+                    
+                    # If not in any admin groups, remove staff status
+                    if not other_admin_groups.exists():
+                        instance.is_staff = False
+                        instance.save()
+                        logger.info(f"User {instance.get_full_name()} staff status removed after being removed from Timetable Admin group")
+                    
+                    # Log audit for group removal
+                    from core.models import AuditLog
+                    AuditLog.objects.create(
+                        user=instance,
+                        action='GROUP_REMOVE',
+                        model_name='auth.User',
+                        object_id=str(instance.pk),
+                        details={
+                            'group': 'Timetable Admin',
+                            'action': 'removed',
+                            'staff_status_removed': not other_admin_groups.exists()
+                        }
+                    )
+                    
+    except Exception as e:
+        logger.error(f"Error handling user group change: {str(e)}")
+
+# ===== EXISTING SIGNALS (PRESERVED) =====
 
 @receiver(post_save, sender='core.Student')
 def handle_student_save(sender, instance, created, **kwargs):
@@ -367,14 +516,20 @@ def handle_teacher_save(sender, instance, created, **kwargs):
     except Exception as e:
         logger.error(f"Error in teacher save signal: {str(e)}")
 
-# REMOVED PROBLEMATIC M2M SIGNALS - THEY'RE CAUSING THE ERROR
-# @receiver(m2m_changed, sender='core.Teacher.subjects.through')
-# def teacher_subjects_changed(sender, instance, action, **kwargs):
-#     pass
-
-# @receiver(m2m_changed, sender='core.ParentGuardian.students.through')
-# def parent_students_changed(sender, instance, action, **kwargs):
-#     pass
+@receiver(post_save, sender='core.ParentGuardian')
+def handle_parent_guardian_save(sender, instance, created, **kwargs):
+    try:
+        from core.models import AuditLog
+        
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+            
+    except Exception as e:
+        logger.error(f"Error in parent guardian save signal: {str(e)}")
 
 @receiver(post_save)
 def general_post_save_audit(sender, instance, created, **kwargs):
@@ -408,9 +563,107 @@ def general_post_delete_audit(sender, instance, **kwargs):
     except Exception as e:
         logger.debug(f"Delete audit logging skipped for {sender._meta.model_name}: {str(e)}")
 
+# ===== TIMETABLE SPECIFIC SIGNALS =====
+
+@receiver(post_save, sender='core.Timetable')
+def handle_timetable_save(sender, instance, created, **kwargs):
+    """Handle timetable creation/updates with notifications"""
+    try:
+        from core.models import AuditLog, Notification
+        
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+        
+        # Notify teachers of timetable changes
+        if instance.is_active:
+            from django.contrib.auth.models import Group
+            from core.models import ClassAssignment
+            
+            # Get teachers assigned to this class
+            assigned_teachers = ClassAssignment.objects.filter(
+                class_level=instance.class_level
+            ).select_related('teacher__user')
+            
+            for class_assignment in assigned_teachers:
+                if class_assignment.teacher.user:
+                    Notification.objects.create(
+                        recipient=class_assignment.teacher.user,
+                        notification_type='TIMETABLE',
+                        title='Timetable Updated',
+                        message=f'Timetable for {instance.get_class_level_display()} - {instance.get_day_of_week_display()} has been updated',
+                        related_object_id=instance.id,
+                        related_content_type='timetable'
+                    )
+                    
+                    send_websocket_notification(
+                        class_assignment.teacher.user.id,
+                        'TIMETABLE',
+                        'Timetable Updated',
+                        f'Timetable for {instance.get_class_level_display()} has been updated',
+                        instance.id
+                    )
+                    
+    except Exception as e:
+        logger.error(f"Error in timetable save signal: {str(e)}")
+
+@receiver(post_save, sender='core.TimetableEntry')
+def handle_timetable_entry_save(sender, instance, created, **kwargs):
+    """Handle timetable entry changes"""
+    try:
+        from core.models import AuditLog
+        
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+            
+    except Exception as e:
+        logger.error(f"Error in timetable entry save signal: {str(e)}")
+
+@receiver(post_save, sender='core.TimeSlot')
+def handle_timeslot_save(sender, instance, created, **kwargs):
+    """Handle timeslot changes"""
+    try:
+        from core.models import AuditLog
+        
+        request = getattr(instance, '_request', None)
+        user = getattr(instance, '_request_user', None) or (request.user if request and hasattr(request, 'user') else None)
+        
+        if user and user.is_authenticated:
+            action = 'CREATE' if created else 'UPDATE'
+            log_audit(action, instance, user, request)
+            
+    except Exception as e:
+        logger.error(f"Error in timeslot save signal: {str(e)}")
 
 def initialize_signals():
     try:
+        # Import models to ensure signals are registered
+        from django.apps import apps
+        
+        # Check if timetable groups exist, create them if not
+        try:
+            from django.contrib.auth.models import Group, Permission
+            from django.contrib.contenttypes.models import ContentType
+            from core.models import Timetable, TimetableEntry, TimeSlot
+            
+            timetable_groups = ['Timetable Admin', 'Timetable Teacher', 'Timetable Student', 'Timetable Parent']
+            
+            for group_name in timetable_groups:
+                Group.objects.get_or_create(name=group_name)
+                
+            logger.info("✅ Timetable groups verified/created")
+            
+        except Exception as e:
+            logger.warning(f"Could not verify/create timetable groups: {str(e)}")
+        
         logger.info("✅ School Management System signals initialized successfully")
+        
     except Exception as e:
         logger.error(f"❌ Error initializing signals: {str(e)}")

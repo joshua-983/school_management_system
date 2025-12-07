@@ -3,234 +3,351 @@
 {% load static %}
 {% load humanize %}
 
-{% block title %}{{ announcement.title }} - Announcement Details{% endblock %}
+{% block title %}{{ announcement.title }} | Announcement Details{% endblock %}
 
 {% block extra_css %}
 <style>
-.announcement-detail-card {
-    border: none;
-    border-radius: 15px;
-    box-shadow: 0 5px 25px rgba(0,0,0,0.1);
-    overflow: hidden;
-}
-
-.announcement-header {
-    background: linear-gradient(135deg, #3a7bd5, #00d2ff);
-    color: white;
-    padding: 2rem;
-}
-
-.priority-badge {
-    font-size: 0.8rem;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-}
-
-.status-badge {
-    font-size: 0.8rem;
-    padding: 6px 12px;
-    border-radius: 20px;
-}
-
-.announcement-content {
-    line-height: 1.8;
-    font-size: 1.1rem;
-    white-space: pre-line;
-}
-
-.meta-info {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 1.5rem;
-}
-
-.meta-item {
-    display: flex;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.meta-item:last-child {
-    border-bottom: none;
-}
-
-.meta-icon {
-    width: 40px;
-    height: 40px;
-    background: #e9ecef;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 1rem;
-    flex-shrink: 0;
-}
-
-.meta-content {
-    flex-grow: 1;
-}
-
-.class-tag {
-    background: #e3f2fd;
-    color: #1976d2;
-    padding: 4px 12px;
-    border-radius: 15px;
-    font-size: 0.875rem;
-    margin: 2px;
-    display: inline-block;
-}
-
-.action-buttons .btn {
-    border-radius: 25px;
-    padding: 8px 20px;
-    font-weight: 500;
-}
-
-.views-count {
-    font-size: 0.9rem;
-    color: #6c757d;
-}
-
-.attachment-card {
-    border: 2px dashed #dee2e6;
-    border-radius: 10px;
-    transition: all 0.3s ease;
-    padding: 1rem;
-}
-
-.attachment-card:hover {
-    border-color: #3a7bd5;
-    background: #f8f9ff;
-}
-
-.expiry-warning {
-    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    color: white;
-    border-radius: 10px;
-    padding: 1rem;
-}
-
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
-}
-
-.stat-card {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 10px;
-    text-align: center;
-    border-left: 4px solid #3a7bd5;
-}
-
-.stat-number {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #3a7bd5;
-    display: block;
-}
-
-.stat-label {
-    font-size: 0.875rem;
-    color: #6c757d;
-}
-
-.view-timeline {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.timeline-item {
-    padding: 0.75rem;
-    border-bottom: 1px solid #e9ecef;
-    border-left: 3px solid #007bff;
-    background: #f8f9fa;
-    margin-bottom: 0.5rem;
-    border-radius: 0 8px 8px 0;
-}
-
-.timeline-item:last-child {
-    border-bottom: none;
-}
-
-/* Alert container */
-.alert-container {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    z-index: 1050;
-    min-width: 300px;
-}
-
-/* Loading states */
-.loading {
-    opacity: 0.6;
-    pointer-events: none;
-    position: relative;
-}
-
-.loading::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 0.375rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Print styles */
-@media print {
-    .action-buttons,
-    .announcement-actions {
-        display: none !important;
+    /* ===== CSS Variables ===== */
+    :root {
+        --gradient-primary: linear-gradient(135deg, #3a7bd5, #00d2ff);
+        --gradient-danger: linear-gradient(135deg, #ff6b6b, #ee5a24);
+        --border-radius-card: 15px;
+        --border-radius-badge: 20px;
+        --border-radius-element: 10px;
+        --shadow-card: 0 5px 25px rgba(0,0,0,0.1);
+        --transition-default: all 0.3s ease;
     }
-    
+
+    /* ===== Main Layout ===== */
+    .announcement-detail-card {
+        border: none;
+        border-radius: var(--border-radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        transition: var(--transition-default);
+    }
+
     .announcement-header {
-        background: #f8f9fa !important;
-        color: #000 !important;
+        background: var(--gradient-primary);
+        color: white;
+        padding: 2rem;
     }
-    
-    .alert-container {
-        display: none !important;
-    }
-}
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .announcement-header {
-        padding: 1.5rem 1rem;
+    /* ===== Badge Styles ===== */
+    .badge-custom {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+        border-radius: var(--border-radius-badge);
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
     }
-    
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+
+    .badge-priority {
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
     }
-    
+
+    /* ===== Typography ===== */
+    .announcement-content {
+        line-height: 1.8;
+        font-size: 1.1rem;
+        white-space: pre-line;
+    }
+
+    .announcement-meta {
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* ===== Meta Information Panel ===== */
+    .meta-panel {
+        background: #f8f9fa;
+        border-radius: var(--border-radius-element);
+        padding: 1.5rem;
+    }
+
     .meta-item {
-        flex-direction: column;
-        align-items: start;
-        text-align: left;
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e9ecef;
+        transition: var(--transition-default);
     }
-    
+
+    .meta-item:hover {
+        background: rgba(0, 0, 0, 0.02);
+    }
+
+    .meta-item:last-child {
+        border-bottom: none;
+    }
+
     .meta-icon {
+        width: 40px;
+        height: 40px;
+        background: #e9ecef;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        flex-shrink: 0;
+        transition: var(--transition-default);
+    }
+
+    .meta-item:hover .meta-icon {
+        background: #dee2e6;
+        transform: scale(1.05);
+    }
+
+    /* ===== Tags & Labels ===== */
+    .class-tag {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.875rem;
+        margin: 2px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        transition: var(--transition-default);
+    }
+
+    .class-tag:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== Action Buttons ===== */
+    .btn-action {
+        border-radius: 25px;
+        padding: 8px 20px;
+        font-weight: 500;
+        transition: var(--transition-default);
+    }
+
+    .btn-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== Statistics Grid ===== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: var(--border-radius-element);
+        text-align: center;
+        border-left: 4px solid #3a7bd5;
+        transition: var(--transition-default);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #3a7bd5;
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== Timeline Styles ===== */
+    .view-timeline {
+        max-height: 300px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #dee2e6 #f8f9fa;
+    }
+
+    .view-timeline::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .view-timeline::-webkit-scrollbar-track {
+        background: #f8f9fa;
+        border-radius: 3px;
+    }
+
+    .view-timeline::-webkit-scrollbar-thumb {
+        background: #dee2e6;
+        border-radius: 3px;
+    }
+
+    .timeline-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #e9ecef;
+        border-left: 3px solid #007bff;
+        background: #f8f9fa;
         margin-bottom: 0.5rem;
-        margin-right: 0;
+        border-radius: 0 var(--border-radius-element) var(--border-radius-element) 0;
+        transition: var(--transition-default);
     }
-    
+
+    .timeline-item:hover {
+        border-left-width: 6px;
+        background: #fff;
+    }
+
+    .timeline-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    /* ===== Alert Container ===== */
     .alert-container {
-        left: 10px;
-        right: 10px;
-        top: 70px;
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 1050;
+        min-width: 300px;
+        animation: slideInRight 0.3s ease;
     }
-}
+
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    /* ===== Expiry Warning ===== */
+    .expiry-alert {
+        background: var(--gradient-danger);
+        color: white;
+        border-radius: var(--border-radius-element);
+        padding: 1rem;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
+        }
+    }
+
+    /* ===== Loading State ===== */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: var(--border-radius-card);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        opacity: 0;
+        visibility: hidden;
+        transition: var(--transition-default);
+    }
+
+    .loading-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .spinner-custom {
+        width: 3rem;
+        height: 3rem;
+    }
+
+    /* ===== Print Styles ===== */
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .announcement-header {
+            background: #f8f9fa !important;
+            color: #000 !important;
+            border: 1px solid #dee2e6;
+        }
+        
+        .announcement-content {
+            font-size: 14pt;
+            line-height: 1.6;
+        }
+    }
+
+    /* ===== Responsive Design ===== */
+    @media (max-width: 768px) {
+        .announcement-header {
+            padding: 1.5rem 1rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+        
+        .meta-item {
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+            padding: 1rem;
+        }
+        
+        .meta-icon {
+            margin-bottom: 0.5rem;
+            margin-right: 0;
+        }
+        
+        .alert-container {
+            left: 10px;
+            right: 10px;
+            top: 70px;
+            min-width: auto;
+        }
+        
+        .btn-action {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .announcement-header h1 {
+            font-size: 1.5rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -239,98 +356,135 @@
     <!-- Messages Display -->
     <div class="alert-container">
         {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
             <i class="bi 
-                {% if message.tags == 'success' %}bi-check-circle 
-                {% elif message.tags == 'error' %}bi-exclamation-circle 
-                {% else %}bi-info-circle{% endif %} me-2"></i>
+                {% if message.tags == 'success' %}bi-check-circle-fill
+                {% elif message.tags == 'error' or message.tags == 'danger' %}bi-exclamation-circle-fill
+                {% else %}bi-info-circle-fill{% endif %} me-2"></i>
             {{ message }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endfor %}
     </div>
 
+    <!-- Back Navigation -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'announcement_list' %}" class="text-decoration-none">
+                            <i class="bi bi-arrow-left me-1"></i>All Announcements
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Details</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
     <div class="row justify-content-center">
         <div class="col-lg-10 col-xl-8">
-            <!-- Back Button -->
-            <div class="mb-4">
-                <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-2"></i>Back to Announcements
-                </a>
-            </div>
-
-            <!-- Main Announcement Card -->
+            <!-- Announcement Card -->
             <div class="card announcement-detail-card">
-                <!-- Header -->
+                <!-- Loading Overlay -->
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="spinner-border text-primary spinner-custom" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Header Section -->
                 <div class="announcement-header">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <h1 class="h3 mb-3" id="announcementTitle">{{ announcement.title }}</h1>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="flex-grow-1 me-3">
+                            <!-- Title -->
+                            <h1 class="h3 mb-3 fw-semibold" id="announcementTitle">
+                                {{ announcement.title }}
+                            </h1>
                             
-                            <!-- Priority and Status Badges -->
+                            <!-- Badges -->
                             <div class="d-flex flex-wrap gap-2 mb-3">
-                                <span class="priority-badge bg-{{ announcement.priority|lower }}">
-                                    <i class="bi bi-flag me-1"></i>{{ announcement.priority }} Priority
+                                <!-- Priority Badge -->
+                                <span class="badge-custom badge-priority">
+                                    <i class="bi bi-flag-fill"></i>
+                                    {{ announcement.priority }} Priority
                                 </span>
                                 
-                                <span class="status-badge bg-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
-                                    <i class="bi bi-{% if announcement.is_active %}check-circle{% else %}pause-circle{% endif %} me-1"></i>
+                                <!-- Status Badge -->
+                                <span class="badge-custom bg-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
+                                    <i class="bi bi-{% if announcement.is_active %}check-circle-fill{% else %}pause-circle-fill{% endif %}"></i>
                                     {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
                                 </span>
                                 
+                                <!-- Expiry Badge -->
                                 {% if announcement.is_expired %}
-                                <span class="status-badge bg-warning">
-                                    <i class="bi bi-clock me-1"></i>Expired
+                                <span class="badge-custom bg-warning">
+                                    <i class="bi bi-clock-fill"></i>
+                                    Expired
                                 </span>
                                 {% endif %}
                             </div>
                             
-                            <!-- Author and Date -->
-                            <div class="d-flex align-items-center text-white-50 flex-wrap gap-3">
-                                <span class="d-flex align-items-center">
-                                    <i class="bi bi-person me-2"></i>
-                                    By {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
-                                </span>
-                                
-                                <span class="d-flex align-items-center">
-                                    <i class="bi bi-calendar me-2"></i>
-                                    {{ announcement.created_at|date:"F j, Y" }}
-                                </span>
+                            <!-- Author & Date -->
+                            <div class="announcement-meta">
+                                <div class="d-flex flex-wrap gap-3">
+                                    <span class="d-flex align-items-center">
+                                        <i class="bi bi-person-circle me-2"></i>
+                                        {{ announcement.created_by.get_full_name|default:announcement.created_by.username }}
+                                    </span>
+                                    <span class="d-flex align-items-center">
+                                        <i class="bi bi-calendar-event me-2"></i>
+                                        {{ announcement.created_at|date:"F j, Y" }}
+                                    </span>
+                                    <span class="d-flex align-items-center">
+                                        <i class="bi bi-clock-history me-2"></i>
+                                        {{ announcement.created_at|date:"g:i A" }}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         
-                        <!-- Action Buttons -->
+                        <!-- Action Dropdown -->
                         {% if user.is_staff or user.teacher or user == announcement.created_by %}
-                        <div class="dropdown announcement-actions">
-                            <button class="btn btn-light dropdown-toggle" type="button" 
-                                    data-bs-toggle="dropdown" aria-expanded="false"
-                                    aria-label="Announcement actions">
+                        <div class="dropdown no-print">
+                            <button class="btn btn-light btn-sm rounded-circle" 
+                                    type="button" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false"
+                                    aria-label="Announcement actions"
+                                    data-bs-boundary="viewport">
                                 <i class="bi bi-three-dots-vertical"></i>
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                                 <li>
                                     <a class="dropdown-item" href="{% url 'update_announcement' announcement.pk %}">
-                                        <i class="bi bi-pencil me-2"></i>Edit Announcement
+                                        <i class="bi bi-pencil-square me-2"></i>
+                                        Edit Announcement
                                     </a>
                                 </li>
                                 <li>
                                     {% if announcement.is_active %}
-                                    <button class="dropdown-item text-warning toggle-status" 
-                                            onclick="announcementDetail.toggleStatus({{ announcement.pk }}, false)">
-                                        <i class="bi bi-pause-circle me-2"></i>Deactivate
+                                    <button class="dropdown-item text-warning" 
+                                            onclick="announcementManager.toggleStatus({{ announcement.pk }}, false)">
+                                        <i class="bi bi-pause-circle me-2"></i>
+                                        Deactivate
                                     </button>
                                     {% else %}
-                                    <button class="dropdown-item text-success toggle-status" 
-                                            onclick="announcementDetail.toggleStatus({{ announcement.pk }}, true)">
-                                        <i class="bi bi-play-circle me-2"></i>Activate
+                                    <button class="dropdown-item text-success" 
+                                            onclick="announcementManager.toggleStatus({{ announcement.pk }}, true)">
+                                        <i class="bi bi-play-circle me-2"></i>
+                                        Activate
                                     </button>
                                     {% endif %}
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <button class="dropdown-item text-danger" 
-                                           onclick="announcementDetail.confirmDelete({{ announcement.pk }})">
-                                        <i class="bi bi-trash me-2"></i>Delete
+                                            onclick="announcementManager.confirmDelete({{ announcement.pk }})">
+                                        <i class="bi bi-trash me-2"></i>
+                                        Delete Announcement
                                     </button>
                                 </li>
                             </ul>
@@ -339,153 +493,163 @@
                     </div>
                 </div>
 
-                <!-- Stats Grid -->
-                <div class="px-4 pt-3">
+                <!-- Statistics Overview -->
+                <div class="px-4 pt-3 bg-white">
                     <div class="stats-grid">
                         <div class="stat-card">
                             <span class="stat-number">{{ views_count|default:0 }}</span>
                             <span class="stat-label">Total Views</span>
                         </div>
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.created_at|date:"M d, Y" }}</span>
-                            <span class="stat-label">Created Date</span>
+                            <span class="stat-number">{{ announcement.created_at|date:"M d" }}</span>
+                            <span class="stat-label">Created</span>
                         </div>
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.created_by.get_full_name }}</span>
-                            <span class="stat-label">Created By</span>
+                            <span class="stat-number">
+                                {{ announcement.created_by.get_full_name|truncatechars:12 }}
+                            </span>
+                            <span class="stat-label">Author</span>
                         </div>
                         {% if announcement.end_date %}
                         <div class="stat-card">
-                            <span class="stat-number">{{ announcement.end_date|date:"M d, Y" }}</span>
-                            <span class="stat-label">Expiry Date</span>
+                            <span class="stat-number">{{ announcement.end_date|date:"M d" }}</span>
+                            <span class="stat-label">Expires</span>
                         </div>
                         {% endif %}
                     </div>
                 </div>
 
-                <!-- Content -->
+                <!-- Content Body -->
                 <div class="card-body p-4">
                     <div class="row">
-                        <!-- Main Content -->
+                        <!-- Main Content Column -->
                         <div class="col-lg-8">
                             <!-- Announcement Message -->
                             <div class="announcement-content mb-4" id="announcementMessage">
-                                {{ announcement.message }}
+                                {{ announcement.message|linebreaksbr }}
                             </div>
 
-                            <!-- Expiry Warning -->
-                            {% if announcement.end_date and announcement.is_expired %}
-                            <div class="expiry-warning mb-4">
+                            <!-- Expiry Notice -->
+                            {% if announcement.end_date %}
+                            <div class="{% if announcement.is_expired %}expiry-alert{% else %}alert alert-info{% endif %} mb-4">
                                 <div class="d-flex align-items-center">
-                                    <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
+                                    <i class="bi {% if announcement.is_expired %}bi-exclamation-triangle-fill{% else %}bi-clock{% endif %} me-3 fs-4"></i>
                                     <div>
-                                        <h6 class="mb-1">This announcement has expired</h6>
-                                        <p class="mb-0">Expired on {{ announcement.end_date|date:"F j, Y" }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {% elif announcement.end_date %}
-                            <div class="alert alert-info mb-4">
-                                <div class="d-flex align-items-center">
-                                    <i class="bi bi-clock me-3"></i>
-                                    <div>
-                                        <h6 class="mb-1">Expires on {{ announcement.end_date|date:"F j, Y" }}</h6>
-                                        <p class="mb-0">This announcement will automatically expire in {{ announcement.end_date|timeuntil }}</p>
+                                        <h6 class="mb-1">
+                                            {% if announcement.is_expired %}
+                                            This announcement has expired
+                                            {% else %}
+                                            Expires on {{ announcement.end_date|date:"F j, Y" }}
+                                            {% endif %}
+                                        </h6>
+                                        <p class="mb-0">
+                                            {% if announcement.is_expired %}
+                                            Expired on {{ announcement.end_date|date:"F j, Y" }}
+                                            {% else %}
+                                            Will expire in {{ announcement.end_date|timeuntil }}
+                                            {% endif %}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
                             {% endif %}
 
-                            <!-- Target Classes -->
-                            {% with target_classes=announcement.get_target_class_levels %}
-                            {% if target_classes %}
+                            <!-- Target Audience -->
                             <div class="mb-4">
-                                <h6 class="text-muted mb-2">
-                                    <i class="bi bi-people me-2"></i>Targeted Classes
+                                <h6 class="text-muted mb-2 d-flex align-items-center">
+                                    <i class="bi bi-people-fill me-2"></i>
+                                    Target Audience
                                 </h6>
+                                {% with target_classes=announcement.get_target_class_levels %}
+                                {% if target_classes %}
                                 <div class="d-flex flex-wrap gap-2">
                                     {% for class_level in target_classes %}
                                     <span class="class-tag">
-                                        <i class="bi bi-person-badge me-1"></i>{{ class_level }}
+                                        <i class="bi bi-person-badge"></i>
+                                        {{ class_level }}
                                     </span>
                                     {% endfor %}
                                 </div>
-                            </div>
-                            {% else %}
-                            <div class="mb-4">
-                                <h6 class="text-muted mb-2">
-                                    <i class="bi bi-globe me-2"></i>Audience
-                                </h6>
+                                {% else %}
                                 <span class="class-tag bg-success">
-                                    <i class="bi bi-globe me-1"></i>All Users (School-wide)
+                                    <i class="bi bi-globe-americas"></i>
+                                    All Users (School-wide)
                                 </span>
+                                {% endif %}
+                                {% endwith %}
                             </div>
-                            {% endif %}
-                            {% endwith %}
 
-                            <!-- Action Buttons -->
-                            <div class="d-flex flex-wrap gap-2 action-buttons mt-4">
+                            <!-- User Actions -->
+                            <div class="d-flex flex-wrap gap-2 action-buttons mt-4 no-print">
                                 {% if user != announcement.created_by and announcement.is_active %}
-                                <button class="btn btn-outline-warning" onclick="announcementDetail.dismiss({{ announcement.pk }})">
-                                    <i class="bi bi-eye-slash me-2"></i>Dismiss
+                                <button class="btn btn-outline-warning btn-action" 
+                                        onclick="announcementManager.dismiss({{ announcement.pk }})">
+                                    <i class="bi bi-eye-slash me-2"></i>
+                                    Dismiss
                                 </button>
                                 {% endif %}
                                 
-                                <button class="btn btn-outline-primary" onclick="announcementDetail.copyLink()">
-                                    <i class="bi bi-link-45deg me-2"></i>Copy Link
+                                <button class="btn btn-outline-primary btn-action" 
+                                        onclick="announcementManager.copyLink()">
+                                    <i class="bi bi-link-45deg me-2"></i>
+                                    Copy Link
                                 </button>
                                 
-                                <button class="btn btn-outline-secondary" onclick="window.print()">
-                                    <i class="bi bi-printer me-2"></i>Print
+                                <button class="btn btn-outline-secondary btn-action" 
+                                        onclick="window.print()">
+                                    <i class="bi bi-printer me-2"></i>
+                                    Print
                                 </button>
                                 
                                 {% if user.is_staff or user.teacher %}
-                                <a href="{% url 'create_announcement' %}" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-2"></i>Create New
+                                <a href="{% url 'create_announcement' %}" class="btn btn-primary btn-action">
+                                    <i class="bi bi-plus-circle me-2"></i>
+                                    Create New
                                 </a>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <!-- Sidebar - Meta Information -->
-                        <div class="col-lg-4">
-                            <div class="meta-info">
-                                <h6 class="text-muted mb-3">Announcement Details</h6>
+                        <!-- Sidebar Column -->
+                        <div class="col-lg-4 mt-4 mt-lg-0">
+                            <!-- Meta Information Panel -->
+                            <div class="meta-panel mb-4">
+                                <h6 class="text-muted mb-3 d-flex align-items-center">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Details
+                                </h6>
                                 
-                                <!-- Created Date -->
+                                <!-- Meta Items -->
                                 <div class="meta-item">
                                     <div class="meta-icon">
                                         <i class="bi bi-calendar-plus text-primary"></i>
                                     </div>
                                     <div class="meta-content">
                                         <strong>Created</strong>
-                                        <div class="text-muted">{{ announcement.created_at|date:"M j, Y g:i A" }}</div>
+                                        <div class="text-muted small">{{ announcement.created_at|date:"M j, Y g:i A" }}</div>
                                     </div>
                                 </div>
                                 
-                                <!-- Last Updated -->
                                 <div class="meta-item">
                                     <div class="meta-icon">
                                         <i class="bi bi-arrow-clockwise text-info"></i>
                                     </div>
                                     <div class="meta-content">
                                         <strong>Last Updated</strong>
-                                        <div class="text-muted">{{ announcement.updated_at|date:"M j, Y g:i A" }}</div>
+                                        <div class="text-muted small">{{ announcement.updated_at|date:"M j, Y g:i A" }}</div>
                                     </div>
                                 </div>
                                 
-                                <!-- Start Date -->
                                 <div class="meta-item">
                                     <div class="meta-icon">
                                         <i class="bi bi-play-circle text-success"></i>
                                     </div>
                                     <div class="meta-content">
                                         <strong>Start Date</strong>
-                                        <div class="text-muted">{{ announcement.start_date|date:"M j, Y g:i A" }}</div>
+                                        <div class="text-muted small">{{ announcement.start_date|date:"M j, Y g:i A" }}</div>
                                     </div>
                                 </div>
                                 
-                                <!-- End Date -->
                                 {% if announcement.end_date %}
                                 <div class="meta-item">
                                     <div class="meta-icon">
@@ -493,77 +657,81 @@
                                     </div>
                                     <div class="meta-content">
                                         <strong>End Date</strong>
-                                        <div class="text-muted">{{ announcement.end_date|date:"M j, Y g:i A" }}</div>
+                                        <div class="text-muted small">{{ announcement.end_date|date:"M j, Y g:i A" }}</div>
                                     </div>
                                 </div>
                                 {% endif %}
                                 
-                                <!-- Views Count -->
                                 <div class="meta-item">
                                     <div class="meta-icon">
                                         <i class="bi bi-eye text-secondary"></i>
                                     </div>
                                     <div class="meta-content">
                                         <strong>Views</strong>
-                                        <div class="text-muted">
-                                            {{ views_count }} views
+                                        <div class="text-muted small">
+                                            {{ views_count }} total view{{ views_count|pluralize }}
                                         </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Created By -->
-                                <div class="meta-item">
-                                    <div class="meta-icon">
-                                        <i class="bi bi-person text-dark"></i>
-                                    </div>
-                                    <div class="meta-content">
-                                        <strong>Author</strong>
-                                        <div class="text-muted">{{ announcement.created_by.get_full_name }}</div>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Quick Stats -->
-                            <div class="mt-4">
-                                <h6 class="text-muted mb-3">Quick Stats</h6>
-                                <div class="row text-center">
-                                    <div class="col-6">
-                                        <div class="p-3 bg-light rounded">
-                                            <div class="h5 mb-1 text-primary">{{ views_count }}</div>
-                                            <small class="text-muted">Total Views</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-6">
-                                        <div class="p-3 bg-light rounded">
-                                            <div class="h5 mb-1 text-success">
-                                                {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
+                            <div class="card border-0 shadow-sm mb-4">
+                                <div class="card-body">
+                                    <h6 class="text-muted mb-3 d-flex align-items-center">
+                                        <i class="bi bi-graph-up me-2"></i>
+                                        Quick Stats
+                                    </h6>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <div class="text-center p-2 bg-light rounded">
+                                                <div class="h5 mb-1 text-primary">{{ views_count }}</div>
+                                                <small class="text-muted">Total Views</small>
                                             </div>
-                                            <small class="text-muted">Status</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-center p-2 bg-light rounded">
+                                                <div class="h5 mb-1 text-{% if announcement.is_active %}success{% else %}secondary{% endif %}">
+                                                    {% if announcement.is_active %}Active{% else %}Inactive{% endif %}
+                                                </div>
+                                                <small class="text-muted">Status</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Recent Views -->
+                            <!-- Recent Views (Staff/Teacher Only) -->
                             {% if user.is_staff or user.teacher %}
-                            <div class="mt-4">
-                                <h6 class="text-muted mb-3">Recent Views</h6>
-                                <div class="view-timeline">
-                                    {% for view in announcement.userannouncementview_set.all|slice:":5" %}
-                                    <div class="timeline-item">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="fw-semibold">{{ view.user.get_full_name|default:view.user.username }}</small>
-                                            <small class="text-muted">{{ view.viewed_at|timesince }} ago</small>
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <h6 class="text-muted mb-3 d-flex align-items-center">
+                                        <i class="bi bi-clock-history me-2"></i>
+                                        Recent Views
+                                    </h6>
+                                    <div class="view-timeline">
+                                        {% for view in announcement.userannouncementview_set.all|slice:":5" %}
+                                        <div class="timeline-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <small class="fw-semibold">
+                                                    {{ view.user.get_full_name|default:view.user.username|truncatechars:15 }}
+                                                </small>
+                                                <small class="text-muted">{{ view.viewed_at|timesince }} ago</small>
+                                            </div>
+                                            {% if view.dismissed %}
+                                            <small class="text-warning d-flex align-items-center mt-1">
+                                                <i class="bi bi-eye-slash me-1"></i>
+                                                Dismissed
+                                            </small>
+                                            {% endif %}
                                         </div>
-                                        {% if view.dismissed %}
-                                        <small class="text-warning">
-                                            <i class="bi bi-eye-slash me-1"></i>Dismissed
-                                        </small>
-                                        {% endif %}
+                                        {% empty %}
+                                        <p class="text-muted small text-center py-2 mb-0">
+                                            <i class="bi bi-eye-slash me-1"></i>
+                                            No views yet
+                                        </p>
+                                        {% endfor %}
                                     </div>
-                                    {% empty %}
-                                    <p class="text-muted small text-center py-2">No views yet</p>
-                                    {% endfor %}
                                 </div>
                             </div>
                             {% endif %}
@@ -572,20 +740,26 @@
                 </div>
             </div>
 
-            <!-- Related Actions Card -->
+            <!-- Management Actions (Staff/Teacher Only) -->
             {% if user.is_staff or user.teacher %}
-            <div class="card mt-4">
+            <div class="card border-0 shadow-sm mt-4 no-print">
                 <div class="card-body">
-                    <h6 class="text-muted mb-3">Management Actions</h6>
+                    <h6 class="text-muted mb-3 d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i>
+                        Management Actions
+                    </h6>
                     <div class="d-flex flex-wrap gap-2">
-                        <a href="{% url 'update_announcement' announcement.pk %}" class="btn btn-outline-primary">
-                            <i class="bi bi-pencil me-2"></i>Edit Announcement
+                        <a href="{% url 'update_announcement' announcement.pk %}" class="btn btn-outline-primary btn-action">
+                            <i class="bi bi-pencil me-2"></i>
+                            Edit Announcement
                         </a>
-                        <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-list me-2"></i>View All Announcements
+                        <a href="{% url 'announcement_list' %}" class="btn btn-outline-secondary btn-action">
+                            <i class="bi bi-list-ul me-2"></i>
+                            View All Announcements
                         </a>
-                        <a href="{% url 'create_announcement' %}" class="btn btn-outline-success">
-                            <i class="bi bi-plus-circle me-2"></i>Create New
+                        <a href="{% url 'create_announcement' %}" class="btn btn-outline-success btn-action">
+                            <i class="bi bi-plus-lg me-2"></i>
+                            Create New
                         </a>
                     </div>
                 </div>
@@ -602,165 +776,215 @@
 
 {% block extra_js %}
 <script>
-// Enhanced announcement detail page functionality
-const announcementDetail = {
-    // Copy announcement link to clipboard
-    copyLink: function() {
+/**
+ * Announcement Manager - Enhanced functionality for announcement detail page
+ */
+class AnnouncementManager {
+    constructor() {
+        this.toastContainer = null;
+        this.initToastContainer();
+        this.autoDismissMessages();
+        this.initTooltips();
+    }
+
+    /**
+     * Initialize toast notification container
+     */
+    initToastContainer() {
+        this.toastContainer = document.getElementById('toastContainer');
+        if (!this.toastContainer) {
+            this.toastContainer = document.createElement('div');
+            this.toastContainer.id = 'toastContainer';
+            this.toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(this.toastContainer);
+        }
+    }
+
+    /**
+     * Show toast notification
+     * @param {string} message - Notification message
+     * @param {string} type - Notification type (success, error, warning, info)
+     */
+    showToast(message, type = 'info') {
+        const toastId = `toast-${Date.now()}`;
+        const iconMap = {
+            'success': 'check-circle-fill',
+            'error': 'exclamation-circle-fill',
+            'warning': 'exclamation-triangle-fill',
+            'info': 'info-circle-fill'
+        };
+
+        const toastHTML = `
+            <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body d-flex align-items-center">
+                        <i class="bi bi-${iconMap[type] || 'info-circle-fill'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+
+        this.toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: 5000
+        });
+        
+        toast.show();
+        
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+
+    /**
+     * Set loading state
+     * @param {boolean} isLoading - Loading state
+     */
+    setLoading(isLoading) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            if (isLoading) {
+                overlay.classList.add('active');
+            } else {
+                overlay.classList.remove('active');
+            }
+        }
+    }
+
+    /**
+     * Copy announcement link to clipboard
+     */
+    copyLink() {
         const link = window.location.href;
         
         navigator.clipboard.writeText(link).then(() => {
             this.showToast('Announcement link copied to clipboard!', 'success');
-        }).catch(() => {
-            // Fallback for older browsers
+        }).catch(err => {
+            console.error('Failed to copy link:', err);
+            // Fallback method
             const textArea = document.createElement('textarea');
             textArea.value = link;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
             document.body.appendChild(textArea);
             textArea.select();
-            document.execCommand('copy');
+            
+            try {
+                document.execCommand('copy');
+                this.showToast('Announcement link copied to clipboard!', 'success');
+            } catch (err) {
+                this.showToast('Failed to copy link to clipboard', 'error');
+            }
+            
             document.body.removeChild(textArea);
-            this.showToast('Announcement link copied to clipboard!', 'success');
         });
-    },
+    }
 
-    // Dismiss announcement
-    dismiss: function(announcementId) {
+    /**
+     * Dismiss announcement for current user
+     * @param {number} announcementId - Announcement ID
+     */
+    async dismiss(announcementId) {
         if (!confirm('Are you sure you want to dismiss this announcement? You can always find it in the announcements list.')) {
             return;
         }
         
         this.setLoading(true);
         
-        fetch(`/announcements/${announcementId}/dismiss/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': this.getCookie('csrftoken'),
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            this.setLoading(false);
+        try {
+            const response = await fetch(`/announcements/${announcementId}/dismiss/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCsrfToken(),
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
             if (data.status === 'success') {
                 this.showToast('Announcement dismissed', 'success');
-                setTimeout(() => window.location.href = "{% url 'announcement_list' %}", 1000);
+                setTimeout(() => {
+                    window.location.href = "{% url 'announcement_list' %}";
+                }, 1500);
             } else {
-                this.showToast('Failed to dismiss announcement', 'error');
+                throw new Error(data.message || 'Failed to dismiss announcement');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             console.error('Error dismissing announcement:', error);
-            this.setLoading(false);
             this.showToast('Failed to dismiss announcement', 'error');
-        });
-    },
+        } finally {
+            this.setLoading(false);
+        }
+    }
 
-    // Toggle announcement status
-    toggleStatus: function(announcementId, activate) {
+    /**
+     * Toggle announcement status (activate/deactivate)
+     * @param {number} announcementId - Announcement ID
+     * @param {boolean} activate - Activate or deactivate
+     */
+    async toggleStatus(announcementId, activate) {
         const action = activate ? 'activate' : 'deactivate';
+        const confirmMessage = `Are you sure you want to ${action} this announcement?`;
         
-        if (!confirm(`Are you sure you want to ${action} this announcement?`)) {
+        if (!confirm(confirmMessage)) {
             return;
         }
         
         this.setLoading(true);
         
-        fetch(`/announcements/${announcementId}/toggle-status/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': this.getCookie('csrftoken'),
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            this.setLoading(false);
+        try {
+            const response = await fetch(`/announcements/${announcementId}/toggle-status/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCsrfToken(),
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            });
+            
+            const data = await response.json();
+            
             if (data.status === 'success') {
                 this.showToast(`Announcement ${action}d successfully`, 'success');
                 setTimeout(() => window.location.reload(), 1000);
             } else {
-                this.showToast(`Failed to ${action} announcement: ${data.message}`, 'error');
+                throw new Error(data.message || `Failed to ${action} announcement`);
             }
-        })
-        .catch(error => {
-            console.error('Error toggling announcement status:', error);
-            this.setLoading(false);
+        } catch (error) {
+            console.error(`Error ${action}ing announcement:`, error);
             this.showToast(`Failed to ${action} announcement`, 'error');
-        });
-    },
+        } finally {
+            this.setLoading(false);
+        }
+    }
 
-    // Confirm delete action
-    confirmDelete: function(announcementId) {
+    /**
+     * Confirm and delete announcement
+     * @param {number} announcementId - Announcement ID
+     */
+    confirmDelete(announcementId) {
         if (confirm('Are you sure you want to delete this announcement? This action cannot be undone.')) {
             window.location.href = `{% url 'delete_announcement' 0 %}`.replace('0', announcementId);
         }
-    },
+    }
 
-    // Set loading state
-    setLoading: function(isLoading) {
-        const card = document.querySelector('.announcement-detail-card');
-        if (card) {
-            if (isLoading) {
-                card.classList.add('loading');
-            } else {
-                card.classList.remove('loading');
-            }
-        }
-    },
-
-    // Show toast notification
-    showToast: function(message, type) {
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-bg-${type} border-0`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'assertive');
-        toast.setAttribute('aria-atomic', 'true');
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        `;
-        
-        // Add to toast container
-        let toastContainer = document.getElementById('toastContainer');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toastContainer';
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            document.body.appendChild(toastContainer);
-        }
-        
-        toastContainer.appendChild(toast);
-        
-        // Initialize and show toast
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-        
-        // Remove toast after hidden
-        toast.addEventListener('hidden.bs.toast', () => {
-            toast.remove();
-        });
-    },
-
-    // Get CSRF token
-    getCookie: function(name) {
+    /**
+     * Get CSRF token from cookies
+     * @returns {string|null} CSRF token
+     */
+    getCsrfToken() {
+        const name = 'csrftoken';
         let cookieValue = null;
+        
         if (document.cookie && document.cookie !== '') {
             const cookies = document.cookie.split(';');
+            
             for (let i = 0; i < cookies.length; i++) {
                 const cookie = cookies[i].trim();
                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
@@ -769,41 +993,34 @@ const announcementDetail = {
                 }
             }
         }
+        
         return cookieValue;
-    },
+    }
 
-    // Initialize page functionality
-    init: function() {
-        // Initialize tooltips
-        this.initTooltips();
-        this.autoDismissMessages();
-    },
-
-    // Auto-dismiss messages after 5 seconds
-    autoDismissMessages: function() {
+    /**
+     * Auto-dismiss alert messages after delay
+     */
+    autoDismissMessages() {
         setTimeout(() => {
             document.querySelectorAll('.alert').forEach(alert => {
                 const bsAlert = new bootstrap.Alert(alert);
                 bsAlert.close();
             });
         }, 5000);
-    },
-
-    // Initialize tooltips
-    initTooltips: function() {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
     }
-};
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    announcementDetail.init();
+    /**
+     * Initialize Bootstrap tooltips
+     */
+    initTooltips() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    }
+}
+
+// Initialize Announcement Manager when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.announcementManager = new AnnouncementManager();
 });
-
-// Export for global access
-window.announcementDetail = announcementDetail;
 </script>
 {% endblock %}

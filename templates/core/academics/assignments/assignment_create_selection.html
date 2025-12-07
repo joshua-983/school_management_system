@@ -1,0 +1,956 @@
+<!-- core/academics/assignments/assignment_create_selection.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Assignment - Select Class & Subject{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        --warning-gradient: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        --info-gradient: linear-gradient(135deg, #17a2b8 0%, #20c9a6 100%);
+        --dark-gradient: linear-gradient(135deg, #343a40 0%, #495057 100%);
+    }
+    
+    body {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        min-height: 100vh;
+    }
+    
+    .page-header {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0 0 20px 20px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+    }
+    
+    .header-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 2rem;
+        margin: 2rem auto;
+        max-width: 600px;
+    }
+    
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        position: relative;
+    }
+    
+    .step-number {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #6c757d;
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+        z-index: 2;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .step.active .step-number {
+        background: var(--primary-gradient);
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .step.completed .step-number {
+        background: var(--success-gradient);
+        color: white;
+    }
+    
+    .step-line {
+        position: absolute;
+        top: 25px;
+        left: 50%;
+        width: 100%;
+        height: 3px;
+        background: #e9ecef;
+        z-index: 1;
+    }
+    
+    .step:last-child .step-line {
+        display: none;
+    }
+    
+    .step-label {
+        font-weight: 600;
+        color: #6c757d;
+        text-align: center;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    
+    .step.active .step-label {
+        color: #495057;
+    }
+    
+    .assignment-card {
+        background: white;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        overflow: hidden;
+        height: 100%;
+        margin-bottom: 1.5rem;
+    }
+    
+    .assignment-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+    }
+    
+    .assignment-card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .assignment-card-body {
+        padding: 1.5rem;
+    }
+    
+    .subject-badge {
+        background: var(--info-gradient);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .teacher-info {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+        border-radius: 10px;
+        padding: 0.75rem;
+        margin: 1rem 0;
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .teacher-info i {
+        color: #17a2b8;
+        margin-right: 0.5rem;
+    }
+    
+    .create-btn {
+        background: var(--success-gradient);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    .create-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    .create-btn:active {
+        transform: translateY(0);
+    }
+    
+    .empty-state {
+        padding: 4rem 2rem;
+        text-align: center;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin: 2rem 0;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        color: #6c757d;
+        opacity: 0.5;
+        margin-bottom: 1.5rem;
+    }
+    
+    .available-options-card {
+        background: white;
+        border: 2px dashed #ffc107;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(255, 193, 7, 0.1);
+        margin-bottom: 2rem;
+    }
+    
+    .available-options-header {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        color: #856404;
+        border-bottom: 1px solid #ffeaa7;
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .available-option-item {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        transition: background 0.2s ease;
+    }
+    
+    .available-option-item:hover {
+        background: rgba(255, 193, 7, 0.05);
+    }
+    
+    .available-option-item:last-child {
+        border-bottom: none;
+    }
+    
+    .request-btn {
+        background: var(--warning-gradient);
+        color: #856404;
+        border: 1px solid #ffc107;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .request-btn:hover {
+        background: #ffc107;
+        color: #856404;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+    }
+    
+    .guide-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        margin-bottom: 2rem;
+    }
+    
+    .guide-header {
+        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+        color: #0c5460;
+        border-radius: 15px 15px 0 0;
+        padding: 1.25rem 1.5rem;
+    }
+    
+    .guide-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    
+    .guide-step:last-child {
+        border-bottom: none;
+    }
+    
+    .guide-step-number {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--info-gradient);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+    }
+    
+    .guide-step-content {
+        flex: 1;
+    }
+    
+    @media (max-width: 768px) {
+        .step-indicator {
+            gap: 1rem;
+        }
+        
+        .step-number {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+        
+        .step-line {
+            top: 20px;
+        }
+        
+        .step-label {
+            font-size: 0.8rem;
+        }
+        
+        .header-content h1 {
+            font-size: 1.5rem;
+        }
+        
+        .header-content p {
+            font-size: 0.9rem;
+        }
+    }
+    
+    /* Animation for cards */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
+    }
+    
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+    
+    /* Loading spinner for buttons */
+    .btn-loading {
+        position: relative;
+        pointer-events: none;
+    }
+    
+    .btn-loading .spinner-border {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+    
+    .btn-loading .btn-text {
+        opacity: 0;
+    }
+    
+    /* Custom scrollbar for list */
+    .scrollable-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .scrollable-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .scrollable-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .scrollable-list::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+    
+    .scrollable-list::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<header class="page-header">
+    <div class="header-content">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Create New Assignment
+                </h1>
+                <p class="mb-0 opacity-85">
+                    Select a class and subject to create assignment for your students
+                </p>
+            </div>
+            <div class="badge bg-white text-dark px-3 py-2 shadow-sm">
+                <i class="bi bi-calendar me-1"></i> {{ academic_year }}
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Main Content -->
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-xxl-10 col-xl-11">
+            <!-- Step Indicator -->
+            <div class="step-indicator fade-in-up">
+                <div class="step active">
+                    <div class="step-number">1</div>
+                    <div class="step-line"></div>
+                    <div class="step-label">Select Class & Subject</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-line"></div>
+                    <div class="step-label">Assignment Details</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Review & Create</div>
+                </div>
+            </div>
+            
+            {% if has_assignments %}
+                <div class="row">
+                    <!-- Main Content - Assigned Classes -->
+                    <div class="col-lg-8">
+                        <div class="card mb-4 border-0 shadow-sm">
+                            <div class="card-header bg-white border-0 py-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h3 class="h5 mb-0">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        Your Assigned Classes
+                                    </h3>
+                                    <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                                        <i class="bi bi-journal-text me-1"></i>
+                                        {{ assignments_by_class|length }} class{{ assignments_by_class|pluralize:"es" }}
+                                    </span>
+                                </div>
+                                <p class="text-muted mb-0 mt-2">
+                                    You can create assignments for these classes immediately. Click on any subject to get started.
+                                </p>
+                            </div>
+                            <div class="card-body pt-0">
+                                {% for class_name, subjects in assignments_by_class.items %}
+                                <div class="assignment-card fade-in-up delay-{{ forloop.counter }}">
+                                    <div class="assignment-card-header">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h4 class="h5 mb-0">
+                                                <i class="bi bi-people-fill me-2 text-primary"></i>
+                                                {{ class_name }}
+                                            </h4>
+                                            <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-1">
+                                                {{ subjects|length }} subject{{ subjects|pluralize }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="assignment-card-body">
+                                        <div class="row g-3">
+                                            {% for item in subjects %}
+                                            <div class="col-md-6">
+                                                <div class="border rounded-3 p-3 h-100">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <div>
+                                                            <span class="subject-badge">
+                                                                <i class="bi bi-book me-1"></i>
+                                                                {{ item.subject.name }}
+                                                            </span>
+                                                        </div>
+                                                        <small class="text-muted">ID: {{ item.id }}</small>
+                                                    </div>
+                                                    
+                                                    {% if item.teacher %}
+                                                    <div class="teacher-info">
+                                                        <p class="mb-0 small">
+                                                            <i class="bi bi-person-badge"></i>
+                                                            <strong>Teacher:</strong> {{ item.teacher.get_full_name }}
+                                                        </p>
+                                                    </div>
+                                                    {% endif %}
+                                                    
+                                                    <div class="mt-3 pt-3 border-top">
+                                                        <button class="create-btn create-assignment-btn" 
+                                                                data-assignment-id="{{ item.id }}"
+                                                                data-subject="{{ item.subject.name }}"
+                                                                data-class="{{ class_name }}">
+                                                            <i class="bi bi-plus-lg"></i>
+                                                            <span class="btn-text">Create Assignment</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sidebar - Available Options & Guide -->
+                    <div class="col-lg-4">
+                        <!-- Available Options -->
+                        {% if available_combinations %}
+                        <div class="available-options-card fade-in-up delay-2">
+                            <div class="available-options-header">
+                                <h4 class="h5 mb-0">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    Available Teaching Options
+                                </h4>
+                            </div>
+                            <div class="scrollable-list">
+                                {% for combo in available_combinations %}
+                                <div class="available-option-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="mb-1">{{ combo.subject.name }}</h6>
+                                            <p class="small text-muted mb-1">
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                {{ combo.class_level }}
+                                            </p>
+                                            <small class="text-muted">{{ combo.message }}</small>
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <a href="{% url 'quick_class_assignment' %}?class_level={{ combo.class_level_code }}&subject={{ combo.subject.id }}"
+                                           class="request-btn btn btn-sm w-100 text-center">
+                                            <i class="bi bi-person-plus me-1"></i>
+                                            Request Assignment
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Quick Guide -->
+                        <div class="guide-card fade-in-up delay-3">
+                            <div class="guide-header">
+                                <h4 class="h5 mb-0">
+                                    <i class="bi bi-question-circle-fill me-2"></i>
+                                    How to Create an Assignment
+                                </h4>
+                            </div>
+                            <div class="p-3">
+                                <div class="guide-step">
+                                    <div class="guide-step-number">1</div>
+                                    <div class="guide-step-content">
+                                        <h6 class="mb-1">Select Class & Subject</h6>
+                                        <p class="small text-muted mb-0">
+                                            Choose from your assigned classes and subjects
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="guide-step-number">2</div>
+                                    <div class="guide-step-content">
+                                        <h6 class="mb-1">Enter Assignment Details</h6>
+                                        <p class="small text-muted mb-0">
+                                            Provide title, description, and due date
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="guide-step-number">3</div>
+                                    <div class="guide-step-content">
+                                        <h6 class="mb-1">Set Grading Criteria</h6>
+                                        <p class="small text-muted mb-0">
+                                            Define maximum score and weight percentage
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="guide-step-number">4</div>
+                                    <div class="guide-step-content">
+                                        <h6 class="mb-1">Add Attachments</h6>
+                                        <p class="small text-muted mb-0">
+                                            Upload supporting materials if needed
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="guide-step">
+                                    <div class="guide-step-number">5</div>
+                                    <div class="guide-step-content">
+                                        <h6 class="mb-1">Review & Create</h6>
+                                        <p class="small text-muted mb-0">
+                                            Preview and create assignment for all students
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-top p-3 bg-light bg-opacity-10">
+                                <div class="alert alert-info border-0 mb-0 small">
+                                    <i class="bi bi-lightbulb-fill me-2"></i>
+                                    <strong>Tip:</strong> Assignments are automatically distributed to all students in the selected class.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Year Info -->
+                        <div class="card border-0 shadow-sm fade-in-up delay-4">
+                            <div class="card-body">
+                                <h5 class="h6 mb-3">
+                                    <i class="bi bi-calendar-check-fill me-2 text-primary"></i>
+                                    Academic Information
+                                </h5>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li class="mb-2">
+                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        <strong>Current Year:</strong> {{ academic_year }}
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-person-check-fill text-info me-2"></i>
+                                        <strong>Teacher:</strong> {{ request.user.get_full_name }}
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="bi bi-journal-check text-warning me-2"></i>
+                                        <strong>Status:</strong> Active
+                                    </li>
+                                    <li>
+                                        <i class="bi bi-clock-history text-secondary me-2"></i>
+                                        <strong>Last Login:</strong> {{ request.user.last_login|date:"M d, Y H:i"|default:"First time" }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Empty State - No Assignments -->
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="empty-state fade-in-up">
+                            <div class="empty-state-icon">
+                                <i class="bi bi-chalkboard"></i>
+                            </div>
+                            <h3 class="h4 text-muted mb-3">No Class Assignments Found</h3>
+                            <p class="text-muted mb-4" style="max-width: 600px; margin: 0 auto;">
+                                You haven't been assigned to teach any classes for the {{ academic_year }} academic year.
+                                Class assignments are required before you can create assignments for students.
+                            </p>
+                            <div class="d-flex justify-content-center gap-3 mt-4">
+                                {% if is_admin %}
+                                <a href="{% url 'class_assignment_list' %}" class="btn btn-primary px-4 py-2">
+                                    <i class="bi bi-gear-fill me-2"></i>Manage Class Assignments
+                                </a>
+                                {% else %}
+                                <button class="btn btn-primary px-4 py-2" data-bs-toggle="modal" data-bs-target="#requestAssignmentModal">
+                                    <i class="bi bi-envelope-fill me-2"></i>Request Assignment
+                                </button>
+                                <button class="btn btn-outline-secondary px-4 py-2" data-bs-toggle="modal" data-bs-target="#contactAdminModal">
+                                    <i class="bi bi-headset me-2"></i>Contact Administrator
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Contact Admin Modal -->
+<div class="modal fade" id="contactAdminModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-headset me-2"></i>Contact School Administrator
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="bi bi-person-lines-fill display-4 text-primary mb-3"></i>
+                    <h5 class="mb-3">Need Assistance?</h5>
+                    <p class="text-muted">Please contact the school administration to be assigned to classes:</p>
+                </div>
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item border-0 py-3">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <i class="bi bi-person-badge fs-4 text-primary"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">School Principal</h6>
+                                <p class="text-muted mb-0">[Principal's Name]</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-group-item border-0 py-3">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <i class="bi bi-telephone fs-4 text-success"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">Phone Number</h6>
+                                <p class="text-muted mb-0">[School Phone Number]</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-group-item border-0 py-3">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <i class="bi bi-envelope fs-4 text-info"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="mb-1">Email Address</h6>
+                                <p class="text-muted mb-0">admin@school.edu</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="mailto:admin@school.edu" class="btn btn-primary">
+                    <i class="bi bi-envelope-fill me-2"></i>Send Email
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Request Assignment Modal -->
+<div class="modal fade" id="requestAssignmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="bi bi-envelope-paper-fill me-2"></i>Request Class Assignment
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 mb-4">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    To request assignment to classes, please follow these steps:
+                </div>
+                <ol class="mb-4">
+                    <li class="mb-2">Send an email to the school administrator</li>
+                    <li class="mb-2">Specify which classes and subjects you want to teach</li>
+                    <li class="mb-2">Include your qualifications for those subjects</li>
+                    <li class="mb-2">Provide your teacher ID and contact information</li>
+                </ol>
+                <div class="alert alert-success border-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    <strong>Processing Time:</strong> Your request will be processed within 1-2 business days.
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="mailto:admin@school.edu?subject=Class%20Assignment%20Request&body=Dear%20Administrator,%0A%0AI%20would%20like%20to%20request%20assignment%20to%20the%20following%20classes:%0A%0A- %20%0A- %20%0A%0AMy%20qualifications:%0A%0A- %20%0A- %20%0A%0ATeacher%20ID:%20{{ request.user.teacher.employee_id|default:'Not provided' }}%0A%0AThank%20you,%0A{{ request.user.get_full_name }}"
+                   class="btn btn-warning">
+                    <i class="bi bi-send-fill me-2"></i>Send Request Email
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg bg-transparent">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h6 class="mt-3 text-white">Creating Assignment...</h6>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Create assignment button click handler
+    document.querySelectorAll('.create-assignment-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const assignmentId = this.getAttribute('data-assignment-id');
+            const subject = this.getAttribute('data-subject');
+            const className = this.getAttribute('data-class');
+            
+            // Validate assignment ID
+            if (!assignmentId || assignmentId === 'null' || assignmentId === 'undefined') {
+                showNotification('Error: Invalid class assignment selected', 'danger');
+                return;
+            }
+            
+            // Show loading state on button
+            const originalHTML = this.innerHTML;
+            const originalButton = this;
+            this.classList.add('btn-loading');
+            this.innerHTML = `
+                <div class="spinner-border spinner-border-sm text-white" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span class="btn-text">Creating...</span>
+            `;
+            this.disabled = true;
+            
+            // Show loading modal
+            const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            loadingModal.show();
+            
+            // Create notification
+            showNotification('Creating assignment for ' + subject + '...', 'info');
+            
+            // Build the correct URL
+            const createUrl = new URL('{% url "assignment_create" %}', window.location.origin);
+            createUrl.searchParams.set('class_assignment', assignmentId);
+            
+            // Log for debugging
+            console.log('Redirecting to:', createUrl.toString());
+            console.log('Assignment ID:', assignmentId, 'Subject:', subject, 'Class:', className);
+            
+            // Redirect to assignment creation page WITH CORRECT URL
+            setTimeout(() => {
+                window.location.href = createUrl.toString();
+            }, 500);
+            
+            // Backup: Restore button state after 5 seconds if redirect fails
+            setTimeout(() => {
+                if (window.location.href.indexOf('create/') === -1) {
+                    originalButton.classList.remove('btn-loading');
+                    originalButton.innerHTML = originalHTML;
+                    originalButton.disabled = false;
+                    loadingModal.hide();
+                    showNotification('Redirection failed. Please try again.', 'warning');
+                }
+            }, 5000);
+        });
+    });
+    
+    // Show notification function
+    function showNotification(message, type = 'info') {
+        // Remove existing notifications
+        const existingAlerts = document.querySelectorAll('.notification-alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Define icon based on type
+        let iconClass = 'bi-info-circle';
+        if (type === 'success') iconClass = 'bi-check-circle';
+        if (type === 'warning') iconClass = 'bi-exclamation-triangle';
+        if (type === 'danger') iconClass = 'bi-x-circle';
+        
+        // Create new notification
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `notification-alert alert alert-${type} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+        alertDiv.style.zIndex = '9999';
+        alertDiv.innerHTML = `
+            <i class="bi ${iconClass} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.classList.remove('show');
+                setTimeout(() => alertDiv.remove(), 150);
+            }
+        }, 5000);
+    }
+    
+    // Animate elements on scroll
+    function animateOnScroll() {
+        const elements = document.querySelectorAll('.fade-in-up');
+        elements.forEach(element => {
+            const elementTop = element.getBoundingClientRect().top;
+            const elementVisible = 150;
+            
+            if (elementTop < window.innerHeight - elementVisible) {
+                element.classList.add('active');
+            }
+        });
+    }
+    
+    // Initial animation
+    animateOnScroll();
+    
+    // Animate on scroll
+    window.addEventListener('scroll', animateOnScroll);
+    
+    // Add hover effects to cards
+    document.querySelectorAll('.assignment-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-10px)';
+            this.style.boxShadow = '0 15px 35px rgba(0,0,0,0.15)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 5px 15px rgba(0,0,0,0.08)';
+        });
+    });
+    
+    // Add keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        const buttons = document.querySelectorAll('.create-assignment-btn');
+        
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const currentIndex = Array.from(buttons).findIndex(btn => btn === document.activeElement);
+            let nextIndex;
+            
+            if (e.key === 'ArrowDown') {
+                nextIndex = currentIndex < buttons.length - 1 ? currentIndex + 1 : 0;
+            } else {
+                nextIndex = currentIndex > 0 ? currentIndex - 1 : buttons.length - 1;
+            }
+            
+            buttons[nextIndex].focus();
+        }
+    });
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add confirmation for request buttons
+    document.querySelectorAll('.request-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (!confirm('Are you sure you want to request this assignment? This will send an email to the administrator.')) {
+                e.preventDefault();
+            }
+        });
+    });
+    
+    // Add data attributes to buttons for better debugging
+    document.querySelectorAll('.create-assignment-btn').forEach((button, index) => {
+        button.setAttribute('data-button-index', index);
+        console.log(`Button ${index}:`, {
+            assignmentId: button.getAttribute('data-assignment-id'),
+            subject: button.getAttribute('data-subject'),
+            class: button.getAttribute('data-class')
+        });
+    });
+});
+</script>
+{% endblock %}

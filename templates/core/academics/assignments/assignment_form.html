@@ -244,28 +244,6 @@
         font-weight: 600;
     }
 
-    /* NEW: Multiple classes and template styles */
-    .multiple-classes-checkboxes {
-        max-height: 200px;
-        overflow-y: auto;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .multiple-classes-checkboxes .form-check {
-        margin-bottom: 5px;
-    }
-
-    .template-preview {
-        background: #f8f9fa;
-        border-left: 4px solid #007bff;
-        padding: 10px;
-        margin: 10px 0;
-        border-radius: 4px;
-        display: none;
-    }
-
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .form-container {
@@ -326,6 +304,21 @@
         from { opacity: 0; transform: translateX(-30px); }
         to { opacity: 1; transform: translateX(0); }
     }
+    
+    /* Class info sidebar */
+    .class-info-card {
+        background: linear-gradient(135deg, #f0f4ff 0%, #e8f4ff 100%);
+        border-left: 4px solid #667eea;
+    }
+    
+    .info-label {
+        color: #4a5568;
+        font-weight: 600;
+    }
+    
+    .info-value {
+        color: #2d3748;
+    }
 </style>
 {% endblock %}
 
@@ -351,6 +344,34 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Class Information Summary -->
+                {% if selected_class and selected_subject %}
+                <div class="card class-info-card mb-4 slide-in">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-2">
+                                    <span class="info-label">Subject:</span>
+                                    <span class="info-value ms-2 fw-bold">{{ selected_subject.name }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-2">
+                                    <span class="info-label">Class:</span>
+                                    <span class="info-value ms-2 fw-bold">{{ selected_class }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-2">
+                                    <span class="info-label">Teacher:</span>
+                                    <span class="info-value ms-2 fw-bold">{{ selected_teacher.get_full_name|default:"Not assigned" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Step Indicator -->
                 <div class="step-indicator slide-in">
@@ -387,6 +408,11 @@
                         <form method="post" id="assignmentForm" enctype="multipart/form-data" novalidate>
                             {% csrf_token %}
                             
+                            <!-- Hidden fields for class assignment selection -->
+                            {% if selected_class_assignment %}
+                                <input type="hidden" name="class_assignment" value="{{ selected_class_assignment.id }}">
+                            {% endif %}
+                            
                             {% if form.non_field_errors %}
                             <div class="alert alert-danger">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
@@ -418,32 +444,6 @@
                                         <div class="form-text">Enter a clear and descriptive title for the assignment</div>
                                     </div>
 
-                                    <!-- Subject and Class Level -->
-                                    <div class="col-md-6">
-                                        <label for="{{ form.subject.id_for_label }}" class="form-label">
-                                            Subject <span class="text-danger">*</span>
-                                        </label>
-                                        {{ form.subject }}
-                                        {% if form.subject.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.subject.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                    </div>
-
-                                    <!-- The class_level field -->
-                                    <div class="col-md-6">
-                                        <label for="{{ form.class_level.id_for_label }}" class="form-label">
-                                            Class Level <span class="text-danger">*</span>
-                                        </label>
-                                        {{ form.class_level }}
-                                        {% if form.class_level.errors %}
-                                        <div class="invalid-feedback">
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ form.class_level.errors.0 }}
-                                        </div>
-                                        {% endif %}
-                                    </div>
-
                                     <!-- Due Date -->
                                     <div class="col-12">
                                         <label for="{{ form.due_date.id_for_label }}" class="form-label">
@@ -459,27 +459,6 @@
                                         </div>
                                         {% endif %}
                                         <div class="form-text">Students will not be able to submit after this date</div>
-                                    </div>
-
-                                    <!-- NEW: Template Selection -->
-                                    <div class="col-12 mb-4">
-                                        <label for="{{ form.template.id_for_label }}" class="form-label">
-                                            <i class="fas fa-magic me-2 text-info"></i>Use Template (Optional)
-                                        </label>
-                                        {{ form.template }}
-                                        <div class="form-text">Select a template to automatically fill common assignment settings</div>
-                                    </div>
-
-                                    <!-- NEW: Multiple Classes Selection -->
-                                    <div class="col-12 mb-4">
-                                        <label for="{{ form.multiple_classes.id_for_label }}" class="form-label">
-                                            <i class="fas fa-copy me-2 text-warning"></i>Create for Multiple Classes
-                                        </label>
-                                        {{ form.multiple_classes }}
-                                        <div class="form-text">
-                                            This assignment will be automatically created for the selected classes. 
-                                            The primary class (selected above) is always included.
-                                        </div>
                                     </div>
                                 </div>
 
@@ -615,7 +594,7 @@
                                     </button>
                                     
                                     <div class="btn-group">
-                                        <a href="{% if object %}{% url 'assignment_detail' object.pk %}{% else %}{% url 'assignment_list' %}{% endif %}" 
+                                        <a href="{% if object %}{% url 'assignment_detail' object.pk %}{% else %}{% url 'assignment_create_selection' %}{% endif %}" 
                                            class="btn btn-outline-secondary px-4">
                                             <i class="fas fa-times me-2"></i>Cancel
                                         </a>
@@ -659,8 +638,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize Select2 for dropdowns (exclude multiple_classes which uses checkboxes)
-    $('select').not('[name="multiple_classes"]').select2({
+    // Initialize Select2 for dropdowns
+    $('select').select2({
         theme: 'bootstrap4',
         width: '100%',
         placeholder: 'Select an option',
@@ -990,73 +969,5 @@ function showToast(title, message, type = 'info') {
         document.body.removeChild(toast);
     });
 }
-
-function applyAssignmentTemplate(selectElement) {
-    const templateConfigs = {
-        'HOMEWORK': {
-            type: 'HOMEWORK',
-            maxScore: 100,
-            weight: 10,
-            description: 'Complete the following exercises. Show all your work and submit by the due date.'
-        },
-        'CLASSWORK': {
-            type: 'CLASSWORK',
-            maxScore: 50, 
-            weight: 5,
-            description: 'In-class assignment to be completed during the lesson. Work independently and show your reasoning.'
-        },
-        'TEST': {
-            type: 'TEST',
-            maxScore: 100,
-            weight: 30,
-            description: 'Assessment covering recent topics. Read all questions carefully and manage your time effectively.'
-        },
-        'EXAM': {
-            type: 'EXAM', 
-            maxScore: 100,
-            weight: 50,
-            description: 'End of term examination. Comprehensive assessment of all topics covered this term.'
-        }
-    };
-    
-    const selectedTemplate = selectElement.value;
-    const preview = document.getElementById('templatePreview');
-    
-    if (selectedTemplate && templateConfigs[selectedTemplate]) {
-        const config = templateConfigs[selectedTemplate];
-        
-        // Update form fields
-        document.getElementById('id_assignment_type_custom').value = config.type;
-        document.getElementById('id_max_score').value = config.maxScore;
-        document.getElementById('id_weight').value = config.weight;
-        
-        // Only update description if empty
-        const descriptionField = document.getElementById('id_description');
-        if (!descriptionField.value || descriptionField.value.trim() === '') {
-            descriptionField.value = config.description;
-        }
-        
-        // Show preview
-        preview.innerHTML = `
-            <strong>Template Applied:</strong> ${selectedTemplate}<br>
-            <small>Type: ${config.type} | Max Score: ${config.maxScore} | Weight: ${config.weight}%</small>
-        `;
-        preview.style.display = 'block';
-    } else {
-        preview.style.display = 'none';
-    }
-}
-
-// Initialize template preview on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const templateSelect = document.querySelector('[name="template"]');
-    if (templateSelect) {
-        // Create preview element
-        const preview = document.createElement('div');
-        preview.id = 'templatePreview';
-        preview.className = 'template-preview';
-        templateSelect.parentNode.appendChild(preview);
-    }
-});
 </script>
 {% endblock %}

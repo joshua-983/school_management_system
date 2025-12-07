@@ -1,0 +1,118 @@
+<!-- core/templates/core/admin/timetable_groups.html -->
+{% extends 'base.html' %}
+
+{% block title %}Timetable Group Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="bi bi-people me-2"></i>
+                Timetable Group Management
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'admin_dashboard' %}">Admin Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Timetable Groups</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for group_data in groups %}
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header {% if group_data.group.name == 'Timetable Admin' %}bg-primary text-white{% elif group_data.group.name == 'Timetable Teacher' %}bg-info text-white{% elif group_data.group.name == 'Timetable Student' %}bg-success text-white{% else %}bg-warning{% endif %}">
+                    <h5 class="card-title mb-0">
+                        {{ group_data.group.name|cut:"Timetable " }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="badge bg-secondary">
+                            {{ group_data.user_count }} user{{ group_data.user_count|pluralize }}
+                        </span>
+                        <span class="badge bg-light text-dark">
+                            {{ group_data.permissions.count }} permission{{ group_data.permissions.count|pluralize }}
+                        </span>
+                    </div>
+                    
+                    <h6>Permissions:</h6>
+                    <div class="mb-3">
+                        {% for perm in group_data.permissions|slice:":3" %}
+                        <span class="badge bg-light text-dark mb-1 d-block text-start">
+                            <small>{{ perm.name }}</small>
+                        </span>
+                        {% endfor %}
+                        {% if group_data.permissions.count > 3 %}
+                        <small class="text-muted">+{{ group_data.permissions.count|add:"-3" }} more</small>
+                        {% endif %}
+                    </div>
+                    
+                    <h6>Sample Users:</h6>
+                    <ul class="list-unstyled mb-0">
+                        {% for user in group_data.users %}
+                        <li class="mb-1">
+                            <i class="bi bi-person-circle me-1"></i>
+                            {{ user.get_full_name|default:user.username }}
+                        </li>
+                        {% empty %}
+                        <li class="text-muted">No users assigned</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'user_group_management' %}?group={{ group_data.group.id }}" 
+                       class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-pencil me-1"></i> Manage Users
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Group Descriptions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-primary">
+                                <h6><i class="bi bi-shield-check me-2"></i>Timetable Admin</h6>
+                                <p class="mb-0">Full access to create, edit, delete, and manage all timetable components. Users in this group automatically get staff access.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-person-badge me-2"></i>Timetable Teacher</h6>
+                                <p class="mb-0">Can view timetables for their assigned classes. Can see timetable details but cannot modify them.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-success">
+                                <h6><i class="bi bi-person-video me-2"></i>Timetable Student</h6>
+                                <p class="mb-0">Can view their own class timetable only. Access is automatically filtered by their class level.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6><i class="bi bi-people me-2"></i>Timetable Parent</h6>
+                                <p class="mb-0">Can view timetables for their children's classes. Access is automatically filtered by their children's class levels.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

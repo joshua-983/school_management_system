@@ -1,4 +1,4 @@
-# audit_enhancements.py - FIXED VERSION WITH CSRF PROTECTION
+# core/views/audit_enhancements.py - FIXED VERSION
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, CreateView, UpdateView, DetailView, TemplateView
 from django.contrib import messages
@@ -9,34 +9,31 @@ from django.utils import timezone
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import get_user_model  # FIXED: Use get_user_model for custom user model
-from django.db import models  # ADDED: For Count aggregation
-from django.views.decorators.csrf import ensure_csrf_cookie  # ADDED: CSRF protection
+from django.contrib.auth import get_user_model
+from django.db import models
+from django.views.decorators.csrf import ensure_csrf_cookie
 import json
 from datetime import datetime
 
-# FIXED: Get the custom user model
 User = get_user_model()
 
 from core.models import (
     AuditAlertRule, SecurityEvent, AuditReport, DataRetentionPolicy
 )
 
-# If you don't have these utils yet, use placeholder classes
+# Import utility classes
 try:
     from core.utils.audit_enhancements import (
         RealTimeSecurityMonitor, AdvancedAuditAnalytics, 
         AuditReportGenerator, DataRetentionManager
     )
 except ImportError:
-    # Placeholder implementations - FIXED: Use get_user_model()
-    from django.contrib.auth import get_user_model
+    # Placeholder implementations
     import random
     from datetime import datetime, timedelta
     
     class AdvancedAuditAnalytics:
         def predict_risk_scores(self, users):
-            """Return risk scores with proper data structure for template"""
             risk_scores = []
             for user in users:
                 risk_score = random.randint(10, 85)
@@ -53,7 +50,6 @@ except ImportError:
             return risk_scores
         
         def detect_anomalies(self):
-            """Return dummy anomalies for demonstration"""
             anomalies = [
                 {
                     'type': 'Unusual Login Time',
@@ -75,7 +71,6 @@ except ImportError:
 
     class AuditReportGenerator:
         def generate_daily_report(self):
-            User = get_user_model()
             report = AuditReport.objects.create(
                 name="Daily Report",
                 report_type="DAILY",
@@ -84,7 +79,6 @@ except ImportError:
             return report
         
         def generate_weekly_report(self):
-            User = get_user_model()
             report = AuditReport.objects.create(
                 name="Weekly Report", 
                 report_type="WEEKLY",
@@ -93,7 +87,6 @@ except ImportError:
             return report
         
         def generate_security_report(self):
-            User = get_user_model()
             report = AuditReport.objects.create(
                 name="Security Report",
                 report_type="SECURITY", 
@@ -190,7 +183,7 @@ class SecurityEventDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailVie
 
 @login_required
 @require_POST
-@ensure_csrf_cookie  # ADDED: CSRF protection
+@ensure_csrf_cookie
 def resolve_security_event(request, event_id):
     """Mark a security event as resolved"""
     if not is_admin(request.user):
@@ -278,7 +271,7 @@ class AuditAlertRuleUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
 @login_required
 @require_POST
-@ensure_csrf_cookie  # ADDED: CSRF protection
+@ensure_csrf_cookie
 def toggle_alert_rule(request, rule_id):
     """Toggle alert rule active status"""
     if not is_admin(request.user):
@@ -312,8 +305,7 @@ class AdvancedAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateVie
         
         analytics = AdvancedAuditAnalytics()
         
-        # Get risk scores with better performance - FIXED: Use get_user_model()
-        User = get_user_model()
+        # Get risk scores with better performance
         users = User.objects.filter(is_active=True).only('id', 'username', 'email', 'first_name', 'last_name')[:20]
         
         try:
@@ -339,7 +331,7 @@ class AdvancedAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateVie
             context['anomaly_count'] = 0
             context['recent_anomalies'] = []
         
-        # Add basic statistics - FIXED: Use get_user_model()
+        # Add basic statistics
         context['total_users'] = User.objects.count()
         context['active_users'] = User.objects.filter(is_active=True).count()
         context['security_events_count'] = SecurityEvent.objects.count()
@@ -384,7 +376,7 @@ class AuditReportListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
 
 @login_required
 @require_POST
-@ensure_csrf_cookie  # ADDED: CSRF protection
+@ensure_csrf_cookie
 def generate_custom_report(request):
     """Generate custom audit report"""
     if not is_admin(request.user):
@@ -438,7 +430,7 @@ class DataRetentionPolicyListView(LoginRequiredMixin, UserPassesTestMixin, ListV
 
 @login_required
 @require_POST
-@ensure_csrf_cookie  # ADDED: CSRF protection
+@ensure_csrf_cookie
 def apply_retention_policies(request):
     """Apply all data retention policies"""
     if not is_admin(request.user):
@@ -459,7 +451,7 @@ def apply_retention_policies(request):
 
 @login_required
 @require_POST
-@ensure_csrf_cookie  # ADDED: CSRF protection
+@ensure_csrf_cookie
 def run_anomaly_detection(request):
     """API endpoint to run anomaly detection"""
     if not is_admin(request.user):
@@ -478,73 +470,3 @@ def run_anomaly_detection(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
-def security_dashboard(request):
-    """Security dashboard overview"""
-    if not is_admin(request.user):
-        raise PermissionDenied
-    
-    # Get security statistics
-    total_events = SecurityEvent.objects.count()
-    critical_events = SecurityEvent.objects.filter(severity='CRITICAL', is_resolved=False).count()
-    active_rules = AuditAlertRule.objects.filter(is_active=True).count()
-    
-    # Recent security events
-    recent_events = SecurityEvent.objects.select_related('user', 'rule').order_by('-created_at')[:10]
-    
-    # Event severity distribution - FIXED: Use models.Count
-    severity_distribution = SecurityEvent.objects.values('severity').annotate(
-        count=models.Count('id')
-    ).order_by('severity')
-    
-    context = {
-        'total_events': total_events,
-        'critical_events': critical_events,
-        'active_rules': active_rules,
-        'recent_events': recent_events,
-        'severity_distribution': list(severity_distribution),
-    }
-    
-    return render(request, 'core/audit/security_dashboard.html', context)
-
-
-@login_required
-def security_stats_api(request):
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-    
-    stats = {
-        'total_events': SecurityEvent.objects.count(),
-        'critical_events': SecurityEvent.objects.filter(severity='CRITICAL', is_resolved=False).count(),
-        'active_rules': AuditAlertRule.objects.filter(is_active=True).count(),
-        'threat_level': 'MEDIUM',  # You can implement your own logic here
-    }
-    
-    return JsonResponse(stats)
-
-
-@login_required
-def security_notifications_api(request):
-    if not request.user.is_superuser:
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-    
-    # Return recent security notifications
-    notifications = []
-    return JsonResponse(notifications, safe=False)
-
-
-@login_required
-def system_health_api(request):
-    """API endpoint for system health data"""
-    if not is_admin(request.user):
-        return JsonResponse({'error': 'Permission denied'}, status=403)
-    
-    health_data = {
-        'system_status': 'Healthy',
-        'response_time': '0.45s',
-        'database_status': 'Connected',
-        'cache_status': 'Active',
-        'timestamp': timezone.now().isoformat()
-    }
-    
-    return JsonResponse(health_data)

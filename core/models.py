@@ -142,6 +142,10 @@ class Subject(models.Model):
     def __str__(self):
         return f"{self.name} ({self.code})"
     
+    def get_assignment_count(self):
+        """Get number of assignments for this subject"""
+        return self.classassignment_set.filter(is_active=True).count()
+    
     def generate_subject_code(self):
         """Generate a 3-letter subject code from the name"""
         # Remove common words and get first letters
@@ -286,7 +290,13 @@ class Student(models.Model):
         ordering = ['class_level', 'last_name', 'first_name']
         verbose_name = 'Student'
         verbose_name_plural = 'Students'
- 
+        indexes = [
+            # NEW indexes
+            models.Index(fields=['student_id']),
+            models.Index(fields=['class_level', 'is_active']),
+            models.Index(fields=['last_name', 'first_name']),
+            models.Index(fields=['is_active', 'class_level']),
+        ]
     def __str__(self):
         return f"{self.get_full_name()} ({self.student_id}) - {self.get_class_level_display()}"
     
@@ -848,7 +858,14 @@ class ClassAssignment(models.Model):
         verbose_name = 'Class Assignment'
         verbose_name_plural = 'Class Assignments'
         ordering = ['class_level', 'subject']
-    
+        indexes = [
+            # NEW indexes
+            models.Index(fields=['class_level', 'subject', 'academic_year']),
+            models.Index(fields=['teacher', 'is_active']),
+            models.Index(fields=['is_active', 'academic_year']),
+            models.Index(fields=['class_level', 'is_active']),
+        ]
+
     def __str__(self):
         return f"{self.get_class_level_display()} - {self.subject} - {self.teacher} ({self.academic_year})"
     
@@ -1103,6 +1120,8 @@ class AttendanceSummary(models.Model):
 # ===== GRADE MANAGEMENT =====
 
 # In core/models.py - Complete updated Grade class
+# In core/models.py - Complete updated Grade model with enhanced class assignment logic
+
 class Grade(models.Model):
     """
     Enhanced Grade Model with comprehensive validation, business logic,
@@ -1150,8 +1169,8 @@ class Grade(models.Model):
         'ClassAssignment', 
         on_delete=models.CASCADE, 
         related_name='grades',
-        null=True,  # FIXED: Allow null initially
-        blank=True  # FIXED: Allow blank in forms
+        null=True,
+        blank=True
     )
     academic_year = models.CharField(
         max_length=9, 
@@ -1232,9 +1251,8 @@ class Grade(models.Model):
         help_text="Automatically determined GES grade"
     )
     
-    # FIXED: Letter grade field with correct max_length
     letter_grade = models.CharField(
-        max_length=3,  # Fixed: Changed from 2 to 3 to accommodate 'N/A'
+        max_length=3,
         choices=LETTER_GRADE_CHOICES,
         editable=False,
         blank=True,
@@ -1303,14 +1321,22 @@ class Grade(models.Model):
         verbose_name = 'Grade'
         verbose_name_plural = 'Grades'
         indexes = [
+            # Existing indexes
             models.Index(fields=['student', 'academic_year', 'term']),
             models.Index(fields=['subject', 'academic_year']),
             models.Index(fields=['class_assignment', 'term']),
             models.Index(fields=['total_score']),
             models.Index(fields=['ges_grade']),
             models.Index(fields=['letter_grade']),
+            
+            # NEW indexes for better performance
+            models.Index(fields=['student', 'subject', 'academic_year', 'term']),
+            models.Index(fields=['total_score', 'ges_grade']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['class_assignment', 'academic_year', 'term']),
+            models.Index(fields=['student', 'class_assignment']),
+            models.Index(fields=['academic_year', 'term', 'class_level']),
         ]
-
     def __str__(self):
         """Fixed: Use get_display_grade method for consistent grade display"""
         grade_display = self.get_display_grade()
@@ -1329,10 +1355,6 @@ class Grade(models.Model):
             
             if not self.subject_id:
                 errors['subject'] = 'Subject is required'
-            
-            # FIXED: Don't require class_assignment in clean() - handle in save()
-            # if not self.class_assignment_id:
-            #     errors['class_assignment'] = 'Class assignment is required'
             
             # Validate academic year format and logic
             if self.academic_year:
@@ -1418,14 +1440,12 @@ class Grade(models.Model):
             if self._is_term_locked():
                 errors['__all__'] = 'Cannot modify grades for locked academic term'
             
-            # FIXED: Only validate class assignment if it exists
-            if (self.class_assignment_id and self.student_id and 
-                self.student.class_level != self.class_assignment.class_level):
-                errors['class_assignment'] = 'Class assignment does not match student class level'
-            
-            if (self.class_assignment_id and self.subject_id and 
-                self.subject != self.class_assignment.subject):
-                errors['class_assignment'] = 'Class assignment does not match subject'
+            # Check if class assignment exists and validate it
+            if self.class_assignment_id:
+                if self.student_id and self.student.class_level != self.class_assignment.class_level:
+                    errors['class_assignment'] = 'Class assignment does not match student class level'
+                if self.subject_id and self.subject != self.class_assignment.subject:
+                    errors['class_assignment'] = 'Class assignment does not match subject'
             
             # Check for significant changes if updating existing grade
             if self.pk:
@@ -1531,54 +1551,203 @@ class Grade(models.Model):
 
     def get_or_create_class_assignment(self):
         """
-        Find or create a class assignment for this grade
+        Enhanced class assignment creation with comprehensive error handling
+        and teacher assignment logic
         """
         from django.db import transaction
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         
-        # Use class_level from the grade or fall back to student's class level
-        target_class_level = self.class_level or (self.student.class_level if self.student else None)
-        
-        if not target_class_level:
-            raise ValueError("Cannot create class assignment: No class level specified")
-        
-        # Try to find existing class assignment
-        class_assignment = ClassAssignment.objects.filter(
-            class_level=target_class_level,
-            subject=self.subject,
-            academic_year=self.academic_year.replace('/', '-'),
-            is_active=True
-        ).first()
-        
-        if class_assignment:
-            print(f"DEBUG: Found existing class assignment: {class_assignment}")
-            return class_assignment
-        
-        # Create new class assignment if none exists
-        print(f"DEBUG: Creating new class assignment for {target_class_level}, {self.subject}, {self.academic_year}")
-        
-        # Find an available teacher for this subject and class level
-        available_teacher = Teacher.objects.filter(
-            subjects=self.subject,
-            is_active=True
-        ).first()
-        
-        if not available_teacher:
-            # If no teacher found, use the first active teacher
-            available_teacher = Teacher.objects.filter(is_active=True).first()
-        
-        if available_teacher:
+        try:
+            # Validate required fields
+            if not all([self.student, self.subject, self.academic_year]):
+                raise ValueError(
+                    "Missing required fields for class assignment: "
+                    "student, subject, and academic year are required"
+                )
+            
+            # Determine target class level
+            target_class_level = self.class_level or getattr(self.student, 'class_level', None)
+            if not target_class_level:
+                raise ValueError("No class level specified for class assignment")
+            
+            # Format academic year consistently (YYYY/YYYY -> YYYY-YYYY)
+            formatted_academic_year = self.academic_year.replace('/', '-')
+            
+            logger.debug(
+                f"Creating class assignment - Class: {target_class_level}, "
+                f"Subject: {self.subject.name}, Year: {formatted_academic_year}"
+            )
+            
+            # Look for existing active class assignment
+            class_assignment = ClassAssignment.objects.filter(
+                class_level=target_class_level,
+                subject=self.subject,
+                academic_year=formatted_academic_year,
+                is_active=True
+            ).select_related('teacher', 'teacher__user').first()
+            
+            if class_assignment:
+                logger.debug(f"Found existing class assignment: {class_assignment}")
+                return class_assignment
+            
+            # No existing assignment found - create a new one
+            logger.debug("No existing class assignment found, creating new one")
+            
+            # Find appropriate teacher using multiple strategies
+            teacher = self._find_appropriate_teacher(target_class_level)
+            
+            if not teacher:
+                # Create a temporary teacher if none found
+                teacher = self._create_temporary_teacher()
+            
+            # Create the class assignment
             with transaction.atomic():
                 class_assignment = ClassAssignment.objects.create(
                     class_level=target_class_level,
                     subject=self.subject,
-                    teacher=available_teacher,
-                    academic_year=self.academic_year.replace('/', '-'),
+                    teacher=teacher,
+                    academic_year=formatted_academic_year,
                     is_active=True
                 )
-                print(f"DEBUG: Created new class assignment: {class_assignment}")
+                
+                logger.info(
+                    f"Created new class assignment - ID: {class_assignment.id}, "
+                    f"Class: {target_class_level}, Subject: {self.subject.name}, "
+                    f"Teacher: {teacher.employee_id}, Year: {formatted_academic_year}"
+                )
+                
+                # Update analytics cache
+                self._update_class_assignment_cache(class_assignment)
+                
                 return class_assignment
+                
+        except Exception as e:
+            logger.error(
+                f"Failed to get/create class assignment - "
+                f"Student: {getattr(self.student, 'id', 'Unknown')}, "
+                f"Subject: {getattr(self.subject, 'name', 'Unknown')}, "
+                f"Error: {str(e)}",
+                exc_info=True
+            )
+            raise
+    
+    def _find_appropriate_teacher(self, class_level):
+        """
+        Find appropriate teacher for the class assignment using multiple strategies
+        """
+        try:
+            # Strategy 1: Find teachers who teach this subject
+            subject_teachers = Teacher.objects.filter(
+                subjects=self.subject,
+                is_active=True
+            ).select_related('user')
+            
+            if subject_teachers.exists():
+                # Strategy 1a: Find teachers who already teach this class level
+                for teacher in subject_teachers:
+                    # Safely handle class_levels field (could be None or empty)
+                    if teacher.class_levels:
+                        teacher_classes = [cls.strip() for cls in teacher.class_levels.split(',')]
+                        if class_level in teacher_classes:
+                            logger.debug(f"Found teacher {teacher.employee_id} for class {class_level}")
+                            return teacher
+                
+                # Strategy 1b: Use first available subject teacher
+                teacher = subject_teachers.first()
+                logger.debug(f"Using subject teacher {teacher.employee_id} for class {class_level}")
+                return teacher
+            
+            # Strategy 2: Find teachers who teach this class level
+            class_teachers = Teacher.objects.filter(
+                is_active=True
+            ).select_related('user')
+            
+            for teacher in class_teachers:
+                if teacher.class_levels:
+                    teacher_classes = [cls.strip() for cls in teacher.class_levels.split(',')]
+                    if class_level in teacher_classes:
+                        logger.debug(f"Found class teacher {teacher.employee_id} for class {class_level}")
+                        return teacher
+            
+            # Strategy 3: Find any active teacher
+            any_teacher = Teacher.objects.filter(is_active=True).first()
+            if any_teacher:
+                logger.debug(f"Using available teacher {any_teacher.employee_id} for class {class_level}")
+                return any_teacher
+            
+            logger.warning(f"No active teachers found for class {class_level}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding appropriate teacher: {str(e)}", exc_info=True)
+            return None
+    
+    def _create_temporary_teacher(self):
+        """
+        Create a temporary teacher record when no teachers are available
+        """
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         
-        raise ValueError("No available teacher found for class assignment")
+        try:
+            # Find or create a system user for temporary teachers
+            system_user, created = User.objects.get_or_create(
+                username='system_teacher',
+                defaults={
+                    'email': 'system@school.edu',
+                    'first_name': 'System',
+                    'last_name': 'Teacher',
+                    'is_active': True,
+                    'is_staff': True
+                }
+            )
+            
+            # Generate temporary employee ID
+            current_year = str(timezone.now().year)
+            teacher_count = Teacher.objects.count()
+            employee_id = f"TEMP{current_year}{teacher_count + 1:04d}"
+            
+            # Create temporary teacher
+            teacher = Teacher.objects.create(
+                user=system_user,
+                employee_id=employee_id,
+                date_of_birth=date(1980, 1, 1),
+                gender='M',
+                phone_number='0240000000',
+                address='Temporary System Teacher',
+                qualification='System Generated',
+                class_levels='P1,P2,P3,P4,P5,P6,J1,J2,J3',  # All classes
+                is_active=True
+            )
+            
+            # Add subject to teacher
+            teacher.subjects.add(self.subject)
+            
+            logger.warning(f"Created temporary teacher {employee_id} for subject {self.subject.name}")
+            
+            return teacher
+            
+        except Exception as e:
+            logger.error(f"Failed to create temporary teacher: {str(e)}", exc_info=True)
+            # Last resort: return any teacher or None
+            return Teacher.objects.filter(is_active=True).first()
+    
+    def _update_class_assignment_cache(self, class_assignment):
+        """Update cache after creating class assignment"""
+        try:
+            from django.core.cache import cache
+            
+            # Clear cache for this class level and subject
+            cache_key = f"class_assignments_{class_assignment.class_level}_{class_assignment.subject_id}"
+            cache.delete(cache_key)
+            
+            # Clear teacher assignment cache
+            teacher_cache_key = f"teacher_assignments_{class_assignment.teacher_id}"
+            cache.delete(teacher_cache_key)
+            
+        except Exception as e:
+            logger.warning(f"Failed to update class assignment cache: {str(e)}")
 
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -1590,20 +1759,17 @@ class Grade(models.Model):
             # Pre-save validation
             is_new = self.pk is None
             
-            # FIXED: Set class_level from student if not set
+            # Set class_level from student if not set
             if self.student and not self.class_level:
                 self.class_level = self.student.class_level
-                print(f"DEBUG: Auto-set class_level to {self.class_level} from student")
             
-            # FIXED: Auto-create class_assignment if not set
+            # Auto-create class_assignment if not set
             if not self.class_assignment_id and self.student and self.subject and self.academic_year:
                 try:
                     self.class_assignment = self.get_or_create_class_assignment()
-                    print(f"DEBUG: Auto-created class_assignment: {self.class_assignment}")
                 except Exception as e:
-                    print(f"DEBUG: Could not auto-create class assignment: {e}")
-                    # Don't fail the save - class_assignment can be set later
                     logger.warning(f"Could not auto-create class assignment: {e}")
+                    # Don't fail the save - class_assignment can be set later
             
             # Run full validation
             self.full_clean()
@@ -2085,6 +2251,7 @@ class Grade(models.Model):
             'total': float(self.total_score) if self.total_score else 0.0,
         }
 
+
 class SchoolConfiguration(models.Model):
     GRADING_SYSTEM_CHOICES = [
         ('GES', 'Ghana Education System (1-9)'),
@@ -2201,8 +2368,23 @@ class Assignment(models.Model):
         return f"{self.get_assignment_type_display()} - {self.subject} ({self.class_assignment.get_class_level_display()})"
     
     def clean(self):
-        if self.due_date and self.due_date <= timezone.now():
-            raise ValidationError({'due_date': 'Due date must be in the future'})
+        """Model-level validation"""
+        super().clean()
+        
+        # Ensure subject is set if we have class_assignment
+        if self.class_assignment and not self.subject_id:
+            self.subject = self.class_assignment.subject
+        
+        # Validate subject is required
+        if not self.subject_id:
+            raise ValidationError({'subject': 'Subject is required'})
+        
+        # Validate subject matches class_assignment
+        if (self.class_assignment and self.subject_id and 
+            self.class_assignment.subject_id != self.subject_id):
+            raise ValidationError({
+                'subject': f'Subject must match class assignment subject ({self.class_assignment.subject.name})'
+            })
 
     def get_status_summary(self):
         return {
@@ -2226,9 +2408,33 @@ class Assignment(models.Model):
         return self.due_date < timezone.now()
 
     def save(self, *args, **kwargs):
+        """Save assignment with automatic subject setting"""
         is_new = self.pk is None
+        
+        # ===========================================
+        # CRITICAL FIX: Auto-set subject from class_assignment
+        # ===========================================
+        if self.class_assignment and not self.subject_id:
+            self.subject = self.class_assignment.subject
+            print(f"DEBUG: Auto-set subject to {self.subject.name} from class_assignment")
+        
+        # Double-check subject is set (safety check)
+        if not self.subject_id:
+            raise ValidationError({
+                'subject': 'Subject is required. Either set subject directly or provide a class_assignment.'
+            })
+        
+        # Validate subject matches class_assignment subject
+        if (self.class_assignment and self.subject_id and 
+            self.class_assignment.subject_id != self.subject_id):
+            raise ValidationError({
+                'subject': f'Subject mismatch. Class assignment is for {self.class_assignment.subject.name}, but assignment subject is {self.subject.name}.'
+            })
+        
+        # Call parent save
         super().save(*args, **kwargs)
-
+        
+        # Create student assignments for new assignments
         if is_new:
             from django.db import transaction
             transaction.on_commit(lambda: self.create_student_assignments())
@@ -3483,16 +3689,22 @@ class TimeSlot(models.Model):
     break_name = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
     
     class Meta:
         ordering = ['period_number']
         verbose_name = 'Time Slot'
         verbose_name_plural = 'Time Slots'
+        permissions = [
+            ('can_view_timeslot', 'Can view time slot'),
+            ('manage_timeslot', 'Can manage time slot'),
+        ]
     
     def __str__(self):
         if self.is_break:
             return f"{self.break_name} ({self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')})"
         return f"Period {self.period_number} ({self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')})"
+
 
 class Timetable(models.Model):
     DAYS_OF_WEEK = [
@@ -3518,9 +3730,14 @@ class Timetable(models.Model):
         ordering = ['class_level', 'day_of_week']
         verbose_name = 'Timetable'
         verbose_name_plural = 'Timetables'
+        permissions = [
+            ('can_view_timetable', 'Can view timetable'),
+            ('manage_timetable', 'Can manage timetable'),
+        ]
     
     def __str__(self):
         return f"{self.get_class_level_display()} - {self.get_day_of_week_display()} - {self.academic_year} Term {self.term}"
+
 
 class TimetableEntry(models.Model):
     timetable = models.ForeignKey(Timetable, on_delete=models.CASCADE, related_name='entries')
@@ -3529,6 +3746,7 @@ class TimetableEntry(models.Model):
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
     classroom = models.CharField(max_length=100, blank=True)
     is_break = models.BooleanField(default=False)
+    break_name = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -3536,13 +3754,15 @@ class TimetableEntry(models.Model):
         unique_together = ('timetable', 'time_slot')
         verbose_name = 'Timetable Entry'
         verbose_name_plural = 'Timetable Entries'
+        permissions = [
+            ('view_timetable_entry', 'Can view timetable entry'),
+            ('manage_timetable_entry', 'Can manage timetable entry'),
+        ]
     
     def __str__(self):
         if self.is_break:
-            return f"{self.time_slot.break_name} - Break"
+            return f"{self.break_name} - Break"
         return f"{self.time_slot} - {self.subject.name} - {self.teacher.get_full_name()}"
-
-# ===== ANNOUNCEMENTS =====
 
 # ===== ANNOUNCEMENTS =====
 

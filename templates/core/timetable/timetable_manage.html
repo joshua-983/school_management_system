@@ -6,6 +6,8 @@
 <style>
     .timeslot-card {
         transition: all 0.2s ease-in-out;
+        border: 1px solid #dee2e6;
+        border-left: 4px solid #3a7bd5;
     }
     .timeslot-card:hover {
         transform: translateY(-2px);
@@ -14,6 +16,7 @@
     .break-card {
         background-color: #fff3cd;
         border-color: #ffeaa7;
+        border-left-color: #ffc107;
     }
     .teacher-select, .subject-select {
         width: 100%;
@@ -24,6 +27,28 @@
     .collapsed .bi-chevron-down {
         transform: rotate(-90deg);
         transition: transform 0.2s ease-in-out;
+    }
+    .is-invalid {
+        border-color: #dc3545 !important;
+    }
+    .is-valid {
+        border-color: #198754 !important;
+    }
+    .error-message {
+        color: #dc3545;
+        font-size: 0.875em;
+        margin-top: 0.25rem;
+    }
+    .field-required::after {
+        content: " *";
+        color: #dc3545;
+    }
+    .period-time {
+        font-weight: 600;
+        color: #3a7bd5;
+    }
+    .break-fields, .class-fields {
+        margin-top: 1rem;
     }
 </style>
 {% endblock %}
@@ -41,9 +66,9 @@
                     <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-outline-primary">
                         <i class="bi bi-eye me-1"></i> View
                     </a>
-                    <button type="button" class="btn btn-primary" onclick="document.querySelector('form').submit()">
-                        <i class="bi bi-check-circle me-1"></i> Save Changes
-                    </button>
+                    <a href="{% url 'timetable_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Back
+                    </a>
                 </div>
             </div>
             <nav aria-label="breadcrumb">
@@ -85,28 +110,38 @@
         </div>
     </div>
 
-    <form method="post">
+    <form method="post" id="timetableForm" novalidate>
         {% csrf_token %}
         <input type="hidden" name="timetable_id" value="{{ timetable.pk }}">
         
-        <div class="row">
+        <div class="row mb-4">
             <div class="col-12">
-                <div class="card shadow-sm mb-4">
+                <div class="card shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Daily Schedule Configuration</h5>
                         <button type="button" class="btn btn-sm btn-outline-secondary" 
                                 data-bs-toggle="collapse" data-bs-target="#helpCollapse">
-                            <i class="bi bi-question-circle me-1"></i> Help
+                            <i class="bi bi-question-circle me-1"></i> Help & Instructions
                         </button>
                     </div>
                     <div class="collapse" id="helpCollapse">
                         <div class="card-body bg-light">
                             <p class="mb-2"><strong>Instructions:</strong></p>
-                            <ul class="mb-0">
-                                <li>Select subjects and teachers for each time slot</li>
-                                <li>Mark periods as breaks for lunch, recess, etc.</li>
+                            <ol class="mb-3">
+                                <li>For each time slot, either:
+                                    <ul>
+                                        <li>Select a subject and teacher for a class period</li>
+                                        <li>OR mark as a break period and provide a break name</li>
+                                    </ul>
+                                </li>
                                 <li>Assign classrooms if needed</li>
-                                <li>Click "Save Changes" when finished</li>
+                                <li>Click "Save All Changes" when finished</li>
+                            </ol>
+                            <p class="mb-2"><strong>Tips:</strong></p>
+                            <ul class="mb-0">
+                                <li>Mark periods as breaks for lunch, recess, assemblies, etc.</li>
+                                <li>Use descriptive break names like "Morning Assembly" or "Lunch Break"</li>
+                                <li>Ensure teachers are not double-booked in the same period</li>
                             </ul>
                         </div>
                     </div>
@@ -122,111 +157,119 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="bi bi-clock me-1"></i>
-                            {{ timeslot.get_period_number_display }}
-                            <small class="text-muted">
+                            <span class="period-time">{{ timeslot.get_period_number_display }}</span>
+                            <small class="text-muted ms-2">
                                 ({{ timeslot.start_time|time:"H:i" }} - {{ timeslot.end_time|time:"H:i" }})
                             </small>
                         </h6>
                         {% if timeslot.is_break %}
-                        <span class="badge bg-warning">Break</span>
+                        <span class="badge bg-warning">Pre-defined Break</span>
                         {% endif %}
                     </div>
                     <div class="card-body">
-                        <!-- Hidden fields for time slot and entry ID -->
-                        <input type="hidden" name="timeslot_{{ timeslot.id }}_id" value="{{ timeslot.id }}">
-                        {% if form.instance.pk %}
-                        <input type="hidden" name="entry_{{ timeslot.id }}_id" value="{{ form.instance.id }}">
-                        {% endif %}
+                        <!-- Hidden field for existing entry ID -->
+                        <input type="hidden" name="entry_{{ timeslot.id }}" value="{{ form.instance.id|default:'' }}">
                         
                         <div class="mb-3">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" 
+                                <input class="form-check-input break-toggle" 
+                                       type="checkbox" 
                                        name="timeslot_{{ timeslot.id }}_is_break" 
                                        id="break_{{ timeslot.id }}" 
                                        value="true" 
                                        {% if form.initial.is_break %}checked{% endif %}
-                                       onchange="toggleBreakFields({{ timeslot.id }})">
+                                       data-timeslot-id="{{ timeslot.id }}">
                                 <label class="form-check-label" for="break_{{ timeslot.id }}">
                                     Mark as break period
                                 </label>
                             </div>
                         </div>
 
+                        <!-- BREAK FIELDS -->
                         <div id="break_fields_{{ timeslot.id }}" 
+                             class="break-fields" 
                              style="display: {% if form.initial.is_break %}block{% else %}none{% endif %};">
                             <div class="mb-3">
                                 <label for="break_name_{{ timeslot.id }}" class="form-label">
                                     Break Name
                                 </label>
-                                <input type="text" class="form-control" 
+                                <input type="text" 
+                                       class="form-control" 
                                        name="timeslot_{{ timeslot.id }}_break_name" 
                                        id="break_name_{{ timeslot.id }}" 
-                                       value="{{ form.initial.break_name|default:timeslot.break_name }}"
-                                       placeholder="e.g., Lunch Break, Morning Recess">
+                                       value="{{ form.initial.break_name|default:timeslot.break_name|default:'' }}"
+                                       placeholder="e.g., Lunch Break, Morning Recess, Assembly">
+                                <div class="form-text">Optional: Name for this break period</div>
                             </div>
                         </div>
 
+                        <!-- CLASS FIELDS -->
                         <div id="class_fields_{{ timeslot.id }}" 
+                             class="class-fields" 
                              style="display: {% if form.initial.is_break %}none{% else %}block{% endif %};">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="subject_{{ timeslot.id }}" class="form-label">
-                                            Subject <span class="text-danger">*</span>
+                                        <label for="subject_{{ timeslot.id }}" class="form-label field-required">
+                                            Subject
                                         </label>
                                         <select class="form-select subject-select" 
                                                 name="timeslot_{{ timeslot.id }}_subject" 
                                                 id="subject_{{ timeslot.id }}"
-                                                required>
+                                                data-timeslot-id="{{ timeslot.id }}">
                                             <option value="">Select Subject</option>
                                             {% for subject in form.fields.subject.queryset %}
                                             <option value="{{ subject.id }}" 
-                                                    {% if form.initial.subject == subject %}selected{% endif %}>
+                                                    {% if form.initial.subject.id == subject.id %}selected{% endif %}>
                                                 {{ subject.name }} ({{ subject.code }})
                                             </option>
                                             {% endfor %}
                                         </select>
+                                        <div class="invalid-feedback">Please select a subject</div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="teacher_{{ timeslot.id }}" class="form-label">
-                                            Teacher <span class="text-danger">*</span>
+                                        <label for="teacher_{{ timeslot.id }}" class="form-label field-required">
+                                            Teacher
                                         </label>
                                         <select class="form-select teacher-select" 
                                                 name="timeslot_{{ timeslot.id }}_teacher" 
                                                 id="teacher_{{ timeslot.id }}"
-                                                required>
+                                                data-timeslot-id="{{ timeslot.id }}">
                                             <option value="">Select Teacher</option>
                                             {% for teacher in form.fields.teacher.queryset %}
                                             <option value="{{ teacher.id }}" 
-                                                    {% if form.initial.teacher == teacher %}selected{% endif %}>
+                                                    {% if form.initial.teacher.id == teacher.id %}selected{% endif %}>
                                                 {{ teacher.get_full_name }}
                                             </option>
                                             {% endfor %}
                                         </select>
+                                        <div class="invalid-feedback">Please select a teacher</div>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label for="classroom_{{ timeslot.id }}" class="form-label">
-                                    Classroom
+                                    Classroom / Location
                                 </label>
-                                <input type="text" class="form-control" 
+                                <input type="text" 
+                                       class="form-control" 
                                        name="timeslot_{{ timeslot.id }}_classroom" 
                                        id="classroom_{{ timeslot.id }}" 
-                                       value="{{ form.initial.classroom }}"
-                                       placeholder="e.g., Room 101, Science Lab">
+                                       value="{{ form.initial.classroom|default:'' }}"
+                                       placeholder="e.g., Room 101, Science Lab, Computer Lab">
+                                <div class="form-text">Optional: Classroom or location for this period</div>
                             </div>
                         </div>
                     </div>
                     <div class="card-footer bg-transparent">
                         <small class="text-muted">
                             {% if form.instance.pk %}
-                            Last updated: {{ form.instance.updated_at|timesince }} ago
+                            <i class="bi bi-check-circle text-success me-1"></i> Configured
                             {% else %}
-                            Not configured yet
+                            <i class="bi bi-clock text-muted me-1"></i> Not configured
                             {% endif %}
                         </small>
                     </div>
@@ -240,10 +283,10 @@
                 <div class="card shadow-sm">
                     <div class="card-body">
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-secondary me-md-2">
-                                <i class="bi bi-x-circle me-1"></i> Cancel
-                            </a>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="button" class="btn btn-secondary me-md-2" onclick="resetForm()">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Reset
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="saveButton">
                                 <i class="bi bi-check-circle me-1"></i> Save All Changes
                             </button>
                         </div>
@@ -261,6 +304,7 @@
 
 {% block extra_js %}
 <script>
+// Function to toggle between break and class fields
 function toggleBreakFields(timeslotId) {
     const isBreak = document.getElementById(`break_${timeslotId}`).checked;
     const breakFields = document.getElementById(`break_fields_${timeslotId}`);
@@ -269,112 +313,301 @@ function toggleBreakFields(timeslotId) {
     const teacherSelect = document.getElementById(`teacher_${timeslotId}`);
     
     if (isBreak) {
+        // Show break fields, hide class fields
         breakFields.style.display = 'block';
         classFields.style.display = 'none';
-        subjectSelect.removeAttribute('required');
-        teacherSelect.removeAttribute('required');
+        
+        // Clear and disable validation for class fields
+        if (subjectSelect) {
+            subjectSelect.value = '';
+            subjectSelect.removeAttribute('required');
+            subjectSelect.classList.remove('is-invalid', 'is-valid');
+        }
+        if (teacherSelect) {
+            teacherSelect.value = '';
+            teacherSelect.removeAttribute('required');
+            teacherSelect.classList.remove('is-invalid', 'is-valid');
+        }
+        
+        // Enable break name field
+        const breakNameInput = document.getElementById(`break_name_${timeslotId}`);
+        if (breakNameInput) {
+            breakNameInput.removeAttribute('disabled');
+        }
     } else {
+        // Show class fields, hide break fields
         breakFields.style.display = 'none';
         classFields.style.display = 'block';
-        subjectSelect.setAttribute('required', 'required');
-        teacherSelect.setAttribute('required', 'required');
+        
+        // Enable validation for class fields
+        if (subjectSelect) {
+            subjectSelect.setAttribute('required', 'required');
+        }
+        if (teacherSelect) {
+            teacherSelect.setAttribute('required', 'required');
+        }
+        
+        // Clear break name field
+        const breakNameInput = document.getElementById(`break_name_${timeslotId}`);
+        if (breakNameInput) {
+            breakNameInput.value = '';
+            breakNameInput.setAttribute('disabled', 'disabled');
+        }
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Select2 for better dropdowns
-    $('.teacher-select, .subject-select').select2({
-        theme: 'bootstrap-5',
-        width: '100%',
-        placeholder: 'Select an option',
-        allowClear: true
+// Function to validate a single field
+function validateField(field) {
+    field.classList.remove('is-invalid', 'is-valid');
+    
+    const timeslotId = field.name.split('_')[1];
+    const isBreak = document.getElementById(`break_${timeslotId}`)?.checked;
+    
+    // Skip validation for break-related fields when not in break mode
+    if (field.name.includes('break_name')) {
+        if (!isBreak) return;
+        if (field.value.trim() === '') {
+            field.classList.add('is-invalid');
+        } else {
+            field.classList.add('is-valid');
+        }
+        return;
+    }
+    
+    // Validate subject and teacher when in class mode
+    if ((field.name.includes('subject') || field.name.includes('teacher')) && !isBreak) {
+        if (!field.value) {
+            field.classList.add('is-invalid');
+        } else {
+            field.classList.add('is-valid');
+        }
+    }
+}
+
+// Function to check for teacher conflicts
+function checkTeacherConflicts() {
+    const teacherAssignments = {};
+    const conflicts = [];
+    
+    // Gather all teacher assignments
+    document.querySelectorAll('.teacher-select').forEach(select => {
+        const teacherId = select.value;
+        const timeslotId = select.getAttribute('data-timeslot-id');
+        
+        if (teacherId && timeslotId) {
+            const isBreak = document.getElementById(`break_${timeslotId}`)?.checked;
+            
+            if (!isBreak) {
+                if (!teacherAssignments[teacherId]) {
+                    teacherAssignments[teacherId] = [];
+                }
+                
+                const timeSlotElement = document.querySelector(`#timeslot-${timeslotId} .period-time`);
+                const timeSlotText = timeSlotElement ? timeSlotElement.textContent : `Period ${timeslotId}`;
+                
+                teacherAssignments[teacherId].push({
+                    timeslotId: timeslotId,
+                    timeSlot: timeSlotText,
+                    teacherName: select.options[select.selectedIndex].text
+                });
+            }
+        }
     });
     
-    // Add form validation
-    const form = document.querySelector('form');
+    // Check for conflicts (same teacher in multiple periods)
+    for (const [teacherId, assignments] of Object.entries(teacherAssignments)) {
+        if (assignments.length > 1) {
+            conflicts.push({
+                teacherName: assignments[0].teacherName,
+                periods: assignments.map(a => a.timeSlot)
+            });
+        }
+    }
+    
+    return conflicts;
+}
+
+// Function to reset the form
+function resetForm() {
+    if (confirm('Are you sure you want to reset all changes? This will clear all subject, teacher, and classroom selections.')) {
+        document.querySelectorAll('select').forEach(select => {
+            select.value = '';
+            select.classList.remove('is-valid', 'is-invalid');
+        });
+        
+        document.querySelectorAll('input[type="text"]').forEach(input => {
+            if (!input.name.includes('break_name')) {
+                input.value = '';
+            }
+        });
+        
+        document.querySelectorAll('.break-toggle').forEach(checkbox => {
+            checkbox.checked = false;
+            const timeslotId = checkbox.getAttribute('data-timeslot-id');
+            toggleBreakFields(timeslotId);
+        });
+    }
+}
+
+// Main initialization when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Select2 if available
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.teacher-select, .subject-select').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Select an option',
+            allowClear: true
+        }).on('change', function() {
+            validateField(this);
+        });
+    }
+    
+    // Initialize all break toggles
+    document.querySelectorAll('.break-toggle').forEach(toggle => {
+        const timeslotId = toggle.getAttribute('data-timeslot-id');
+        
+        // Set initial state
+        toggleBreakFields(timeslotId);
+        
+        // Add change event listener
+        toggle.addEventListener('change', function() {
+            toggleBreakFields(timeslotId);
+        });
+    });
+    
+    // Add validation events to all form fields
+    document.querySelectorAll('select, input[type="text"]').forEach(field => {
+        field.addEventListener('change', function() {
+            validateField(this);
+        });
+        
+        field.addEventListener('blur', function() {
+            validateField(this);
+        });
+    });
+    
+    // Form submission handler
+    const form = document.getElementById('timetableForm');
     form.addEventListener('submit', function(e) {
-        let hasErrors = false;
+        e.preventDefault();
+        
+        let isValid = true;
         const errorMessages = [];
         
-        // Check for conflicts (same teacher in multiple periods at same time)
-        const teacherAssignments = {};
-        {% for timeslot, form in entry_forms %}
-        {% if not form.initial.is_break %}
-        const teacherSelect = document.getElementById(`teacher_{{ timeslot.id }}`);
-        const subjectSelect = document.getElementById(`subject_{{ timeslot.id }}`);
-        const isBreak = document.getElementById(`break_{{ timeslot.id }}`).checked;
-        
-        if (!isBreak) {
-            if (teacherSelect.value && subjectSelect.value) {
-                if (teacherAssignments[teacherSelect.value]) {
-                    teacherAssignments[teacherSelect.value].push('{{ timeslot.get_period_number_display }}');
-                } else {
-                    teacherAssignments[teacherSelect.value] = ['{{ timeslot.get_period_number_display }}'];
-                }
+        // Validate all fields
+        document.querySelectorAll('select[required], input[type="text"][required]').forEach(field => {
+            const timeslotId = field.name.split('_')[1];
+            const isBreak = document.getElementById(`break_${timeslotId}`)?.checked;
+            
+            // Skip validation for break name when not in break mode
+            if (field.name.includes('break_name') && !isBreak) {
+                return;
             }
             
-            // Check if required fields are filled for non-break periods
-            if (!teacherSelect.value || !subjectSelect.value) {
-                hasErrors = true;
-                errorMessages.push(`Please fill all required fields for {{ timeslot.get_period_number_display }}`);
+            // Skip validation for subject/teacher when in break mode
+            if ((field.name.includes('subject') || field.name.includes('teacher')) && isBreak) {
+                return;
             }
-        }
-        {% endif %}
-        {% endfor %}
+            
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+                
+                const fieldName = field.name.includes('subject') ? 'Subject' : 
+                                 field.name.includes('teacher') ? 'Teacher' : 'Break Name';
+                
+                const timeslotElement = document.querySelector(`#timeslot-${timeslotId} .period-time`);
+                const timeSlot = timeslotElement ? timeslotElement.textContent : `Period ${timeslotId}`;
+                
+                errorMessages.push(`${fieldName} is required for ${timeSlot}`);
+            } else {
+                field.classList.add('is-valid');
+            }
+        });
         
         // Check for teacher conflicts
-        for (const [teacherId, periods] of Object.entries(teacherAssignments)) {
-            if (periods.length > 1) {
-                hasErrors = true;
-                const teacherName = $(`#teacher_${periods[0].replace(/\D/g, '')} option[value="${teacherId}"]`).text();
-                errorMessages.push(`Teacher ${teacherName} is assigned to multiple periods: ${periods.join(', ')}`);
-            }
+        const conflicts = checkTeacherConflicts();
+        if (conflicts.length > 0) {
+            isValid = false;
+            conflicts.forEach(conflict => {
+                errorMessages.push(`Teacher ${conflict.teacherName} is assigned to multiple periods: ${conflict.periods.join(', ')}`);
+            });
         }
         
-        if (hasErrors) {
+        // Show errors or submit form
+        if (!isValid) {
+            // Scroll to first error
+            const firstError = document.querySelector('.is-invalid');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstError.focus();
+            }
+            
+            // Show error alert
+            let alertMessage = 'Please fix the following errors:\n\n' + errorMessages.join('\n');
+            if (errorMessages.length > 5) {
+                alertMessage = 'Please fix the errors in the form. The first error has been highlighted.';
+            }
+            
+            alert(alertMessage);
+            return false;
+        }
+        
+        // All valid - show confirmation and submit
+        const saveButton = document.getElementById('saveButton');
+        const originalText = saveButton.innerHTML;
+        
+        saveButton.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i> Saving...';
+        saveButton.disabled = true;
+        
+        // Add spinner animation
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .spin {
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Submit the form
+        setTimeout(() => {
+            form.submit();
+        }, 500);
+    });
+    
+    // Auto-save reminder
+    let hasUnsavedChanges = false;
+    const inputs = document.querySelectorAll('select, input[type="text"], input[type="checkbox"]');
+    
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            hasUnsavedChanges = true;
+            
+            // Update save button text
+            const saveButton = document.getElementById('saveButton');
+            if (saveButton.innerHTML.includes('Save All Changes')) {
+                saveButton.innerHTML = '<i class="bi bi-save me-1"></i> Save Changes*';
+            }
+        });
+    });
+    
+    // Warn before leaving with unsaved changes
+    window.addEventListener('beforeunload', function(e) {
+        if (hasUnsavedChanges) {
             e.preventDefault();
-            let errorMessage = 'Please fix the following issues:\n\n' + errorMessages.join('\n');
-            alert(errorMessage);
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            return 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
     
-    // Add auto-save functionality
-    let autoSaveTimer;
-    const inputs = document.querySelectorAll('select, input[type="text"], input[type="checkbox"]');
-    inputs.forEach(input => {
-        input.addEventListener('change', function() {
-            clearTimeout(autoSaveTimer);
-            autoSaveTimer = setTimeout(() => {
-                // Show saving indicator
-                const saveBtn = document.querySelector('button[type="submit"]');
-                const originalText = saveBtn.innerHTML;
-                saveBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Saving...';
-                saveBtn.disabled = true;
-                
-                // Submit form
-                fetch(window.location.href, {
-                    method: 'POST',
-                    body: new FormData(form),
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        saveBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Saved!';
-                        setTimeout(() => {
-                            saveBtn.innerHTML = originalText;
-                            saveBtn.disabled = false;
-                        }, 2000);
-                    }
-                })
-                .catch(error => {
-                    saveBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Error';
-                    saveBtn.disabled = false;
-                });
-            }, 1000);
-        });
+    // Clear unsaved changes flag on form submit
+    form.addEventListener('submit', function() {
+        hasUnsavedChanges = false;
     });
 });
 </script>

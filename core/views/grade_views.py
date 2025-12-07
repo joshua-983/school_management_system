@@ -1,8 +1,16 @@
 # grade_views.py - Complete and Functional Implementation
+
+# Add these Django imports
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_cookie
+from django.core.cache import cache
+from django.http import HttpResponseForbidden, JsonResponse, HttpResponse
+
+# Existing imports
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.http import JsonResponse, HttpResponse, Http404
 from django.db.models import Avg, Max, Min, Count, Sum, Q
 from django.core.files.base import ContentFile
 from django.shortcuts import render, redirect, get_object_or_404
@@ -36,6 +44,7 @@ from ..models import (
 )
 from ..forms import GradeEntryForm, ReportCardForm, ReportCardFilterForm, BulkGradeUploadForm
 from ..utils import is_admin, is_teacher, is_student, is_parent
+from ..utils.validation import validate_grade_data, validate_bulk_grade_data
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +53,19 @@ class NotificationException(Exception):
     pass
 
 # Enhanced GradeListView with proper error handling
+# In grade_views.py - Complete updated GradeListView class
+
+
 class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
     """
     Enhanced Grade List View with comprehensive filtering, search, 
-    role-based access control, and professional UI integration.
+    role-based access control, professional UI integration, and performance optimizations.
     """
     model = Grade
     template_name = 'core/academics/grades/grade_list.html'
     context_object_name = 'grades'
     paginate_by = 25
-    ordering = ['-created_at']  # Default ordering
+    ordering = ['-id']
 
     def test_func(self):
         """
@@ -77,18 +89,23 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
 
     def get_queryset(self):
         """
-        Safe queryset filtering with validation and optimization
+        Highly optimized queryset with select_related and prefetch_related
         """
         try:
+            # Base queryset with optimized relationships - FIXED VERSION
             queryset = super().get_queryset().select_related(
-                'student', 
-                'subject', 
+                'student__user',
+                'subject',
                 'class_assignment',
                 'class_assignment__teacher',
+                'class_assignment__teacher__user',
                 'recorded_by'
-            ).prefetch_related('student__parents')
+            ).prefetch_related(
+                'student__parents',
+                'student__parents__user'
+            )
             
-            # Apply filters and search
+            # Apply filters
             queryset = self.apply_filters(queryset)
             queryset = self.apply_search(queryset)
             queryset = self.apply_role_based_filtering(queryset)
@@ -232,56 +249,59 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
 
     def apply_role_based_filtering(self, queryset):
         """
-        Apply role-based filtering safely
+        Optimized role-based filtering with efficient database queries
         """
         try:
             user = self.request.user
             
             if is_teacher(user):
-                # Teachers can only see grades for their assigned classes and subjects
-                teacher_classes = ClassAssignment.objects.filter(
+                # Use subquery for better performance
+                teacher_class_assignments = ClassAssignment.objects.filter(
                     teacher=user.teacher,
                     is_active=True
-                ).values_list('class_level', 'subject')
+                ).values_list('id', flat=True)
                 
-                # Create Q objects for each class-subject combination
-                class_subject_conditions = Q()
-                for class_level, subject in teacher_classes:
-                    class_subject_conditions |= Q(
-                        student__class_level=class_level,
-                        subject=subject
-                    )
-                
-                if class_subject_conditions:
-                    queryset = queryset.filter(class_subject_conditions)
+                if teacher_class_assignments.exists():
+                    # Use __in for better query optimization
+                    queryset = queryset.filter(class_assignment_id__in=teacher_class_assignments)
                 else:
+                    # Teacher has no assigned classes
                     queryset = queryset.none()
-                    
-                logger.debug(f"Teacher filtering applied - {user.teacher}, Classes: {len(teacher_classes)}")
+                
+                logger.debug(
+                    f"Teacher filtering applied - User: {user.username}, "
+                    f"Classes: {len(teacher_class_assignments)}"
+                )
                 
             elif is_student(user):
                 # Students can only see their own grades
                 queryset = queryset.filter(student=user.student)
-                
-            # Admins and superusers see all grades (no additional filtering)
+                logger.debug(f"Student filtering applied - User: {user.username}")
             
-            return queryset.filter(
+            # Admins and superusers see all grades (no additional filtering)
+            elif is_admin(user) or user.is_superuser:
+                logger.debug(f"Admin filtering applied - User: {user.username}")
+            
+            # Apply active status filters
+            queryset = queryset.filter(
                 student__is_active=True,
                 subject__is_active=True
-            )
+            ).distinct()
+            
+            return queryset
             
         except Exception as e:
-            logger.error(f"Role-based filtering failed: {str(e)}")
-            return queryset.none()
+            logger.error(f"Role-based filtering failed: {str(e)}", exc_info=True)
+            return Grade.objects.none()
 
     def apply_ordering(self, queryset):
         """
         Apply dynamic ordering based on request parameters
         """
-        order_by = self.request.GET.get('order_by', '-created_at')
+        order_by = self.request.GET.get('order_by', '-id')
         valid_ordering_fields = [
             'student__last_name', 'student__first_name', 'subject__name',
-            'total_score', 'ges_grade', 'academic_year', 'term', 'created_at'
+            'total_score', 'ges_grade', 'academic_year', 'term', 'id'
         ]
         
         # Handle descending order
@@ -295,7 +315,7 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
             return queryset.order_by(order_by)
         
         # Default ordering
-        return queryset.order_by('-created_at')
+        return queryset.order_by('-id')
 
     def get_context_data(self, **kwargs):
         """
@@ -370,7 +390,7 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
             'min_score': self.request.GET.get('min_score', ''),
             'max_score': self.request.GET.get('max_score', ''),
             'search': self.request.GET.get('search', ''),
-            'order_by': self.request.GET.get('order_by', '-created_at'),
+            'order_by': self.request.GET.get('order_by', '-id'),
         }
         
         # Get available filter options based on user role
@@ -428,85 +448,6 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
             logger.error(f"Error fetching students: {str(e)}")
             return Student.objects.none()
 
-    def get_available_teachers(self):
-        """
-        Get teachers for filter dropdown
-        """
-        try:
-            if is_admin(self.request.user) or self.request.user.is_superuser:
-                return Teacher.objects.filter(is_active=True).select_related('user').order_by('user__last_name')
-            else:
-                return Teacher.objects.none()
-        except Exception as e:
-            logger.error(f"Error fetching teachers: {str(e)}")
-            return Teacher.objects.none()
-
-    def get_academic_years(self):
-        """
-        Get distinct academic years from existing grades
-        """
-        try:
-            years = Grade.objects.values_list('academic_year', flat=True).distinct()
-            return [(year, year) for year in sorted(years, reverse=True)]
-        except Exception as e:
-            logger.error(f"Error fetching academic years: {str(e)}")
-            return []
-
-    def get_statistics_context(self):
-        """
-        Calculate and prepare statistics for display
-        """
-        try:
-            queryset = self.get_queryset()
-            total_grades = queryset.count()
-            
-            if total_grades > 0:
-                # Calculate average score
-                avg_result = queryset.aggregate(avg_score=Avg('total_score'))
-                average_score = avg_result['avg_score'] or 0
-                
-                # Calculate grade distribution
-                grade_distribution = queryset.values('ges_grade').annotate(
-                    count=Count('id'),
-                    percentage=ExpressionWrapper(
-                        Count('id') * 100.0 / total_grades,
-                        output_field=FloatField()
-                    )
-                ).order_by('ges_grade')
-                
-                # Calculate passing rate (GES standard: 40% and above)
-                passing_count = queryset.filter(total_score__gte=40).count()
-                passing_rate = (passing_count / total_grades * 100) if total_grades > 0 else 0
-                
-                # Get top performers
-                top_performers = queryset.order_by('-total_score')[:5]
-                
-            else:
-                average_score = 0
-                grade_distribution = []
-                passing_rate = 0
-                top_performers = []
-            
-            return {
-                'total_grades': total_grades,
-                'average_score': round(average_score, 2),
-                'passing_rate': round(passing_rate, 1),
-                'grade_distribution': grade_distribution,
-                'top_performers': top_performers,
-                'has_data': total_grades > 0,
-            }
-            
-        except Exception as e:
-            logger.error(f"Error calculating statistics: {str(e)}")
-            return {
-                'total_grades': 0,
-                'average_score': 0,
-                'passing_rate': 0,
-                'grade_distribution': [],
-                'top_performers': [],
-                'has_data': False,
-            }
-
     def get_ui_context(self):
         """
         Prepare UI-related context data
@@ -539,38 +480,46 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
         logger.warning(
             f"Unauthorized access attempt to grade list - User: {user.username}, "
             f"Role: {getattr(user, 'role', 'unknown')}"
-    )
+        )
     
         messages.error(self.request, "You don't have permission to access the grade management system.")
     
         # Use the CORRECT URL name that we confirmed works
         return redirect('student_dashboard')  # ✅ This will work!
 
-
-    def render_to_response(self, context, **response_kwargs):
-        """
-        Override to add additional response handling
-        """
-        response = super().render_to_response(context, **response_kwargs)
-        
-        # Add cache control headers
-        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response['Pragma'] = 'no-cache'
-        response['Expires'] = '0'
-        
-        return response
-
-
 class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
-    """
-    Enhanced Grade Create View with comprehensive validation,
-    transaction safety, and professional UI integration.
-    """
+    """Enhanced Grade Create View with rate limiting and comprehensive validation"""
     model = Grade
     form_class = GradeEntryForm
     template_name = 'core/academics/grades/grade_form.html'
     success_url = reverse_lazy('grade_list')
     success_message = "Grade created successfully."
+
+    def dispatch(self, request, *args, **kwargs):
+        """Add rate limiting to prevent abuse"""
+        try:
+            if is_teacher(request.user) or is_admin(request.user):
+                cache_key = f"grade_create_rate_{request.user.id}"
+                attempts = cache.get(cache_key, 0)
+                
+                if attempts >= 50:  # Limit to 50 creations per hour
+                    logger.warning(
+                        f"Rate limit exceeded for grade creation - User: {request.user.username}, "
+                        f"Attempts: {attempts}"
+                    )
+                    messages.error(
+                        request, 
+                        "Too many grade creation attempts. Please try again in an hour."
+                    )
+                    return HttpResponseForbidden("Rate limit exceeded")
+                
+                cache.set(cache_key, attempts + 1, 3600)  # 1 hour timeout
+                
+            return super().dispatch(request, *args, **kwargs)
+            
+        except Exception as e:
+            logger.error(f"Rate limiting error: {str(e)}")
+            return super().dispatch(request, *args, **kwargs)
 
     def test_func(self):
         """
@@ -830,10 +779,12 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
         
         return super().form_invalid(form)
 
+# In grade_views.py - Complete updated GradeUpdateView class
+
 class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateView):
     """
     Enhanced Grade Update View with comprehensive error handling,
-    transaction safety, and professional notification system.
+    transaction safety, professional notification system, and enhanced audit logging.
     """
     model = Grade
     form_class = GradeEntryForm
@@ -912,13 +863,15 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         # Check if the academic term is still editable
         if self._is_term_locked(grade.academic_year, grade.term):
             raise ValidationError("Cannot update grades for locked academic term")
+        
+        # Check if grade is locked
+        if grade.is_locked:
+            raise ValidationError("This grade is locked and cannot be modified")
 
     def _is_term_locked(self, academic_year, term):
         """
         Check if the academic term is locked for editing
         """
-        # Implement your term locking logic here
-        # This could check against a configuration or academic calendar
         try:
             term_obj = AcademicTerm.objects.filter(
                 academic_year=academic_year,
@@ -931,7 +884,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             return False
         except Exception as e:
             logger.warning(f"Error checking term lock status: {str(e)}")
-            return False
+            return True  # Default to locked if there's an error
 
     def get_queryset(self):
         """
@@ -984,11 +937,12 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         Check if teacher has permission to update this specific grade
         """
         try:
+            # Check if teacher is assigned to this class and subject
             has_permission = ClassAssignment.objects.filter(
                 Q(class_level=grade.student.class_level) &
                 Q(teacher=teacher) &
                 Q(subject=grade.subject) &
-                Q(academic_year=grade.academic_year) &
+                Q(academic_year=grade.academic_year.replace('/', '-')) &  # Match format
                 Q(is_active=True)
             ).exists()
             
@@ -998,7 +952,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 logger.warning(
                     f"Teacher permission denied - Teacher: {teacher}, "
                     f"Grade: {grade.id}, Class: {grade.student.class_level}, "
-                    f"Subject: {grade.subject.name}"
+                    f"Subject: {grade.subject.name}, Year: {grade.academic_year}"
                 )
             
             return has_permission
@@ -1010,26 +964,41 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
     @transaction.atomic
     def form_valid(self, form):
         """
-        Handle form validation with comprehensive transaction safety
-        and business logic validation
+        Handle form validation with enhanced audit logging
         """
         try:
-            # Store original state for comparison and audit
+            # Store original state for comprehensive audit
             original_grade = Grade.objects.get(pk=self.object.pk)
             original_scores = self._get_original_scores(original_grade)
+            original_state = self._capture_original_state(original_grade)
             
-            # Pre-save validation
-            validation_errors = self._validate_grade_update(form.cleaned_data)
+            # Pre-save validation with enhanced validation
+            validation_errors = self._validate_grade_update(form.cleaned_data, original_grade)
             if validation_errors:
                 for field, error in validation_errors.items():
                     form.add_error(field, error)
                 return self.form_invalid(form)
             
-            # Save the grade with automatic calculations
+            # Calculate changes before save
+            predicted_changes = self._predict_changes(form.cleaned_data, original_grade)
+            
+            # Check if changes require approval
+            if self._requires_approval(form.cleaned_data, original_grade):
+                form.add_error('__all__', "This grade change requires administrative approval.")
+                return self.form_invalid(form)
+            
+            # Save the grade
             response = super().form_valid(form)
             
-            # Post-save operations
-            self._handle_post_save_operations(original_scores, form.cleaned_data)
+            # Refresh object to get calculated fields
+            self.object.refresh_from_db()
+            
+            # Perform comprehensive post-save operations
+            self._handle_post_save_operations(
+                original_state, 
+                predicted_changes, 
+                form.cleaned_data
+            )
             
             return response
             
@@ -1040,7 +1009,6 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         except Exception as e:
             logger.error(f"Error saving grade: {str(e)}", exc_info=True)
             messages.error(self.request, 'Failed to update grade. Please try again.')
-            # Transaction will be rolled back automatically
             return self.form_invalid(form)
 
     def _get_original_scores(self, original_grade):
@@ -1056,7 +1024,97 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             'ges_grade': original_grade.ges_grade
         }
 
-    def _validate_grade_update(self, cleaned_data):
+    def _capture_original_state(self, grade):
+        """
+        Capture comprehensive original state for audit
+        """
+        return {
+            'id': grade.id,
+            'student_id': grade.student.id,
+            'student_name': grade.student.get_full_name(),
+            'student_code': grade.student.student_id,
+            'subject_id': grade.subject.id,
+            'subject_name': grade.subject.name,
+            'academic_year': grade.academic_year,
+            'term': grade.term,
+            'class_level': grade.class_level,
+            'scores': {
+                'classwork': float(grade.classwork_score) if grade.classwork_score else 0.0,
+                'homework': float(grade.homework_score) if grade.homework_score else 0.0,
+                'test': float(grade.test_score) if grade.test_score else 0.0,
+                'exam': float(grade.exam_score) if grade.exam_score else 0.0,
+                'total': float(grade.total_score) if grade.total_score else 0.0,
+            },
+            'grades': {
+                'ges_grade': grade.ges_grade,
+                'letter_grade': grade.letter_grade,
+                'ges_display': grade.get_ges_grade_display(),
+                'letter_display': grade.get_letter_grade_display() if hasattr(grade, 'get_letter_grade_display') else grade.letter_grade,
+            },
+            'is_passing': grade.is_passing(),
+            'performance_level': grade.get_performance_level(),
+            'recorded_by': grade.recorded_by.username if grade.recorded_by else None,
+            'recorded_by_name': grade.recorded_by.get_full_name() if grade.recorded_by else None,
+            'created_at': grade.created_at.isoformat() if grade.created_at else None,
+            'updated_at': grade.updated_at.isoformat() if grade.updated_at else None,
+            'is_locked': grade.is_locked,
+            'requires_review': grade.requires_review,
+            'remarks': grade.remarks or '',
+        }
+
+    def _predict_changes(self, cleaned_data, original_grade):
+        """
+        Predict changes that will occur
+        """
+        changes = {}
+        
+        # Predict score changes
+        score_fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score']
+        for field in score_fields:
+            original = getattr(original_grade, field, Decimal('0.00'))
+            new = cleaned_data.get(field, Decimal('0.00'))
+            
+            if original != new:
+                changes[field] = {
+                    'from': float(original),
+                    'to': float(new),
+                    'delta': float(new) - float(original),
+                    'percent_change': ((float(new) - float(original)) / float(original) * 100) if float(original) > 0 else 100
+                }
+        
+        # Predict total score change
+        original_total = original_grade.total_score or Decimal('0.00')
+        predicted_total = sum(cleaned_data.get(field, Decimal('0.00')) for field in score_fields)
+        
+        if original_total != predicted_total:
+            changes['total_score'] = {
+                'from': float(original_total),
+                'to': float(predicted_total),
+                'delta': float(predicted_total) - float(original_total),
+                'percent_change': ((float(predicted_total) - float(original_total)) / float(original_total) * 100) if float(original_total) > 0 else 100
+            }
+        
+        # Predict grade changes based on predicted total
+        if original_total != predicted_total:
+            from core.grading_utils import get_all_grades
+            original_grades = get_all_grades(float(original_total))
+            predicted_grades = get_all_grades(float(predicted_total))
+            
+            if original_grades['ges_grade'] != predicted_grades['ges_grade']:
+                changes['ges_grade'] = {
+                    'from': original_grades['ges_grade'],
+                    'to': predicted_grades['ges_grade']
+                }
+            
+            if original_grades['letter_grade'] != predicted_grades['letter_grade']:
+                changes['letter_grade'] = {
+                    'from': original_grades['letter_grade'],
+                    'to': predicted_grades['letter_grade']
+                }
+        
+        return changes
+
+    def _validate_grade_update(self, cleaned_data, original_grade=None):
         """
         Comprehensive validation for grade updates
         """
@@ -1082,19 +1140,25 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         if total_score > 100:
             errors['__all__'] = f"Total score cannot exceed 100%. Current total: {total_score}%"
         
-        # Check for significant changes that might need approval
-        if self._requires_approval(cleaned_data):
-            errors['__all__'] = "This grade change requires administrative approval."
+        # Validate decimal precision
+        for field in max_scores.keys():
+            score = cleaned_data.get(field)
+            if score is not None:
+                try:
+                    # Check if score has more than 2 decimal places
+                    score_str = str(score)
+                    if '.' in score_str and len(score_str.split('.')[1]) > 2:
+                        errors[field] = "Score cannot have more than 2 decimal places"
+                except (ValueError, TypeError):
+                    pass
         
         return errors
 
-    def _requires_approval(self, cleaned_data):
+    def _requires_approval(self, cleaned_data, original_grade):
         """
         Determine if grade change requires administrative approval
         """
         try:
-            original_grade = Grade.objects.get(pk=self.object.pk)
-            
             # Check for significant score changes (more than 20 points)
             score_changes = []
             for score_type in ['classwork', 'homework', 'test', 'exam']:
@@ -1109,128 +1173,269 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             logger.warning(f"Error checking approval requirements: {str(e)}")
             return False
 
-    def _handle_post_save_operations(self, original_scores, new_scores):
+    def _handle_post_save_operations(self, original_state, predicted_changes, cleaned_data):
         """
-        Handle all operations that should occur after successful grade update
+        Comprehensive post-save operations with detailed audit logging
         """
         try:
-            # Refresh the object to get calculated fields
+            # Refresh to get calculated fields
             self.object.refresh_from_db()
             
+            # Calculate actual changes
+            actual_changes = self._calculate_actual_changes(original_state)
+            
             # Check for significant changes
-            score_changed = self._detect_score_changes(original_scores, new_scores)
-            grade_changed = original_scores['ges_grade'] != self.object.ges_grade
+            significant_changes = self._detect_significant_changes(actual_changes)
             
-            # Log the update
-            self._log_grade_update(original_scores, score_changed, grade_changed)
+            # Create comprehensive audit log
+            self._create_comprehensive_audit_log(
+                original_state, 
+                actual_changes, 
+                significant_changes
+            )
             
-            # Send notifications if changes occurred
-            if score_changed or grade_changed:
-                self._send_notifications(score_changed, grade_changed)
+            # Send appropriate notifications
+            if significant_changes:
+                self._send_change_notifications(actual_changes, significant_changes, original_state)
                 
                 # Update analytics cache
                 self._update_analytics_cache()
                 
+                # Mark for review if needed
+                if self._requires_admin_review(actual_changes):
+                    self.object.requires_review = True
+                    self.object.save(update_fields=['requires_review'])
+                    self._notify_administrators_for_review(actual_changes, original_state)
+            
+            # Show appropriate message
+            if significant_changes:
                 messages.success(
                     self.request, 
-                    'Grade updated successfully. ' +
-                    ('Notifications sent.' if score_changed else '')
+                    f'✅ Grade updated successfully. {len(significant_changes)} significant changes detected.'
                 )
             else:
-                messages.info(self.request, 'Grade saved with no changes to scores.')
+                messages.success(self.request, '✅ Grade updated successfully with no significant changes.')
                 
         except Exception as e:
             logger.error(f"Post-save operations failed: {str(e)}", exc_info=True)
-            # Don't raise exception here as the grade was already saved successfully
             messages.warning(self.request, 'Grade updated but some follow-up operations failed.')
 
-    def _detect_score_changes(self, original_scores, new_scores):
+    def _calculate_actual_changes(self, original_state):
         """
-        Detect if any scores have actually changed
+        Calculate actual changes after save
         """
-        for score_type in ['homework', 'classwork', 'test', 'exam']:
-            original = str(original_scores[score_type])
-            new = str(new_scores.get(f"{score_type}_score", 0))
-            if original != new:
-                return True
-        return False
+        changes = {}
+        
+        # Score changes
+        score_fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score']
+        for field in score_fields:
+            original = original_state['scores'][field.replace('_score', '')]
+            new = float(getattr(self.object, field, Decimal('0.00')))
+            
+            if abs(original - new) > 0.001:  # Small tolerance for floating point
+                changes[field] = {
+                    'from': original,
+                    'to': new,
+                    'delta': new - original,
+                    'percent_change': ((new - original) / original * 100) if original > 0 else 0
+                }
+        
+        # Total score change
+        original_total = original_state['scores']['total']
+        new_total = float(self.object.total_score or Decimal('0.00'))
+        
+        if abs(original_total - new_total) > 0.001:
+            changes['total_score'] = {
+                'from': original_total,
+                'to': new_total,
+                'delta': new_total - original_total,
+                'percent_change': ((new_total - original_total) / original_total * 100) if original_total > 0 else 0
+            }
+        
+        # Grade changes
+        if original_state['grades']['ges_grade'] != self.object.ges_grade:
+            changes['ges_grade'] = {
+                'from': original_state['grades']['ges_grade'],
+                'to': self.object.ges_grade,
+                'from_display': original_state['grades']['ges_display'],
+                'to_display': self.object.get_ges_grade_display()
+            }
+        
+        if original_state['grades']['letter_grade'] != self.object.letter_grade:
+            changes['letter_grade'] = {
+                'from': original_state['grades']['letter_grade'],
+                'to': self.object.letter_grade,
+                'from_display': original_state['grades']['letter_display'],
+                'to_display': self.object.get_letter_grade_display() if hasattr(self.object, 'get_letter_grade_display') else self.object.letter_grade
+            }
+        
+        # Passing status change
+        original_passing = original_state['is_passing']
+        new_passing = self.object.is_passing()
+        
+        if original_passing != new_passing:
+            changes['passing_status'] = {
+                'from': 'PASSING' if original_passing else 'FAILING',
+                'to': 'PASSING' if new_passing else 'FAILING',
+                'significance': 'HIGH'
+            }
+        
+        # Remarks change
+        original_remarks = original_state.get('remarks', '')
+        new_remarks = self.object.remarks or ''
+        
+        if original_remarks != new_remarks:
+            changes['remarks'] = {
+                'from': original_remarks,
+                'to': new_remarks,
+                'changed': True
+            }
+        
+        return changes
 
-    def _log_grade_update(self, original_scores, score_changed, grade_changed):
+    def _detect_significant_changes(self, actual_changes):
         """
-        Log grade update for audit purposes
+        Detect significant changes that need attention
+        """
+        significant = {}
+        
+        for field, change in actual_changes.items():
+            is_significant = False
+            
+            # Score changes > 10 points
+            if field.endswith('_score'):
+                if abs(change.get('delta', 0)) > 10:
+                    is_significant = True
+            
+            # Total score change > 5%
+            elif field == 'total_score':
+                if abs(change.get('percent_change', 0)) > 5:
+                    is_significant = True
+            
+            # Grade letter change
+            elif field in ['ges_grade', 'letter_grade']:
+                is_significant = True
+            
+            # Passing status change
+            elif field == 'passing_status':
+                is_significant = True
+            
+            # Remarks changed (if not empty)
+            elif field == 'remarks' and change.get('changed', False) and change.get('to', '').strip():
+                is_significant = True
+            
+            if is_significant:
+                significant[field] = change
+        
+        return significant
+
+    def _requires_admin_review(self, actual_changes):
+        """
+        Determine if changes require admin review
+        """
+        # Passing status change always requires review
+        if 'passing_status' in actual_changes:
+            return True
+        
+        # Total score change > 20%
+        if 'total_score' in actual_changes:
+            if abs(actual_changes['total_score'].get('percent_change', 0)) > 20:
+                return True
+        
+        # Multiple significant changes
+        significant_count = sum(1 for field in actual_changes 
+                              if field.endswith('_score') 
+                              and abs(actual_changes[field].get('delta', 0)) > 15)
+        return significant_count >= 2
+
+    def _create_comprehensive_audit_log(self, original_state, actual_changes, significant_changes):
+        """
+        Create comprehensive audit log entry
         """
         try:
-            changes = {}
-            if score_changed:
-                for score_type in ['homework', 'classwork', 'test', 'exam']:
-                    original = original_scores[score_type]
-                    new = getattr(self.object, f"{score_type}_score")
-                    if str(original) != str(new):
-                        changes[f"{score_type}_score"] = {
-                            'from': float(original) if original else 0,
-                            'to': float(new) if new else 0
-                        }
-            
-            if grade_changed:
-                changes['ges_grade'] = {
-                    'from': original_scores['ges_grade'],
-                    'to': self.object.ges_grade
+            audit_details = {
+                'original_state': original_state,
+                'actual_changes': actual_changes,
+                'significant_changes': significant_changes,
+                'updated_by': {
+                    'username': self.request.user.username,
+                    'full_name': self.request.user.get_full_name(),
+                    'role': 'Admin' if is_admin(self.request.user) else 'Teacher'
+                },
+                'update_timestamp': timezone.now().isoformat(),
+                'ip_address': self._get_client_ip(),
+                'user_agent': self.request.META.get('HTTP_USER_AGENT', ''),
+                'session_id': self.request.session.session_key if hasattr(self.request, 'session') else None,
+                'grade_id': self.object.id,
+                'student_id': self.object.student.id,
+                'subject_id': self.object.subject.id,
+                'academic_year': self.object.academic_year,
+                'term': self.object.term,
+                'final_state': {
+                    'total_score': float(self.object.total_score) if self.object.total_score else 0.0,
+                    'ges_grade': self.object.ges_grade,
+                    'letter_grade': self.object.letter_grade,
+                    'is_passing': self.object.is_passing(),
+                    'performance_level': self.object.get_performance_level(),
+                    'requires_review': self.object.requires_review,
+                    'is_locked': self.object.is_locked,
+                },
+                'change_summary': {
+                    'total_changes': len(actual_changes),
+                    'significant_changes': len(significant_changes),
+                    'has_passing_change': 'passing_status' in actual_changes,
+                    'has_grade_change': any(field in ['ges_grade', 'letter_grade'] for field in actual_changes),
                 }
+            }
             
+            # Create audit log
             AuditLog.objects.create(
                 user=self.request.user,
-                action='UPDATE',
+                action='GRADE_UPDATE_DETAILED',
                 model_name='Grade',
                 object_id=self.object.id,
-                details={
-                    'changes': changes,
-                    'student_id': self.object.student.id,
-                    'subject_id': self.object.subject.id,
-                    'academic_year': self.object.academic_year,
-                    'term': self.object.term
-                },
-                ip_address=self._get_client_ip()
+                details=audit_details,
+                ip_address=self._get_client_ip(),
+                timestamp=timezone.now()
             )
             
+            # Also log to file for redundancy
             logger.info(
-                f"Grade update logged - Grade ID: {self.object.id}, "
-                f"Student: {self.object.student}, Changes: {len(changes)}"
+                f"Comprehensive grade audit - ID: {self.object.id}, "
+                f"Student: {self.object.student.get_full_name()}, "
+                f"Subject: {self.object.subject.name}, "
+                f"Changes: {len(actual_changes)} fields, "
+                f"Significant: {len(significant_changes)}"
             )
             
         except Exception as e:
-            logger.error(f"Failed to log grade update: {str(e)}")
+            logger.error(f"Failed to create comprehensive audit log: {str(e)}")
 
-    def _get_client_ip(self):
-        """
-        Get client IP address for audit logging
-        """
-        x_forwarded_for = self.request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = self.request.META.get('REMOTE_ADDR')
-        return ip
-
-    def _send_notifications(self, score_changed, grade_changed):
+    def _send_change_notifications(self, actual_changes, significant_changes, original_state):
         """
         Send appropriate notifications based on changes
         """
         try:
-            if score_changed:
-                self._send_grade_update_notification()
+            # Determine notification type
+            if 'passing_status' in actual_changes:
+                notification_type = 'GRADE_PASSING_CHANGE'
+            elif any(field in ['ges_grade', 'letter_grade'] for field in actual_changes):
+                notification_type = 'GRADE_LEVEL_CHANGE'
+            else:
+                notification_type = 'GRADE_UPDATE'
             
-            if grade_changed:
-                self._send_grade_change_notification()
+            # Send notification to student
+            self._send_student_notification(notification_type, actual_changes, original_state)
             
             # Notify administrators for significant changes
-            if self._is_significant_change():
-                self._notify_administrators()
+            if self._is_significant_change(actual_changes):
+                self._notify_administrators(notification_type, actual_changes, original_state)
                 
         except Exception as e:
             logger.error(f"Notification sending failed: {str(e)}")
-            raise NotificationException(f"Failed to send notifications: {str(e)}")
+            # Don't raise exception - notifications are secondary
 
-    def _send_grade_update_notification(self):
+    def _send_student_notification(self, notification_type, actual_changes, original_state):
         """
         Send notification to student about grade update
         """
@@ -1238,16 +1443,37 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             student = self.object.student
             subject = self.object.subject
             
+            # Determine message based on change type
+            if notification_type == 'GRADE_PASSING_CHANGE':
+                message = f'Your {subject.name} grade has changed from {"PASSING" if original_state["is_passing"] else "FAILING"} to {"PASSING" if self.object.is_passing() else "FAILING"}'
+                color = 'success' if self.object.is_passing() else 'danger'
+            elif notification_type == 'GRADE_LEVEL_CHANGE':
+                message = f'Your {subject.name} grade has changed from {original_state["grades"]["ges_display"]} to {self.object.get_ges_grade_display()}'
+                color = 'info'
+            else:
+                message = f'Your {subject.name} grade has been updated'
+                color = 'info'
+            
             notification_data = {
                 'type': 'send_notification',
-                'notification_type': 'GRADE_UPDATE',
+                'notification_type': notification_type,
                 'title': 'Grade Updated',
-                'message': f'Your {subject.name} grade has been updated',
+                'message': message,
                 'related_object_id': self.object.id,
                 'timestamp': timezone.now().isoformat(),
                 'icon': 'bi-journal-check',
-                'color': 'info',
-                'action_url': self._get_grade_detail_url()
+                'color': color,
+                'action_url': self._get_grade_detail_url(),
+                'metadata': {
+                    'student_name': student.get_full_name(),
+                    'subject_name': subject.name,
+                    'old_grade': original_state['grades']['ges_display'],
+                    'new_grade': self.object.get_ges_grade_display(),
+                    'old_score': original_state['scores']['total'],
+                    'new_score': float(self.object.total_score) if self.object.total_score else 0.0,
+                    'is_passing': self.object.is_passing(),
+                    'changed_by': self.request.user.get_full_name(),
+                }
             }
             
             self._send_websocket_notification(
@@ -1255,40 +1481,12 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 notification_data
             )
             
-            logger.info(f"Grade update notification sent to student {student.student_id}")
+            logger.info(f"Grade {notification_type} notification sent to student {student.student_id}")
             
         except Exception as e:
-            logger.error(f"Failed to send grade update notification: {str(e)}")
-            raise
+            logger.error(f"Failed to send student notification: {str(e)}")
 
-    def _send_grade_change_notification(self):
-        """
-        Send notification about grade letter change
-        """
-        try:
-            student = self.object.student
-            
-            notification_data = {
-                'type': 'send_notification',
-                'notification_type': 'GRADE_CHANGE',
-                'title': 'Grade Level Changed',
-                'message': f'Your {self.object.subject.name} grade level has changed to {self.object.get_ges_grade_display()}',
-                'related_object_id': self.object.id,
-                'timestamp': timezone.now().isoformat(),
-                'icon': 'bi-graph-up',
-                'color': 'warning' if self.object.ges_grade in ['7', '8', '9'] else 'success',
-                'action_url': self._get_grade_detail_url()
-            }
-            
-            self._send_websocket_notification(
-                f'notifications_{student.user.id}',
-                notification_data
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to send grade change notification: {str(e)}")
-
-    def _notify_administrators(self):
+    def _notify_administrators(self, notification_type, actual_changes, original_state):
         """
         Notify administrators about significant grade changes
         """
@@ -1300,16 +1498,36 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 Q(is_superuser=True) | Q(is_staff=True)
             ).distinct()
             
+            # Determine message
+            if notification_type == 'GRADE_PASSING_CHANGE':
+                action = 'changed passing status'
+            elif notification_type == 'GRADE_LEVEL_CHANGE':
+                action = 'changed grade level'
+            else:
+                action = 'updated grade'
+            
             notification_data = {
                 'type': 'send_notification',
-                'notification_type': 'GRADE_MODIFIED',
+                'notification_type': 'GRADE_MODIFIED_BY_TEACHER',
                 'title': 'Grade Modified by Teacher',
-                'message': f'{self.request.user.get_full_name()} updated grade for {self.object.student.get_full_name()} in {self.object.subject.name}',
+                'message': f'{self.request.user.get_full_name()} {action} for {self.object.student.get_full_name()} in {self.object.subject.name}',
                 'related_object_id': self.object.id,
                 'timestamp': timezone.now().isoformat(),
                 'icon': 'bi-shield-check',
                 'color': 'warning',
-                'action_url': self.get_success_url()
+                'action_url': self.get_success_url(),
+                'metadata': {
+                    'teacher_name': self.request.user.get_full_name(),
+                    'student_name': self.object.student.get_full_name(),
+                    'subject_name': self.object.subject.name,
+                    'old_grade': original_state['grades']['ges_display'],
+                    'new_grade': self.object.get_ges_grade_display(),
+                    'old_score': original_state['scores']['total'],
+                    'new_score': float(self.object.total_score) if self.object.total_score else 0.0,
+                    'is_passing_change': 'passing_status' in actual_changes,
+                    'grade_change': any(field in ['ges_grade', 'letter_grade'] for field in actual_changes),
+                    'significant_changes_count': len(actual_changes),
+                }
             }
             
             for admin in admins:
@@ -1323,6 +1541,45 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         except Exception as e:
             logger.error(f"Failed to send admin notifications: {str(e)}")
 
+    def _notify_administrators_for_review(self, actual_changes, original_state):
+        """
+        Notify administrators that a grade requires review
+        """
+        try:
+            admins = User.objects.filter(
+                Q(is_superuser=True) | Q(is_staff=True)
+            ).distinct()
+            
+            notification_data = {
+                'type': 'send_notification',
+                'notification_type': 'GRADE_REQUIRES_REVIEW',
+                'title': 'Grade Requires Administrative Review',
+                'message': f'Grade for {self.object.student.get_full_name()} in {self.object.subject.name} requires review',
+                'related_object_id': self.object.id,
+                'timestamp': timezone.now().isoformat(),
+                'icon': 'bi-exclamation-triangle',
+                'color': 'danger',
+                'action_url': reverse_lazy('grade_detail', kwargs={'pk': self.object.pk}),
+                'metadata': {
+                    'student_name': self.object.student.get_full_name(),
+                    'subject_name': self.object.subject.name,
+                    'changes_count': len(actual_changes),
+                    'changed_by': self.request.user.get_full_name(),
+                    'requires_review_reason': 'Significant changes detected',
+                }
+            }
+            
+            for admin in admins:
+                self._send_websocket_notification(
+                    f'notifications_{admin.id}',
+                    notification_data
+                )
+            
+            logger.info(f"Admin review notifications sent - Grade ID: {self.object.id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send review notifications: {str(e)}")
+
     def _send_websocket_notification(self, group_name, notification_data):
         """
         Send WebSocket notification with error handling
@@ -1335,23 +1592,25 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             )
         except Exception as e:
             logger.error(f"WebSocket notification failed for group {group_name}: {str(e)}")
-            raise NotificationException(f"WebSocket notification failed: {str(e)}")
+            # Don't raise - notifications are secondary
 
-    def _is_significant_change(self):
+    def _is_significant_change(self, actual_changes):
         """
         Determine if the change is significant enough for admin notification
         """
-        # Implement logic for significant changes
-        # Example: grade change from passing to failing or vice versa
-        try:
-            original_grade = Grade.objects.get(pk=self.object.pk)
-            was_passing = original_grade.is_passing()
-            is_passing_now = self.object.is_passing()
-            
-            return was_passing != is_passing_now
-        except Exception as e:
-            logger.warning(f"Error determining significant change: {str(e)}")
-            return False
+        # Check for passing status change
+        if 'passing_status' in actual_changes:
+            return True
+        
+        # Check for grade level change
+        if any(field in ['ges_grade', 'letter_grade'] for field in actual_changes):
+            return True
+        
+        # Check for large score changes
+        large_score_changes = sum(1 for field in actual_changes 
+                                 if field.endswith('_score') 
+                                 and abs(actual_changes[field].get('delta', 0)) > 15)
+        return large_score_changes >= 2
 
     def _update_analytics_cache(self):
         """
@@ -1364,7 +1623,10 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             cache_keys_to_clear = [
                 f"class_performance_{self.object.subject.id}_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}",
                 f"student_progress_{self.object.student.id}_{self.object.academic_year}",
-                f"term_report_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}"
+                f"term_report_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}",
+                f"student_grades_{self.object.student.id}",
+                f"subject_stats_{self.object.subject.id}",
+                f"teacher_dashboard_{self.object.class_assignment.teacher_id if self.object.class_assignment else ''}",
             ]
             
             for cache_key in cache_keys_to_clear:
@@ -1375,9 +1637,20 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         except Exception as e:
             logger.warning(f"Failed to update analytics cache: {str(e)}")
 
+    def _get_client_ip(self):
+        """
+        Get client IP address for audit logging
+        """
+        x_forwarded_for = self.request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = self.request.META.get('REMOTE_ADDR')
+        return ip
+
     def _get_grade_detail_url(self):
         """
-        Get URL for grade detail page (if available)
+        Get URL for grade detail page
         """
         try:
             return reverse_lazy('grade_detail', kwargs={'pk': self.object.pk})
@@ -1393,8 +1666,24 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             f"Errors: {form.errors}"
         )
         
-        # Add generic error message if no specific field errors
-        if not form.errors:
+        # Add specific error messages for common issues
+        if 'class_level' in form.errors:
+            messages.error(self.request, 
+                "Class level error. Please ensure the class level matches the student's current class.")
+        elif 'student' in form.errors:
+            messages.error(self.request, 
+                "Student selection error. Please verify the student exists and is active.")
+        elif 'subject' in form.errors:
+            messages.error(self.request, 
+                "Subject selection error. Please verify the subject is available for this class level.")
+        elif any(field in form.errors for field in ['classwork_score', 'homework_score', 'test_score', 'exam_score']):
+            messages.error(self.request, 
+                "Please check the score values. They must be within the allowed ranges (Classwork: 0-30, Homework: 0-10, Test: 0-10, Exam: 0-50).")
+        elif '__all__' in form.errors:
+            # Show non-field errors
+            for error in form.errors['__all__']:
+                messages.error(self.request, error)
+        else:
             messages.error(self.request, "Please correct the errors below.")
         
         return super().form_invalid(form)
@@ -1410,6 +1699,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 'student': self.object.student,
                 'subject': self.object.subject,
                 'is_teacher': is_teacher(self.request.user),
+                'is_admin': is_admin(self.request.user),
                 'academic_year': self.object.academic_year,
                 'term': self.object.term,
                 'can_edit': self._can_edit_grade(),
@@ -1419,7 +1709,19 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                     'homework': 10,
                     'test': 10,
                     'exam': 50
-                }
+                },
+                'current_scores': {
+                    'classwork': float(self.object.classwork_score) if self.object.classwork_score else 0,
+                    'homework': float(self.object.homework_score) if self.object.homework_score else 0,
+                    'test': float(self.object.test_score) if self.object.test_score else 0,
+                    'exam': float(self.object.exam_score) if self.object.exam_score else 0,
+                },
+                'grade_display': self.object.get_display_grade(),
+                'performance_level': self.object.get_performance_level_display(),
+                'is_passing': self.object.is_passing(),
+                'grade_id': self.object.id,
+                'page_title': f'Update Grade - {self.object.student.get_full_name()} - {self.object.subject.name}',
+                'current_view': 'grade_update',
             })
         except Exception as e:
             logger.error(f"Error preparing context data: {str(e)}")
@@ -1427,29 +1729,44 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             context.update({
                 'student': getattr(self.object, 'student', None),
                 'subject': getattr(self.object, 'subject', None),
-                'is_teacher': is_teacher(self.request.user)
+                'is_teacher': is_teacher(self.request.user),
+                'is_admin': is_admin(self.request.user),
+                'can_edit': True,
             })
         
         return context
 
     def _can_edit_grade(self):
         """
-        Check if the grade can still be edited (not locked, etc.)
+        Check if the grade can still be edited
         """
         try:
-            return not self._is_term_locked(self.object.academic_year, self.object.term)
-        except:
+            # Check if grade is locked
+            if self.object.is_locked:
+                return False
+            
+            # Check if term is locked
+            if self._is_term_locked(self.object.academic_year, self.object.term):
+                return False
+            
+            # Check if grade requires review and user is not admin
+            if self.object.requires_review and not is_admin(self.request.user):
+                return False
+            
+            return True
+            
+        except Exception:
             return True
 
     def _get_grade_history(self):
         """
-        Get grade history for context (optional)
+        Get grade history for context
         """
         try:
             return AuditLog.objects.filter(
                 object_id=self.object.id,
                 model_name='Grade'
-            ).order_by('-timestamp')[:5]
+            ).order_by('-timestamp')[:10]
         except:
             return []
 
@@ -1466,6 +1783,12 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             pass
         
         return super().get_success_url()
+
+    def get_form_kwargs(self):
+        """Add user to form kwargs"""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
 class GradeDetailView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Grade Detail View for viewing individual grade records"""
@@ -1530,10 +1853,23 @@ class BulkGradeUploadView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get(self, request):
-        """Handle GET request with proper form initialization"""
+        """Handle GET request with progress tracking initialization"""
         try:
             form = BulkGradeUploadForm(request=request)
+            
+            # Initialize session for progress tracking
+            session_key = f"bulk_upload_{request.user.id}"
+            request.session[session_key] = {
+                'status': 'ready',
+                'processed': 0,
+                'total': 0,
+                'errors': [],
+                'started_at': None,
+                'completed_at': None
+            }
+            
             return render(request, self.template_name, {'form': form})
+            
         except Exception as e:
             logger.error(f"Error loading bulk upload form: {str(e)}", exc_info=True)
             messages.error(request, 'Error loading upload form. Please try again.')
@@ -1541,57 +1877,122 @@ class BulkGradeUploadView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View
     
     @transaction.atomic
     def post(self, request):
-        """Handle file upload with comprehensive error handling"""
+        """Handle file upload with progress tracking"""
         form = BulkGradeUploadForm(request.POST, request.FILES, request=request)
         
         if not form.is_valid():
             return render(request, self.template_name, {'form': form})
         
         try:
+            # Initialize progress tracking
+            session_key = f"bulk_upload_{request.user.id}"
+            progress_data = {
+                'status': 'processing',
+                'processed': 0,
+                'total': 0,
+                'errors': [],
+                'started_at': timezone.now().isoformat(),
+                'completed_at': None,
+                'session_id': f"{request.user.id}_{int(timezone.now().timestamp())}"
+            }
+            request.session[session_key] = progress_data
+            request.session.modified = True
+            
+            # Process the file
             result = self.process_uploaded_file(
                 form.cleaned_data['file'],
                 form.cleaned_data['assignment'],
-                form.cleaned_data['term']
+                form.cleaned_data['term'],
+                session_key,
+                request
             )
             
+            # Update progress to completed
+            progress_data['status'] = 'completed'
+            progress_data['completed_at'] = timezone.now().isoformat()
+            progress_data['processed'] = result['success_count']
+            progress_data['errors'] = result['error_messages']
+            request.session[session_key] = progress_data
+            request.session.modified = True
+            
+            # Handle results
             self.handle_upload_result(request, result)
+            
             return redirect('grade_list')
             
         except Exception as e:
             logger.error(f"Bulk grade upload failed: {str(e)}", exc_info=True)
+            
+            # Update progress with error
+            if 'session_key' in locals():
+                progress_data['status'] = 'failed'
+                progress_data['error'] = str(e)
+                progress_data['completed_at'] = timezone.now().isoformat()
+                request.session[session_key] = progress_data
+                request.session.modified = True
+            
             messages.error(request, 'Failed to process uploaded file. Please check the format and try again.')
             return render(request, self.template_name, {'form': form})
     
-    def process_uploaded_file(self, file, assignment, term):
-        """Process uploaded file with validation"""
+    def process_uploaded_file(self, file, assignment, term, session_key, request):
+        """Process uploaded file with progress updates"""
         success_count = 0
         error_messages = []
         
         file_extension = file.name.split('.')[-1].lower()
         
         try:
+            # Update total count based on file type
+            total_rows = self._estimate_total_rows(file, file_extension)
+            
+            # Update progress with total
+            progress_data = request.session.get(session_key, {})
+            progress_data['total'] = total_rows
+            request.session[session_key] = progress_data
+            request.session.modified = True
+            
             if file_extension == 'csv':
-                result = self.process_csv_file(file, assignment, term)
+                result = self.process_csv_file(file, assignment, term, session_key, request)
             elif file_extension in ['xlsx', 'xls']:
-                result = self.process_excel_file(file, assignment, term)
+                result = self.process_excel_file(file, assignment, term, session_key, request)
             else:
                 raise ValidationError("Unsupported file format. Please upload CSV or Excel files.")
             
             return result
             
         except Exception as e:
-            logger.error(f"File processing error: {str(e)}", exc_info=True)
+            logger.error(f"File processing error: {str(e)}")
             raise ValidationError(f"Error processing file: {str(e)}")
     
-    def process_csv_file(self, file, assignment, term):
-        """Process CSV file with proper encoding handling"""
+    def _estimate_total_rows(self, file, file_extension):
+        """Estimate total rows in the file"""
+        try:
+            if file_extension == 'csv':
+                # Reset file pointer
+                file.seek(0)
+                decoded_file = file.read().decode('utf-8').splitlines()
+                return len(decoded_file) - 1  # Subtract header row
+            elif file_extension in ['xlsx', 'xls']:
+                from openpyxl import load_workbook
+                wb = load_workbook(filename=BytesIO(file.read()), read_only=True)
+                sheet = wb.active
+                return sheet.max_row - 1  # Subtract header row
+            return 0
+        except Exception as e:
+            logger.warning(f"Could not estimate total rows: {str(e)}")
+            return 0
+    
+    def process_csv_file(self, file, assignment, term, session_key, request):
+        """Process CSV file with progress updates"""
         success_count = 0
         error_messages = []
+        processed_count = 0
         
         try:
             # Try different encodings
             for encoding in ['utf-8', 'latin-1', 'cp1252']:
                 try:
+                    file.seek(0)
                     decoded_file = file.read().decode(encoding).splitlines()
                     reader = csv.DictReader(decoded_file)
                     break
@@ -1606,12 +2007,29 @@ class BulkGradeUploadView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View
                     success_count += 1
                 except Exception as e:
                     error_messages.append(f"Row {row_num}: {str(e)}")
+                
+                # Update progress every 10 rows
+                processed_count += 1
+                if processed_count % 10 == 0:
+                    self._update_progress(session_key, request, processed_count, success_count)
             
             return {'success_count': success_count, 'error_messages': error_messages}
             
         except Exception as e:
             logger.error(f"CSV processing failed: {str(e)}", exc_info=True)
             raise
+    
+    def _update_progress(self, session_key, request, processed, success):
+        """Update progress in session"""
+        try:
+            if session_key in request.session:
+                progress_data = request.session[session_key]
+                progress_data['processed'] = processed
+                progress_data['success'] = success
+                request.session[session_key] = progress_data
+                request.session.modified = True
+        except Exception as e:
+            logger.warning(f"Failed to update progress: {str(e)}")
     
     def process_excel_file(self, file, assignment, term):
         """Process Excel file with error handling"""
@@ -1746,6 +2164,38 @@ class BulkGradeUploadView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View
                 'Some records could not be processed. Please correct the errors and try again.'
             )
 
+
+# Add this to grade_views.py
+class BulkUploadProgressAPI(TwoFactorLoginRequiredMixin, View):
+    """API endpoint to get bulk upload progress"""
+    
+    def get(self, request):
+        try:
+            session_key = f"bulk_upload_{request.user.id}"
+            progress_data = request.session.get(session_key, {})
+            
+            # Clean up old completed sessions
+            if progress_data.get('status') == 'completed':
+                completed_at = progress_data.get('completed_at')
+                if completed_at:
+                    completed_time = timezone.datetime.fromisoformat(completed_at)
+                    if timezone.now() - completed_time > timedelta(minutes=5):
+                        del request.session[session_key]
+                        request.session.modified = True
+                        progress_data = {}
+            
+            return JsonResponse({
+                'success': True,
+                'progress': progress_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting upload progress: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to get progress'
+            }, status=500)
+
 class GradeUploadTemplateView(View):
     def get(self, request):
         # Create a CSV file in memory
@@ -1760,9 +2210,7 @@ class GradeUploadTemplateView(View):
         response['Content-Disposition'] = 'attachment; filename="grade_upload_template.csv"'
         return response
 
-# In core/views/grade_views.py - Update GradeEntryView
 
-# In core/views/grade_views.py - Update GradeEntryView
 
 # In grade_views.py - Update GradeEntryView class
 class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
@@ -1823,8 +2271,15 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
         return kwargs
 
     def get_context_data(self, **kwargs):
-        """Enhanced context with student and subject information"""
+        """Enhanced context with safe object access"""
         context = super().get_context_data(**kwargs)
+        
+        # Safely get the object (if it exists)
+        grade = None
+        if hasattr(self, 'object') and self.object:
+            grade = self.object
+        elif self.request.method == 'POST' and hasattr(self, 'form') and self.form.instance:
+            grade = self.form.instance
         
         # Get selected student and subject for template context
         student_id = self.request.GET.get('student')
@@ -1836,14 +2291,12 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
         if student_id:
             try:
                 selected_student = Student.objects.get(pk=student_id)
-                print(f"DEBUG: Context - selected_student: {selected_student}")
             except Student.DoesNotExist:
                 pass
         
         if subject_id:
             try:
                 selected_subject = Subject.objects.get(pk=subject_id)
-                print(f"DEBUG: Context - selected_subject: {selected_subject}")
             except Subject.DoesNotExist:
                 pass
         
@@ -1871,7 +2324,7 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                     available_subjects = Subject.objects.filter(is_active=True).order_by('name')
                     
             except Exception as e:
-                print(f"DEBUG GradeEntryView: Error getting available subjects: {e}")
+                logger.error(f"Error getting available subjects: {e}")
                 available_subjects = Subject.objects.filter(is_active=True).order_by('name')
         else:
             available_subjects = Subject.objects.filter(is_active=True).order_by('name')
@@ -1890,6 +2343,16 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
         else:
             students = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
         
+        # Prepare context with grade data if available
+        if grade:
+            context.update({
+                'grade': grade,
+                'student': grade.student,
+                'subject': grade.subject,
+                'score_breakdown': grade.score_breakdown if hasattr(grade, 'score_breakdown') else {},
+            })
+        
+        # Always add these context variables
         context.update({
             'selected_student': selected_student,
             'selected_subject': selected_subject,
@@ -1898,12 +2361,8 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             'class_levels': CLASS_LEVEL_CHOICES,
             'is_teacher': is_teacher(self.request.user),
             'is_admin': is_admin(self.request.user),
+            'has_grade_object': bool(grade),
         })
-        
-        print(f"DEBUG GradeEntryView: Available subjects count: {available_subjects.count()}")
-        print(f"DEBUG GradeEntryView: Students count: {students.count()}")
-        print(f"DEBUG GradeEntryView: Selected student: {selected_student}")
-        print(f"DEBUG GradeEntryView: Selected subject: {selected_subject}")
                 
         return context
 
@@ -3361,3 +3820,251 @@ def export_grades(request):
     Function-based wrapper for GradeExportView
     """
     return GradeExportView.as_view()(request)
+
+
+# Add to grade_views.py
+class GradeValidationAPI(TwoFactorLoginRequiredMixin, View):
+    """API for validating grade data before submission"""
+    
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            # Validate the data
+            is_valid, errors, cleaned_data = validate_grade_data(data)
+            
+            if is_valid:
+                # Calculate predicted grade
+                total_score = cleaned_data.get('total_score', Decimal('0.00'))
+                
+                from core.grading_utils import get_all_grades, get_grading_system
+                grading_system = get_grading_system()
+                grades = get_all_grades(float(total_score))
+                
+                return JsonResponse({
+                    'valid': True,
+                    'total_score': float(total_score),
+                    'predicted_ges_grade': grades['ges_grade'],
+                    'predicted_letter_grade': grades['letter_grade'],
+                    'is_passing': grades['is_passing'],
+                    'grading_system': grading_system,
+                    'warnings': []  # Add any warnings here
+                })
+            else:
+                return JsonResponse({
+                    'valid': False,
+                    'errors': errors,
+                    'total_score': 0.0
+                })
+                
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'valid': False,
+                'errors': ['Invalid JSON data']
+            }, status=400)
+        except Exception as e:
+            logger.error(f"Grade validation API error: {str(e)}")
+            return JsonResponse({
+                'valid': False,
+                'errors': ['Server error during validation']
+            }, status=500)
+
+
+# Add to grade_views.py
+class ClearGradeCacheView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View):
+    """View to clear grade-related cache"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def post(self, request):
+        try:
+            from django.core.cache import cache
+            
+            # Clear all grade-related cache keys
+            cache_patterns = [
+                'grades_list_*',
+                'grade_statistics_*',
+                'class_assignments_*',
+                'teacher_assignments_*',
+                'student_grades_*',
+                'subject_stats_*',
+            ]
+            
+            cleared_count = 0
+            for pattern in cache_patterns:
+                # Note: This requires Redis or memcached with pattern delete support
+                # For simple cache, we might need a different approach
+                keys = cache.keys(pattern)
+                for key in keys:
+                    cache.delete(key)
+                    cleared_count += 1
+            
+            messages.success(
+                request, 
+                f'Successfully cleared {cleared_count} cache entries.'
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'cleared_count': cleared_count,
+                'message': f'Cleared {cleared_count} cache entries'
+            })
+            
+        except Exception as e:
+            logger.error(f"Error clearing cache: {str(e)}")
+            messages.error(request, 'Error clearing cache.')
+            
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+
+# Add these missing classes at the end of your grade_views.py file
+
+class GradeStatisticsAPI(TwoFactorLoginRequiredMixin, View):
+    """API for getting grade statistics"""
+    
+    def get(self, request):
+        try:
+            user = request.user
+            filters = Q()
+            
+            if is_teacher(user):
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=user.teacher
+                ).values_list('class_level', flat=True)
+                filters &= Q(student__class_level__in=teacher_classes)
+            
+            # Apply other filters from request
+            class_level = request.GET.get('class_level')
+            if class_level:
+                filters &= Q(student__class_level=class_level)
+            
+            subject_id = request.GET.get('subject')
+            if subject_id:
+                filters &= Q(subject_id=subject_id)
+            
+            academic_year = request.GET.get('academic_year')
+            if academic_year:
+                filters &= Q(academic_year=academic_year)
+            
+            term = request.GET.get('term')
+            if term and term.isdigit():
+                filters &= Q(term=int(term))
+            
+            grades = Grade.objects.filter(filters)
+            
+            stats = {
+                'total_records': grades.count(),
+                'average_score': grades.aggregate(Avg('total_score'))['total_score__avg'] or 0,
+                'passing_rate': (grades.filter(total_score__gte=40).count() / grades.count() * 100) if grades.count() > 0 else 0,
+                'grade_distribution': list(grades.values('ges_grade').annotate(
+                    count=Count('id'),
+                    percentage=ExpressionWrapper(
+                        Count('id') * 100.0 / grades.count(),
+                        output_field=FloatField()
+                    )
+                ).order_by('ges_grade')),
+            }
+            
+            return JsonResponse(stats)
+            
+        except Exception as e:
+            logger.error(f"Grade statistics API error: {str(e)}")
+            return JsonResponse({'error': 'Failed to calculate statistics'}, status=500)
+
+
+# Add this to your grade_views.py file, near the other views:
+
+class GradingQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """View for grading queue - assignments pending grading"""
+    model = Assignment
+    template_name = 'core/grades/grading_queue.html'
+    context_object_name = 'assignments'
+    paginate_by = 20
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Get current term
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        
+        # Base queryset - assignments with ungraded submissions
+        queryset = Assignment.objects.filter(
+            submissions__graded=False,
+            submissions__is_submitted=True
+        ).distinct().select_related(
+            'subject', 'class_assignment', 'class_assignment__teacher'
+        ).prefetch_related('submissions')
+        
+        # Filter by user role
+        if is_teacher(user):
+            queryset = queryset.filter(class_assignment__teacher=user.teacher)
+        
+        # Apply filters from GET parameters
+        subject_id = self.request.GET.get('subject')
+        class_level = self.request.GET.get('class_level')
+        days_overdue = self.request.GET.get('days_overdue')
+        
+        if subject_id:
+            queryset = queryset.filter(subject_id=subject_id)
+        
+        if class_level:
+            queryset = queryset.filter(class_assignment__class_level=class_level)
+        
+        if days_overdue:
+            try:
+                days = int(days_overdue)
+                cutoff_date = timezone.now() - timezone.timedelta(days=days)
+                queryset = queryset.filter(due_date__lt=cutoff_date)
+            except ValueError:
+                pass
+        
+        # Order by most overdue first
+        return queryset.order_by('due_date')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        
+        # Get statistics
+        assignments = self.get_queryset()
+        
+        # Calculate overdue assignments
+        one_week_ago = timezone.now() - timezone.timedelta(days=7)
+        two_weeks_ago = timezone.now() - timezone.timedelta(days=14)
+        
+        context.update({
+            'total_pending': assignments.count(),
+            'overdue_week': assignments.filter(due_date__lt=one_week_ago).count(),
+            'overdue_two_weeks': assignments.filter(due_date__lt=two_weeks_ago).count(),
+            'urgent_count': assignments.filter(due_date__lt=two_weeks_ago).count(),
+        })
+        
+        # Get filter options
+        if is_admin(user):
+            context['subjects'] = Subject.objects.all()
+            context['class_levels'] = CLASS_LEVEL_CHOICES
+        else:
+            teacher = user.teacher
+            # Get subjects taught by this teacher
+            teacher_subjects = Assignment.objects.filter(
+                class_assignment__teacher=teacher
+            ).values_list('subject', flat=True).distinct()
+            context['subjects'] = Subject.objects.filter(id__in=teacher_subjects)
+            
+            # Get classes taught by this teacher
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=teacher
+            ).values_list('class_level', flat=True).distinct()
+            context['class_levels'] = [
+                (code, name) for code, name in CLASS_LEVEL_CHOICES 
+                if code in teacher_classes
+            ]
+        
+        return context

@@ -1,0 +1,159 @@
+<!-- core/templates/core/timetable/teacher_timetable_list.html -->
+{% extends 'base.html' %}
+
+{% block title %}My Class Timetables{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="bi bi-calendar-week me-2"></i>
+                My Class Timetables
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'teacher_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Timetables</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="class_level" class="form-label">Class Level</label>
+                            <select name="class_level" id="class_level" class="form-select">
+                                <option value="">All Classes</option>
+                                {% for value, display in class_levels %}
+                                <option value="{{ value }}" {% if request.GET.class_level == value %}selected{% endif %}>
+                                    {{ display }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="academic_year" class="form-label">Academic Year</label>
+                            <select name="academic_year" id="academic_year" class="form-select">
+                                <option value="">All Years</option>
+                                {% for year in academic_years %}
+                                <option value="{{ year }}" {% if request.GET.academic_year == year %}selected{% endif %}>
+                                    {{ year }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="term" class="form-label">Term</label>
+                            <select name="term" id="term" class="form-select">
+                                <option value="">All Terms</option>
+                                <option value="1" {% if request.GET.term == "1" %}selected{% endif %}>Term 1</option>
+                                <option value="2" {% if request.GET.term == "2" %}selected{% endif %}>Term 2</option>
+                                <option value="3" {% if request.GET.term == "3" %}selected{% endif %}>Term 3</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="day_of_week" class="form-label">Day</label>
+                            <select name="day_of_week" id="day_of_week" class="form-select">
+                                <option value="">All Days</option>
+                                <option value="0" {% if request.GET.day_of_week == "0" %}selected{% endif %}>Monday</option>
+                                <option value="1" {% if request.GET.day_of_week == "1" %}selected{% endif %}>Tuesday</option>
+                                <option value="2" {% if request.GET.day_of_week == "2" %}selected{% endif %}>Wednesday</option>
+                                <option value="3" {% if request.GET.day_of_week == "3" %}selected{% endif %}>Thursday</option>
+                                <option value="4" {% if request.GET.day_of_week == "4" %}selected{% endif %}>Friday</option>
+                                <option value="5" {% if request.GET.day_of_week == "5" %}selected{% endif %}>Saturday</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="bi bi-filter me-1"></i> Filter
+                            </button>
+                            <a href="{% url 'teacher_timetable_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        {% if timetables %}
+        {% for timetable in timetables %}
+        <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <span class="badge bg-primary">{{ timetable.get_class_level_display }}</span>
+                    </h5>
+                    <span class="badge bg-secondary">
+                        {{ timetable.get_day_of_week_display }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        {{ timetable.academic_year }} - Term {{ timetable.term }}
+                    </h6>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <i class="bi bi-clock me-1"></i>
+                            {{ timetable.entries.count }} periods
+                        </small>
+                    </div>
+                    
+                    {% with entries=timetable.entries.all|slice:":3" %}
+                    {% if entries %}
+                    <div class="schedule-preview">
+                        {% for entry in entries %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-truncate">
+                                <strong>{{ entry.time_slot.start_time|time:"H:i" }}</strong>
+                                {{ entry.subject.name|truncatechars:20 }}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-calendar-x display-4"></i>
+                        <p class="mt-2 mb-0">No periods scheduled</p>
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'teacher_timetable_detail' timetable.pk %}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-eye me-1"></i> View
+                        </a>
+                        {% if is_admin %}
+                        <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-calendar-week display-1 text-muted"></i>
+                    <h4 class="text-muted mt-3">No timetables found</h4>
+                    <p class="text-muted">You are not assigned to any classes or no timetables are available.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

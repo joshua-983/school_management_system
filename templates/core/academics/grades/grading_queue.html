@@ -1,0 +1,254 @@
+<!-- templates/core/grades/grading_queue.html -->
+{% extends 'base.html' %}
+
+{% block title %}Grading Queue{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Grading Queue
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Quick Stats -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ total_pending }}</h5>
+                                    <p class="card-text mb-0">Pending Assignments</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-warning text-dark">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ overdue_week }}</h5>
+                                    <p class="card-text mb-0">Overdue (7+ days)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ overdue_two_weeks }}</h5>
+                                    <p class="card-text mb-0">Overdue (14+ days)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ urgent_count }}</h5>
+                                    <p class="card-text mb-0">Urgent</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">Filters</h6>
+                        </div>
+                        <div class="card-body">
+                            <form method="get" class="row g-3">
+                                {% if subjects %}
+                                <div class="col-md-3">
+                                    <label for="subject" class="form-label">Subject</label>
+                                    <select name="subject" id="subject" class="form-select">
+                                        <option value="">All Subjects</option>
+                                        {% for subject in subjects %}
+                                        <option value="{{ subject.id }}" 
+                                                {% if request.GET.subject == subject.id|stringformat:"i" %}selected{% endif %}>
+                                            {{ subject.name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
+                                
+                                {% if class_levels %}
+                                <div class="col-md-3">
+                                    <label for="class_level" class="form-label">Class Level</label>
+                                    <select name="class_level" id="class_level" class="form-select">
+                                        <option value="">All Classes</option>
+                                        {% for code, name in class_levels %}
+                                        <option value="{{ code }}" 
+                                                {% if request.GET.class_level == code %}selected{% endif %}>
+                                            {{ name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="col-md-3">
+                                    <label for="days_overdue" class="form-label">Overdue Period</label>
+                                    <select name="days_overdue" id="days_overdue" class="form-select">
+                                        <option value="">All</option>
+                                        <option value="7" {% if request.GET.days_overdue == "7" %}selected{% endif %}>
+                                            7+ days overdue
+                                        </option>
+                                        <option value="14" {% if request.GET.days_overdue == "14" %}selected{% endif %}>
+                                            14+ days overdue
+                                        </option>
+                                        <option value="30" {% if request.GET.days_overdue == "30" %}selected{% endif %}>
+                                            30+ days overdue
+                                        </option>
+                                    </select>
+                                </div>
+                                
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="bi bi-funnel me-1"></i>Apply Filters
+                                        </button>
+                                        <a href="{% url 'grading_queue' %}" class="btn btn-secondary">
+                                            <i class="bi bi-x-circle me-1"></i>Clear
+                                        </a>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Assignments Table -->
+                    <div class="card">
+                        <div class="card-body">
+                            {% if assignments %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Assignment</th>
+                                            <th>Subject</th>
+                                            <th>Class</th>
+                                            <th>Due Date</th>
+                                            <th>Days Overdue</th>
+                                            <th>Pending Submissions</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for assignment in assignments %}
+                                        {% with days_overdue=assignment.due_date|timesince %}
+                                        <tr class="{% if assignment.due_date < one_week_ago %}table-warning{% endif %}
+                                                  {% if assignment.due_date < two_weeks_ago %}table-danger{% endif %}">
+                                            <td>
+                                                <strong>{{ assignment.title }}</strong>
+                                                {% if assignment.due_date < two_weeks_ago %}
+                                                <span class="badge bg-danger ms-2">URGENT</span>
+                                                {% elif assignment.due_date < one_week_ago %}
+                                                <span class="badge bg-warning ms-2">OVERDUE</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ assignment.subject.name }}</td>
+                                            <td>{{ assignment.class_assignment.get_class_level_display }}</td>
+                                            <td>{{ assignment.due_date|date:"M d, Y" }}</td>
+                                            <td>
+                                                {% if assignment.due_date < timezone.now %}
+                                                    <span class="badge {% if assignment.due_date < two_weeks_ago %}bg-danger{% elif assignment.due_date < one_week_ago %}bg-warning{% else %}bg-secondary{% endif %}">
+                                                        {{ assignment.due_date|timesince }} ago
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-success">On time</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary">
+                                                    {{ assignment.submissions.filter(graded=False, is_submitted=True).count }} pending
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'grade_assignment' assignment.id %}" 
+                                                   class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-pencil me-1"></i>Grade
+                                                </a>
+                                                <a href="{% url 'assignment_detail' assignment.id %}" 
+                                                   class="btn btn-sm btn-secondary">
+                                                    <i class="bi bi-eye me-1"></i>View
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endwith %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Pagination -->
+                            {% if is_paginated %}
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-center">
+                                    {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                            Previous
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    
+                                    {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                            {{ num }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                            Next
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+                            
+                            {% else %}
+                            <div class="text-center py-5">
+                                <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+                                <h4>No pending assignments to grade!</h4>
+                                <p class="text-muted">All assignments have been graded.</p>
+                                <a href="{% url 'assignment_list' %}" class="btn btn-primary">
+                                    <i class="bi bi-arrow-left me-1"></i>Back to Assignments
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-submit form on filter change
+    $('#subject, #class_level, #days_overdue').change(function() {
+        $(this).closest('form').submit();
+    });
+    
+    // Highlight urgent rows
+    $('tr.table-danger').each(function() {
+        $(this).find('td').css('font-weight', 'bold');
+    });
+});
+</script>
+{% endblock %}

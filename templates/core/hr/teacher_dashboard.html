@@ -44,6 +44,56 @@
         background: rgba(255, 255, 255, 0.1);
         transform: rotate(45deg);
     }
+    .timetable-links {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .timetable-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .timetable-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+    .timetable-card-content {
+        padding: 1.5rem;
+        position: relative;
+        z-index: 1;
+    }
+    .timetable-card-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+    }
+    .timetable-card-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    .timetable-card-desc {
+        font-size: 0.875rem;
+        opacity: 0.9;
+        margin-bottom: 1rem;
+    }
+    .timetable-card-link {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+    .timetable-card-link:hover {
+        background: rgba(255, 255, 255, 0.3);
+        color: white;
+        text-decoration: none;
+    }
 </style>
 {% endblock %}
 
@@ -57,6 +107,110 @@
                     Teacher Dashboard
                 </h2>
                 <span class="badge bg-primary fs-6">Welcome, {{ teacher.user.get_full_name }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timetable Quick Links -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-week me-2"></i>
+                        Timetable Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timetable-links">
+                        <!-- Class Timetables Card -->
+                        <div class="timetable-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="timetable-card-content">
+                                <div class="timetable-card-icon">
+                                    <i class="bi bi-calendar-week"></i>
+                                </div>
+                                <h3 class="timetable-card-title">Class Timetables</h3>
+                                <p class="timetable-card-desc">
+                                    View and manage timetables for all classes you teach. Check daily schedules, periods, and classroom assignments.
+                                </p>
+                                <a href="{% url 'teacher_timetable_list' %}" class="timetable-card-link">
+                                    <i class="bi bi-arrow-right me-1"></i> View Class Timetables
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Personal Schedule Card -->
+                        <div class="timetable-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <div class="timetable-card-content">
+                                <div class="timetable-card-icon">
+                                    <i class="bi bi-calendar-check"></i>
+                                </div>
+                                <h3 class="timetable-card-title">My Weekly Schedule</h3>
+                                <p class="timetable-card-desc">
+                                    View your personal teaching schedule across all classes and days. See your periods, subjects, and current class.
+                                </p>
+                                <a href="{% url 'teacher_timetable_view' %}" class="timetable-card-link">
+                                    <i class="bi bi-arrow-right me-1"></i> View My Schedule
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Today's Schedule Card -->
+                        {% if current_term %}
+                        <div class="timetable-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <div class="timetable-card-content">
+                                <div class="timetable-card-icon">
+                                    <i class="bi bi-calendar-day"></i>
+                                </div>
+                                <h3 class="timetable-card-title">Today's Schedule</h3>
+                                <p class="timetable-card-desc">
+                                    View your classes for today. See current period, upcoming classes, and classroom locations.
+                                </p>
+                                <a href="{% url 'teacher_timetable_view' %}?day=today" class="timetable-card-link">
+                                    <i class="bi bi-arrow-right me-1"></i> View Today's Schedule
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Quick Timetable Stats -->
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-2">Classes Teaching</h6>
+                                    <h4 class="text-primary mb-0">{{ current_classes.count }}</h4>
+                                    <small class="text-muted">Active class assignments</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-2">Teaching Days</h6>
+                                    <h4 class="text-success mb-0">
+                                        {% if periods_by_day %}
+                                            {{ periods_by_day.keys|length }}
+                                        {% else %}
+                                            0
+                                        {% endif %}
+                                    </h4>
+                                    <small class="text-muted">Days with scheduled classes</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted mb-2">Weekly Periods</h6>
+                                    <h4 class="text-warning mb-0">{{ total_periods|default:0 }}</h4>
+                                    <small class="text-muted">Total teaching periods per week</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -120,6 +274,90 @@
             </div>
         </div>
     </div>
+
+    <!-- Today's Schedule Preview -->
+    {% if periods_by_day and days_order %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-calendar-day me-2"></i>
+                        Today's Schedule Preview
+                    </h5>
+                    <span class="badge bg-light text-dark">{{ current_date|date:"l, F d, Y" }}</span>
+                </div>
+                <div class="card-body">
+                    {% with current_day=current_date.weekday %}
+                        {% with day_name=days_order.current_day %}
+                            {% if day_name in periods_by_day %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-info-circle me-2"></i>
+                                You have {{ periods_by_day.day_name|length }} classes scheduled for today.
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Subject</th>
+                                            <th>Class</th>
+                                            <th>Classroom</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for entry in periods_by_day.day_name %}
+                                        <tr class="{% if entry.is_current %}table-primary{% endif %}">
+                                            <td>
+                                                <strong>{{ entry.time_slot.start_time|time:"H:i" }}</strong>
+                                                <br>
+                                                <small>{{ entry.time_slot.end_time|time:"H:i" }}</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary">{{ entry.subject.name }}</span>
+                                            </td>
+                                            <td>
+                                                <strong>{{ entry.timetable.get_class_level_display }}</strong>
+                                            </td>
+                                            <td>
+                                                {{ entry.classroom|default:"Main Classroom" }}
+                                            </td>
+                                            <td>
+                                                {% if entry.is_current %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle me-1"></i> Current
+                                                </span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-clock me-1"></i> Scheduled
+                                                </span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4">
+                                <i class="bi bi-calendar-x display-4 text-muted"></i>
+                                <h5 class="text-muted mt-3">No classes scheduled for today</h5>
+                                <p class="text-muted">You're free today! Check your weekly schedule for other days.</p>
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endwith %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'teacher_timetable_view' %}" class="btn btn-info">
+                            <i class="bi bi-calendar-week me-1"></i> View Full Weekly Schedule
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Recent Submissions Needing Grading -->
     {% if recent_submissions %}
@@ -374,9 +612,13 @@
                                            class="btn btn-primary">
                                             <i class="bi bi-graph-up me-1"></i> Grades
                                         </a>
-                                        <a href="{% url 'assignment_create' %}?class_assignment={{ class_assignment.pk }}" 
+                                        <a href="{% url 'assignment_create_selection' %}"
                                            class="btn btn-success">
                                             <i class="bi bi-plus-circle me-1"></i> Assignment
+                                        </a>
+                                        <a href="{% url 'teacher_timetable_list' %}?class_level={{ class_assignment.class_level }}"
+                                           class="btn btn-info">
+                                            <i class="bi bi-calendar-week me-1"></i> Timetable
                                         </a>
                                     </div>
                                 </div>
@@ -408,6 +650,23 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
+    // Add current date to dashboard
+    const currentDate = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dateString = currentDate.toLocaleDateString('en-US', options);
+    
+    // Update any date displays if needed
+    const dateElements = document.querySelectorAll('.current-date-display');
+    dateElements.forEach(el => {
+        el.textContent = dateString;
+    });
+
+    // Highlight current period if exists
+    const currentPeriodRows = document.querySelectorAll('tr.table-primary');
+    currentPeriodRows.forEach(row => {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 });
 </script>

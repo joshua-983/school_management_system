@@ -1,291 +1,539 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{% if object %}Edit{% else %}Create New{% endif %} Class Assignment{% endblock %}
+{% block title %}{% if object %}Edit{% else %}Create New{% endif %} Class Assignment - School Management System{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
+    /* Professional Color Scheme */
     :root {
-        --primary: #4361ee;
-        --primary-dark: #3a56d4;
-        --secondary: #6c757d;
-        --light: #f8f9fa;
-        --dark: #212529;
-        --success: #198754;
-        --warning: #ffc107;
-        --danger: #dc3545;
-        --border-radius: 10px;
-        --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        --transition: all 0.3s ease;
+        --primary-blue: #2A5B9B;      /* Professional blue */
+        --secondary-blue: #3A6BA8;    /* Lighter blue */
+        --accent-gold: #F4B942;       /* Gold accent */
+        --success-green: #28A745;     /* Success green */
+        --warning-orange: #FD7E14;    /* Warning orange */
+        --danger-red: #DC3545;        /* Danger red */
+        --light-gray: #F8F9FA;        /* Light background */
+        --dark-gray: #343A40;         /* Dark text */
+        --border-color: #E0E0E0;      /* Border color */
+        --shadow-light: 0 4px 6px rgba(0, 0, 0, 0.07);
+        --shadow-medium: 0 6px 12px rgba(0, 0, 0, 0.1);
+        --shadow-heavy: 0 10px 25px rgba(0, 0, 0, 0.15);
+        --transition-fast: 0.2s ease;
+        --transition-medium: 0.3s ease;
+        --border-radius: 8px;
     }
-    
+
+    /* Main Container */
     .form-container {
-        max-width: 800px;
+        max-width: 900px;
         margin: 2rem auto;
         padding: 0 1rem;
     }
-    
+
+    /* Form Card */
     .form-card {
         background: white;
         border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-medium);
         overflow: hidden;
-        transition: var(--transition);
+        transition: var(--transition-medium);
+        border: 1px solid var(--border-color);
     }
-    
+
     .form-card:hover {
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--shadow-heavy);
+        transform: translateY(-2px);
     }
-    
+
+    /* Form Header */
     .form-header {
-        background: var(--primary);
+        background: linear-gradient(135deg, var(--primary-blue), var(--secondary-blue));
         color: white;
-        padding: 1.5rem 2rem;
+        padding: 1.75rem 2rem;
         position: relative;
+        overflow: hidden;
     }
-    
+
+    .form-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 150px;
+        height: 150px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        transform: translate(30%, -30%);
+    }
+
+    .form-header::after {
+        content: '';
+        position: absolute;
+        bottom: -50px;
+        left: -50px;
+        width: 100px;
+        height: 100px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 50%;
+    }
+
     .form-header h2 {
         margin: 0;
         font-weight: 600;
         display: flex;
         align-items: center;
         gap: 0.75rem;
+        position: relative;
+        z-index: 1;
+        font-size: 1.75rem;
     }
-    
+
+    .form-header h2 i {
+        font-size: 1.8rem;
+        color: var(--accent-gold);
+    }
+
+    /* Form Body */
     .form-body {
-        padding: 2rem;
+        padding: 2.5rem;
     }
-    
+
+    /* Form Grid */
     .form-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        gap: 1.75rem;
+        margin-bottom: 2.5rem;
     }
-    
+
+    /* Form Groups */
     .form-group {
-        margin-bottom: 1.25rem;
+        margin-bottom: 1.5rem;
     }
-    
+
     .form-label {
         display: block;
         margin-bottom: 0.5rem;
-        font-weight: 500;
-        color: var(--dark);
+        font-weight: 600;
+        color: var(--dark-gray);
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        font-size: 0.95rem;
     }
-    
+
+    .form-label i {
+        color: var(--primary-blue);
+        font-size: 1.1rem;
+    }
+
     .form-control, .form-select {
         width: 100%;
         padding: 0.875rem 1rem;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        background-color: #fff;
-        transition: var(--transition);
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        background-color: white;
+        transition: var(--transition-fast);
         font-size: 1rem;
+        font-family: inherit;
     }
-    
+
     .form-control:focus, .form-select:focus {
         outline: none;
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 3px rgba(42, 91, 155, 0.15);
     }
-    
+
+    .form-control.is-invalid, .form-select.is-invalid {
+        border-color: var(--danger-red);
+    }
+
+    .form-control.is-valid, .form-select.is-valid {
+        border-color: var(--success-green);
+    }
+
+    /* Form Hints */
     .form-hint {
         display: block;
         margin-top: 0.4rem;
         font-size: 0.85rem;
-        color: var(--secondary);
+        color: #6c757d;
+        line-height: 1.4;
     }
-    
+
+    .form-hint i {
+        margin-right: 0.3rem;
+    }
+
+    /* Checkbox Styling */
     .form-check {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 1rem;
+        padding: 1.25rem;
         background: #f8f9fa;
-        border-radius: 8px;
-        border: 1px solid #e9ecef;
+        border-radius: var(--border-radius);
+        border: 2px solid #e9ecef;
         margin: 1rem 0;
+        transition: var(--transition-fast);
     }
-    
+
+    .form-check:hover {
+        background: #e9ecef;
+        border-color: #dee2e6;
+    }
+
     .form-check-input {
-        width: 1.2em;
-        height: 1.2em;
+        width: 1.3em;
+        height: 1.3em;
         margin: 0;
+        cursor: pointer;
     }
-    
+
     .form-check-label {
         font-weight: 500;
-        color: var(--dark);
+        color: var(--dark-gray);
         flex: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    
-    .qualification-warning {
-        background: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 8px;
+
+    /* Alert Boxes */
+    .alert-box {
+        border-radius: var(--border-radius);
         padding: 1.25rem;
         margin: 1.5rem 0;
         display: flex;
         align-items: flex-start;
         gap: 1rem;
+        border-left: 4px solid;
     }
-    
-    .qualification-warning i {
-        color: var(--warning);
+
+    .alert-box i {
         font-size: 1.5rem;
+        flex-shrink: 0;
         margin-top: 0.1rem;
     }
-    
-    .qualification-warning-content {
+
+    .alert-box-content {
         flex: 1;
     }
-    
-    .qualification-warning strong {
-        color: #856404;
+
+    .alert-box strong {
         display: block;
         margin-bottom: 0.5rem;
+        font-size: 1rem;
     }
-    
-    .qualification-warning p {
+
+    .alert-box p {
         margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    .alert-warning {
+        background: #fff3cd;
+        border-color: var(--warning-orange);
         color: #856404;
     }
-    
-    .form-info {
+
+    .alert-warning i {
+        color: var(--warning-orange);
+    }
+
+    .alert-info {
         background: #e8f4ff;
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        margin: 1.5rem 0;
+        border-color: var(--primary-blue);
+        color: #004085;
+    }
+
+    .alert-info i {
+        color: var(--primary-blue);
+    }
+
+    .alert-success {
+        background: #d4edda;
+        border-color: var(--success-green);
+        color: #155724;
+    }
+
+    .alert-success i {
+        color: var(--success-green);
+    }
+
+    /* Teacher Qualifications Panel */
+    .qualifications-panel {
+        background: white;
+        border-radius: var(--border-radius);
+        border: 2px solid #e9ecef;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        transition: var(--transition-medium);
+    }
+
+    .qualifications-panel:hover {
+        border-color: var(--primary-blue);
+        box-shadow: var(--shadow-light);
+    }
+
+    .qualifications-header {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e9ecef;
     }
-    
-    .form-info i {
-        color: var(--primary);
-        font-size: 1.25rem;
-        margin-top: 0.1rem;
-    }
-    
-    .form-info-content {
+
+    .qualifications-header h6 {
+        margin: 0;
+        color: var(--primary-blue);
+        font-weight: 600;
         flex: 1;
     }
-    
-    .form-info-content strong {
-        color: var(--primary-dark);
+
+    .qualifications-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
-    
-    .btn {
-        padding: 0.75rem 1.5rem;
-        border-radius: 8px;
+
+    .qualification-badge {
+        background: var(--primary-blue);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
         font-weight: 500;
-        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: var(--transition-fast);
+    }
+
+    .qualification-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-light);
+    }
+
+    .qualification-badge.missing {
+        background: var(--warning-orange);
+    }
+
+    .qualification-badge.current {
+        background: var(--success-green);
+        border: 2px solid var(--success-green);
+    }
+
+    /* Subject Selection Panel */
+    .subject-panel {
+        background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);
+        border-radius: var(--border-radius);
+        border: 2px dashed #c6d2ff;
+        padding: 1.5rem;
+        margin: 1rem 0;
+    }
+
+    /* Form Actions */
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 2.5rem;
+        padding-top: 1.75rem;
+        border-top: 2px solid #e9ecef;
+    }
+
+    .btn {
+        padding: 0.875rem 2rem;
+        border-radius: var(--border-radius);
+        font-weight: 600;
+        transition: var(--transition-medium);
         border: none;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
+        font-size: 1rem;
+        min-width: 140px;
     }
-    
+
     .btn-primary {
-        background: var(--primary);
+        background: linear-gradient(135deg, var(--primary-blue), var(--secondary-blue));
         color: white;
     }
-    
+
     .btn-primary:hover {
-        background: var(--primary-dark);
+        background: linear-gradient(135deg, var(--secondary-blue), var(--primary-blue));
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.25);
+        box-shadow: 0 8px 20px rgba(42, 91, 155, 0.25);
     }
-    
+
+    .btn-primary:active {
+        transform: translateY(0);
+    }
+
     .btn-outline {
         background: transparent;
-        border: 1px solid var(--secondary);
-        color: var(--secondary);
+        border: 2px solid #6c757d;
+        color: #6c757d;
     }
-    
+
     .btn-outline:hover {
-        background: var(--secondary);
+        background: #6c757d;
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, var(--success-green), #20c997);
         color: white;
     }
-    
-    .form-actions {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 2rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid #dee2e6;
+
+    .btn-success:hover {
+        background: linear-gradient(135deg, #20c997, var(--success-green));
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(40, 167, 69, 0.25);
     }
-    
+
+    /* Error Messages */
     .error-message {
-        color: var(--danger);
+        color: var(--danger-red);
         font-size: 0.875rem;
         margin-top: 0.4rem;
         display: flex;
         align-items: center;
         gap: 0.4rem;
+        font-weight: 500;
     }
-    
-    .teacher-qualifications {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-left: 4px solid var(--primary);
+
+    .error-message i {
+        font-size: 1rem;
     }
-    
-    .teacher-qualifications h6 {
-        margin: 0 0 0.5rem 0;
-        color: var(--primary-dark);
+
+    /* Progress Steps */
+    .progress-steps {
         display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2.5rem;
+        position: relative;
+    }
+
+    .progress-steps::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50px;
+        right: 50px;
+        height: 2px;
+        background: #e9ecef;
+        transform: translateY(-50%);
+        z-index: 0;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
         align-items: center;
         gap: 0.5rem;
+        position: relative;
+        z-index: 1;
     }
-    
-    .qualification-list {
+
+    .step-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #e9ecef;
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
-    }
-    
-    .qualification-badge {
-        background: var(--primary);
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
+        justify-content: center;
+        font-size: 1.25rem;
+        color: #6c757d;
+        transition: var(--transition-medium);
     }
-    
-    .qualification-badge.missing {
-        background: var(--warning);
-        color: var(--dark);
-    }
-    
-    .current-subject-badge {
-        background: var(--success);
+
+    .step.active .step-icon {
+        background: var(--primary-blue);
+        border-color: var(--primary-blue);
         color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        border: 2px solid var(--success);
+        transform: scale(1.1);
     }
-    
+
+    .step-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #6c757d;
+    }
+
+    .step.active .step-label {
+        color: var(--primary-blue);
+        font-weight: 600;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.95);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid var(--primary-blue);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+        font-size: 1.1rem;
+        color: var(--dark-gray);
+        font-weight: 500;
+    }
+
+    /* Responsive Design */
     @media (max-width: 768px) {
         .form-grid {
             grid-template-columns: 1fr;
+            gap: 1.25rem;
+        }
+        
+        .form-body {
+            padding: 1.5rem;
+        }
+        
+        .form-header {
+            padding: 1.5rem;
+        }
+        
+        .form-header h2 {
+            font-size: 1.5rem;
         }
         
         .form-actions {
@@ -295,23 +543,180 @@
         
         .btn {
             width: 100%;
+            max-width: 300px;
         }
         
-        .qualification-warning {
+        .progress-steps::before {
+            left: 30px;
+            right: 30px;
+        }
+        
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+        
+        .alert-box {
             flex-direction: column;
             gap: 0.75rem;
         }
+    }
+
+    /* Print Styles */
+    @media print {
+        .form-actions,
+        .alert-box,
+        .btn {
+            display: none !important;
+        }
+        
+        .form-card {
+            box-shadow: none !important;
+            border: 1px solid #000 !important;
+        }
+    }
+
+    /* Custom Select2 Styling */
+    .select2-container--bootstrap-5 .select2-selection {
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 0.75rem;
+        transition: var(--transition-fast);
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection:focus {
+        border-color: var(--primary-blue);
+        box-shadow: 0 0 0 3px rgba(42, 91, 155, 0.15);
+    }
+    
+    .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+        padding-left: 0;
+    }
+    
+    /* Enhanced Teacher Card */
+    .teacher-card {
+        background: white;
+        border-radius: var(--border-radius);
+        border: 2px solid #e9ecef;
+        padding: 1.25rem;
+        margin: 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: var(--transition-fast);
+    }
+    
+    .teacher-card:hover {
+        border-color: var(--primary-blue);
+        transform: translateX(5px);
+    }
+    
+    .teacher-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-blue), var(--secondary-blue));
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    
+    .teacher-info {
+        flex: 1;
+    }
+    
+    .teacher-name {
+        font-weight: 600;
+        color: var(--dark-gray);
+        margin: 0 0 0.25rem 0;
+    }
+    
+    .teacher-details {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin: 0;
+    }
+    
+    /* Year Selection */
+    .year-selector {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .year-selector .form-control {
+        text-align: center;
+        font-weight: 600;
+        letter-spacing: 1px;
+    }
+    
+    /* Status Badge */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.9rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin-left: auto;
+    }
+    
+    .status-active {
+        background: rgba(40, 167, 69, 0.1);
+        color: var(--success-green);
+        border: 1px solid rgba(40, 167, 69, 0.2);
+    }
+    
+    .status-inactive {
+        background: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+        border: 1px solid rgba(108, 117, 125, 0.2);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="form-container">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing your request...</div>
+    </div>
+
+    <!-- Progress Steps -->
+    {% if not object %}
+    <div class="progress-steps mb-4">
+        <div class="step active" data-step="1">
+            <div class="step-icon">
+                <i class="bi bi-journal-plus"></i>
+            </div>
+            <span class="step-label">Assignment Details</span>
+        </div>
+        <div class="step" data-step="2">
+            <div class="step-icon">
+                <i class="bi bi-person-check"></i>
+            </div>
+            <span class="step-label">Teacher Selection</span>
+        </div>
+        <div class="step" data-step="3">
+            <div class="step-icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <span class="step-label">Confirmation</span>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="form-card">
         <div class="form-header">
             <h2>
                 <i class="bi bi-journal-plus"></i>
-                {% if object %}Edit Class Assignment{% else %}Create New Class for Teacher{% endif %}
+                {% if object %}Edit Class Assignment{% else %}Create New Class Assignment{% endif %}
             </h2>
         </div>
         
@@ -319,11 +724,24 @@
             <form method="post" novalidate id="assignment-form">
                 {% csrf_token %}
                 
+                <!-- Form Errors -->
+                {% if form.non_field_errors %}
+                    <div class="alert-box alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <div class="alert-box-content">
+                            <strong>Please correct the following errors:</strong>
+                            {% for error in form.non_field_errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
                 <!-- Qualification Warning Alert -->
                 {% if form.qualification_warning %}
-                <div class="qualification-warning">
+                <div class="alert-box alert-warning" id="qualificationAlert">
                     <i class="bi bi-exclamation-triangle-fill"></i>
-                    <div class="qualification-warning-content">
+                    <div class="alert-box-content">
                         <strong>Qualification Notice</strong>
                         <p>
                             {{ form.unqualified_teacher.get_full_name }} is not currently qualified to teach {{ form.unqualified_subject.name }}.
@@ -337,16 +755,8 @@
                 </div>
                 {% endif %}
                 
-                {% if form.non_field_errors %}
-                    <div class="error-message">
-                        <i class="bi bi-exclamation-circle"></i>
-                        {% for error in form.non_field_errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-                
                 <div class="form-grid">
+                    <!-- Class Level -->
                     <div class="form-group">
                         <label for="{{ form.class_level.id_for_label }}" class="form-label">
                             <i class="bi bi-mortarboard"></i>
@@ -358,9 +768,12 @@
                                 <i class="bi bi-x-circle"></i>{{ form.class_level.errors.as_text }}
                             </div>
                         {% endif %}
-                        <span class="form-hint">Select the class or grade level</span>
+                        <span class="form-hint">
+                            <i class="bi bi-info-circle"></i>Select the class or grade level for this assignment
+                        </span>
                     </div>
                     
+                    <!-- Subject -->
                     <div class="form-group">
                         <label for="{{ form.subject.id_for_label }}" class="form-label">
                             <i class="bi bi-book"></i>
@@ -372,25 +785,34 @@
                                 <i class="bi bi-x-circle"></i>{{ form.subject.errors.as_text }}
                             </div>
                         {% endif %}
-                        <span class="form-hint">Select the subject or course</span>
+                        <span class="form-hint">
+                            <i class="bi bi-info-circle"></i>Select the subject or course to be taught
+                        </span>
                         
-                        <!-- Show current subject selection -->
+                        <!-- Subject Information -->
                         {% if form.subject.value %}
                             {% for subject_obj in form.subject.field.queryset %}
                                 {% if subject_obj.id == form.subject.value %}
-                                <div class="teacher-qualifications">
-                                    <h6><i class="bi bi-bookmark-check"></i> Selected Subject</h6>
-                                    <div class="qualification-list">
-                                        <span class="current-subject-badge">
-                                            <i class="bi bi-book"></i>{{ subject_obj.name }}
+                                <div class="subject-panel">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-bookmark-check text-primary fs-5 me-2"></i>
+                                        <strong>Selected Subject</strong>
+                                    </div>
+                                    <div class="qualifications-list">
+                                        <span class="qualification-badge current">
+                                            <i class="bi bi-book"></i>{{ subject_obj.name }} ({{ subject_obj.code }})
                                         </span>
                                     </div>
+                                    {% if subject_obj.description %}
+                                    <p class="mt-2 mb-0 text-muted small">{{ subject_obj.description|truncatechars:100 }}</p>
+                                    {% endif %}
                                 </div>
                                 {% endif %}
                             {% endfor %}
                         {% endif %}
                     </div>
                     
+                    <!-- Teacher Selection -->
                     <div class="form-group">
                         <label for="{{ form.teacher.id_for_label }}" class="form-label">
                             <i class="bi bi-person-badge"></i>
@@ -402,24 +824,65 @@
                                 <i class="bi bi-x-circle"></i>{{ form.teacher.errors.as_text }}
                             </div>
                         {% endif %}
-                        <span class="form-hint">Teacher responsible for this class</span>
+                        <span class="form-hint">
+                            <i class="bi bi-info-circle"></i>Teacher responsible for this class and subject
+                        </span>
                         
-                        <!-- Show teacher's current qualifications - FIXED VERSION -->
+                        <!-- Teacher Information -->
                         {% if form.teacher.value %}
                             {% with selected_teacher_id=form.teacher.value %}
                                 {% for teacher_obj in form.teacher.field.queryset %}
                                     {% if teacher_obj.id == selected_teacher_id %}
-                                    <div class="teacher-qualifications">
-                                        <h6><i class="bi bi-award"></i> Current Qualifications</h6>
-                                        <div class="qualification-list">
+                                    <div class="teacher-card">
+                                        <div class="teacher-avatar">
+                                            {{ teacher_obj.get_full_name|slice:":1" }}
+                                        </div>
+                                        <div class="teacher-info">
+                                            <h5 class="teacher-name">{{ teacher_obj.get_full_name }}</h5>
+                                            <p class="teacher-details">
+                                                ID: {{ teacher_obj.employee_id }}
+                                                {% if teacher_obj.phone_number %} | {{ teacher_obj.phone_number }}{% endif %}
+                                            </p>
+                                        </div>
+                                        {% if teacher_obj.is_active %}
+                                        <span class="status-badge status-active">
+                                            <i class="bi bi-check-circle"></i>Active
+                                        </span>
+                                        {% else %}
+                                        <span class="status-badge status-inactive">
+                                            <i class="bi bi-x-circle"></i>Inactive
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Teacher Qualifications -->
+                                    <div class="qualifications-panel">
+                                        <div class="qualifications-header">
+                                            <i class="bi bi-award text-primary"></i>
+                                            <h6>Teacher Qualifications</h6>
+                                        </div>
+                                        <div class="qualifications-list">
                                             {% for subject in teacher_obj.subjects.all %}
-                                                <span class="qualification-badge">
-                                                    <i class="bi bi-check-lg"></i>{{ subject.name }}
-                                                </span>
+                                                {% if subject.id == form.subject.value %}
+                                                    <span class="qualification-badge current">
+                                                        <i class="bi bi-check-lg"></i>{{ subject.name }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="qualification-badge">
+                                                        <i class="bi bi-check-lg"></i>{{ subject.name }}
+                                                    </span>
+                                                {% endif %}
                                             {% empty %}
                                                 <span class="text-muted">No subjects qualified</span>
                                             {% endfor %}
                                         </div>
+                                        {% if teacher_obj.qualification %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-mortarboard"></i> {{ teacher_obj.qualification }}
+                                            </small>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                 {% endfor %}
@@ -427,31 +890,37 @@
                         {% endif %}
                     </div>
                     
+                    <!-- Academic Year -->
                     <div class="form-group">
                         <label for="{{ form.academic_year.id_for_label }}" class="form-label">
                             <i class="bi bi-calendar-event"></i>
                             Academic Year
                         </label>
-                        {{ form.academic_year }}
+                        <div class="year-selector">
+                            {{ form.academic_year }}
+                        </div>
                         {% if form.academic_year.errors %}
                             <div class="error-message">
                                 <i class="bi bi-x-circle"></i>{{ form.academic_year.errors.as_text }}
                             </div>
                         {% endif %}
-                        <span class="form-hint">Format: YYYY/YYYY (e.g., 2023/2024)</span>
+                        <span class="form-hint">
+                            <i class="bi bi-info-circle"></i>Format: YYYY/YYYY (e.g., 2023/2024)
+                        </span>
                     </div>
                 </div>
-                
+
                 <!-- Qualification Checkbox (Admin Only) -->
-                {% if is_admin and not form.teacher.field.disabled %}
+                {% if is_admin and not form.teacher.field.disabled and form.qualification_warning %}
                 <div class="form-check">
                     {{ form.add_qualification }}
                     <label for="{{ form.add_qualification.id_for_label }}" class="form-check-label">
-                        <i class="bi bi-check-circle"></i>
+                        <i class="bi bi-check-circle text-primary"></i>
                         Add subject to teacher's qualifications automatically
                     </label>
                 </div>
                 <div class="form-hint">
+                    <i class="bi bi-info-circle"></i>
                     When checked, this subject will be automatically added to the teacher's qualified subjects list.
                 </div>
                 {% else %}
@@ -463,31 +932,110 @@
                     <div class="form-check">
                         {{ form.is_active }}
                         <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
-                            <i class="bi bi-toggle-on"></i>
+                            <i class="bi bi-toggle-on text-primary"></i>
                             Active Assignment
                         </label>
                     </div>
-                    <span class="form-hint">Uncheck to deactivate this assignment</span>
+                    <span class="form-hint">
+                        <i class="bi bi-info-circle"></i>
+                        Uncheck to deactivate this assignment (will not affect historical data)
+                    </span>
                 </div>
                 
-                <div class="form-info">
-                    <i class="bi bi-info-circle"></i>
-                    <div class="form-info-content">
-                        <strong>What is a Class Assignment?</strong> 
-                        This assigns a specific teacher to teach a particular subject to a class for an academic year.
-                        The system will warn you if a teacher is not qualified for a subject, but will allow the assignment to proceed.
+                <!-- Information Box -->
+                <div class="alert-box alert-info">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <div class="alert-box-content">
+                        <strong>About Class Assignments</strong> 
+                        <p>This assigns a specific teacher to teach a particular subject to a class for an academic year. 
+                        The system will track attendance, grades, and assignments based on this configuration. 
+                        Ensure teachers are qualified for their assigned subjects for optimal educational outcomes.</p>
                     </div>
                 </div>
+                
+                <!-- Statistics for Existing Assignment -->
+                {% if object %}
+                <div class="alert-box alert-success">
+                    <i class="bi bi-bar-chart-fill"></i>
+                    <div class="alert-box-content">
+                        <strong>Assignment Statistics</strong>
+                        <div class="row mt-2">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-people-fill me-2 text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold fs-5">{{ object.get_students_count }}</div>
+                                        <small class="text-muted">Students</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-check me-2 text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold fs-5">{{ object.academic_year }}</div>
+                                        <small class="text-muted">Academic Year</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-clock-history me-2 text-primary"></i>
+                                    <div>
+                                        <div class="fw-bold fs-5">{{ object.updated_at|date:"M d, Y" }}</div>
+                                        <small class="text-muted">Last Updated</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
                 
                 <div class="form-actions">
                     <a href="{% url 'class_assignment_list' %}" class="btn btn-outline">
                         <i class="bi bi-arrow-left"></i> Back to List
                     </a>
-                    <button type="submit" class="btn btn-primary" id="submit-btn">
-                        <i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment
-                    </button>
+                    <div class="d-flex gap-2">
+                        {% if object %}
+                        <a href="{% url 'class_assignment_delete' object.pk %}" class="btn btn-outline-danger">
+                            <i class="bi bi-trash"></i> Delete
+                        </a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            <i class="bi bi-save"></i> {% if object %}Update Assignment{% else %}Create Assignment{% endif %}
+                        </button>
+                    </div>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle me-2"></i>
+                    {% if object %}Update Assignment{% else %}Create Assignment{% endif %}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalContent">
+                    <!-- Dynamic content will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmSubmit">
+                    <i class="bi bi-check-circle me-2"></i>Confirm
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -498,111 +1046,342 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add validation styles
-        const form = document.getElementById('assignment-form');
-        const inputs = form.querySelectorAll('select, input');
-        
-        // Add change events to provide feedback
-        inputs.forEach(input => {
-            input.addEventListener('change', function() {
-                if (this.checkValidity()) {
-                    this.style.borderColor = '#198754';
-                } else {
-                    this.style.borderColor = '#dc3545';
-                }
-            });
+    $(document).ready(function() {
+        // Initialize Select2
+        $('#{{ form.teacher.id_for_label }}').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select a teacher',
+            allowClear: true,
+            width: '100%'
         });
         
-        // Teacher change handler - update qualifications display
-        const teacherSelect = document.getElementById('{{ form.teacher.id_for_label }}');
-        if (teacherSelect) {
-            teacherSelect.addEventListener('change', function() {
-                // In a real implementation, you would fetch teacher qualifications via AJAX
-                // For now, we'll just show a loading state and reload the page to update qualifications
-                const qualificationsDiv = document.querySelector('.teacher-qualifications');
-                if (qualificationsDiv) {
-                    qualificationsDiv.innerHTML = '<p><i class="bi bi-hourglass-split"></i> Loading qualifications...</p>';
+        $('#{{ form.subject.id_for_label }}').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select a subject',
+            allowClear: true,
+            width: '100%'
+        });
+        
+        $('#{{ form.class_level.id_for_label }}').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select class level',
+            allowClear: false,
+            width: '100%',
+            minimumResultsForSearch: Infinity
+        });
+        
+        // Initialize academic year picker
+        const academicYearInput = $('#{{ form.academic_year.id_for_label }}');
+        academicYearInput.attr('placeholder', '2023/2024');
+        
+        // Validate academic year format
+        academicYearInput.on('blur', function() {
+            const yearPattern = /^\d{4}\/\d{4}$/;
+            if (this.value && !yearPattern.test(this.value)) {
+                $(this).addClass('is-invalid');
+                $(this).after('<div class="error-message"><i class="bi bi-x-circle"></i>Please use format: YYYY/YYYY (e.g., 2023/2024)</div>');
+            } else {
+                $(this).removeClass('is-invalid');
+                $(this).next('.error-message').remove();
+                $(this).addClass('is-valid');
+            }
+        });
+        
+        // Auto-format academic year
+        academicYearInput.on('input', function() {
+            let value = $(this).val().replace(/[^0-9]/g, '');
+            if (value.length >= 4) {
+                let year1 = value.substring(0, 4);
+                let year2 = value.substring(4, 8);
+                if (year2) {
+                    $(this).val(year1 + '/' + year2);
+                } else if (year1.length === 4) {
+                    let nextYear = parseInt(year1) + 1;
+                    $(this).val(year1 + '/' + nextYear);
                 }
-                
-                // Simple approach: submit form to refresh with new teacher data
-                // In production, you'd use AJAX to fetch qualifications
-                console.log('Teacher changed to:', this.value);
-            });
-        }
+            }
+        });
         
-        // Subject change handler - check for qualification conflicts
-        const subjectSelect = document.getElementById('{{ form.subject.id_for_label }}');
-        if (subjectSelect && teacherSelect) {
-            subjectSelect.addEventListener('change', function() {
-                // This would typically make an AJAX call to check if the selected teacher
-                // is qualified for the selected subject
-                console.log('Subject changed to:', this.value);
-                
-                // Highlight if there might be a qualification issue
-                const selectedSubject = this.options[this.selectedIndex].text;
-                console.log('Selected subject:', selectedSubject);
-            });
-        }
-        
-        // Form submission handling
-        form.addEventListener('submit', function(e) {
-            // Show loading state on button
-            const submitBtn = document.getElementById('submit-btn');
-            if (submitBtn) {
-                submitBtn.innerHTML = '<i class="bi bi-arrow-repeat spinner"></i> Processing...';
-                submitBtn.disabled = true;
+        // Teacher change handler
+        $('#{{ form.teacher.id_for_label }}').on('change', function() {
+            const teacherId = $(this).val();
+            const subjectId = $('#{{ form.subject.id_for_label }}').val();
+            
+            if (teacherId && subjectId) {
+                checkTeacherQualification(teacherId, subjectId);
             }
             
-            // Check for qualification warnings and confirm if needed
-            const qualificationWarning = document.querySelector('.qualification-warning');
-            const addQualificationCheckbox = document.getElementById('{{ form.add_qualification.id_for_label }}');
+            // Update progress step
+            $('.step[data-step="2"]').addClass('active');
+        });
+        
+        // Subject change handler
+        $('#{{ form.subject.id_for_label }}').on('change', function() {
+            const subjectId = $(this).val();
+            const teacherId = $('#{{ form.teacher.id_for_label }}').val();
             
-            if (qualificationWarning && (!addQualificationCheckbox || !addQualificationCheckbox.checked)) {
-                const confirmed = confirm(
-                    'This teacher is not qualified for the selected subject. Are you sure you want to proceed with this assignment?'
-                );
-                if (!confirmed) {
-                    e.preventDefault();
-                    if (submitBtn) {
-                        submitBtn.innerHTML = '<i class="bi bi-save"></i> {% if object %}Update{% else %}Create{% endif %} Assignment';
-                        submitBtn.disabled = false;
+            if (teacherId && subjectId) {
+                checkTeacherQualification(teacherId, subjectId);
+            }
+            
+            // Update progress step
+            $('.step[data-step="1"]').addClass('active');
+        });
+        
+        // Class level change handler
+        $('#{{ form.class_level.id_for_label }}').on('change', function() {
+            // Update progress step
+            $('.step[data-step="1"]').addClass('active');
+        });
+        
+        // Check teacher qualification
+        function checkTeacherQualification(teacherId, subjectId) {
+            $.ajax({
+                url: `/api/teachers/${teacherId}/qualification-check/${subjectId}/`,
+                method: 'GET',
+                beforeSend: function() {
+                    $('#loadingOverlay').show();
+                },
+                success: function(response) {
+                    if (!response.is_qualified) {
+                        showQualificationWarning(response.teacher_name, response.subject_name);
+                    } else {
+                        $('#qualificationAlert').hide();
                     }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Qualification check failed:', error);
+                },
+                complete: function() {
+                    $('#loadingOverlay').hide();
                 }
+            });
+        }
+        
+        // Show qualification warning
+        function showQualificationWarning(teacherName, subjectName) {
+            let warningHtml = `
+                <div class="alert-box alert-warning" id="qualificationAlert">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <div class="alert-box-content">
+                        <strong>Qualification Notice</strong>
+                        <p>
+                            ${teacherName} is not currently qualified to teach ${subjectName}.
+                            {% if is_admin %}
+                            You can add this subject to their qualifications using the checkbox below.
+                            {% else %}
+                            Please contact an administrator to add this subject to their qualifications.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            if ($('#qualificationAlert').length) {
+                $('#qualificationAlert').replaceWith(warningHtml);
+            } else {
+                $('.form-grid').after(warningHtml);
             }
+            
+            // Show qualification checkbox for admins
+            {% if is_admin %}
+            $('.form-check').show();
+            {% endif %}
+        }
+        
+        // Form submission with confirmation
+        const form = $('#assignment-form');
+        const confirmationModal = new bootstrap.Modal('#confirmationModal');
+        
+        form.on('submit', function(e) {
+            e.preventDefault();
+            
+            // Validate form
+            if (!validateForm()) {
+                return false;
+            }
+            
+            // Gather form data for confirmation
+            const formData = {
+                classLevel: $('#{{ form.class_level.id_for_label }}').select2('data')[0]?.text || '',
+                subject: $('#{{ form.subject.id_for_label }}').select2('data')[0]?.text || '',
+                teacher: $('#{{ form.teacher.id_for_label }}').select2('data')[0]?.text || '',
+                academicYear: $('#{{ form.academic_year.id_for_label }}').val(),
+                isActive: $('#{{ form.is_active.id_for_label }}').is(':checked') ? 'Active' : 'Inactive',
+                addQualification: $('#{{ form.add_qualification.id_for_label }}').is(':checked') ? 'Yes' : 'No'
+            };
+            
+            // Build confirmation message
+            let confirmationHtml = `
+                <div class="text-center mb-4">
+                    <i class="bi bi-check-circle display-1 text-primary"></i>
+                    <h4 class="mt-3 mb-4">Please confirm the assignment details</h4>
+                </div>
+                <div class="confirmation-details">
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Class Level:</div>
+                        <div class="col-7 fw-semibold">${formData.classLevel}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Subject:</div>
+                        <div class="col-7 fw-semibold">${formData.subject}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Teacher:</div>
+                        <div class="col-7 fw-semibold">${formData.teacher}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Academic Year:</div>
+                        <div class="col-7 fw-semibold">${formData.academicYear}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Status:</div>
+                        <div class="col-7">
+                            <span class="badge ${formData.isActive === 'Active' ? 'bg-success' : 'bg-secondary'}">
+                                ${formData.isActive}
+                            </span>
+                        </div>
+                    </div>
+            `;
+            
+            {% if is_admin %}
+            confirmationHtml += `
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Add to Qualifications:</div>
+                        <div class="col-7 fw-semibold">${formData.addQualification}</div>
+                    </div>
+            `;
+            {% endif %}
+            
+            confirmationHtml += `</div>`;
+            
+            // Show confirmation modal
+            $('#modalContent').html(confirmationHtml);
+            confirmationModal.show();
+            
+            // Update progress step
+            $('.step[data-step="3"]').addClass('active');
+            
+            return false;
         });
         
-        // Academic year format validation
-        const academicYearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
-        if (academicYearInput) {
-            academicYearInput.addEventListener('blur', function() {
-                const pattern = /^\d{4}\/\d{4}$/;
-                if (this.value && !pattern.test(this.value)) {
-                    this.setCustomValidity('Please use format: YYYY/YYYY (e.g., 2023/2024)');
-                    this.style.borderColor = '#dc3545';
-                } else {
-                    this.setCustomValidity('');
-                    this.style.borderColor = '#198754';
+        // Confirm submission
+        $('#confirmSubmit').on('click', function() {
+            $('#loadingOverlay').show();
+            form.off('submit').submit();
+        });
+        
+        // Form validation
+        function validateForm() {
+            let isValid = true;
+            
+            // Clear previous errors
+            $('.error-message').remove();
+            $('.form-control, .form-select').removeClass('is-invalid');
+            
+            // Validate required fields
+            const requiredFields = [
+                { id: '{{ form.class_level.id_for_label }}', name: 'Class level' },
+                { id: '{{ form.subject.id_for_label }}', name: 'Subject' },
+                { id: '{{ form.teacher.id_for_label }}', name: 'Teacher' },
+                { id: '{{ form.academic_year.id_for_label }}', name: 'Academic year' }
+            ];
+            
+            requiredFields.forEach(field => {
+                const element = $(`#${field.id}`);
+                if (!element.val()) {
+                    element.addClass('is-invalid');
+                    element.after(`<div class="error-message"><i class="bi bi-x-circle"></i>${field.name} is required</div>`);
+                    isValid = false;
                 }
             });
             
-            // Add placeholder text
-            academicYearInput.placeholder = "2023/2024";
+            // Validate academic year format
+            const academicYear = $('#{{ form.academic_year.id_for_label }}').val();
+            const yearPattern = /^\d{4}\/\d{4}$/;
+            if (academicYear && !yearPattern.test(academicYear)) {
+                const element = $('#{{ form.academic_year.id_for_label }}');
+                element.addClass('is-invalid');
+                element.after('<div class="error-message"><i class="bi bi-x-circle"></i>Please use format: YYYY/YYYY</div>');
+                isValid = false;
+            }
+            
+            return isValid;
         }
         
-        // Add spinner animation
-        const style = document.createElement('style');
-        style.textContent = `
-            .spinner {
-                animation: spin 1s linear infinite;
+        // Auto-suggest academic year
+        function suggestAcademicYear() {
+            const currentYear = new Date().getFullYear();
+            const nextYear = currentYear + 1;
+            const suggestedYear = `${currentYear}/${nextYear}`;
+            
+            if (!$('#{{ form.academic_year.id_for_label }}').val()) {
+                $('#{{ form.academic_year.id_for_label }}').val(suggestedYear);
             }
-            @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
+        }
+        
+        // Initialize academic year suggestion
+        suggestAcademicYear();
+        
+        // Print functionality
+        $('.btn-print').on('click', function() {
+            window.print();
+        });
+        
+        // Keyboard shortcuts
+        $(document).on('keydown', function(e) {
+            // Ctrl + S to save
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                $('#submit-btn').click();
             }
-        `;
-        document.head.appendChild(style);
+            
+            // Esc to go back
+            if (e.key === 'Escape') {
+                window.location.href = "{% url 'class_assignment_list' %}";
+            }
+        });
+        
+        // Auto-save draft (for long forms)
+        let autoSaveTimer;
+        const formInputs = $('input, select, textarea');
+        
+        formInputs.on('change input', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(function() {
+                saveDraft();
+            }, 2000);
+        });
+        
+        function saveDraft() {
+            // Implement draft saving logic here
+            console.log('Auto-saving draft...');
+        }
+        
+        // Load draft on page load
+        $(window).on('load', function() {
+            // Implement draft loading logic here
+        });
+    });
+    
+    // Progress step animation
+    function updateProgressSteps() {
+        const steps = document.querySelectorAll('.step');
+        steps.forEach((step, index) => {
+            setTimeout(() => {
+                step.style.opacity = '1';
+                step.style.transform = 'translateY(0)';
+            }, index * 300);
+        });
+    }
+    
+    // Initialize progress steps
+    document.addEventListener('DOMContentLoaded', function() {
+        updateProgressSteps();
     });
 </script>
 {% endblock %}

@@ -1,200 +1,1087 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Class Assignments{% endblock %}
+{% block title %}Class Assignments - School Management System{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
 <style>
+    :root {
+        --primary-color: #4361ee;
+        --secondary-color: #3f37c9;
+        --success-color: #4cc9f0;
+        --warning-color: #f72585;
+        --light-color: #f8f9fa;
+        --dark-color: #212529;
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: var(--primary-color);
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--secondary-color);
+    }
+    
     .card {
         border: none;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
+        overflow: hidden;
     }
     
     .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        transform: translateY(-8px);
+        box-shadow: 0 12px 25px rgba(0, 0, 0, 0.12);
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        padding: 1.25rem 1.5rem;
+        border-bottom: none;
     }
     
     .table-hover tbody tr {
-        transition: background-color 0.2s ease;
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f1f3f4;
     }
     
     .table-hover tbody tr:hover {
-        background-color: rgba(13, 110, 253, 0.05);
+        background-color: rgba(67, 97, 238, 0.05);
+        transform: scale(1.001);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
     .badge {
+        font-weight: 500;
+        padding: 0.5em 0.9em;
+        border-radius: 6px;
         font-size: 0.85em;
-        padding: 0.5em 0.8em;
+        letter-spacing: 0.3px;
     }
     
     .filter-card {
-        background-color: #f8f9fa;
+        background: linear-gradient(to right, #f8f9ff, #eef1ff);
+        border: 1px solid #e3e6f0;
+        border-radius: 12px;
     }
     
-    .pagination {
-        margin-bottom: 0;
+    .filter-card .card-header {
+        background: transparent;
+        color: var(--dark-color);
+        border-bottom: 1px solid #e3e6f0;
+        padding: 1rem 1.5rem;
     }
     
     .empty-state {
-        color: #6c757d;
+        padding: 4rem 1rem;
+        text-align: center;
+        background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);
+        border-radius: 12px;
+        margin: 2rem 0;
     }
     
-    .btn-group-sm > .btn {
-        border-radius: 5px;
+    .empty-state i {
+        color: var(--primary-color);
+        opacity: 0.6;
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .status-badge {
+        padding: 0.35rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .status-active {
+        background-color: rgba(76, 201, 240, 0.1);
+        color: #4cc9f0;
+        border: 1px solid rgba(76, 201, 240, 0.2);
+    }
+    
+    .status-inactive {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+        border: 1px solid rgba(108, 117, 125, 0.2);
+    }
+    
+    .teacher-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1rem;
+        box-shadow: 0 4px 8px rgba(67, 97, 238, 0.2);
+    }
+    
+    .student-count-badge {
+        background: linear-gradient(135deg, #7209b7, #3a0ca3);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+    }
+    
+    .student-count-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(114, 9, 183, 0.3);
+    }
+    
+    .action-buttons .btn {
+        padding: 0.375rem 0.75rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    .action-buttons .btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Stats cards */
+    .stats-card {
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: none;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    .stats-card-primary {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+    }
+    
+    .stats-card-success {
+        background: linear-gradient(135deg, #4cc9f0, #4895ef);
+        color: white;
+    }
+    
+    .stats-card-info {
+        background: linear-gradient(135deg, #4361ee, #3a0ca3);
+        color: white;
+    }
+    
+    .stats-card-warning {
+        background: linear-gradient(135deg, #f72585, #b5179e);
+        color: white;
+    }
+    
+    .stats-icon {
+        font-size: 2.2rem;
+        opacity: 0.9;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     }
     
     /* Animation for new items */
-    @keyframes highlight {
-        from { background-color: rgba(40, 167, 69, 0.2); }
-        to { background-color: transparent; }
+    @keyframes highlightNew {
+        0% { background-color: rgba(76, 201, 240, 0.3); }
+        50% { background-color: rgba(76, 201, 240, 0.1); }
+        100% { background-color: transparent; }
     }
     
-    .new-item {
-        animation: highlight 2s ease;
+    .highlight-new {
+        animation: highlightNew 2s ease;
+    }
+    
+    /* Loading animation */
+    .loading-spinner {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid var(--primary-color);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Subject filter improvements */
+    .subject-option {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+        transition: background-color 0.2s ease;
+    }
+    
+    .subject-option:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    
+    .subject-code {
+        font-size: 0.85rem;
+        color: #6c757d;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+    }
+    
+    /* Quick actions */
+    .quick-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .quick-action-btn {
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+    
+    .quick-action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Assignment status indicator */
+    .assignment-status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    
+    .status-indicator-active {
+        background-color: #4cc9f0;
+        box-shadow: 0 0 10px rgba(76, 201, 240, 0.6);
+        animation: pulse 2s infinite;
+    }
+    
+    .status-indicator-inactive {
+        background-color: #6c757d;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(76, 201, 240, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(76, 201, 240, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(76, 201, 240, 0); }
+    }
+    
+    /* Debug panel */
+    .debug-panel {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1050;
+        max-width: 400px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .debug-content {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.8rem;
+        background: #1a1a1a;
+        color: #f8f9fa;
+    }
+    
+    .debug-content::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .debug-content::-webkit-scrollbar-thumb {
+        background: var(--primary-color);
+    }
+    
+    /* Progress indicators */
+    .progress-ring {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+    }
+    
+    .progress-ring-circle {
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+    }
+    
+    /* Modern table styling */
+    .modern-table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    
+    .modern-table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-top: none;
+    }
+    
+    .modern-table td {
+        border-top: 1px solid #f1f3f4;
+        vertical-align: middle;
+    }
+    
+    /* Hover effect for table rows */
+    .hover-lift {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .hover-lift:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     
     /* Responsive adjustments */
     @media (max-width: 768px) {
-        .d-flex.justify-content-between {
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
         .table-responsive {
-            font-size: 0.9rem;
+            border: none;
+            margin: 0 -1rem;
+            padding: 0 1rem;
         }
         
-        .btn-group {
+        .action-buttons {
             flex-wrap: wrap;
+            justify-content: center;
             gap: 0.25rem;
         }
+        
+        .stats-card {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .quick-actions {
+            justify-content: center;
+        }
+        
+        .quick-action-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+    }
+    
+    /* Print styles */
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #dee2e6 !important;
+        }
+        
+        .stats-card {
+            break-inside: avoid;
+        }
+    }
+    
+    /* Glass morphism effect for cards */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Tooltip enhancements */
+    .custom-tooltip {
+        position: relative;
+        cursor: help;
+    }
+    
+    .custom-tooltip:hover::before {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--dark-color);
+        color: white;
+        padding: 0.6rem 0.9rem;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        z-index: 1060;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .custom-tooltip:hover::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--dark-color);
+        z-index: 1060;
+        margin-bottom: -5px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="alert alert-danger mb-4">
+    <h5>Template Debug</h5>
+    <p><strong>total_subjects:</strong> {{ total_subjects|default:"NOT SET" }}</p>
+    <p><strong>assigned_subjects:</strong> {{ assigned_subjects|default:"NOT SET" }}</p>
+    <p><strong>subjects count:</strong> {{ subjects|length|default:"0" }}</p>
+    
+    <h6>Subject List:</h6>
+    <ul>
+    {% for subject in subjects %}
+        <li>{{ subject.name }} (ID: {{ subject.id }}) - Assignments: {{ subject.assignment_count }}</li>
+    {% empty %}
+        <li>NO SUBJECTS IN TEMPLATE</li>
+    {% endfor %}
+    </ul>
+</div>
+
+<div class="container-fluid px-3 px-md-4">
+    <!-- Debug Panel -->
+    <div class="debug-panel animate__animated animate__fadeInUp" id="debugPanel" style="display: none;">
+        <div class="card border-0">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                <h6 class="mb-0"><i class="bi bi-bug me-2"></i>Debug Panel</h6>
+                <button type="button" class="btn-close btn-close-white" onclick="toggleDebugPanel()"></button>
+            </div>
+            <div class="card-body debug-content p-3">
+                <h6 class="text-primary mb-3">Context Variables:</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="bg-dark p-2 rounded">
+                            <small class="text-muted">Total Subjects</small>
+                            <div class="h5">{{ total_subjects|default:"0" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-dark p-2 rounded">
+                            <small class="text-muted">Assigned Subjects</small>
+                            <div class="h5">{{ assigned_subjects|default:"0" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-dark p-2 rounded">
+                            <small class="text-muted">Active Teachers</small>
+                            <div class="h5">{{ active_teachers|default:"0" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-dark p-2 rounded">
+                            <small class="text-muted">Total Assignments</small>
+                            <div class="h5">{{ total_assignments|default:"0" }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h6 class="text-primary mb-2">Subjects List ({{ subjects|length }}):</h6>
+                <div class="mb-3">
+                    {% for subject in subjects %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-1">
+                        <span>{{ forloop.counter }}. {{ subject.name }} ({{ subject.code }})</span>
+                        <span class="badge bg-primary">{{ subject.assignment_count }} assignment{{ subject.assignment_count|pluralize }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-2 text-muted">
+                        <i class="bi bi-exclamation-circle"></i> No subjects found
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <h6 class="text-primary mb-2">Database Query Debug:</h6>
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-light w-100 mb-2" onclick="runDatabaseQueries()">
+                        <i class="bi bi-database me-1"></i> Run Database Checks
+                    </button>
+                    <div id="queryResults" class="mt-2" style="display: none;"></div>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <button class="btn btn-sm btn-outline-danger w-100" onclick="clearAllCache()">
+                        <i class="bi bi-trash me-1"></i> Clear Debug Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Header with Quick Stats -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-journal-bookmark-fill me-2"></i> Class Assignments</h2>
-        {% if is_admin or is_teacher %}
-        <a href="{% url 'class_assignment_create' %}" class="btn btn-primary" id="new-assignment-btn">
-            <i class="bi bi-plus-lg me-1"></i> Assign Teacher to Class
+        <div>
+            <h1 class="h3 mb-1 text-dark"><i class="bi bi-journal-bookmark-fill me-2 text-primary"></i> Class Assignments</h1>
+            <p class="text-muted mb-0">Manage teacher assignments to classes and subjects across the school</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <button type="button" class="btn btn-outline-info btn-sm" onclick="toggleDebugPanel()" data-bs-toggle="tooltip" title="Toggle Debug Panel">
+                <i class="bi bi-bug"></i>
+            </button>
+            <div class="vr mx-2"></div>
+            {% if is_admin or is_teacher %}
+            <a href="{% url 'class_assignment_create' %}" class="btn btn-primary btn-lg shadow-sm animate__animated animate__pulse animate__infinite" id="new-assignment-btn">
+                <i class="bi bi-plus-lg me-2"></i> New Assignment
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions no-print">
+        {% if is_admin %}
+        <a href="{% url 'teacher_list' %}" class="btn btn-outline-primary quick-action-btn">
+            <i class="bi bi-person-badge me-1"></i> Manage Teachers
+        </a>
+        <a href="{% url 'subject_list' %}" class="btn btn-outline-success quick-action-btn">
+            <i class="bi bi-book me-1"></i> Manage Subjects
+        </a>
+        <a href="{% url 'student_list' %}" class="btn btn-outline-warning quick-action-btn">
+            <i class="bi bi-people me-1"></i> View Students
         </a>
         {% endif %}
+        <button type="button" class="btn btn-outline-secondary quick-action-btn" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> Print List
+        </button>
+        <button type="button" class="btn btn-outline-info quick-action-btn" onclick="exportData()">
+            <i class="bi bi-download me-1"></i> Export Data
+        </button>
+        <button type="button" class="btn btn-outline-dark quick-action-btn" onclick="refreshPage()">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+    </div>
+
+    <!-- Stats Overview -->
+    <div class="row mb-4 g-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card-primary shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-2 opacity-75">Total Assignments</h6>
+                            <h2 class="mb-1">{{ total_assignments|default:"0" }}</h2>
+                            <small class="opacity-75">
+                                <i class="bi bi-eye me-1"></i>
+                                {{ class_assignments|length }} currently displayed
+                            </small>
+                        </div>
+                        <i class="bi bi-journal-text stats-icon"></i>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between small opacity-75">
+                            <span>Active: {{ class_assignments|length }}</span>
+                            <span>{% widthratio class_assignments|length total_assignments|default:1 100 %}%</span>
+                        </div>
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar" style="width: {% widthratio class_assignments|length total_assignments|default:1 100 %}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card-success shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-2 opacity-75">Active Teachers</h6>
+                            <h2 class="mb-1">{{ active_teachers|default:"0" }}</h2>
+                            <small class="opacity-75">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Available for assignments
+                            </small>
+                        </div>
+                        <i class="bi bi-person-badge stats-icon"></i>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex align-items-center small opacity-75">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <span>Qualified for current subjects</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card-info shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-2 opacity-75">Subjects</h6>
+                            <h2 class="mb-1">{{ total_subjects|default:"0" }}</h2>
+                            <small class="opacity-75">
+                                {% if assigned_subjects > 0 %}
+                                <i class="bi bi-check-circle me-1"></i>
+                                {{ assigned_subjects }} assigned
+                                {% else %}
+                                <i class="bi bi-exclamation-circle me-1"></i>
+                                No subjects assigned yet
+                                {% endif %}
+                            </small>
+                        </div>
+                        <i class="bi bi-book stats-icon"></i>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between small opacity-75">
+                            <span>Total: {{ total_subjects|default:"0" }}</span>
+                            <span>Assigned: {{ assigned_subjects|default:"0" }}</span>
+                        </div>
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar" style="width: {% widthratio assigned_subjects|default:0 total_subjects|default:1 100 %}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stats-card-warning shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-2 opacity-75">Class Levels</h6>
+                            <h2 class="mb-1">{{ total_classes|default:"0" }}</h2>
+                            <small class="opacity-75">
+                                <i class="bi bi-mortarboard me-1"></i>
+                                Primary & JHS Levels
+                            </small>
+                        </div>
+                        <i class="bi bi-mortarboard stats-icon"></i>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for value, display in class_levels|slice:":4" %}
+                            <span class="badge bg-light text-dark">{{ value }}</span>
+                            {% endfor %}
+                            {% if class_levels|length > 4 %}
+                            <span class="badge bg-light text-dark">+{{ class_levels|length|add:"-4" }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time Data Summary -->
+    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-info-circle-fill me-3 fs-4"></i>
+        <div>
+            <strong>Data Summary:</strong> 
+            Showing <strong>{{ class_assignments|length }}</strong> assignment{{ class_assignments|length|pluralize }} 
+            out of <strong>{{ total_assignments|default:"0" }}</strong> total. 
+            <strong>{{ total_subjects|default:"0" }}</strong> subjects available, 
+            <strong>{{ assigned_subjects|default:"0" }}</strong> currently assigned.
+            <span class="d-block mt-1 small">
+                <i class="bi bi-clock me-1"></i>
+                Last updated: <span id="currentTime">{{ now|date:"F j, Y H:i:s" }}</span>
+            </span>
+        </div>
     </div>
 
     <!-- Filter/Search Section -->
-    <div class="card mb-4 filter-card">
-        <div class="card-header bg-transparent">
-            <h5 class="mb-0"><i class="bi bi-funnel me-1"></i> Filter Assignments</h5>
+    <div class="card mb-4 filter-card shadow-sm">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0"><i class="bi bi-funnel me-2"></i> Filter Assignments</h5>
+                    <p class="text-muted mb-0 mt-1 small">Filter assignments by various criteria</p>
+                </div>
+                <span class="badge bg-primary">
+                    <i class="bi bi-filter me-1"></i>
+                    {{ class_assignments|length }} result{{ class_assignments|length|pluralize }}
+                </span>
+            </div>
         </div>
         <div class="card-body">
             <form method="get" class="row g-3" id="filter-form">
-                <div class="col-md-3">
-                    <label class="form-label">Class Level</label>
-                    <select name="class_level" class="form-select">
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-mortarboard me-1"></i>
+                        Class Level
+                    </label>
+                    <select name="class_level" class="form-select shadow-sm">
                         <option value="">All Classes</option>
                         {% for value, display in class_levels %}
-                        <option value="{{ value }}" {% if request.GET.class_level == value %}selected{% endif %}>
+                        <option value="{{ value }}" 
+                                {% if request.GET.class_level == value %}selected{% endif %}>
                             {{ display }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Academic Year</label>
-                    <input type="text" name="academic_year" class="form-control" 
-                           placeholder="e.g., 2023-2024" value="{{ request.GET.academic_year }}"
-                           pattern="\d{4}-\d{4}" title="Please use format: YYYY-YYYY">
+                
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-calendar3 me-1"></i>
+                        Academic Year
+                    </label>
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-light"><i class="bi bi-calendar"></i></span>
+                        <input type="text" name="academic_year" class="form-control" 
+                               placeholder="e.g., 2023/2024" value="{{ request.GET.academic_year }}"
+                               pattern="\d{4}/\d{4}" title="Format: YYYY/YYYY">
+                    </div>
+                    <div class="form-text">
+                        <small>Format: YYYY/YYYY</small>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for year in academic_years|slice:":3" %}
+                            <button type="button" class="btn btn-xs btn-outline-primary year-suggestion" 
+                                    data-year="{{ year }}">
+                                {{ year }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Subject</label>
-                    <select name="subject" class="form-select">
+                
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-book me-1"></i>
+                        Subject
+                    </label>
+                    <select name="subject" class="form-select shadow-sm" id="subject-filter">
                         <option value="">All Subjects</option>
                         {% for subject in subjects %}
-                        <option value="{{ subject.id }}" {% if request.GET.subject == subject.id|stringformat:"s" %}selected{% endif %}>
-                            {{ subject.name }}
+                        <option value="{{ subject.id }}" 
+                                {% if request.GET.subject|stringformat:"s" == subject.id|stringformat:"s" %}selected{% endif %}
+                                data-assignments="{{ subject.assignment_count }}">
+                            {{ subject.name }} ({{ subject.code }})
                         </option>
+                        {% empty %}
+                        <option value="" disabled>No subjects available</option>
                         {% endfor %}
                     </select>
+                    <div class="form-text">
+                        <small>{{ subjects|length }} subject{{ subjects|pluralize }} available</small>
+                    </div>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary me-2">
-                        <i class="bi bi-filter me-1"></i> Apply
-                    </button>
-                    <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary" title="Reset filters">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </a>
+                
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-toggle-on me-1"></i>
+                        Status
+                    </label>
+                    <select name="is_active" class="form-select shadow-sm">
+                        <option value="">All Status</option>
+                        <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>
+                            <i class="bi bi-check-circle text-success me-1"></i>Active
+                        </option>
+                        <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>
+                            <i class="bi bi-x-circle text-danger me-1"></i>Inactive
+                        </option>
+                    </select>
+                </div>
+                
+                <div class="col-lg-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-search me-1"></i>
+                        Search
+                    </label>
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                        <input type="text" name="search" class="form-control" 
+                               placeholder="Search by teacher name, subject, or class level..." 
+                               value="{{ request.GET.search }}">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        <small>Search in teacher names, subject names/codes, or class levels</small>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <label class="form-label fw-semibold">
+                        <i class="bi bi-lightning me-1"></i>
+                        Quick Filters
+                    </label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="setCurrentYear()">
+                            <i class="bi bi-calendar-check me-1"></i>Current Year
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="showActiveOnly()">
+                            <i class="bi bi-toggle-on me-1"></i>Active Only
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="showUnassignedSubjects()">
+                            <i class="bi bi-book me-1"></i>Unassigned
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Active Filters Badges -->
+                {% if request.GET %}
+                <div class="col-12">
+                    <div class="alert alert-light py-2 mb-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-funnel-fill text-primary me-2"></i>
+                                <strong>Active Filters:</strong>
+                                {% if request.GET.class_level %}
+                                <span class="badge bg-primary ms-2">
+                                    <i class="bi bi-mortarboard me-1"></i>{{ request.GET.class_level }}
+                                    <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                            onclick="removeFilter('class_level')"></button>
+                                </span>
+                                {% endif %}
+                                {% if request.GET.academic_year %}
+                                <span class="badge bg-primary ms-2">
+                                    <i class="bi bi-calendar me-1"></i>{{ request.GET.academic_year }}
+                                    <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                            onclick="removeFilter('academic_year')"></button>
+                                </span>
+                                {% endif %}
+                                {% if request.GET.subject %}
+                                {% with subject_id=request.GET.subject %}
+                                    <span class="badge bg-primary ms-2">
+                                        <i class="bi bi-book me-1"></i>Subject: {{ subject_id }}
+                                        <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                                onclick="removeFilter('subject')"></button>
+                                    </span>
+                                {% endwith %}
+                                {% endif %}
+                                {% if request.GET.search %}
+                                <span class="badge bg-primary ms-2">
+                                    <i class="bi bi-search me-1"></i>"{{ request.GET.search }}"
+                                    <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                            onclick="removeFilter('search')"></button>
+                                </span>
+                                {% endif %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearAllFilters()">
+                                <i class="bi bi-x-circle me-1"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Showing {{ class_assignments|length }} of {{ total_assignments|default:"0" }} assignments
+                            </span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary px-4" id="apply-filters-btn">
+                                <i class="bi bi-filter me-2"></i> Apply Filters
+                            </button>
+                            <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise me-2"></i> Reset View
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
+    <!-- Assignments Table -->
+    <div class="card shadow-sm border-0 overflow-hidden">
+        <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0 text-dark">
+                    <i class="bi bi-journal-text me-2 text-primary"></i>
+                    Class Assignments
+                </h5>
+                <p class="text-muted mb-0 small mt-1">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Manage teacher assignments to specific classes and subjects
+                </p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge bg-light text-dark border">
+                    <i class="bi bi-list-check me-1"></i>
+                    {{ class_assignments|length }} assignment{{ class_assignments|length|pluralize }}
+                </span>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" 
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-gear me-1"></i> Actions
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="exportToCSV()">
+                            <i class="bi bi-file-earmark-excel me-2"></i>Export to CSV
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportToExcel()">
+                            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export to Excel
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="printAssignmentList()">
+                            <i class="bi bi-printer me-2"></i>Print List
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="downloadPDF()">
+                            <i class="bi bi-file-earmark-pdf me-2"></i>Download PDF
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body p-0">
             {% if class_assignments %}
             <div class="table-responsive">
-                <table class="table table-hover" id="assignments-table">
+                <table class="table table-hover mb-0 modern-table" id="assignments-table">
                     <thead class="table-light">
                         <tr>
-                            <th>Class Level</th>
+                            <th class="ps-4">Class Level</th>
                             <th>Subject</th>
                             <th>Teacher</th>
                             <th>Academic Year</th>
                             <th>Students</th>
+                            <th>Status</th>
                             {% if is_admin %}
-                            <th>Actions</th>
+                            <th class="text-end pe-4">Actions</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for assignment in class_assignments %}
-                        <tr id="assignment-{{ assignment.id }}" class="{% if forloop.first and request.GET.created %}new-item{% endif %}">
-                            <td>
-                                <span class="badge bg-primary">{{ assignment.get_class_level_display }}</span>
-                            </td>
-                            <td>
-                                <strong>{{ assignment.subject.name }}</strong>
-                                <br>
-                                <small class="text-muted">{{ assignment.subject.code }}</small>
-                            </td>
-                            <td>
+                        <tr id="assignment-{{ assignment.id }}" 
+                            class="hover-lift {% if forloop.first and request.GET.created %}highlight-new{% endif %}">
+                            <td class="ps-4">
                                 <div class="d-flex align-items-center">
-                                    <div class="flex-shrink-0">
-                                        <i class="bi bi-person-circle me-2"></i>
+                                    <div class="bg-primary bg-opacity-10 p-2 rounded me-3">
+                                        <i class="bi bi-mortarboard-fill text-primary"></i>
                                     </div>
-                                    <div class="flex-grow-1 ms-2">
-                                        {{ assignment.teacher.get_full_name }}
-                                        <br>
-                                        <small class="text-muted">{{ assignment.teacher.phone_number }}</small>
+                                    <div>
+                                        <strong class="d-block">{{ assignment.get_class_level_display }}</strong>
+                                        <small class="text-muted">{{ assignment.class_level }}</small>
                                     </div>
                                 </div>
                             </td>
-                            <td>{{ assignment.academic_year }}</td>
                             <td>
-                                <span class="badge bg-info">
-                                    <i class="bi bi-people-fill me-1"></i>{{ assignment.student_count }} students
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-info bg-opacity-10 p-2 rounded me-3">
+                                        <i class="bi bi-book text-info"></i>
+                                    </div>
+                                    <div>
+                                        <strong class="d-block">{{ assignment.subject.name }}</strong>
+                                        <small class="text-muted">{{ assignment.subject.code }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="teacher-avatar me-3">
+                                        {{ assignment.teacher.get_full_name|slice:":1" }}
+                                    </div>
+                                    <div>
+                                        <strong class="d-block">{{ assignment.teacher.get_full_name }}</strong>
+                                        <small class="text-muted d-flex align-items-center">
+                                            <i class="bi bi-person-badge me-1"></i>
+                                            {{ assignment.teacher.employee_id }}
+                                            {% if assignment.teacher.phone_number %}
+                                            <span class="ms-2 d-flex align-items-center">
+                                                <i class="bi bi-telephone me-1"></i>{{ assignment.teacher.phone_number }}
+                                            </span>
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border d-inline-flex align-items-center">
+                                    <i class="bi bi-calendar3 me-1"></i>{{ assignment.academic_year }}
                                 </span>
+                                {% if assignment.academic_year == current_year %}
+                                <span class="badge bg-success ms-1">Current</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <button type="button" class="student-count-badge border-0" 
+                                            onclick="loadStudents({{ assignment.id }})"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-placement="top"
+                                            title="Click to view students in {{ assignment.get_class_level_display }}">
+                                        <i class="bi bi-people-fill me-1"></i>
+                                        {{ assignment.get_students_count }} student{{ assignment.get_students_count|pluralize }}
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="assignment-status-indicator {% if assignment.is_active %}status-indicator-active{% else %}status-indicator-inactive{% endif %} me-2"></span>
+                                    {% if assignment.is_active %}
+                                    <span class="status-badge status-active">
+                                        <i class="bi bi-check-circle me-1"></i>Active
+                                    </span>
+                                    {% else %}
+                                    <span class="status-badge status-inactive">
+                                        <i class="bi bi-x-circle me-1"></i>Inactive
+                                    </span>
+                                    {% endif %}
+                                </div>
                             </td>
                             {% if is_admin %}
-                            <td>
-                                <div class="btn-group btn-group-sm">
+                            <td class="text-end pe-4">
+                                <div class="action-buttons d-flex gap-1">
                                     <a href="{% url 'class_assignment_update' assignment.pk %}" 
-                                       class="btn btn-outline-primary" title="Edit">
+                                       class="btn btn-outline-primary btn-sm"
+                                       data-bs-toggle="tooltip"
+                                       data-bs-placement="top"
+                                       title="Edit Assignment">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <a href="{% url 'class_assignment_delete' assignment.pk %}" 
-                                       class="btn btn-outline-danger" title="Delete">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                    <a href="#" class="btn btn-outline-info view-students-btn" 
-                                       title="View Students" data-assignment-id="{{ assignment.id }}">
+                                    <button type="button" 
+                                           class="btn btn-outline-info btn-sm"
+                                           onclick="loadStudents({{ assignment.id }})"
+                                           data-bs-toggle="tooltip"
+                                           data-bs-placement="top"
+                                           title="View Students">
                                         <i class="bi bi-people"></i>
+                                    </button>
+                                    <a href="{% url 'class_assignment_delete' assignment.pk %}" 
+                                       class="btn btn-outline-danger btn-sm"
+                                       data-bs-toggle="tooltip"
+                                       data-bs-placement="top"
+                                       title="Delete Assignment">
+                                        <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
                             </td>
@@ -205,63 +1092,204 @@
                 </table>
             </div>
             
-            <!-- Pagination -->
-            {% if is_paginated %}
-            <nav aria-label="Page navigation" class="mt-4">
-                <ul class="pagination justify-content-center">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                            <i class="bi bi-chevron-double-left"></i>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                            <i class="bi bi-chevron-left"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                        <li class="page-item active">
-                            <span class="page-link">{{ num }}</span>
-                        </li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
-                        </li>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                            <i class="bi bi-chevron-right"></i>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                            <i class="bi bi-chevron-double-right"></i>
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            {% endif %}
-            
+            <!-- Empty State -->
             {% else %}
-            <div class="text-center py-5 empty-state">
-                <i class="bi bi-journal-x display-1"></i>
-                <h4 class="mt-3">No class assignments found</h4>
-                <p class="text-muted">Try adjusting your filters or create a new assignment.</p>
+            <div class="empty-state">
+                <i class="bi bi-journal-x"></i>
+                <h4 class="mb-2">No class assignments found</h4>
+                <p class="text-muted mb-4 w-75 mx-auto">
+                    {% if request.GET %}
+                    Try adjusting your filters or clear them to see all assignments.
+                    {% else %}
+                    No assignments have been created yet. Create your first assignment to get started.
+                    {% endif %}
+                </p>
                 {% if is_admin or is_teacher %}
-                <a href="{% url 'class_assignment_create' %}" class="btn btn-primary mt-2">
-                    <i class="bi bi-plus-lg me-1"></i> Create First Assignment
-                </a>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="{% url 'class_assignment_create' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-lg me-2"></i> Create First Assignment
+                    </a>
+                    {% if request.GET %}
+                    <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary btn-lg">
+                        <i class="bi bi-arrow-clockwise me-2"></i> Clear Filters
+                    </a>
+                    {% endif %}
+                </div>
                 {% endif %}
             </div>
             {% endif %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="card-footer bg-white border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">
+                        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} assignments
+                    </small>
+                </div>
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Data Summary Footer -->
+    {% if class_assignments %}
+    <div class="mt-4">
+        <div class="alert alert-light border d-flex justify-content-between align-items-center">
+            <div>
+                <i class="bi bi-info-circle text-primary me-2"></i>
+                <strong>Data Summary:</strong> 
+                {{ class_assignments|length }} assignments • 
+                {{ active_teachers|default:"0" }} active teachers • 
+                {{ assigned_subjects|default:"0" }} assigned subjects
+            </div>
+            <div class="text-muted small">
+                Last updated: <span id="updateTimestamp">{{ now|date:"H:i:s" }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Student Modal -->
+<div class="modal fade" id="studentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-people-fill me-2 text-primary"></i>
+                    Students in Class
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center py-5" id="loadingStudents">
+                    <div class="loading-spinner mx-auto mb-3"></div>
+                    <p class="text-muted">Loading students...</p>
+                </div>
+                <div id="studentList" class="d-none">
+                    <!-- Student list will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Close
+                </button>
+                <button type="button" class="btn btn-primary" onclick="printStudentList()">
+                    <i class="bi bi-printer me-1"></i>Print List
+                </button>
+                <button type="button" class="btn btn-success" onclick="exportStudentList()">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-download me-2"></i>
+                    Export Data
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Export Format:</label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="exportFormat" id="formatCSV" value="csv" checked>
+                        <label class="form-check-label" for="formatCSV">
+                            CSV (Comma Separated Values)
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="exportFormat" id="formatExcel" value="excel">
+                        <label class="form-check-label" for="formatExcel">
+                            Excel (.xlsx)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="exportFormat" id="formatPDF" value="pdf">
+                        <label class="form-check-label" for="formatPDF">
+                            PDF Document
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Include:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="includeStats" checked>
+                        <label class="form-check-label" for="includeStats">
+                            Statistics Summary
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="includeFilters" checked>
+                        <label class="form-check-label" for="includeFilters">
+                            Current Filters
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="includeTimestamp" checked>
+                        <label class="form-check-label" for="includeTimestamp">
+                            Timestamp
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmExport()">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -273,60 +1301,1804 @@
 
 {% block extra_js %}
 <script>
+    // ============================================================================
+    // Global Configuration and Constants
+    // ============================================================================
+    const CONFIG = {
+        API_ENDPOINTS: {
+            // CORRECTED: Use 'assignment_students' not 'get_assignment_students'
+            ASSIGNMENT_STUDENTS: function(assignmentId) {
+                return `/api/class-assignments/${assignmentId}/students/`;
+            },
+            
+            DEBUG_STATS: '/api/debug/database-stats/',
+            EXPORT_DATA: '/api/export/assignments/',
+            TOGGLE_STATUS: function(assignmentId) {
+                return `/api/toggle-assignment-status/${assignmentId}/`;
+            },
+            BULK_DELETE: '/api/bulk-delete-assignments/',
+            STATISTICS: '/api/assignment-statistics/'
+        },
+        ANIMATION_DURATIONS: {
+            SHORT: 300,
+            MEDIUM: 500,
+            LONG: 1000
+        },
+        LOCAL_STORAGE_KEYS: {
+            DEBUG_PANEL: 'debug_panel_state',
+            TABLE_FILTERS: 'assignment_filters',
+            TABLE_SORT: 'assignment_sort',
+            THEME: 'theme_preference'
+        },
+        EVENT_NAMES: {
+            DATA_UPDATED: 'assignments:data-updated',
+            FILTER_CHANGED: 'assignments:filters-changed',
+            EXPORT_COMPLETE: 'assignments:export-complete'
+        }
+    };
+
+    // ============================================================================
+    // State Management
+    // ============================================================================
+    class AssignmentState {
+        constructor() {
+            this.currentFilters = this._loadFilters();
+            this.sortState = this._loadSortState();
+            this.selectedAssignments = new Set();
+            this.isLoading = false;
+            this.debugPanelOpen = false;
+        }
+
+        _loadFilters() {
+            try {
+                const saved = localStorage.getItem(CONFIG.LOCAL_STORAGE_KEYS.TABLE_FILTERS);
+                return saved ? JSON.parse(saved) : {};
+            } catch (e) {
+                console.warn('Failed to load filters from localStorage:', e);
+                return {};
+            }
+        }
+
+        _loadSortState() {
+            try {
+                const saved = localStorage.getItem(CONFIG.LOCAL_STORAGE_KEYS.TABLE_SORT);
+                return saved ? JSON.parse(saved) : { column: null, direction: 'asc' };
+            } catch (e) {
+                console.warn('Failed to load sort state:', e);
+                return { column: null, direction: 'asc' };
+            }
+        }
+
+        saveFilters() {
+            try {
+                localStorage.setItem(
+                    CONFIG.LOCAL_STORAGE_KEYS.TABLE_FILTERS,
+                    JSON.stringify(this.currentFilters)
+                );
+            } catch (e) {
+                console.warn('Failed to save filters:', e);
+            }
+        }
+
+        saveSortState() {
+            try {
+                localStorage.setItem(
+                    CONFIG.LOCAL_STORAGE_KEYS.TABLE_SORT,
+                    JSON.stringify(this.sortState)
+                );
+            } catch (e) {
+                console.warn('Failed to save sort state:', e);
+            }
+        }
+
+        toggleAssignmentSelection(id) {
+            if (this.selectedAssignments.has(id)) {
+                this.selectedAssignments.delete(id);
+            } else {
+                this.selectedAssignments.add(id);
+            }
+            this._updateSelectionUI();
+        }
+
+        clearSelection() {
+            this.selectedAssignments.clear();
+            this._updateSelectionUI();
+        }
+
+        _updateSelectionUI() {
+            const count = this.selectedAssignments.size;
+            const badge = document.getElementById('selectedCountBadge');
+            const bulkActions = document.getElementById('bulkActions');
+            
+            if (badge) {
+                badge.textContent = count;
+                badge.style.display = count > 0 ? 'inline-flex' : 'none';
+            }
+            
+            if (bulkActions) {
+                bulkActions.style.display = count > 0 ? 'flex' : 'none';
+            }
+        }
+    }
+
+    // ============================================================================
+    // Core Application Initialization
+    // ============================================================================
     document.addEventListener('DOMContentLoaded', function() {
-        // Highlight new assignment if redirected from creation
+        // Initialize application state
+        window.AssignmentApp = {
+            state: new AssignmentState(),
+            utils: AssignmentUtils,
+            api: AssignmentAPI,
+            ui: AssignmentUI
+        };
+
+        // Initialize all modules
+        initializeApplication();
+    });
+
+    function initializeApplication() {
+        // Initialize Bootstrap components
+        initializeBootstrapComponents();
+        
+        // Initialize time and auto-update
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 60000); // Update every minute
+        
+        // Set up filters and search
+        initializeFilters();
+        initializeSearch();
+        
+        // Set up table interactions
+        initializeTable();
+        
+        // Set up event handlers
+        initializeEventHandlers();
+        
+        // Set up keyboard shortcuts
+        initializeKeyboardShortcuts();
+        
+        // Check for success messages or special states
+        checkInitialState();
+        
+        // Load any saved state
+        restoreApplicationState();
+    }
+
+    // ============================================================================
+    // Bootstrap Components Initialization
+    // ============================================================================
+    function initializeBootstrapComponents() {
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(
+            document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        );
+        tooltipTriggerList.forEach(tooltipTriggerEl => {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // Initialize popovers
+        const popoverTriggerList = [].slice.call(
+            document.querySelectorAll('[data-bs-toggle="popover"]')
+        );
+        popoverTriggerList.forEach(popoverTriggerEl => {
+            new bootstrap.Popover(popoverTriggerEl);
+        });
+
+        // Initialize dropdowns
+        const dropdowns = document.querySelectorAll('.dropdown-toggle');
+        dropdowns.forEach(dropdown => {
+            new bootstrap.Dropdown(dropdown);
+        });
+    }
+
+    // ============================================================================
+    // Filter Management
+    // ============================================================================
+    function initializeFilters() {
+        const filterForm = document.getElementById('filter-form');
+        if (!filterForm) return;
+
+        // Apply saved filters
+        applySavedFilters();
+
+        // Set up form submission
+        filterForm.addEventListener('submit', handleFilterSubmit);
+
+        // Set up quick filter buttons
+        document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+            btn.addEventListener('click', handleQuickFilter);
+        });
+
+        // Set up year suggestions
+        document.querySelectorAll('.year-suggestion').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const year = this.dataset.year;
+                document.querySelector('input[name="academic_year"]').value = year;
+                AssignmentUI.showToast('Year Selected', `Academic year set to ${year}`, 'info');
+            });
+        });
+
+        // Set up clear filter buttons
+        document.querySelectorAll('.filter-clear-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const filterName = this.dataset.filter;
+                if (filterName) {
+                    removeFilter(filterName);
+                }
+            });
+        });
+    }
+
+    function applySavedFilters() {
+        const filters = AssignmentApp.state.currentFilters;
+        const form = document.getElementById('filter-form');
+        
+        if (!form || !filters) return;
+        
+        Object.keys(filters).forEach(key => {
+            const element = form.querySelector(`[name="${key}"]`);
+            if (element) {
+                if (element.type === 'checkbox' || element.type === 'radio') {
+                    element.checked = filters[key];
+                } else {
+                    element.value = filters[key];
+                }
+            }
+        });
+        
+        // Update active filters display
+        updateActiveFiltersDisplay();
+    }
+
+    function handleFilterSubmit(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const submitBtn = form.querySelector('#apply-filters-btn');
+        
+        if (submitBtn) {
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = `
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                Applying...
+            `;
+            submitBtn.disabled = true;
+        }
+        
+        // Validate form
+        if (!validateFilterForm(form)) {
+            if (submitBtn) {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+            return false;
+        }
+        
+        // Save filters
+        saveCurrentFilters();
+        
+        // Submit form
+        form.submit();
+        
+        return true;
+    }
+
+    function validateFilterForm(form) {
+        let isValid = true;
+        
+        // Validate academic year format
+        const yearInput = form.querySelector('input[name="academic_year"]');
+        if (yearInput && yearInput.value) {
+            const yearRegex = /^\d{4}\/\d{4}$/;
+            if (!yearRegex.test(yearInput.value)) {
+                AssignmentUI.showToast(
+                    'Validation Error',
+                    'Please enter academic year in the format YYYY/YYYY (e.g., 2023/2024)',
+                    'error'
+                );
+                yearInput.focus();
+                isValid = false;
+            }
+        }
+        
+        return isValid;
+    }
+
+    function saveCurrentFilters() {
+        const form = document.getElementById('filter-form');
+        if (!form) return;
+        
+        const filters = {};
+        const formData = new FormData(form);
+        
+        for (const [key, value] of formData.entries()) {
+            filters[key] = value;
+        }
+        
+        AssignmentApp.state.currentFilters = filters;
+        AssignmentApp.state.saveFilters();
+    }
+
+    function handleQuickFilter(event) {
+        const action = event.currentTarget.dataset.action;
+        
+        switch (action) {
+            case 'current-year':
+                setCurrentYear();
+                break;
+            case 'active-only':
+                showActiveOnly();
+                break;
+            case 'unassigned':
+                showUnassignedSubjects();
+                break;
+            case 'clear-all':
+                clearAllFilters();
+                break;
+        }
+    }
+
+    function updateActiveFiltersDisplay() {
+        const activeFiltersContainer = document.getElementById('activeFilters');
+        if (!activeFiltersContainer) return;
+        
+        const filters = AssignmentApp.state.currentFilters;
+        let html = '';
+        
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value) {
+                html += `
+                    <span class="badge bg-primary me-2 mb-1">
+                        ${getFilterDisplayName(key)}: ${value}
+                        <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                data-filter="${key}" aria-label="Remove filter"></button>
+                    </span>
+                `;
+            }
+        });
+        
+        activeFiltersContainer.innerHTML = html;
+        
+        // Add event listeners to remove buttons
+        activeFiltersContainer.querySelectorAll('.btn-close').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const filterName = this.dataset.filter;
+                removeFilter(filterName);
+            });
+        });
+    }
+
+    function getFilterDisplayName(filterKey) {
+        const displayNames = {
+            'class_level': 'Class Level',
+            'academic_year': 'Academic Year',
+            'subject': 'Subject',
+            'is_active': 'Status',
+            'search': 'Search'
+        };
+        
+        return displayNames[filterKey] || filterKey;
+    }
+
+    // ============================================================================
+    // Search Functionality
+    // ============================================================================
+    function initializeSearch() {
+        const searchInput = document.querySelector('input[name="search"]');
+        if (!searchInput) return;
+        
+        let debounceTimer;
+        const searchClearBtn = searchInput.nextElementSibling;
+        
+        // Debounced search
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                highlightMatchingRows(this.value.toLowerCase());
+            }, 300);
+        });
+        
+        // Clear search
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                searchInput.focus();
+                highlightMatchingRows('');
+            });
+        }
+        
+        // Auto-focus on search with Ctrl+F
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+        });
+    }
+
+    function highlightMatchingRows(searchTerm) {
+        const rows = document.querySelectorAll('#assignments-table tbody tr');
+        let matchCount = 0;
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            if (searchTerm && text.includes(searchTerm)) {
+                row.classList.add('table-info');
+                matchCount++;
+            } else {
+                row.classList.remove('table-info');
+            }
+        });
+        
+        // Update search result count
+        const resultBadge = document.getElementById('searchResultCount');
+        if (resultBadge) {
+            if (searchTerm && matchCount > 0) {
+                resultBadge.textContent = `${matchCount} match${matchCount !== 1 ? 'es' : ''}`;
+                resultBadge.classList.remove('d-none');
+            } else {
+                resultBadge.classList.add('d-none');
+            }
+        }
+    }
+
+    // ============================================================================
+    // Table Management
+    // ============================================================================
+    function initializeTable() {
+        const table = document.getElementById('assignments-table');
+        if (!table) return;
+        
+        // Add selection checkboxes
+        addSelectionCheckboxes(table);
+        
+        // Add sorting
+        addTableSorting(table);
+        
+        // Add row click handlers
+        addRowClickHandlers(table);
+        
+        // Add bulk actions
+        initializeBulkActions();
+        
+        // Add export functionality
+        initializeExport();
+    }
+
+    function addSelectionCheckboxes(table) {
+        const thead = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+        
+        if (!thead || !tbody) return;
+        
+        // Add header checkbox
+        const th = document.createElement('th');
+        th.style.width = '40px';
+        th.innerHTML = `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="selectAllCheckbox">
+            </div>
+        `;
+        thead.insertBefore(th, thead.firstChild);
+        
+        // Add row checkboxes
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((row, index) => {
+            const td = document.createElement('td');
+            const assignmentId = row.id.replace('assignment-', '');
+            td.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input row-checkbox" type="checkbox" 
+                           data-assignment-id="${assignmentId}">
+                </div>
+            `;
+            row.insertBefore(td, row.firstChild);
+        });
+        
+        // Add event listeners
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                const checkboxes = table.querySelectorAll('.row-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = this.checked;
+                    if (this.checked) {
+                        AssignmentApp.state.selectedAssignments.add(cb.dataset.assignmentId);
+                    } else {
+                        AssignmentApp.state.selectedAssignments.delete(cb.dataset.assignmentId);
+                    }
+                });
+                AssignmentApp.state._updateSelectionUI();
+            });
+        }
+        
+        // Add individual checkbox listeners
+        table.querySelectorAll('.row-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const assignmentId = this.dataset.assignmentId;
+                if (this.checked) {
+                    AssignmentApp.state.selectedAssignments.add(assignmentId);
+                } else {
+                    AssignmentApp.state.selectedAssignments.delete(assignmentId);
+                    // Uncheck select all if any checkbox is unchecked
+                    if (selectAllCheckbox) {
+                        selectAllCheckbox.checked = false;
+                    }
+                }
+                AssignmentApp.state._updateSelectionUI();
+            });
+        });
+    }
+
+    function addTableSorting(table) {
+        const headers = table.querySelectorAll('thead th[data-sortable="true"]');
+        
+        headers.forEach(header => {
+            header.style.cursor = 'pointer';
+            
+            header.addEventListener('click', function() {
+                const column = this.dataset.column;
+                const currentDirection = AssignmentApp.state.sortState.direction;
+                const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                
+                // Update state
+                AssignmentApp.state.sortState = {
+                    column: column,
+                    direction: newDirection
+                };
+                AssignmentApp.state.saveSortState();
+                
+                // Sort table
+                sortTable(column, newDirection);
+                
+                // Update UI
+                updateSortIndicators(this, newDirection);
+            });
+        });
+    }
+
+    function sortTable(column, direction) {
+        const table = document.getElementById('assignments-table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        rows.sort((a, b) => {
+            let aValue, bValue;
+            
+            // Extract values based on column
+            switch (column) {
+                case 'class_level':
+                    aValue = a.querySelector('.class-level-display').textContent;
+                    bValue = b.querySelector('.class-level-display').textContent;
+                    break;
+                case 'subject':
+                    aValue = a.querySelector('.subject-name').textContent;
+                    bValue = b.querySelector('.subject-name').textContent;
+                    break;
+                case 'teacher':
+                    aValue = a.querySelector('.teacher-name').textContent;
+                    bValue = b.querySelector('.teacher-name').textContent;
+                    break;
+                case 'academic_year':
+                    aValue = a.querySelector('.academic-year').textContent;
+                    bValue = b.querySelector('.academic-year').textContent;
+                    break;
+                case 'students':
+                    aValue = parseInt(a.querySelector('.student-count').textContent) || 0;
+                    bValue = parseInt(b.querySelector('.student-count').textContent) || 0;
+                    break;
+                case 'status':
+                    aValue = a.querySelector('.status-badge').textContent.includes('Active') ? 1 : 0;
+                    bValue = b.querySelector('.status-badge').textContent.includes('Active') ? 1 : 0;
+                    break;
+                default:
+                    aValue = a.cells[column]?.textContent || '';
+                    bValue = b.cells[column]?.textContent || '';
+            }
+            
+            // Compare values
+            if (typeof aValue === 'string') {
+                return direction === 'asc' 
+                    ? aValue.localeCompare(bValue)
+                    : bValue.localeCompare(aValue);
+            } else {
+                return direction === 'asc' 
+                    ? aValue - bValue
+                    : bValue - aValue;
+            }
+        });
+        
+        // Reorder rows
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    function updateSortIndicators(header, direction) {
+        // Clear all indicators
+        document.querySelectorAll('th[data-sortable="true"]').forEach(h => {
+            h.classList.remove('sort-asc', 'sort-desc');
+            const icon = h.querySelector('.sort-icon');
+            if (icon) icon.remove();
+        });
+        
+        // Add indicator to current header
+        header.classList.add(`sort-${direction}`);
+        const icon = document.createElement('i');
+        icon.className = `bi bi-sort-${direction === 'asc' ? 'down' : 'up'} sort-icon ms-1`;
+        header.appendChild(icon);
+    }
+
+    function addRowClickHandlers(table) {
+        table.addEventListener('click', function(e) {
+            const row = e.target.closest('tr');
+            if (!row) return;
+            
+            // Don't trigger for checkbox clicks
+            if (e.target.type === 'checkbox') return;
+            
+            // Don't trigger for action button clicks
+            if (e.target.closest('.action-buttons')) return;
+            
+            // Toggle row selection
+            const checkbox = row.querySelector('.row-checkbox');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+
+    // ============================================================================
+    // Bulk Actions
+    // ============================================================================
+    function initializeBulkActions() {
+        const bulkActions = document.getElementById('bulkActions');
+        if (!bulkActions) return;
+        
+        // Delete selected
+        document.getElementById('bulkDeleteBtn')?.addEventListener('click', handleBulkDelete);
+        
+        // Toggle status
+        document.getElementById('bulkToggleStatusBtn')?.addEventListener('click', handleBulkToggleStatus);
+        
+        // Export selected
+        document.getElementById('bulkExportBtn')?.addEventListener('click', handleBulkExport);
+    }
+
+    async function handleBulkDelete() {
+        const selected = Array.from(AssignmentApp.state.selectedAssignments);
+        if (selected.length === 0) return;
+        
+        const confirmMessage = `Are you sure you want to delete ${selected.length} assignment${selected.length !== 1 ? 's' : ''}?`;
+        if (!confirm(confirmMessage)) return;
+        
+        try {
+            const response = await AssignmentAPI.bulkDelete(selected);
+            if (response.success) {
+                AssignmentUI.showToast('Success', response.message, 'success');
+                // Remove rows from table
+                selected.forEach(id => {
+                    const row = document.getElementById(`assignment-${id}`);
+                    if (row) row.remove();
+                });
+                AssignmentApp.state.clearSelection();
+                // Refresh statistics
+                updateStatistics();
+            } else {
+                AssignmentUI.showToast('Error', response.error, 'error');
+            }
+        } catch (error) {
+            AssignmentUI.showToast('Error', 'Failed to delete assignments', 'error');
+            console.error('Bulk delete error:', error);
+        }
+    }
+
+    async function handleBulkToggleStatus() {
+        const selected = Array.from(AssignmentApp.state.selectedAssignments);
+        if (selected.length === 0) return;
+        
+        const confirmMessage = `Toggle status for ${selected.length} assignment${selected.length !== 1 ? 's' : ''}?`;
+        if (!confirm(confirmMessage)) return;
+        
+        try {
+            const promises = selected.map(id => AssignmentAPI.toggleStatus(id));
+            const results = await Promise.allSettled(promises);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value.success) {
+                    successCount++;
+                    // Update UI for this assignment
+                    updateAssignmentStatusUI(selected[index], result.value.is_active);
+                } else {
+                    errorCount++;
+                }
+            });
+            
+            if (successCount > 0) {
+                AssignmentUI.showToast(
+                    'Success', 
+                    `Updated status for ${successCount} assignment${successCount !== 1 ? 's' : ''}`,
+                    'success'
+                );
+            }
+            
+            if (errorCount > 0) {
+                AssignmentUI.showToast(
+                    'Warning',
+                    `Failed to update ${errorCount} assignment${errorCount !== 1 ? 's' : ''}`,
+                    'warning'
+                );
+            }
+            
+            AssignmentApp.state.clearSelection();
+            
+        } catch (error) {
+            AssignmentUI.showToast('Error', 'Failed to toggle status', 'error');
+            console.error('Bulk toggle error:', error);
+        }
+    }
+
+    function updateAssignmentStatusUI(assignmentId, isActive) {
+        const row = document.getElementById(`assignment-${assignmentId}`);
+        if (!row) return;
+        
+        const statusCell = row.querySelector('.status-cell');
+        if (statusCell) {
+            statusCell.innerHTML = isActive 
+                ? '<span class="badge bg-success">Active</span>'
+                : '<span class="badge bg-secondary">Inactive</span>';
+        }
+    }
+
+    function handleBulkExport() {
+        const selected = Array.from(AssignmentApp.state.selectedAssignments);
+        if (selected.length === 0) return;
+        
+        exportData({ selectedIds: selected });
+    }
+
+    // ============================================================================
+    // Export Functionality
+    // ============================================================================
+    function initializeExport() {
+        const exportModal = document.getElementById('exportModal');
+        if (!exportModal) return;
+        
+        const exportBtn = document.getElementById('exportDataBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const modal = new bootstrap.Modal(exportModal);
+                modal.show();
+            });
+        }
+        
+        // Confirm export
+        document.getElementById('confirmExportBtn')?.addEventListener('click', confirmExport);
+    }
+
+    function confirmExport() {
+        const format = document.querySelector('input[name="exportFormat"]:checked').value;
+        const options = {
+            includeStats: document.getElementById('includeStats').checked,
+            includeFilters: document.getElementById('includeFilters').checked,
+            includeTimestamp: document.getElementById('includeTimestamp').checked
+        };
+        
+        switch (format) {
+            case 'csv':
+                exportToCSV(options);
+                break;
+            case 'excel':
+                exportToExcel(options);
+                break;
+            case 'pdf':
+                exportToPDF(options);
+                break;
+            case 'json':
+                exportToJSON(options);
+                break;
+        }
+        
+        const exportModal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+        if (exportModal) exportModal.hide();
+    }
+
+    function exportToCSV(options = {}) {
+        try {
+            const table = document.getElementById('assignments-table');
+            if (!table) {
+                AssignmentUI.showToast('Error', 'No data to export', 'error');
+                return;
+            }
+            
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            // Add headers
+            const headers = [];
+            table.querySelectorAll('thead th').forEach(th => {
+                if (!th.querySelector('.form-check-input')) { // Skip checkbox column
+                    headers.push(`"${th.textContent.trim().replace(/"/g, '""')}"`);
+                }
+            });
+            csvContent += headers.join(',') + '\n';
+            
+            // Add rows
+            const rows = table.querySelectorAll('tbody tr');
+            if (rows.length === 0) {
+                AssignmentUI.showToast('Warning', 'No assignments to export', 'warning');
+                return;
+            }
+            
+            rows.forEach(row => {
+                const cells = [];
+                row.querySelectorAll('td').forEach((td, index) => {
+                    if (index > 0) { // Skip checkbox column
+                        const content = td.textContent.trim().replace(/"/g, '""');
+                        cells.push(`"${content}"`);
+                    }
+                });
+                csvContent += cells.join(',') + '\n';
+            });
+            
+            // Add metadata if requested
+            if (options.includeStats || options.includeFilters || options.includeTimestamp) {
+                csvContent += '\n\n' + getExportMetadata(options);
+            }
+            
+            // Trigger download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', `class_assignments_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            AssignmentUI.showToast('Success', 'Class assignments exported to CSV', 'success');
+            
+        } catch (error) {
+            console.error('CSV export error:', error);
+            AssignmentUI.showToast('Error', 'Failed to export CSV: ' + error.message, 'error');
+        }
+    }
+
+    function exportToExcel(options = {}) {
+        // Note: In a real implementation, you would use a library like SheetJS
+        // For now, we'll show a message and fall back to CSV
+        AssignmentUI.showToast('Info', 'Excel export uses advanced features. Downloading CSV instead.', 'info');
+        exportToCSV(options);
+    }
+
+    function exportToPDF(options = {}) {
+        // Note: In a real implementation, you would use jsPDF or similar
+        AssignmentUI.showToast('Info', 'PDF export will be implemented soon', 'info');
+    }
+
+    function exportToJSON(options = {}) {
+        try {
+            const assignments = [];
+            const rows = document.querySelectorAll('#assignments-table tbody tr');
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 7) { // Including checkbox column
+                    const assignment = {
+                        class_level: cells[1].querySelector('.class-level-display')?.textContent.trim() || '',
+                        subject: cells[2].querySelector('.subject-name')?.textContent.trim() || '',
+                        teacher: cells[3].querySelector('.teacher-name')?.textContent.trim() || '',
+                        academic_year: cells[4].querySelector('.academic-year')?.textContent.trim() || '',
+                        students: cells[5].querySelector('.student-count')?.textContent.trim() || '0',
+                        status: cells[6].querySelector('.status-badge')?.textContent.trim() || '',
+                        id: row.id.replace('assignment-', '')
+                    };
+                    assignments.push(assignment);
+                }
+            });
+            
+            const exportData = {
+                assignments: assignments,
+                metadata: getExportMetadataObject(options),
+                exported_at: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+            
+            const link = document.createElement('a');
+            link.setAttribute('href', dataUri);
+            link.setAttribute('download', `class_assignments_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            AssignmentUI.showToast('Success', 'Class assignments exported to JSON', 'success');
+            
+        } catch (error) {
+            console.error('JSON export error:', error);
+            AssignmentUI.showToast('Error', 'Failed to export JSON: ' + error.message, 'error');
+        }
+    }
+
+    function getExportMetadata(options = {}) {
+        let metadata = '';
+        
+        if (options.includeTimestamp) {
+            metadata += `Exported: ${new Date().toLocaleString()}\n`;
+        }
+        
+        if (options.includeStats) {
+            metadata += `Total Assignments: {{ total_assignments|default:"0" }}\n`;
+            metadata += `Active Teachers: {{ active_teachers|default:"0" }}\n`;
+            metadata += `Subjects: {{ total_subjects|default:"0" }}\n`;
+        }
+        
+        if (options.includeFilters && AssignmentApp.state.currentFilters) {
+            metadata += '\nActive Filters:\n';
+            Object.entries(AssignmentApp.state.currentFilters).forEach(([key, value]) => {
+                if (value) {
+                    metadata += `${getFilterDisplayName(key)}: ${value}\n`;
+                }
+            });
+        }
+        
+        return metadata;
+    }
+
+    function getExportMetadataObject(options = {}) {
+        const metadata = {};
+        
+        if (options.includeTimestamp) {
+            metadata.exported_at = new Date().toISOString();
+        }
+        
+        if (options.includeStats) {
+            metadata.statistics = {
+                total_assignments: {{ total_assignments|default:"0" }},
+                active_teachers: {{ active_teachers|default:"0" }},
+                total_subjects: {{ total_subjects|default:"0" }},
+                assigned_subjects: {{ assigned_subjects|default:"0" }},
+                total_classes: {{ total_classes|default:"0" }}
+            };
+        }
+        
+        if (options.includeFilters && AssignmentApp.state.currentFilters) {
+            metadata.filters = AssignmentApp.state.currentFilters;
+        }
+        
+        return metadata;
+    }
+
+    // ============================================================================
+    // Student Management
+    // ============================================================================
+    async function loadStudents(assignmentId) {
+        try {
+            const response = await AssignmentAPI.getAssignmentStudents(assignmentId);
+            renderStudentList(response);
+            
+            // Show modal
+            const studentModal = new bootstrap.Modal(document.getElementById('studentModal'));
+            studentModal.show();
+            
+        } catch (error) {
+            console.error('Error loading students:', error);
+            AssignmentUI.showToast('Error', 'Failed to load students', 'error');
+        }
+    }
+
+    function renderStudentList(data) {
+        const loadingEl = document.getElementById('loadingStudents');
+        const studentListEl = document.getElementById('studentList');
+        
+        if (!loadingEl || !studentListEl) return;
+        
+        loadingEl.classList.add('d-none');
+        studentListEl.classList.remove('d-none');
+        
+        if (data.success && data.students && data.students.length > 0) {
+            // Build HTML for student list
+            let html = `
+                <div class="alert alert-success mb-3">
+                    <i class="bi bi-people-fill me-2"></i>
+                    <strong>${data.class_display || 'Class Assignment'}</strong> - 
+                    ${data.count} student${data.count !== 1 ? 's' : ''}
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Gender</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            data.students.forEach((student, index) => {
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><span class="badge bg-light text-dark">${student.student_id}</span></td>
+                        <td>${student.full_name}</td>
+                        <td>
+                            <span class="badge ${student.gender === 'Male' ? 'bg-info' : 'bg-warning'}">
+                                ${student.gender}
+                            </span>
+                        </td>
+                        <td>
+                            ${student.is_active 
+                                ? '<span class="badge bg-success">Active</span>'
+                                : '<span class="badge bg-secondary">Inactive</span>'
+                            }
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-3 col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">${data.count}</h5>
+                                <p class="card-text text-muted mb-0">Total</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">
+                                    ${data.students.filter(s => s.gender === 'Male' || s.gender === 'M').length}
+                                </h5>
+                                <p class="card-text text-muted mb-0">Male</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">
+                                    ${data.students.filter(s => s.gender === 'Female' || s.gender === 'F').length}
+                                </h5>
+                                <p class="card-text text-muted mb-0">Female</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">
+                                    ${data.students.filter(s => s.is_active).length}
+                                </h5>
+                                <p class="card-text text-muted mb-0">Active</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            studentListEl.innerHTML = html;
+            
+            // Update modal title
+            const modalTitle = document.querySelector('#studentModal .modal-title');
+            if (modalTitle && data.class_display) {
+                modalTitle.textContent = `Students in ${data.class_display}`;
+            }
+            
+        } else {
+            studentListEl.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="bi bi-people display-1 text-muted mb-3"></i>
+                    <h5>No students found</h5>
+                    <p class="text-muted">This assignment has no students assigned to it.</p>
+                </div>
+            `;
+        }
+    }
+
+    function printStudentList() {
+        try {
+            const studentListEl = document.getElementById('studentList');
+            const modalTitle = document.querySelector('#studentModal .modal-title').textContent;
+            
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                AssignmentUI.showToast('Error', 'Please allow pop-ups to print', 'error');
+                return;
+            }
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${modalTitle}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+                        td { border: 1px solid #dee2e6; padding: 10px; }
+                        .print-date { margin-bottom: 20px; color: #666; }
+                        .badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+                        .no-print { display: none; }
+                        @media print {
+                            body { margin: 0; }
+                            .no-print { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>${modalTitle}</h1>
+                    <div class="print-date">Generated: ${new Date().toLocaleString()}</div>
+                    ${studentListEl.innerHTML}
+                    <div class="no-print" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+                        <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Print Report
+                        </button>
+                        <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+                            Close
+                        </button>
+                    </div>
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            
+        } catch (error) {
+            console.error('Print error:', error);
+            AssignmentUI.showToast('Error', 'Failed to print: ' + error.message, 'error');
+        }
+    }
+
+    // ============================================================================
+    // Debug Panel
+    // ============================================================================
+    function toggleDebugPanel() {
+        const panel = document.getElementById('debugPanel');
+        if (!panel) return;
+        
+        if (panel.style.display === 'none' || !panel.style.display) {
+            panel.style.display = 'block';
+            panel.classList.remove('animate__fadeOutDown');
+            panel.classList.add('animate__fadeInUp');
+            AssignmentApp.state.debugPanelOpen = true;
+            runDatabaseQueries();
+        } else {
+            panel.classList.remove('animate__fadeInUp');
+            panel.classList.add('animate__fadeOutDown');
+            setTimeout(() => {
+                panel.style.display = 'none';
+            }, 500);
+            AssignmentApp.state.debugPanelOpen = false;
+        }
+    }
+
+    async function runDatabaseQueries() {
+        const resultsDiv = document.getElementById('queryResults');
+        if (!resultsDiv) return;
+        
+        resultsDiv.style.display = 'block';
+        resultsDiv.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-light me-2" role="status"></div>
+                <span class="text-light">Running database queries...</span>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch(CONFIG.API_ENDPOINTS.DEBUG_STATS);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderDebugResults(data);
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger mb-2 p-2">
+                        <strong>Error:</strong> ${data.error}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Debug query error:', error);
+            resultsDiv.innerHTML = `
+                <div class="alert alert-danger mb-2 p-2">
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    function renderDebugResults(data) {
+        const resultsDiv = document.getElementById('queryResults');
+        if (!resultsDiv) return;
+        
+        let html = `
+            <div class="alert alert-success mb-2 p-2">
+                <strong>Database Results</strong>
+                <div class="row mt-2">
+                    <div class="col-6">
+                        <small>Total Subjects:</small>
+                        <div class="h6">${data.total_subjects || 0}</div>
+                    </div>
+                    <div class="col-6">
+                        <small>Active Subjects:</small>
+                        <div class="h6">${data.active_subjects || 0}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (data.all_subjects && data.all_subjects.length > 0) {
+            html += `
+                <div class="alert alert-info mb-2 p-2">
+                    <strong>All Subjects (${data.all_subjects.length})</strong>
+                    <div style="max-height: 150px; overflow-y: auto;" class="mt-2">
+            `;
+            
+            data.all_subjects.forEach(subject => {
+                html += `
+                    <div class="d-flex justify-content-between border-bottom py-1">
+                        <span>${subject.name} (${subject.code})</span>
+                        <span class="badge ${subject.is_active ? 'bg-success' : 'bg-danger'}">
+                            ${subject.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        resultsDiv.innerHTML = html;
+    }
+
+    function clearAllCache() {
+        localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEYS.TABLE_FILTERS);
+        localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEYS.TABLE_SORT);
+        
+        AssignmentApp.state.currentFilters = {};
+        AssignmentApp.state.sortState = { column: null, direction: 'asc' };
+        
+        const resultsDiv = document.getElementById('queryResults');
+        if (resultsDiv) {
+            resultsDiv.innerHTML = '';
+            resultsDiv.style.display = 'none';
+        }
+        
+        AssignmentUI.showToast('Success', 'Cache cleared successfully', 'success');
+    }
+
+    // ============================================================================
+    // Utility Functions
+    // ============================================================================
+    function updateCurrentTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        const dateString = now.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        const currentTimeEl = document.getElementById('currentTime');
+        const updateTimestampEl = document.getElementById('updateTimestamp');
+        
+        if (currentTimeEl) {
+            currentTimeEl.textContent = `${dateString} ${timeString}`;
+        }
+        
+        if (updateTimestampEl) {
+            updateTimestampEl.textContent = timeString;
+        }
+    }
+
+    function setCurrentYear() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const academicYear = `${year}/${year + 1}`;
+        
+        const yearInput = document.querySelector('input[name="academic_year"]');
+        if (yearInput) {
+            yearInput.value = academicYear;
+            AssignmentUI.showToast('Year Set', `Academic year set to ${academicYear}`, 'info');
+        }
+    }
+
+    function showActiveOnly() {
+        const statusSelect = document.querySelector('select[name="is_active"]');
+        if (statusSelect) {
+            statusSelect.value = 'true';
+            AssignmentUI.showToast('Filter Applied', 'Showing active assignments only', 'info');
+        }
+    }
+
+    function showUnassignedSubjects() {
+        AssignmentUI.showToast('Coming Soon', 'This feature will be available soon', 'info');
+    }
+
+    function clearAllFilters() {
+        window.location.href = "{% url 'class_assignment_list' %}";
+    }
+
+    function removeFilter(filterName) {
+        const url = new URL(window.location);
+        url.searchParams.delete(filterName);
+        window.location.href = url.toString();
+    }
+
+    function refreshPage() {
+        window.location.reload();
+    }
+
+    // ============================================================================
+    // Event Handlers
+    // ============================================================================
+    function initializeEventHandlers() {
+        // Refresh button
+        document.getElementById('refreshBtn')?.addEventListener('click', refreshPage);
+        
+        // Print button
+        document.getElementById('printBtn')?.addEventListener('click', () => window.print());
+        
+        // Debug panel toggle
+        document.getElementById('debugToggleBtn')?.addEventListener('click', toggleDebugPanel);
+        
+        // Year suggestion buttons
+        document.querySelectorAll('.year-suggestion').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const year = this.dataset.year;
+                document.querySelector('input[name="academic_year"]').value = year;
+                AssignmentUI.showToast('Year Selected', `Academic year set to ${year}`, 'info');
+            });
+        });
+        
+        // Delete confirmation
+        document.querySelectorAll('.delete-confirm').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (!confirm('Are you sure you want to delete this assignment?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    }
+
+    // ============================================================================
+    // Keyboard Shortcuts
+    // ============================================================================
+    function initializeKeyboardShortcuts() {
+        document.addEventListener('keydown', function(e) {
+            // Don't trigger shortcuts when user is typing in inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            switch (true) {
+                case (e.ctrlKey || e.metaKey) && e.key === 'f':
+                    e.preventDefault();
+                    const searchInput = document.querySelector('input[name="search"]');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                    break;
+                    
+                case (e.ctrlKey || e.metaKey) && e.key === 'p':
+                    e.preventDefault();
+                    window.print();
+                    break;
+                    
+                case e.key === 'Escape':
+                    if (AssignmentApp.state.debugPanelOpen) {
+                        toggleDebugPanel();
+                    }
+                    break;
+                    
+                case e.key === 'F5':
+                    e.preventDefault();
+                    refreshPage();
+                    break;
+                    
+                case (e.ctrlKey || e.metaKey) && e.key === 's':
+                    e.preventDefault();
+                    saveCurrentFilters();
+                    AssignmentUI.showToast('Success', 'Filters saved', 'success');
+                    break;
+            }
+        });
+    }
+
+    // ============================================================================
+    // Initial State Checks
+    // ============================================================================
+    function checkInitialState() {
+        // Check for creation success
         if (window.location.search.includes('created=true')) {
             const firstRow = document.querySelector('tbody tr');
             if (firstRow) {
-                firstRow.classList.add('new-item');
+                firstRow.classList.add('highlight-new');
+                AssignmentUI.showToast('Success', 'Class assignment created successfully!', 'success');
                 
-                // Remove the parameter from URL without refreshing
+                // Clean URL
                 const url = new URL(window.location);
                 url.searchParams.delete('created');
                 window.history.replaceState({}, '', url);
             }
         }
         
-        // Add confirmation for delete actions
-        const deleteButtons = document.querySelectorAll('a[href*="delete"]');
-        deleteButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
-                if (!confirm('Are you sure you want to delete this assignment?')) {
-                    e.preventDefault();
-                }
-            });
-        });
-        
-        // View students functionality
-        const viewStudentButtons = document.querySelectorAll('.view-students-btn');
-        viewStudentButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const assignmentId = this.getAttribute('data-assignment-id');
-                alert('View students for assignment ' + assignmentId + '. This functionality would typically show a modal with student details.');
-                // In a real implementation, you would fetch and display student data here
-            });
-        });
-        
-        // Form validation for filter form
-        const filterForm = document.getElementById('filter-form');
-        if (filterForm) {
-            const academicYearInput = filterForm.querySelector('input[name="academic_year"]');
-            
-            filterForm.addEventListener('submit', function(e) {
-                if (academicYearInput.value && !/^\d{4}-\d{4}$/.test(academicYearInput.value)) {
-                    e.preventDefault();
-                    alert('Please enter academic year in the format YYYY-YYYY (e.g., 2023-2024)');
-                    academicYearInput.focus();
-                }
-            });
+        // Check for empty state
+        const emptyState = document.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.classList.add('animate__animated', 'animate__fadeIn');
         }
         
-        // Add tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+        // Check for debug data
+        if (window.location.search.includes('debug=true')) {
+            toggleDebugPanel();
+        }
+    }
+
+    // ============================================================================
+    // Application State Restoration
+    // ============================================================================
+    function restoreApplicationState() {
+        // Restore debug panel state
+        try {
+            const debugState = localStorage.getItem(CONFIG.LOCAL_STORAGE_KEYS.DEBUG_PANEL);
+            if (debugState === 'open') {
+                toggleDebugPanel();
+            }
+        } catch (e) {
+            console.warn('Failed to restore debug panel state:', e);
+        }
+    }
+
+    // ============================================================================
+    // Statistics Update
+    // ============================================================================
+    async function updateStatistics() {
+        try {
+            const response = await fetch(CONFIG.API_ENDPOINTS.STATISTICS);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update statistics cards
+                updateStatCard('totalAssignments', data.total_assignments);
+                updateStatCard('activeTeachers', data.active_teachers);
+                updateStatCard('totalSubjects', data.total_subjects);
+                updateStatCard('assignedSubjects', data.assigned_subjects);
+            }
+        } catch (error) {
+            console.error('Failed to update statistics:', error);
+        }
+    }
+
+    function updateStatCard(cardId, value) {
+        const card = document.getElementById(cardId);
+        if (card) {
+            const valueEl = card.querySelector('.stat-value');
+            if (valueEl) {
+                valueEl.textContent = value;
+            }
+        }
+    }
+
+    // ============================================================================
+    // API Service (UPDATED TO USE FUNCTION CALLS)
+    // ============================================================================
+    class AssignmentAPI {
+        static async getAssignmentStudents(assignmentId) {
+            try {
+                // FIXED: Call the function to get URL
+                const url = CONFIG.API_ENDPOINTS.ASSIGNMENT_STUDENTS(assignmentId);
+                console.log('Fetching students from:', url);
+                const response = await fetch(url);
+                return await response.json();
+            } catch (error) {
+                console.error('Error in getAssignmentStudents:', error);
+                return {
+                    success: false,
+                    error: error.message,
+                    students: [],
+                    count: 0
+                };
+            }
+        }
+
+        static async bulkDelete(assignmentIds) {
+            try {
+                const response = await fetch(CONFIG.API_ENDPOINTS.BULK_DELETE, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken()
+                    },
+                    body: JSON.stringify({ assignment_ids: assignmentIds })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Bulk delete error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        static async toggleStatus(assignmentId) {
+            try {
+                // FIXED: Call the function to get URL
+                const url = CONFIG.API_ENDPOINTS.TOGGLE_STATUS(assignmentId);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCSRFToken(),
+                        'Content-Type': 'application/json'
+                    }
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Toggle status error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        static async getStatistics() {
+            try {
+                const response = await fetch(CONFIG.API_ENDPOINTS.STATISTICS);
+                return await response.json();
+            } catch (error) {
+                console.error('Get statistics error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    }
+
+    // ============================================================================
+    // UI Service
+    // ============================================================================
+    class AssignmentUI {
+        static showToast(title, message, type = 'info') {
+            // Create toast container if it doesn't exist
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'toast-' + Date.now();
+            const typeClass = type === 'error' ? 'danger' : type;
+            const icon = this.getToastIcon(type);
+            
+            const toastHtml = `
+                <div id="${toastId}" class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header bg-${typeClass} text-white">
+                        ${icon}
+                        <strong class="me-auto">${title}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                const toast = document.getElementById(toastId);
+                if (toast) {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 5000);
+            
+            return toastId;
+        }
+
+        static getToastIcon(type) {
+            const icons = {
+                'success': '<i class="bi bi-check-circle me-2"></i>',
+                'error': '<i class="bi bi-x-circle me-2"></i>',
+                'warning': '<i class="bi bi-exclamation-triangle me-2"></i>',
+                'info': '<i class="bi bi-info-circle me-2"></i>'
+            };
+            return icons[type] || icons.info;
+        }
+
+        static showLoading(selector, message = 'Loading...') {
+            const element = document.querySelector(selector);
+            if (element) {
+                const originalContent = element.innerHTML;
+                element.dataset.originalContent = originalContent;
+                element.innerHTML = `
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        <span>${message}</span>
+                    </div>
+                `;
+                return originalContent;
+            }
+            return null;
+        }
+
+        static hideLoading(selector) {
+            const element = document.querySelector(selector);
+            if (element && element.dataset.originalContent) {
+                element.innerHTML = element.dataset.originalContent;
+                delete element.dataset.originalContent;
+            }
+        }
+
+        static showModal(modalId) {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                return modal;
+            }
+            return null;
+        }
+
+        static hideModal(modalId) {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) {
+                    modal.hide();
+                }
+            }
+        }
+    }
+
+    // ============================================================================
+    // Utility Functions
+    // ============================================================================
+    class AssignmentUtils {
+        static debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        static throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+
+        static formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        static formatNumber(num) {
+            return new Intl.NumberFormat('en-US').format(num);
+        }
+
+        static deepClone(obj) {
+            return JSON.parse(JSON.stringify(obj));
+        }
+
+        static getCSRFToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        }
+    }
+
+    // ============================================================================
+    // Global Helper Functions
+    // ============================================================================
+    function getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    }
+
+    // ============================================================================
+    // Error Handling
+    // ============================================================================
+    window.addEventListener('error', function(event) {
+        console.error('Uncaught error:', event.error);
+        AssignmentUI.showToast('JavaScript Error', 'An error occurred. Check console for details.', 'error');
     });
+
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled promise rejection:', event.reason);
+        AssignmentUI.showToast('Promise Error', 'An error occurred in a promise. Check console for details.', 'error');
+    });
+
+    // ============================================================================
+    // Performance Monitoring
+    // ============================================================================
+    if (typeof PerformanceObserver !== 'undefined') {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (entry.duration > 100) {
+                    console.warn('Slow operation detected:', entry);
+                }
+            });
+        });
+        observer.observe({ entryTypes: ['measure', 'resource'] });
+    }
+
+    // ============================================================================
+    // Make Functions Available Globally
+    // ============================================================================
+    window.AssignmentManager = {
+        loadStudents,
+        toggleDebugPanel,
+        runDatabaseQueries,
+        clearAllCache,
+        setCurrentYear,
+        showActiveOnly,
+        clearAllFilters,
+        refreshPage,
+        exportToCSV,
+        exportToJSON,
+        printStudentList,
+        toggleAssignmentStatus: AssignmentAPI.toggleStatus
+    };
+    
+    // ============================================================================
+    // Additional missing functions that might be called from template
+    // ============================================================================
+    function clearSearch() {
+        const searchInput = document.querySelector('input[name="search"]');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+    }
+    
+    function exportData() {
+        const exportModal = new bootstrap.Modal(document.getElementById('exportModal'));
+        exportModal.show();
+    }
+    
+    function printAssignmentList() {
+        window.print();
+    }
+    
+    function downloadPDF() {
+        AssignmentUI.showToast('Info', 'PDF export will be implemented soon', 'info');
+    }
+    
+    function exportStudentList() {
+        AssignmentUI.showToast('Info', 'Export student list feature coming soon', 'info');
+    }
 </script>
 {% endblock %}

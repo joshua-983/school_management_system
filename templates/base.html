@@ -1596,7 +1596,7 @@
                 </div>
             </div>
 
-            <!-- Timetable Menu -->
+            <!-- TIMETABLE MENU - UPDATED WITH ROLE-BASED LINKS -->
             <div class="nav-section">
                 <div class="nav-section-title">Schedule</div>
                 
@@ -1607,28 +1607,57 @@
                         <i class="nav-chevron bi bi-chevron-down"></i>
                     </a>
                     <div class="sub-menu collapse" id="timetableMenu">
+                        <!-- Admin and Teacher Access -->
                         {% if user.is_superuser or user.teacher %}
-                        <a class="nav-link" href="{% url 'timetable_list' %}">
-                            <i class="bi bi-gear"></i>
-                            <span class="nav-text">Manage Timetables</span>
-                        </a>
+                            {% if user.is_superuser %}
+                            <!-- Admin can manage all timetables -->
+                            <a class="nav-link" href="{% url 'timetable_list' %}">
+                                <i class="bi bi-gear"></i>
+                                <span class="nav-text">Manage Timetables</span>
+                            </a>
+                            <a class="nav-link" href="{% url 'timeslot_list' %}">
+                                <i class="bi bi-clock"></i>
+                                <span class="nav-text">Time Slots</span>
+                            </a>
+                            {% endif %}
+                            
+                            <!-- Teachers can view their class timetables -->
+                            {% if user.teacher %}
+                            <a class="nav-link" href="{% url 'teacher_timetable_list' %}">
+                                <i class="bi bi-calendar-check"></i>
+                                <span class="nav-text">My Class Timetables</span>
+                            </a>
+                            {% endif %}
+                            
+                            <!-- Both admin and teachers can view personal schedule -->
+                            <a class="nav-link" href="{% url 'teacher_timetable_view' %}">
+                                <i class="bi bi-person"></i>
+                                <span class="nav-text">My Weekly Schedule</span>
+                            </a>
                         {% endif %}
-                        {% if user.teacher %}
-                        <a class="nav-link" href="{% url 'teacher_timetable' %}">
-                            <i class="bi bi-person"></i>
-                            <span class="nav-text">My Schedule</span>
-                        </a>
-                        {% endif %}
+                        
+                        <!-- Student Access -->
                         {% if user.student %}
-                        <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <a class="nav-link" href="{% url 'student_timetable_view' %}">
                             <i class="bi bi-calendar"></i>
-                            <span class="nav-text">Class Timetable</span>
+                            <span class="nav-text">My Class Timetable</span>
                         </a>
                         {% endif %}
+                        
+                        <!-- Parent Access -->
                         {% if user.parentguardian %}
-                        <a class="nav-link" href="{% url 'student_timetable' %}">
+                        <a class="nav-link" href="{% url 'student_timetable_view' %}">
                             <i class="bi bi-calendar"></i>
                             <span class="nav-text">Children's Timetable</span>
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Quick links for all authenticated users -->
+                        {% if user.is_authenticated %}
+                        <div class="nav-divider"></div>
+                        <a class="nav-link" href="{% url 'timetable_calendar' %}">
+                            <i class="bi bi-calendar-event"></i>
+                            <span class="nav-text">Timetable Calendar</span>
                         </a>
                         {% endif %}
                     </div>

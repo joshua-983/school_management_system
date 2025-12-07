@@ -1,27 +1,29 @@
-# core/academics/views/assignment_views.py
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
+from django.http import JsonResponse, HttpResponseRedirect, HttpResponseForbidden, Http404
+from django.shortcuts import get_object_or_404, render, redirect  # ADDED redirect here
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.db.models import Q, Count, Avg, Max, Min
-from django.core.exceptions import PermissionDenied
-from django.utils import timezone
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.storage import default_storage
 import datetime
 import json
 import logging
 
-from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, Student, CLASS_LEVEL_CHOICES, AssignmentAnalytics
+from ..models import Assignment, StudentAssignment, ClassAssignment, Subject, Student, CLASS_LEVEL_CHOICES, AssignmentAnalytics, Teacher
 from .base_views import is_admin, is_teacher, is_student
 from ..forms import AssignmentForm, StudentAssignmentForm
 from core.forms import StudentAssignmentSubmissionForm
-from django.shortcuts import render, redirect
-
 
 logger = logging.getLogger(__name__)
+
+def get_current_academic_year():
+    """Helper function to get current academic year"""
+    current_year = timezone.now().year
+    return f"{current_year}/{current_year + 1}"
+
 
 class TeacherOwnershipRequiredMixin:
     """Mixin to verify that the current user (teacher) owns the object."""
@@ -94,7 +96,6 @@ class AssignmentListView(LoginRequiredMixin, ListView):
             # Get the student's class level and filter assignments for that level
             student_class_level = self.request.user.student.class_level
             queryset = queryset.filter(class_assignment__class_level=student_class_level)
-
 
         # Apply sorting
         if sort == 'title':
@@ -197,8 +198,144 @@ class AssignmentListView(LoginRequiredMixin, ListView):
         
         return context
 
-# In assignment_views.py - Update AssignmentCreateView
+
+class AssignmentCreateSelectionView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Step 1: Teacher selects class and subject before creating assignment"""
+    template_name = 'core/academics/assignments/assignment_create_selection.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get current academic year
+        academic_year = get_current_academic_year()
+        
+        # Get teacher's assigned classes and subjects
+        if is_teacher(self.request.user):
+            teacher = self.request.user.teacher
+            class_assignments = ClassAssignment.objects.filter(
+                teacher=teacher,
+                academic_year=academic_year,
+                is_active=True
+            ).select_related('subject')
+            
+            # DEBUG: Print all class assignments
+            print(f"DEBUG: Teacher {teacher.get_full_name()} has {class_assignments.count()} class assignments:")
+            for ca in class_assignments:
+                print(f"  - ID: {ca.id}, Class level: '{ca.class_level}'")
+            
+            # Group by class level with better handling
+            assignments_by_class = {}
+            for ca in class_assignments:
+                # Get display name, fallback to the code itself
+                class_display = dict(CLASS_LEVEL_CHOICES).get(ca.class_level)
+                if not class_display:
+                    # If not found in choices, use a formatted version
+                    if ca.class_level == 'FORM_1':
+                        class_display = 'Form 1'
+                    else:
+                        class_display = ca.class_level.replace('_', ' ').title()
+                
+                if class_display not in assignments_by_class:
+                    assignments_by_class[class_display] = []
+                assignments_by_class[class_display].append({
+                    'id': ca.id,
+                    'subject': ca.subject,
+                    'class_level_code': ca.class_level,
+                    'can_create': True
+                })
+            
+            print(f"DEBUG: Grouped assignments: {assignments_by_class}")
+            
+            # Also show available subjects for teacher's expertise even if not assigned
+            teacher_subjects = teacher.subjects.filter(is_active=True)
+            teacher_class_levels = teacher.class_levels.split(',') if teacher.class_levels else []
+            
+            # Clean up class levels
+            teacher_class_levels = [level.strip() for level in teacher_class_levels]
+            
+            available_combinations = []
+            for subject in teacher_subjects:
+                for class_level in teacher_class_levels:
+                    # Check if already assigned
+                    already_assigned = False
+                    for ca_list in assignments_by_class.values():
+                        for ca in ca_list:
+                            if ca['subject'].id == subject.id and ca['class_level_code'] == class_level:
+                                already_assigned = True
+                                break
+                        if already_assigned:
+                            break
+                    
+                    if not already_assigned:
+                        class_display = dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
+                        available_combinations.append({
+                            'subject': subject,
+                            'class_level': class_display,
+                            'class_level_code': class_level,
+                            'can_create': False,
+                            'message': 'Not officially assigned to this class'
+                        })
+            
+            context['assignments_by_class'] = assignments_by_class
+            context['available_combinations'] = available_combinations
+            context['has_assignments'] = bool(assignments_by_class)
+            
+        elif is_admin(self.request.user):
+            # Admin sees all possible combinations
+            all_subjects = Subject.objects.filter(is_active=True)
+            all_class_assignments = {}
+            
+            for class_code, class_name in CLASS_LEVEL_CHOICES:
+                assignments = ClassAssignment.objects.filter(
+                    class_level=class_code,
+                    academic_year=academic_year,
+                    is_active=True
+                ).select_related('subject', 'teacher')
+                
+                if assignments.exists():
+                    all_class_assignments[class_name] = []
+                    for ca in assignments:
+                        all_class_assignments[class_name].append({
+                            'id': ca.id,
+                            'subject': ca.subject,
+                            'teacher': ca.teacher,
+                            'class_level_code': ca.class_level,
+                            'can_create': True
+                        })
+            
+            # Also include any assignments with class levels not in CHOICES
+            other_assignments = ClassAssignment.objects.filter(
+                academic_year=academic_year,
+                is_active=True
+            ).exclude(class_level__in=[code for code, _ in CLASS_LEVEL_CHOICES])
+            
+            for ca in other_assignments:
+                class_display = ca.class_level.replace('_', ' ').title()
+                if class_display not in all_class_assignments:
+                    all_class_assignments[class_display] = []
+                all_class_assignments[class_display].append({
+                    'id': ca.id,
+                    'subject': ca.subject,
+                    'teacher': ca.teacher,
+                    'class_level_code': ca.class_level,
+                    'can_create': True
+                })
+            
+            context['assignments_by_class'] = all_class_assignments
+            context['has_assignments'] = bool(all_class_assignments)
+        
+        context['academic_year'] = academic_year
+        context['is_admin'] = is_admin(self.request.user)
+        context['is_teacher'] = is_teacher(self.request.user)
+        return context
+
+
+
 class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    """Step 2: Create assignment with pre-selected class and subject"""
     model = Assignment
     form_class = AssignmentForm
     template_name = 'core/academics/assignments/assignment_form.html'
@@ -206,13 +343,117 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
+    def setup(self, request, *args, **kwargs):
+        """Setup method - called before dispatch()"""
+        super().setup(request, *args, **kwargs)
+        
+        # Store parameters as instance attributes
+        self.class_assignment_id = request.GET.get('class_assignment')
+        self.class_level = request.GET.get('class_level')
+        self.subject_id = request.GET.get('subject')
+        
+        # Log for debugging
+        logger.info(f"AssignmentCreateView setup - class_assignment_id: {self.class_assignment_id}, "
+                   f"class_level: {self.class_level}, subject_id: {self.subject_id}")
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Main entry point - validate parameters before any HTTP method"""
+        # Check user permissions first
+        if not self.test_func():
+            logger.error(f"User {request.user} doesn't have permission to create assignments")
+            return HttpResponseForbidden("You don't have permission to create assignments.")
+        
+        # Validate parameters
+        if not self.class_assignment_id and (not self.class_level or not self.subject_id):
+            logger.error("Missing required parameters")
+            logger.error(f"class_assignment_id: {self.class_assignment_id}")
+            logger.error(f"class_level: {self.class_level}")
+            logger.error(f"subject_id: {self.subject_id}")
+            
+            messages.error(request, "Missing required parameters. Please select a class and subject first.")
+            return redirect('assignment_create_selection')
+        
+        # If class_assignment_id is provided, validate it exists
+        if self.class_assignment_id:
+            try:
+                class_assignment = ClassAssignment.objects.get(id=self.class_assignment_id)
+                
+                # Check if teacher owns this class assignment
+                if is_teacher(request.user) and class_assignment.teacher != request.user.teacher:
+                    logger.error(f"Teacher {request.user.teacher} doesn't own class assignment {class_assignment.id}")
+                    messages.error(request, "You don't have permission to create assignments for this class.")
+                    return redirect('assignment_create_selection')
+                    
+            except ClassAssignment.DoesNotExist:
+                logger.error(f"ClassAssignment with ID {self.class_assignment_id} does not exist")
+                messages.error(request, "Selected class assignment not found.")
+                return redirect('assignment_create_selection')
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_form_kwargs(self):
+        """Pass parameters to the form"""
         kwargs = super().get_form_kwargs()
-        kwargs['request'] = self.request
-        print(f"DEBUG VIEW: get_form_kwargs called, adding request to form")
+        kwargs.update({
+            'request': self.request,
+            'class_assignment_id': self.class_assignment_id,
+            'class_level': self.class_level,
+            'subject_id': self.subject_id
+        })
         return kwargs
     
+    def get_context_data(self, **kwargs):
+        """Add context information for the template"""
+        context = super().get_context_data(**kwargs)
+        
+        # Add context information
+        if self.class_assignment_id:
+            try:
+                class_assignment = ClassAssignment.objects.get(id=self.class_assignment_id)
+                context['selected_class_assignment'] = class_assignment
+                context['selected_class'] = class_assignment.get_class_level_display()
+                context['selected_subject'] = class_assignment.subject
+                context['selected_teacher'] = class_assignment.teacher
+                context['academic_year'] = class_assignment.academic_year
+            except ClassAssignment.DoesNotExist:
+                messages.error(self.request, "Selected class assignment not found.")
+                context['selected_class'] = "Unknown"
+                context['selected_subject'] = None
+                context['selected_teacher'] = None
+        elif self.class_level and self.subject_id:
+            try:
+                subject = Subject.objects.get(id=self.subject_id)
+                context['selected_class'] = dict(CLASS_LEVEL_CHOICES).get(self.class_level, self.class_level)
+                context['selected_subject'] = subject
+                context['academic_year'] = get_current_academic_year()
+                
+                # Try to find available teachers
+                available_teachers = Teacher.objects.filter(
+                    subjects=subject,
+                    is_active=True
+                )
+                context['available_teachers'] = available_teachers
+                
+                # For admin, show all teachers; for teacher, show only themselves if qualified
+                if is_teacher(self.request.user) and self.request.user.teacher in available_teachers:
+                    context['selected_teacher'] = self.request.user.teacher
+                else:
+                    context['selected_teacher'] = None
+                    
+            except Subject.DoesNotExist:
+                messages.error(self.request, "Selected subject not found.")
+                context['selected_class'] = dict(CLASS_LEVEL_CHOICES).get(self.class_level, self.class_level)
+                context['selected_subject'] = None
+                context['selected_teacher'] = None
+        
+        # Add user role flags
+        context['is_admin'] = is_admin(self.request.user)
+        context['is_teacher'] = is_teacher(self.request.user)
+        
+        return context
+    
     def form_valid(self, form):
+        """Handle form validation"""
         print(f"DEBUG VIEW: form_valid called")
         
         # Save the assignment first
@@ -236,6 +477,7 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             
             for student in students:
                 # Create notification for each student
+                from core.views.notifications_views import create_notification
                 create_notification(
                     recipient=student.user,
                     title="New Assignment Created",
@@ -251,14 +493,116 @@ class AssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             # Don't raise the exception to avoid breaking the assignment creation
     
     def form_invalid(self, form):
+        """Handle form invalidation"""
         print(f"DEBUG VIEW: form_invalid called")
         print(f"DEBUG VIEW: Form errors: {form.errors}")
         print(f"DEBUG VIEW: Form non-field errors: {form.non_field_errors()}")
         return super().form_invalid(form)
     
     def get_success_url(self):
+        """Redirect to assignment detail after creation"""
         return reverse_lazy('assignment_detail', kwargs={'pk': self.object.pk})
 
+class QuickClassAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Quick view to assign teacher to subject/class before creating assignment"""
+    template_name = 'core/academics/assignments/quick_class_assignment.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get(self, request, *args, **kwargs):
+        class_level = request.GET.get('class_level')
+        subject_id = request.GET.get('subject')
+        
+        if not class_level or not subject_id:
+            messages.error(request, "Please select both class level and subject")
+            return redirect('assignment_create_selection')
+        
+        try:
+            subject = Subject.objects.get(id=subject_id, is_active=True)
+        except Subject.DoesNotExist:
+            messages.error(request, "Selected subject not found")
+            return redirect('assignment_create_selection')
+        
+        # Get current academic year
+        academic_year = get_current_academic_year()
+        
+        # Check if assignment already exists
+        existing_assignment = ClassAssignment.objects.filter(
+            class_level=class_level,
+            subject=subject,
+            academic_year=academic_year
+        ).first()
+        
+        if existing_assignment:
+            # Redirect to create assignment with existing class assignment
+            return redirect(f"{reverse('assignment_create')}?class_assignment={existing_assignment.id}")
+        
+        # Get available teachers
+        available_teachers = Teacher.objects.filter(
+            subjects=subject,
+            is_active=True
+        )
+        
+        context = {
+            'class_level': class_level,
+            'class_level_display': dict(CLASS_LEVEL_CHOICES).get(class_level, class_level),
+            'subject': subject,
+            'available_teachers': available_teachers,
+            'academic_year': academic_year,
+            'is_admin': is_admin(request.user),
+            'is_teacher': is_teacher(request.user),
+        }
+        
+        return render(request, self.template_name, context)
+    
+    def post(self, request, *args, **kwargs):
+        class_level = request.POST.get('class_level')
+        subject_id = request.POST.get('subject_id')
+        teacher_id = request.POST.get('teacher_id')
+        
+        if not all([class_level, subject_id, teacher_id]):
+            messages.error(request, "Please provide all required information")
+            return redirect('assignment_create_selection')
+        
+        try:
+            subject = Subject.objects.get(id=subject_id, is_active=True)
+            teacher = Teacher.objects.get(id=teacher_id, is_active=True)
+            
+            # Check if teacher is qualified to teach this subject
+            if subject not in teacher.subjects.all():
+                messages.error(request, f"{teacher.get_full_name()} is not qualified to teach {subject.name}")
+                return redirect('assignment_create_selection')
+            
+            # Check if assignment already exists
+            academic_year = get_current_academic_year()
+            existing_assignment = ClassAssignment.objects.filter(
+                class_level=class_level,
+                subject=subject,
+                academic_year=academic_year
+            ).first()
+            
+            if existing_assignment:
+                messages.info(request, f"Assignment already exists. Redirecting to create assignment.")
+                return redirect(f"{reverse('assignment_create')}?class_assignment={existing_assignment.id}")
+            
+            # Create class assignment
+            class_assignment = ClassAssignment.objects.create(
+                class_level=class_level,
+                subject=subject,
+                teacher=teacher,
+                academic_year=academic_year,
+                is_active=True
+            )
+            
+            messages.success(request, f"Successfully assigned {teacher.get_full_name()} to teach {subject.name} in {dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)}")
+            
+            # Redirect to create assignment
+            return redirect(f"{reverse('assignment_create')}?class_assignment={class_assignment.id}")
+            
+        except (Subject.DoesNotExist, Teacher.DoesNotExist) as e:
+            messages.error(request, f"Error creating assignment: {str(e)}")
+            return redirect('assignment_create_selection')
 
 
 class AssignmentDetailView(LoginRequiredMixin, DetailView):
@@ -277,7 +621,6 @@ class AssignmentDetailView(LoginRequiredMixin, DetailView):
         assignment = self.object
         
         # Add user role flags
-        from .base_views import is_admin, is_teacher, is_student
         context['is_teacher'] = is_teacher(self.request.user)
         context['is_student'] = is_student(self.request.user)
         context['is_admin'] = is_admin(self.request.user)
@@ -363,6 +706,23 @@ class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
         kwargs['request'] = self.request
         return kwargs
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        assignment = self.object
+        
+        # Add class information for the template
+        if assignment.class_assignment:
+            context['selected_class'] = assignment.class_assignment.get_class_level_display()
+            context['selected_subject'] = assignment.subject
+            context['selected_teacher'] = assignment.class_assignment.teacher
+            context['academic_year'] = assignment.class_assignment.academic_year
+        
+        # Add user role flags
+        context['is_admin'] = is_admin(self.request.user)
+        context['is_teacher'] = is_teacher(self.request.user)
+        
+        return context
+    
     def form_valid(self, form):
         # Check if due date was changed (important change)
         old_assignment = Assignment.objects.get(pk=self.object.pk)
@@ -386,6 +746,7 @@ class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
             students = Student.objects.filter(class_level=assignment.class_assignment.class_level)
             
             for student in students:
+                from core.views.notifications_views import create_notification
                 create_notification(
                     recipient=student.user,
                     title="Assignment Due Date Updated",
@@ -401,6 +762,7 @@ class AssignmentUpdateView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
     
     def get_success_url(self):
         return reverse_lazy('assignment_detail', kwargs={'pk': self.object.pk})
+
 
 class AssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwnershipRequiredMixin, DeleteView):
     model = Assignment
@@ -423,7 +785,6 @@ class AssignmentDeleteView(LoginRequiredMixin, UserPassesTestMixin, TeacherOwner
         messages.success(request, 'Assignment deleted successfully!')
         return super().delete(request, *args, **kwargs)
 
-# GradeAssignmentView
 
 class GradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
     """View to grade a student's assignment submission - supports both HTML and AJAX."""
@@ -724,12 +1085,12 @@ class AssignmentCalendarView(LoginRequiredMixin, TemplateView):
         context['year'] = year
         
         # Add user role information for template
-        from .base_views import is_admin, is_teacher, is_student
         context['is_teacher'] = is_teacher(self.request.user)
         context['is_student'] = is_student(self.request.user)
         context['is_admin'] = is_admin(self.request.user)
         
         return context
+
 
 class AssignmentEventJsonView(LoginRequiredMixin, View):
     """ENHANCED JSON endpoint for calendar events with color coding by status"""
@@ -863,6 +1224,7 @@ class AssignmentEventJsonView(LoginRequiredMixin, View):
             else:
                 return '#6c757d'  # Gray - low submission rate
 
+
 class BulkGradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Bulk grade multiple student assignments at once"""
     
@@ -916,6 +1278,7 @@ class BulkGradeAssignmentView(LoginRequiredMixin, UserPassesTestMixin, View):
                 'error': str(e)
             }, status=400)
 
+
 class AssignmentAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Detailed analytics view for an assignment"""
     model = Assignment
@@ -958,6 +1321,7 @@ class AssignmentAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, DetailVie
             context['analytics'] = None
         
         return context
+
 
 class AssignmentExportView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Export assignment data to CSV"""

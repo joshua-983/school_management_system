@@ -762,9 +762,6 @@ class ClassAssignmentForm(forms.ModelForm):
         
         return cleaned_data
 
-
-
-
 #Student Parent Assignment Form
 class StudentParentAssignmentForm(forms.Form):
     """Form for assigning parents to students"""
@@ -2221,28 +2218,23 @@ class BulkGradeUploadForm(forms.Form):
 
 
 # ===== ASSIGNMENT FORMS =====
+# In core/forms.py - Update the AssignmentForm
+
 class AssignmentForm(forms.ModelForm):
-    """Enhanced assignment form with better file handling"""
+    """Enhanced assignment form with better validation and auto-assignment creation"""
     
-    # Add class_level as a form field (not a model field)
-    class_level = forms.ChoiceField(
-        choices=[('', 'Select Class Level')] + list(CLASS_LEVEL_CHOICES),
-        required=True,
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        help_text="Select the class level for this assignment"
-    )
-    
+    # Remove class_level field since we're getting it from class_assignment
     class Meta:
         model = Assignment
         fields = [
-            'title', 'description', 'assignment_type', 'subject',
+            'title', 'description', 'assignment_type', 
             'due_date', 'max_score', 'weight', 'attachment'
-            # Note: 'class_level' is NOT included here since it's not a model field
         ]
         widgets = {
             'due_date': forms.DateTimeInput(attrs={
                 'type': 'datetime-local', 
-                'class': 'form-control'
+                'class': 'form-control',
+                'min': timezone.now().strftime('%Y-%m-%dT%H:%M')
             }),
             'description': forms.Textarea(attrs={
                 'rows': 4, 
@@ -2254,18 +2246,19 @@ class AssignmentForm(forms.ModelForm):
                 'placeholder': 'Enter assignment title'
             }),
             'assignment_type': forms.Select(attrs={'class': 'form-control'}),
-            'subject': forms.Select(attrs={'class': 'form-control'}),
             'max_score': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': '1',
                 'max': '100',
-                'step': '1'
+                'step': '1',
+                'value': '100'
             }),
             'weight': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': '1',
                 'max': '100',
-                'step': '1'
+                'step': '1',
+                'value': '10'
             }),
             'attachment': forms.FileInput(attrs={
                 'class': 'form-control',
@@ -2284,128 +2277,31 @@ class AssignmentForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
+        self.class_assignment_id = kwargs.pop('class_assignment_id', None)
+        self.class_level = kwargs.pop('class_level', None)
+        self.subject_id = kwargs.pop('subject_id', None)
+        
         super().__init__(*args, **kwargs)
         
         # Set current academic year
         current_year = timezone.now().year
         self.academic_year = f"{current_year}/{current_year + 1}"
         
-        # Set up class level choices
-        self.fields['class_level'].choices = [('', 'Select Class Level')] + list(CLASS_LEVEL_CHOICES)
-        
-        # For existing assignments, set the initial class_level value
-        if self.instance and self.instance.pk and self.instance.class_assignment:
-            self.fields['class_level'].initial = self.instance.class_assignment.class_level
-        
-        # Limit subjects based on user role and available class assignments
-        if self.request and hasattr(self.request.user, 'teacher'):
-            teacher = self.request.user.teacher
-            # Only show subjects that the teacher teaches in active class assignments
-            teacher_class_assignments = ClassAssignment.objects.filter(
-                teacher=teacher,
-                academic_year=self.academic_year,
-                is_active=True
-            )
-            self.fields['subject'].queryset = Subject.objects.filter(
-                classassignment__in=teacher_class_assignments
-            ).distinct()
-            
-            # Also limit class_level choices to what the teacher actually teaches
-            teacher_class_levels = teacher_class_assignments.values_list('class_level', flat=True).distinct()
-            available_class_levels = [(level, name) for level, name in CLASS_LEVEL_CHOICES if level in teacher_class_levels]
-            self.fields['class_level'].choices = [('', 'Select Class Level')] + available_class_levels
-            
-        else:
-            # For admins, show all active subjects
-            self.fields['subject'].queryset = Subject.objects.filter(is_active=True)
-        
-        # Set initial due date to 7 days from now for new assignments
+        # Set default due date to 7 days from now
         if not self.instance.pk:
             default_due_date = timezone.now() + timezone.timedelta(days=7)
             self.fields['due_date'].initial = default_due_date
+        
+        # Set default max_score and weight
+        self.fields['max_score'].initial = 100
+        self.fields['weight'].initial = 10
 
     def clean(self):
         """Validate form data and handle class_assignment creation"""
         cleaned_data = super().clean()
-        class_level = cleaned_data.get('class_level')
-        subject = cleaned_data.get('subject')
         due_date = cleaned_data.get('due_date')
         weight = cleaned_data.get('weight')
         max_score = cleaned_data.get('max_score')
-        
-        # Validate required fields
-        if not class_level:
-            self.add_error('class_level', "Class level is required.")
-        
-        if not subject:
-            self.add_error('subject', "Subject is required.")
-        
-        # Create or get class_assignment
-        if class_level and subject and not self.errors:
-            try:
-                # First, try to find an existing class assignment
-                class_assignment = ClassAssignment.objects.filter(
-                    class_level=class_level,
-                    subject=subject,
-                    academic_year=self.academic_year,
-                    is_active=True
-                ).first()
-                
-                if class_assignment:
-                    # Check if teacher is authorized for this class assignment
-                    if (self.request and hasattr(self.request.user, 'teacher') and 
-                        class_assignment.teacher != self.request.user.teacher):
-                        self.add_error('class_level', 
-                            f"You are not assigned to teach {subject.name} in {self.get_class_level_display(class_level)}."
-                        )
-                    else:
-                        self.instance.class_assignment = class_assignment
-                else:
-                    # Create a new class assignment if none exists
-                    if self.request and hasattr(self.request.user, 'teacher'):
-                        teacher = self.request.user.teacher
-                        # Check if teacher is qualified to teach this subject and class level
-                        teacher_class_levels = [level.strip() for level in teacher.class_levels.split(',')] if teacher.class_levels else []
-                        
-                        if (subject in teacher.subjects.all() and 
-                            class_level in teacher_class_levels):
-                            
-                            class_assignment = ClassAssignment.objects.create(
-                                class_level=class_level,
-                                subject=subject,
-                                teacher=teacher,
-                                academic_year=self.academic_year
-                            )
-                            self.instance.class_assignment = class_assignment
-                        else:
-                            self.add_error('class_level', 
-                                f"You are not authorized to teach {subject.name} in {self.get_class_level_display(class_level)}. "
-                                f"Please check your subject assignments and class levels."
-                            )
-                    else:
-                        # For admins, find any available teacher
-                        teacher = Teacher.objects.filter(
-                            subjects=subject,
-                            is_active=True
-                        ).first()
-                        
-                        if teacher:
-                            class_assignment = ClassAssignment.objects.create(
-                                class_level=class_level,
-                                subject=subject,
-                                teacher=teacher,
-                                academic_year=self.academic_year
-                            )
-                            self.instance.class_assignment = class_assignment
-                        else:
-                            self.add_error(None, 
-                                f"No active teacher found for {subject.name} in {self.get_class_level_display(class_level)}. "
-                                f"Please assign a teacher first."
-                            )
-                        
-            except Exception as e:
-                logger.error(f"Error in AssignmentForm.clean(): {str(e)}")
-                self.add_error(None, f"Error creating assignment: {str(e)}")
         
         # Validate due date is in the future
         if due_date and due_date <= timezone.now():
@@ -2419,8 +2315,83 @@ class AssignmentForm(forms.ModelForm):
         if max_score and (max_score < 1 or max_score > 100):
             self.add_error('max_score', 'Maximum score must be between 1 and 100.')
         
+        # Handle class assignment
+        if not self.errors:
+            self.handle_class_assignment()
+        
         return cleaned_data
-
+    
+    def handle_class_assignment(self):
+        """Handle class assignment creation or selection"""
+        if self.class_assignment_id:
+            # Use existing class assignment
+            try:
+                class_assignment = ClassAssignment.objects.get(
+                    id=self.class_assignment_id,
+                    is_active=True
+                )
+                self.instance.class_assignment = class_assignment
+            except ClassAssignment.DoesNotExist:
+                raise ValidationError("Selected class assignment is no longer active or doesn't exist.")
+        
+        elif self.class_level and self.subject_id and self.request:
+            # Try to create or find class assignment
+            try:
+                subject = Subject.objects.get(id=self.subject_id, is_active=True)
+                
+                # Check for existing assignment
+                class_assignment = ClassAssignment.objects.filter(
+                    class_level=self.class_level,
+                    subject=subject,
+                    academic_year=self.academic_year,
+                    is_active=True
+                ).first()
+                
+                if class_assignment:
+                    self.instance.class_assignment = class_assignment
+                else:
+                    # Create new class assignment
+                    if is_teacher(self.request.user):
+                        teacher = self.request.user.teacher
+                        # Check if teacher is qualified
+                        if subject in teacher.subjects.all():
+                            class_assignment = ClassAssignment.objects.create(
+                                class_level=self.class_level,
+                                subject=subject,
+                                teacher=teacher,
+                                academic_year=self.academic_year,
+                                is_active=True
+                            )
+                            self.instance.class_assignment = class_assignment
+                        else:
+                            raise ValidationError(
+                                f"You are not qualified to teach {subject.name}. "
+                                "Please contact administration to update your subject qualifications."
+                            )
+                    elif is_admin(self.request.user):
+                        # For admins, find any available teacher
+                        teacher = Teacher.objects.filter(
+                            subjects=subject,
+                            is_active=True
+                        ).first()
+                        
+                        if teacher:
+                            class_assignment = ClassAssignment.objects.create(
+                                class_level=self.class_level,
+                                subject=subject,
+                                teacher=teacher,
+                                academic_year=self.academic_year,
+                                is_active=True
+                            )
+                            self.instance.class_assignment = class_assignment
+                        else:
+                            raise ValidationError(
+                                f"No active teacher found for {subject.name}. "
+                                "Please assign a teacher to this subject first."
+                            )
+            except Subject.DoesNotExist:
+                raise ValidationError("Selected subject is no longer active or doesn't exist.")
+    
     def clean_attachment(self):
         attachment = self.cleaned_data.get('attachment')
         if attachment:
@@ -2444,44 +2415,27 @@ class AssignmentForm(forms.ModelForm):
         
         return attachment
 
-    def get_class_level_display(self, class_level):
-        """Helper method to get display name for class level"""
-        return dict(CLASS_LEVEL_CHOICES).get(class_level, class_level)
-
     def save(self, commit=True):
         """Save the assignment and create student assignments"""
         assignment = super().save(commit=False)
-        
-        # Ensure class_assignment is set before saving
-        if not assignment.class_assignment and hasattr(self, 'cleaned_data'):
-            class_level = self.cleaned_data.get('class_level')
-            subject = self.cleaned_data.get('subject')
-            
-            if class_level and subject:
-                # Try to find class assignment one more time
-                class_assignment = ClassAssignment.objects.filter(
-                    class_level=class_level,
-                    subject=subject,
-                    academic_year=self.academic_year,
-                    is_active=True
-                ).first()
-                
-                if class_assignment:
-                    assignment.class_assignment = class_assignment
-        
+    
+        # Ensure subject is set from class_assignment
+        if assignment.class_assignment and not assignment.subject_id:
+            assignment.subject = assignment.class_assignment.subject
+    
         if commit:
             assignment.save()
-            
+        
             # Create student assignments after saving
             try:
                 assignment.create_student_assignments()
-                
+            
                 # Send notifications to students about new assignment
                 self.send_assignment_notifications(assignment)
-                
+            
             except Exception as e:
                 logger.error(f"Error creating student assignments for assignment {assignment.id}: {str(e)}")
-        
+    
         return assignment
 
     def send_assignment_notifications(self, assignment):
@@ -2509,7 +2463,6 @@ class AssignmentForm(forms.ModelForm):
             
         except Exception as e:
             logger.error(f"Error sending assignment notifications: {str(e)}")
-
 
 class AssignmentTemplateForm(forms.ModelForm):
     """Form for creating assignment templates"""

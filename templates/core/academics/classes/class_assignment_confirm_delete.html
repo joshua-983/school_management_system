@@ -1,39 +1,185 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Delete Class Assignment{% endblock %}
 
+{% block extra_css %}
+<style>
+    .confirmation-modal {
+        max-width: 500px;
+        margin: 3rem auto;
+        padding: 0 1rem;
+    }
+    
+    .confirmation-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        border: none;
+    }
+    
+    .confirmation-header {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        color: #721c24;
+        padding: 2rem;
+        text-align: center;
+        border-bottom: 1px solid #f1b0b7;
+    }
+    
+    .confirmation-header i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        color: #dc3545;
+    }
+    
+    .confirmation-body {
+        padding: 2.5rem;
+    }
+    
+    .assignment-details {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .detail-value {
+        color: #212529;
+    }
+    
+    .confirmation-actions {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .btn-danger {
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+    }
+    
+    .btn-outline-secondary {
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+    }
+    
+    .warning-note {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        color: #856404;
+    }
+    
+    .warning-note i {
+        color: #ffc107;
+        margin-right: 0.5rem;
+    }
+    
+    @media (max-width: 576px) {
+        .confirmation-body {
+            padding: 1.5rem;
+        }
+        
+        .confirmation-actions {
+            flex-direction: column;
+        }
+        
+        .confirmation-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="card border-danger">
-    <div class="card-header bg-danger text-white">
-        <h4><i class="bi bi-exclamation-triangle"></i> Confirm Deletion</h4>
-    </div>
-    <div class="card-body">
-        <form method="post">
-            {% csrf_token %}
+<div class="confirmation-modal">
+    <div class="confirmation-card">
+        <div class="confirmation-header">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <h2 class="mb-2">Delete Assignment</h2>
+            <p class="mb-0">Are you sure you want to delete this class assignment?</p>
+        </div>
+        
+        <div class="confirmation-body">
+            <h4 class="text-center mb-4">Assignment Details</h4>
             
-            <div class="alert alert-danger">
-                <h5 class="alert-heading">Warning!</h5>
-                <p>You are about to delete the following class assignment:</p>
-                <ul class="mb-0">
-                    <li><strong>Class:</strong> {{ object.get_class_level_display }}</li>
-                    <li><strong>Subject:</strong> {{ object.subject.name }}</li>
-                    <li><strong>Teacher:</strong> {{ object.teacher.get_full_name }}</li>
-                    <li><strong>Academic Year:</strong> {{ object.academic_year }}</li>
-                </ul>
+            <div class="assignment-details">
+                <div class="detail-item">
+                    <span class="detail-label">Class Level:</span>
+                    <span class="detail-value">{{ object.get_class_level_display }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Subject:</span>
+                    <span class="detail-value">{{ object.subject.name }} ({{ object.subject.code }})</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Teacher:</span>
+                    <span class="detail-value">{{ object.teacher.get_full_name }} ({{ object.teacher.employee_id }})</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Academic Year:</span>
+                    <span class="detail-value">{{ object.academic_year }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value">
+                        {% if object.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </span>
+                </div>
             </div>
             
-            <p class="text-danger"><strong>This action cannot be undone.</strong> All related data will also be removed.</p>
+            <div class="warning-note">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                <strong>Warning:</strong> This action cannot be undone. Deleting this assignment will remove it from all records.
+            </div>
             
-            <div class="d-flex justify-content-between mt-4">
-                <!-- FIX: Redirect back to the list view instead of non-existent detail view -->
-                <a href="{% url 'class_assignment_list' %}" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left"></i> Cancel
+            <div class="confirmation-actions">
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-2"></i> Yes, Delete Assignment
+                    </button>
+                </form>
+                <a href="{% url 'class_assignment_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle me-2"></i> Cancel
                 </a>
-                <button type="submit" class="btn btn-danger">
-                    <i class="bi bi-trash"></i> Confirm Delete
-                </button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 {% endblock %}

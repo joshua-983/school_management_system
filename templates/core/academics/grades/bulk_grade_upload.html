@@ -100,11 +100,79 @@
     border-radius: 8px;
 }
 
-.progress {
-    height: 8px;
-    border-radius: 4px;
+.progress-container {
     margin-top: 1rem;
     display: none;
+}
+
+.progress {
+    height: 10px;
+    border-radius: 5px;
+}
+
+.progress-bar {
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+.upload-status-container {
+    display: none;
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.status-item:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.status-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.status-value {
+    font-weight: 500;
+}
+
+#successCount {
+    color: var(--success);
+    font-weight: bold;
+}
+
+#errorCount {
+    color: var(--danger);
+    font-weight: bold;
+}
+
+.error-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 1rem;
+}
+
+.error-item {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: 4px;
+    border-left: 3px solid var(--danger);
+    font-size: 0.875rem;
+}
+
+.error-item:last-child {
+    margin-bottom: 0;
 }
 
 .form-control, .form-select {
@@ -157,6 +225,63 @@
     font-size: 1.1rem;
 }
 
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-processing {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-completed {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.status-failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.upload-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.stat-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--secondary);
+}
+
+.upload-time {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
 @media (max-width: 768px) {
     .page-header {
         padding: 1.5rem;
@@ -169,6 +294,10 @@
     
     .upload-icon {
         font-size: 3rem;
+    }
+    
+    .upload-stats {
+        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -230,6 +359,103 @@
                     </div>
                     {% endif %}
                     
+                    <!-- Upload Progress Tracking -->
+                    <div class="upload-status-container" id="uploadStatusContainer">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">
+                                <i class="bi bi-graph-up me-2"></i>Upload Progress
+                            </h5>
+                            <span class="status-badge" id="statusBadge">Ready</span>
+                        </div>
+                        
+                        <div class="progress-container" id="progressContainer">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span id="progressText">0% Complete</span>
+                                <span id="processedText">0 / 0 records</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" 
+                                     id="progressBar"
+                                     style="width: 0%"
+                                     aria-valuenow="0" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="upload-stats" id="uploadStats">
+                            <div class="stat-card">
+                                <div class="stat-value" id="processedStat">0</div>
+                                <div class="stat-label">Processed</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-success" id="successStat">0</div>
+                                <div class="stat-label">Successful</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-danger" id="errorStat">0</div>
+                                <div class="stat-label">Errors</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="remainingStat">0</div>
+                                <div class="stat-label">Remaining</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <div class="status-item">
+                                <span class="status-label">Started:</span>
+                                <span class="status-value" id="startedTime">--:--</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Elapsed:</span>
+                                <span class="status-value" id="elapsedTime">0s</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Speed:</span>
+                                <span class="status-value" id="speedText">0 records/sec</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">Estimated Time:</span>
+                                <span class="status-value" id="etaText">Calculating...</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4" id="errorSection" style="display: none;">
+                            <h6 class="text-danger">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Errors Found
+                            </h6>
+                            <div class="error-list" id="errorList">
+                                <!-- Errors will be populated here -->
+                            </div>
+                            <div class="mt-2 text-end">
+                                <small class="text-muted" id="errorCountText">0 errors</small>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4" id="successSection" style="display: none;">
+                            <div class="alert alert-success">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle-fill me-3 fs-4"></i>
+                                    <div>
+                                        <h6 class="alert-heading mb-1">Upload Completed Successfully!</h6>
+                                        <p class="mb-0" id="successMessage"></p>
+                                        <div class="mt-2">
+                                            <a href="{% url 'grade_list' %}" class="btn btn-success btn-sm me-2">
+                                                <i class="bi bi-list me-1"></i> View Grades
+                                            </a>
+                                            <button type="button" class="btn btn-outline-success btn-sm" id="downloadReportBtn">
+                                                <i class="bi bi-download me-1"></i> Download Report
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Instructions -->
                     <div class="alert alert-info instructions-card mb-4">
                         <h6 class="alert-heading mb-3">
@@ -252,13 +478,14 @@
                                     <li><strong>Formats:</strong> CSV, XLSX, XLS</li>
                                     <li><strong>Max size:</strong> 5MB</li>
                                     <li><strong>Score range:</strong> 0 to assignment maximum</li>
+                                    <li><strong>Batch processing:</strong> Real-time progress tracking</li>
                                 </ul>
                             </div>
                         </div>
                     </div>
 
                     <!-- Upload Form -->
-                    <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
+                    <form method="post" enctype="multipart/form-data" id="bulkUploadForm" class="needs-validation" novalidate>
                         {% csrf_token %}
                         
                         <div class="row">
@@ -292,13 +519,13 @@
                         <div class="mb-4">
                             <label class="form-label">Grade File *</label>
                             <div class="upload-area" id="uploadArea">
-                                <input type="file" name="file" id="{{ form.file.id_for_label }}" class="file-input" accept=".csv,.xlsx,.xls">
+                                <input type="file" name="file" id="{{ form.file.id_for_label }}" class="file-input" accept=".csv,.xlsx,.xls" required>
                                 <div class="upload-icon">
                                     <i class="bi bi-cloud-arrow-up"></i>
                                 </div>
                                 <h5>Drag & Drop your file here</h5>
                                 <p class="text-muted mb-3">or click to browse files</p>
-                                <button type="button" class="btn btn-primary">
+                                <button type="button" class="btn btn-primary" id="chooseFileBtn">
                                     <i class="bi bi-folder2-open me-2"></i>Choose File
                                 </button>
                                 <div class="help-text mt-2">Supported formats: CSV, Excel (.xlsx, .xls) | Max 5MB</div>
@@ -315,9 +542,6 @@
                                         <i class="bi bi-x"></i>
                                     </button>
                                 </div>
-                                <div class="progress">
-                                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                                </div>
                             </div>
                             
                             {% if form.file.errors %}
@@ -325,6 +549,9 @@
                                     {{ form.file.errors.as_text }}
                                 </div>
                             {% endif %}
+                            <div class="valid-feedback">
+                                File selected and ready for upload
+                            </div>
                         </div>
 
                         <!-- Template Features -->
@@ -390,12 +617,19 @@
 {% endblock %}
 
 {% block footer %}
-
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
 <script>
+// Global variables for progress tracking
+let uploadProgressInterval = null;
+let uploadStartTime = null;
+let sessionId = null;
+let lastProcessed = 0;
+let processingSpeed = 0;
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('bulkUploadForm');
     const uploadBtn = document.getElementById('uploadBtn');
@@ -405,7 +639,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileName = document.getElementById('fileName');
     const fileSize = document.getElementById('fileSize');
     const removeFileBtn = document.getElementById('removeFile');
-    const progressBar = document.querySelector('.progress-bar');
+    const chooseFileBtn = document.getElementById('chooseFileBtn');
+    
+    // Progress tracking elements
+    const uploadStatusContainer = document.getElementById('uploadStatusContainer');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const processedText = document.getElementById('processedText');
+    const statusBadge = document.getElementById('statusBadge');
+    
+    // Stats elements
+    const processedStat = document.getElementById('processedStat');
+    const successStat = document.getElementById('successStat');
+    const errorStat = document.getElementById('errorStat');
+    const remainingStat = document.getElementById('remainingStat');
+    const startedTime = document.getElementById('startedTime');
+    const elapsedTime = document.getElementById('elapsedTime');
+    const speedText = document.getElementById('speedText');
+    const etaText = document.getElementById('etaText');
+    
+    // Error elements
+    const errorSection = document.getElementById('errorSection');
+    const errorList = document.getElementById('errorList');
+    const errorCountText = document.getElementById('errorCountText');
+    
+    // Success elements
+    const successSection = document.getElementById('successSection');
+    const successMessage = document.getElementById('successMessage');
+    const downloadReportBtn = document.getElementById('downloadReportBtn');
 
     // Initialize Select2
     $('#{{ form.assignment.id_for_label }}').select2({
@@ -416,8 +678,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // File upload handling
+    chooseFileBtn.addEventListener('click', () => fileInput.click());
     uploadArea.addEventListener('click', () => fileInput.click());
     
+    // Drag and drop handling
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('dragover');
@@ -444,19 +708,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function handleFileSelection(file) {
         // Validate file type
-        const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+        const validTypes = [
+            'text/csv', 
+            'application/vnd.ms-excel', 
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
         const fileExtension = file.name.split('.').pop().toLowerCase();
         const isValidType = validTypes.includes(file.type) || ['csv', 'xls', 'xlsx'].includes(fileExtension);
         
         if (!isValidType) {
-            alert('Please select a valid file type (CSV or Excel)');
+            showErrorAlert('Invalid file type', 'Please select a CSV or Excel file (CSV, XLS, XLSX)');
+            resetFileInput();
             return;
         }
 
         // Validate file size (5MB)
         const maxSize = 5 * 1024 * 1024;
         if (file.size > maxSize) {
-            alert('File size exceeds 5MB limit');
+            showErrorAlert('File too large', 'File size exceeds 5MB limit');
+            resetFileInput();
             return;
         }
 
@@ -464,12 +734,18 @@ document.addEventListener('DOMContentLoaded', function() {
         fileName.textContent = file.name;
         fileSize.textContent = formatFileSize(file.size);
         fileInfo.style.display = 'block';
+        
+        // Enable upload button and show validation
         uploadBtn.disabled = false;
-
-        // Create a new FileList and set it to the file input
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        fileInput.files = dataTransfer.files;
+        fileInput.classList.add('is-valid');
+        fileInput.classList.remove('is-invalid');
+        
+        // Update status badge
+        statusBadge.textContent = 'Ready';
+        statusBadge.className = 'status-badge status-ready';
+        
+        // Reset progress tracking UI
+        resetProgressTracking();
     }
 
     function formatFileSize(bytes) {
@@ -480,18 +756,302 @@ document.addEventListener('DOMContentLoaded', function() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    removeFileBtn.addEventListener('click', () => {
+    function resetFileInput() {
         fileInput.value = '';
         fileInfo.style.display = 'none';
         uploadBtn.disabled = true;
+        fileInput.classList.remove('is-valid', 'is-invalid');
+    }
+
+    removeFileBtn.addEventListener('click', () => {
+        resetFileInput();
     });
+
+    function showErrorAlert(title, message) {
+        // Remove any existing error alerts
+        const existingAlerts = document.querySelectorAll('.alert-danger');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        // Create new alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
+                <div class="flex-grow-1">
+                    <strong>${title}</strong> - ${message}
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        
+        // Insert after the instructions card
+        const instructionsCard = document.querySelector('.instructions-card');
+        instructionsCard.parentNode.insertBefore(alertDiv, instructionsCard.nextSibling);
+        
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            const bsAlert = new bootstrap.Alert(alertDiv);
+            bsAlert.close();
+        }, 5000);
+    }
+
+    function resetProgressTracking() {
+        // Hide progress containers
+        uploadStatusContainer.style.display = 'none';
+        progressContainer.style.display = 'none';
+        errorSection.style.display = 'none';
+        successSection.style.display = 'none';
+        
+        // Reset all values
+        progressBar.style.width = '0%';
+        progressBar.setAttribute('aria-valuenow', 0);
+        progressText.textContent = '0% Complete';
+        processedText.textContent = '0 / 0 records';
+        
+        processedStat.textContent = '0';
+        successStat.textContent = '0';
+        errorStat.textContent = '0';
+        remainingStat.textContent = '0';
+        
+        startedTime.textContent = '--:--';
+        elapsedTime.textContent = '0s';
+        speedText.textContent = '0 records/sec';
+        etaText.textContent = 'Calculating...';
+        
+        errorList.innerHTML = '';
+        errorCountText.textContent = '0 errors';
+        
+        // Clear any existing interval
+        if (uploadProgressInterval) {
+            clearInterval(uploadProgressInterval);
+            uploadProgressInterval = null;
+        }
+    }
+
+    function startProgressTracking() {
+        // Show progress tracking UI
+        uploadStatusContainer.style.display = 'block';
+        progressContainer.style.display = 'block';
+        
+        // Update status
+        statusBadge.textContent = 'Processing';
+        statusBadge.className = 'status-badge status-processing';
+        
+        // Set start time
+        uploadStartTime = new Date();
+        startedTime.textContent = uploadStartTime.toLocaleTimeString();
+        
+        // Start polling for progress
+        uploadProgressInterval = setInterval(fetchUploadProgress, 1000);
+        
+        // Start elapsed time counter
+        updateElapsedTime();
+        setInterval(updateElapsedTime, 1000);
+    }
+
+    function fetchUploadProgress() {
+        fetch('{% url "bulk_upload_progress" %}')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.progress) {
+                    updateProgressUI(data.progress);
+                    
+                    // If completed, stop polling and show final results
+                    if (data.progress.status === 'completed' || data.progress.status === 'failed') {
+                        stopProgressPolling();
+                        showFinalResults(data.progress);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching upload progress:', error);
+                // Don't show error to user for failed polling
+            });
+    }
+
+    function updateProgressUI(progress) {
+        // Update progress bar
+        let percent = 0;
+        if (progress.total > 0) {
+            percent = Math.min(100, (progress.processed / progress.total) * 100);
+        }
+        
+        progressBar.style.width = percent + '%';
+        progressBar.setAttribute('aria-valuenow', percent);
+        progressText.textContent = `${percent.toFixed(1)}% Complete`;
+        
+        // Update processed text
+        processedText.textContent = `${progress.processed} / ${progress.total} records`;
+        
+        // Update stats
+        processedStat.textContent = progress.processed || 0;
+        successStat.textContent = progress.success || 0;
+        errorStat.textContent = progress.errors ? progress.errors.length : 0;
+        remainingStat.textContent = Math.max(0, (progress.total || 0) - (progress.processed || 0));
+        
+        // Calculate and update speed
+        if (lastProcessed > 0) {
+            processingSpeed = progress.processed - lastProcessed;
+        }
+        lastProcessed = progress.processed;
+        speedText.textContent = `${processingSpeed} records/sec`;
+        
+        // Calculate ETA
+        if (processingSpeed > 0 && progress.total > 0) {
+            const remaining = Math.max(0, progress.total - progress.processed);
+            const etaSeconds = Math.ceil(remaining / processingSpeed);
+            etaText.textContent = formatTime(etaSeconds);
+        } else {
+            etaText.textContent = 'Calculating...';
+        }
+        
+        // Update errors if any
+        if (progress.errors && progress.errors.length > 0) {
+            errorSection.style.display = 'block';
+            updateErrorList(progress.errors);
+        }
+    }
+
+    function updateErrorList(errors) {
+        // Show only the latest 10 errors
+        const recentErrors = errors.slice(-10);
+        errorList.innerHTML = '';
+        
+        recentErrors.forEach(error => {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-item';
+            errorDiv.textContent = error;
+            errorList.appendChild(errorDiv);
+        });
+        
+        errorCountText.textContent = `${errors.length} error${errors.length !== 1 ? 's' : ''}`;
+    }
+
+    function updateElapsedTime() {
+        if (uploadStartTime) {
+            const now = new Date();
+            const elapsed = Math.floor((now - uploadStartTime) / 1000);
+            elapsedTime.textContent = formatTime(elapsed);
+        }
+    }
+
+    function formatTime(seconds) {
+        if (seconds < 60) {
+            return `${seconds}s`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+    }
+
+    function stopProgressPolling() {
+        if (uploadProgressInterval) {
+            clearInterval(uploadProgressInterval);
+            uploadProgressInterval = null;
+        }
+    }
+
+    function showFinalResults(progress) {
+        // Update status badge
+        if (progress.status === 'completed') {
+            statusBadge.textContent = 'Completed';
+            statusBadge.className = 'status-badge status-completed';
+            
+            // Show success section
+            successSection.style.display = 'block';
+            
+            // Update success message
+            const successCount = progress.success || 0;
+            const errorCount = progress.errors ? progress.errors.length : 0;
+            
+            if (errorCount > 0) {
+                successMessage.textContent = 
+                    `${successCount} grades uploaded successfully. ${errorCount} record${errorCount !== 1 ? 's' : ''} had errors.`;
+            } else {
+                successMessage.textContent = 
+                    `All ${successCount} grades uploaded successfully!`;
+            }
+            
+            // Setup download report button
+            downloadReportBtn.addEventListener('click', function() {
+                // Generate and download a report
+                const reportContent = generateReportContent(progress);
+                downloadReport(reportContent, 'grade-upload-report.txt');
+            });
+            
+        } else if (progress.status === 'failed') {
+            statusBadge.textContent = 'Failed';
+            statusBadge.className = 'status-badge status-failed';
+            
+            // Show error alert
+            showErrorAlert('Upload Failed', progress.error || 'Unknown error occurred');
+        }
+        
+        // Stop progress bar animation
+        progressBar.classList.remove('progress-bar-animated');
+    }
+
+    function generateReportContent(progress) {
+        const report = [];
+        report.push('=== GRADE UPLOAD REPORT ===');
+        report.push(`Date: ${new Date().toLocaleString()}`);
+        report.push(`Status: ${progress.status.toUpperCase()}`);
+        report.push(`Total Records: ${progress.total || 0}`);
+        report.push(`Successfully Processed: ${progress.success || 0}`);
+        report.push(`Errors: ${progress.errors ? progress.errors.length : 0}`);
+        report.push('');
+        report.push('=== ERROR DETAILS ===');
+        
+        if (progress.errors && progress.errors.length > 0) {
+            progress.errors.forEach((error, index) => {
+                report.push(`${index + 1}. ${error}`);
+            });
+        } else {
+            report.push('No errors found.');
+        }
+        
+        report.push('');
+        report.push('=== END OF REPORT ===');
+        
+        return report.join('\n');
+    }
+
+    function downloadReport(content, filename) {
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
 
     // Form submission handler
     form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validate form
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return false;
+        }
+        
         // Validate file is selected
         if (!fileInput.files.length) {
-            e.preventDefault();
-            alert('Please select a file to upload');
+            showErrorAlert('No file selected', 'Please select a file to upload');
             return false;
         }
 
@@ -500,35 +1060,79 @@ document.addEventListener('DOMContentLoaded', function() {
         const term = document.getElementById('{{ form.term.id_for_label }}');
         
         if (!assignment.value) {
-            e.preventDefault();
-            alert('Please select an assignment');
+            showErrorAlert('Missing Assignment', 'Please select an assignment');
             assignment.focus();
             return false;
         }
         
         if (!term.value) {
-            e.preventDefault();
-            alert('Please select a term');
+            showErrorAlert('Missing Term', 'Please select a term');
             term.focus();
             return false;
         }
 
-        // Show loading state
-        uploadBtn.disabled = true;
+        // Disable form and show loading state
+        disableForm();
+        startProgressTracking();
+        
+        // Submit form via AJAX
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Upload failed');
+        })
+        .then(data => {
+            // Handle response
+            if (data.success) {
+                // Form will be submitted normally after AJAX response
+                // The progress tracking will handle the rest
+                form.submit();
+            } else {
+                throw new Error(data.error || 'Upload failed');
+            }
+        })
+        .catch(error => {
+            showErrorAlert('Upload Error', error.message);
+            enableForm();
+            resetProgressTracking();
+        });
+        
+        return false;
+    });
+
+    function disableForm() {
+        // Disable all form elements
+        const formElements = form.querySelectorAll('input, select, button, textarea');
+        formElements.forEach(element => {
+            element.disabled = true;
+        });
+        
+        // Show loading state on upload button
         uploadBtn.querySelector('.upload-text').classList.add('d-none');
         uploadBtn.querySelector('.spinner-border').classList.remove('d-none');
-        
-        // Show progress bar
-        document.querySelector('.progress').style.display = 'block';
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 10;
-            progressBar.style.width = progress + '%';
-            if (progress >= 90) clearInterval(interval);
-        }, 200);
+    }
 
-        return true;
-    });
+    function enableForm() {
+        // Enable all form elements
+        const formElements = form.querySelectorAll('input, select, button, textarea');
+        formElements.forEach(element => {
+            element.disabled = false;
+        });
+        
+        // Hide loading state on upload button
+        uploadBtn.querySelector('.upload-text').classList.remove('d-none');
+        uploadBtn.querySelector('.spinner-border').classList.add('d-none');
+    }
 
     // Auto-hide alerts
     const alerts = document.querySelectorAll('.alert');
@@ -539,6 +1143,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 bsAlert.close();
             }, 8000);
         }
+    });
+
+    // Form validation on input change
+    const formInputs = form.querySelectorAll('input, select');
+    formInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.checkValidity()) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+            }
+        });
     });
 });
 </script>

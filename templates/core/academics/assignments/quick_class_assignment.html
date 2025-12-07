@@ -1,0 +1,73 @@
+<!-- core/academics/assignments/quick_class_assignment.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assign Teacher to Class{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-user-plus me-2"></i>Assign Teacher to Class
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        You are about to assign a teacher to teach <strong>{{ subject.name }}</strong> 
+                        in <strong>{{ class_level_display }}</strong> for the <strong>{{ academic_year }}</strong> academic year.
+                    </div>
+                    
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+                        
+                        <input type="hidden" name="class_level" value="{{ class_level }}">
+                        <input type="hidden" name="subject_id" value="{{ subject.id }}">
+                        
+                        <div class="mb-4">
+                            <label class="form-label">Select Teacher</label>
+                            {% if available_teachers %}
+                                <select name="teacher_id" class="form-select" required>
+                                    <option value="">Choose a teacher...</option>
+                                    {% for teacher in available_teachers %}
+                                    <option value="{{ teacher.id }}">
+                                        {{ teacher.get_full_name }} ({{ teacher.employee_id }})
+                                        {% if teacher.subjects.count > 1 %}
+                                        - Teaches {{ teacher.subjects.count }} subjects
+                                        {% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Teachers listed are qualified to teach {{ subject.name }}.
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    No active teachers are qualified to teach {{ subject.name }}.
+                                    Please contact administration to update teacher qualifications.
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'assignment_create_selection' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                            
+                            {% if available_teachers %}
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check me-2"></i>Assign Teacher & Continue
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -8,8 +8,7 @@ from django.db.models import Avg, Sum, Count, Q
 from django.contrib import messages
 import logging
 from datetime import datetime, timedelta
-from ..permissions import is_admin, is_teacher, is_student, is_parent
-# Import models directly to avoid circular imports
+
 from core.models import (
     Student, Teacher, Subject, AuditLog, ClassAssignment, 
     Assignment, StudentAssignment, Grade, Fee, ParentGuardian, 
