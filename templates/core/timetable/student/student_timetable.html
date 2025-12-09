@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 {% load static %}
 
 {% block title %}My Timetable - Student{% endblock %}
@@ -332,56 +333,55 @@
                 </div>
 
                 {% for day_name in days_order %}
-                {% with entries=timetables_by_day|dict_key:day_name|dict_key:forloop.parentloop.counter0 %}
                 <div class="col timetable-day {% if forloop.counter0 == today_day %}today{% endif %} {% if forloop.counter0 >= 5 %}weekend{% endif %}" 
                      data-day="{{ forloop.counter0 }}" data-period="{{ timeslot.period }}">
-                    {% if entries %}
-                        {% for entry in entries %}
-                        <div class="period-block {% if entry.is_current %}current{% endif %} {% if entry.is_break %}break{% endif %}"
-                             data-bs-toggle="popover"
-                             data-bs-html="true"
-                             data-bs-content="
-                                <strong>{{ entry.subject }}</strong><br>
-                                Teacher: {{ entry.teacher }}<br>
-                                Time: {{ entry.time }}<br>
-                                Room: {{ entry.room|default:'TBA' }}<br>
-                                {% if entry.assignment %}<span class='text-warning'>Assignment Due</span>{% endif %}
-                             "
-                             onclick="showClassDetails('{{ entry.id }}')">
-                            <div class="period-time">{{ entry.time_short }}</div>
-                            <div class="period-subject">
-                                <span class="subject-color" style="background-color: {{ entry.color }}"></span>
-                                {{ entry.subject_short }}
-                            </div>
-                            <div class="period-teacher">{{ entry.teacher_short }}</div>
-                            {% if entry.room %}
-                            <div class="period-room">
-                                <i class="fas fa-door-open"></i> {{ entry.room }}
-                            </div>
-                            {% endif %}
-                            {% if entry.assignment %}
-                            <div class="position-absolute bottom-0 end-0 p-1">
-                                <i class="fas fa-exclamation-circle text-warning"></i>
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        {% if timeslot.is_break %}
-                        <div class="period-block break">
-                            <div class="period-time">{{ timeslot.time_short }}</div>
-                            <div class="period-subject">
-                                <i class="fas fa-coffee"></i> {{ timeslot.break_name }}
-                            </div>
-                        </div>
+                    
+                    {# Get entries for this day #}
+                    {% with day_entries=weekly_timetable|dict_key:day_name %}
+                        {% if day_entries %}
+                            {# Find entry for current timeslot #}
+                            {% for entry in day_entries %}
+                                {% if entry.time_slot.period_number == timeslot.period or entry.period_number == timeslot.period %}
+                                <div class="period-block {% if entry.is_current %}current{% endif %} {% if entry.is_break %}break{% endif %}"
+                                     data-bs-toggle="popover"
+                                     data-bs-html="true"
+                                     data-bs-content="
+                                        <strong>{{ entry.subject.name }}</strong><br>
+                                        Teacher: {{ entry.teacher.user.get_full_name }}<br>
+                                        Time: {{ entry.time_slot.start_time|time:'H:i' }} - {{ entry.time_slot.end_time|time:'H:i' }}<br>
+                                        Room: {{ entry.classroom|default:'TBA' }}
+                                     "
+                                     onclick="showClassDetails('{{ entry.id }}')">
+                                    <div class="period-time">{{ entry.time_slot.start_time|time:'H:i' }}</div>
+                                    <div class="period-subject">
+                                        <span class="subject-color" style="background-color: #0d6efd"></span>
+                                        {{ entry.subject.code|default:entry.subject.name|truncatechars:15 }}
+                                    </div>
+                                    <div class="period-teacher">{{ entry.teacher.user.get_full_name|truncatechars:20 }}</div>
+                                    {% if entry.classroom %}
+                                    <div class="period-room">
+                                        <i class="fas fa-door-open"></i> {{ entry.classroom }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
                         {% else %}
-                        <div class="empty-period">
-                            <i class="fas fa-clock"></i> Free
-                        </div>
+                            {% if timeslot.is_break %}
+                            <div class="period-block break">
+                                <div class="period-time">{{ timeslot.start_time|time:'H:i' }}</div>
+                                <div class="period-subject">
+                                    <i class="fas fa-coffee"></i> {{ timeslot.break_name }}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="empty-period">
+                                <i class="fas fa-clock"></i> Free
+                            </div>
+                            {% endif %}
                         {% endif %}
-                    {% endif %}
+                    {% endwith %}
                 </div>
-                {% endwith %}
                 {% endfor %}
             </div>
             {% endfor %}
@@ -480,7 +480,7 @@
                             </div>
                             {% endfor %}
                             {% if upcoming_assignments|length > 3 %}
-                            <a href="#" class="btn btn-sm btn-link w-100">View all assignments</a>
+                            <a href="{% url 'assignment_list' %}" class="btn btn-sm btn-link w-100">View all assignments</a>
                             {% endif %}
                         {% else %}
                             <div class="text-center py-3 text-muted">
@@ -531,15 +531,15 @@
                             <div class="d-flex align-items-center mb-3">
                                 <div class="me-3 text-center">
                                     <div class="badge bg-primary rounded-pill p-2">
-                                        {{ period.time }}
+                                        {{ period.time_slot.start_time|time:'H:i' }} - {{ period.time_slot.end_time|time:'H:i' }}
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-0">{{ period.subject }}</h6>
-                                    <small class="text-muted">{{ period.teacher }}</small>
-                                    {% if period.room %}
+                                    <h6 class="mb-0">{{ period.subject.name }}</h6>
+                                    <small class="text-muted">{{ period.teacher.user.get_full_name }}</small>
+                                    {% if period.classroom %}
                                     <small class="text-muted d-block">
-                                        <i class="fas fa-door-open me-1"></i>{{ period.room }}
+                                        <i class="fas fa-door-open me-1"></i>{{ period.classroom }}
                                     </small>
                                     {% endif %}
                                 </div>
@@ -592,18 +592,23 @@
 
 <!-- Class Details Modal -->
 <div class="modal fade" id="classDetailsModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Class Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="classDetailsContent">
-                <!-- Details will be loaded here -->
+                <div class="text-center p-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Loading class details...</p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="setReminderBtn">Set Reminder</button>
+                <button type="button" class="btn btn-primary" id="setReminderBtn" style="display: none;">
+                    <i class="fas fa-bell me-2"></i>Set Reminder
+                </button>
             </div>
         </div>
     </div>
@@ -672,12 +677,53 @@ function updateWeekView(data) {
 function showClassDetails(periodId) {
     $.ajax({
         url: `{% url "get_class_details" 0 %}`.replace('0', periodId),
+        beforeSend: function() {
+            $('#classDetailsContent').html('<div class="text-center p-4"><div class="spinner-border text-primary"></div><p class="mt-2">Loading class details...</p></div>');
+            $('#setReminderBtn').hide();
+        },
         success: function(response) {
-            $('#classDetailsContent').html(response.details);
+            const detailsHtml = `
+                <div class="class-details">
+                    <h5 class="mb-3">${response.title}</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong><i class="fas fa-clock me-2"></i>Time:</strong> ${response.time}</p>
+                            <p><strong><i class="fas fa-user-tie me-2"></i>Teacher:</strong> ${response.teacher}</p>
+                            <p><strong><i class="fas fa-door-open me-2"></i>Room:</strong> ${response.classroom}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong><i class="fas fa-calendar-day me-2"></i>Day:</strong> ${response.day}</p>
+                            <p><strong><i class="fas fa-layer-group me-2"></i>Class:</strong> ${response.class_level}</p>
+                            <p><strong><i class="fas fa-calendar-alt me-2"></i>Period:</strong> ${response.period_number}</p>
+                        </div>
+                    </div>
+                    ${response.is_break ? `
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-coffee me-2"></i>Break Period: ${response.break_name}
+                        </div>
+                    ` : `
+                        <div class="mt-4">
+                            <h6><i class="fas fa-info-circle me-2"></i>Additional Information</h6>
+                            <p><strong>Academic Year:</strong> ${response.academic_year}</p>
+                            <p><strong>Term:</strong> ${response.term}</p>
+                        </div>
+                    `}
+                </div>
+            `;
+            $('#classDetailsContent').html(detailsHtml);
             $('#setReminderBtn').off('click').click(function() {
                 setReminder(periodId);
             });
+            $('#setReminderBtn').show();
             $('#classDetailsModal').modal('show');
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Failed to load class details';
+            $('#classDetailsContent').html(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>${error}
+                </div>
+            `);
         }
     });
 }
@@ -729,9 +775,11 @@ function highlightCurrentPeriods() {
 }
 
 function convertTimeToMinutes(timeStr) {
+    // Handle 24-hour format (H:i)
     const [time, modifier] = timeStr.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
     
+    // If no modifier (24-hour format), return as is
     if (modifier === 'PM' && hours < 12) hours += 12;
     if (modifier === 'AM' && hours === 12) hours = 0;
     
@@ -782,8 +830,8 @@ METHOD:PUBLISH
     ics += `BEGIN:VEVENT
 UID:{{ student.id }}-{{ forloop.parentloop.counter0 }}-{{ forloop.counter0 }}@school
 DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z
-SUMMARY:{{ period.subject }}
-DESCRIPTION:Teacher: {{ period.teacher }}{% if period.room %}\\nRoom: {{ period.room }}{% endif %}
+SUMMARY:{{ period.subject.name }}
+DESCRIPTION:Teacher: {{ period.teacher.user.get_full_name }}{% if period.classroom %}\\nRoom: {{ period.classroom }}{% endif %}
 LOCATION:School
 DTSTART;TZID=Asia/Kolkata:20241209T090000Z
 DTEND;TZID=Asia/Kolkata:20241209T100000Z
@@ -799,19 +847,26 @@ END:VEVENT
 }
 
 function viewSubjectDetails(subjectId) {
+    // Redirect to subject details page
     window.location.href = `/subjects/${subjectId}/`;
 }
 
 function viewAssignment(assignmentId) {
+    // Redirect to assignment details page
     window.location.href = `/assignments/${assignmentId}/`;
 }
 
 function setReminder(periodId) {
     if ('Notification' in window && Notification.permission === 'granted') {
-        // Schedule notification
-        const period = $(`.period-block[data-period-id="${periodId}"]`);
+        // Get period details first
+        const period = $(`.period-block[onclick*="${periodId}"]`);
         const subject = period.find('.period-subject').text();
         const time = period.find('.period-time').text();
+        
+        if (!subject || !time) {
+            showToast('Could not set reminder: Period details not found', 'error');
+            return;
+        }
         
         // Calculate notification time (15 minutes before class)
         const [startTime] = time.split(' - ');
@@ -829,6 +884,8 @@ function setReminder(periodId) {
             }, timeout);
             
             showToast('Reminder set for 15 minutes before class', 'success');
+        } else {
+            showToast('Class has already started or ended', 'warning');
         }
     } else if ('Notification' in window && Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {

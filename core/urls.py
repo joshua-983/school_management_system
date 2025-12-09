@@ -1,4 +1,4 @@
-# core/urls.py - COMPLETE UPDATED VERSION
+# core/urls.py - COMPREHENSIVE UPDATED VERSION
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from django.http import HttpResponseForbidden
@@ -158,7 +158,9 @@ from .views.timetable_views import (
     TeacherTimetableListView, TeacherTimetableDetailView, TimetableUpdateView,
     # ADD MISSING timetable_calendar view import
     TimetableCalendarView,  print_timetable, get_subjects_for_class, get_available_teachers,
-    calendar_data, day_events, event_details, export_calendar
+    calendar_data, day_events, event_details, export_calendar,
+    timetable_archive_view, timetable_deactivate_view, timetable_duplicate_view, print_weekly_timetable,
+     get_class_details, get_subject_details, get_assignment_details
 )
 
 from .views.notifications_views import (
@@ -613,9 +615,16 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # TIMETABLE URLS - COMPREHENSIVE UPDATE
+    # TIMETABLE URLS - UPDATED STRUCTURE
     # ==============================
-    path('admin/timetable/', include([
+    # Custom Admin Timetable URLs (these will be under /admin/timetable/ in main urls.py)
+    path('timetable/', include([
+        # CRITICAL: AJAX endpoints MUST come BEFORE dynamic patterns
+        path('ajax/get-subjects-for-class/<str:class_level>/', get_subjects_for_class, name='get_subjects_for_class'),
+        path('ajax/get-available-teachers/', get_available_teachers, name='get_available_teachers'),
+        path('ajax/entries/', get_timetable_entries, name='admin_timetable_ajax_entries'),
+        
+        # Main admin timetable views
         path('', TimetableListView.as_view(), name='admin_timetable_list'),
         path('create/', TimetableCreateView.as_view(), name='admin_timetable_create'),
         path('<int:pk>/', TimetableDetailView.as_view(), name='admin_timetable_detail'),
@@ -623,23 +632,23 @@ urlpatterns = [
         path('<int:pk>/update/', TimetableUpdateView.as_view(), name='timetable_update'),
         path('<int:pk>/edit/', TimetableUpdateView.as_view(), name='admin_timetable_edit'),
         path('<int:pk>/delete/', TimetableDeleteView.as_view(), name='admin_timetable_delete'),
-        path('ajax/entries/', get_timetable_entries, name='admin_timetable_ajax_entries'),
         path('generate-weekly/', generate_weekly_timetable, name='admin_generate_weekly_timetable'),
-        path('timetable/<int:pk>/print/', print_timetable, name='print_timetable'),
+        path('<int:pk>/print/', print_timetable, name='admin_print_timetable'),
         
+        path('<int:pk>/archive/', timetable_archive_view, name='archive_timetable'),
+        path('<int:pk>/deactivate/', timetable_deactivate_view, name='deactivate_timetable'),
+        path('<int:pk>/duplicate/', timetable_duplicate_view, name='duplicate_timetable'),
+        
+        # Calendar views
         path('calendar/', TimetableCalendarView.as_view(), name='timetable_calendar'),
         path('calendar/data/', calendar_data, name='calendar_data'),
         path('calendar/day-events/', day_events, name='day_events'),
-        path('<int:pk>/print/', print_timetable, name='admin_print_timetable'),
         path('calendar/event/<str:event_id>/', event_details, name='event_details'),
         path('calendar/export/', export_calendar, name='export_calendar'),
-        path('ajax/get-subjects-for-class/<str:class_level>/', get_subjects_for_class, name='get_subjects_for_class'),
-        path('ajax/get-available-teachers/', get_available_teachers, name='get_available_teachers'),
-        
     ])),
     
-    # Admin Time Slots
-    path('admin/timeslots/', include([
+    # Admin Time Slots (under /admin/timeslots/)
+    path('timeslots/', include([
         path('', TimeSlotListView.as_view(), name='admin_timeslot_list'),
         path('create/', TimeSlotCreateView.as_view(), name='admin_timeslot_create'),
         path('<int:pk>/edit/', TimeSlotUpdateView.as_view(), name='admin_timeslot_edit'),
@@ -661,27 +670,31 @@ urlpatterns = [
     # ==============================
     path('student/timetable/', include([
         path('', StudentTimetableView.as_view(), name='student_timetable'),
+        # Add this line to the student timetable URLs section (around line 491):
+        path('print/', print_weekly_timetable, name='print_weekly_timetable'),
     ])),
     
     # ==============================
-    # COMMON TIMETABLE URLS (For backward compatibility)
+    # COMMON TIMETABLE URLS (For backward compatibility - non-admin)
     # ==============================
-    path('timetable/', include([
+    # These will be accessible at root level (e.g., /timetable/, not /admin/timetable/)
+    path('timetable-view/', include([
         path('', TimetableListView.as_view(), name='timetable_list'),  # Shows based on user role
-        path('create/', TimetableCreateView.as_view(), name='timetable_create'),
-        path('<int:pk>/', TimetableDetailView.as_view(), name='timetable_detail'),
-        path('<int:pk>/manage/', TimetableManageView.as_view(), name='timetable_manage'),
-        path('<int:pk>/edit/', TimetableUpdateView.as_view(), name='timetable_edit'),
-        path('<int:pk>/delete/', TimetableDeleteView.as_view(), name='timetable_delete'),
         path('student/', StudentTimetableView.as_view(), name='student_timetable_view'),
         path('teacher/', TeacherTimetableView.as_view(), name='teacher_timetable_view'),
-        path('calendar/', TimetableCalendarView.as_view(), name='timetable_calendar'),  # ADDED HERE TOO
+        path('calendar/', TimetableCalendarView.as_view(), name='timetable_calendar_view'),
         path('ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
         path('generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
-        path('api/entries/', get_timetable_entries, name='get_timetable_entries'),
+        path('api/entries/', get_timetable_entries, name='timetable_ajax_entries'),
+        
+        path('class-details/<int:period_id>/', get_class_details, name='get_class_details'),
+        path('subject-details/<int:subject_id>/', get_subject_details, name='get_subject_details'),
+        path('assignment-details/<int:assignment_id>/', get_assignment_details, name='get_assignment_details'),
+
     ])),
     
-    path('timeslots/', include([
+    # Common timeslot views (non-admin)
+    path('timeslots-view/', include([
         path('', TimeSlotListView.as_view(), name='timeslot_list'),
         path('create/', TimeSlotCreateView.as_view(), name='timeslot_create'),
         path('<int:pk>/update/', TimeSlotUpdateView.as_view(), name='timeslot_update'),

@@ -47,52 +47,31 @@
     font-weight: bold;
     font-size: 0.9rem;
 }
-.modal-lg-custom {
-    max-width: 800px;
-}
 .filter-card {
     background: #f8f9fa;
     border-left: 4px solid #0d6efd;
 }
 
-/* FIX: Modal dropdown z-index issues */
-.modal.show .select2-container--open {
-    z-index: 1061 !important;
+/* SIMPLE FIX: Ensure dropdowns appear above modal */
+.modal {
+    z-index: 1050;
 }
 
-.modal.show .dropdown-menu {
-    z-index: 1061 !important;
+.modal-backdrop {
+    z-index: 1040;
 }
 
-.modal .form-select {
-    position: relative;
-    z-index: 1;
-}
-
-.modal-content {
-    position: relative;
+/* This is the key fix for dropdowns */
+.modal.show .form-select:focus {
     z-index: 1060;
 }
 
-/* Form floating labels */
+/* Simple form styling */
 .form-floating > .form-select {
     padding-top: 1.625rem;
     padding-bottom: 0.625rem;
 }
 
-.form-floating > label {
-    opacity: 0.65;
-    transform: scale(.85) translateY(-0.5rem) translateX(0.15rem);
-}
-
-.form-floating > .form-control:focus ~ label,
-.form-floating > .form-control:not(:placeholder-shown) ~ label,
-.form-floating > .form-select ~ label {
-    opacity: 1;
-    color: var(--bs-primary);
-}
-
-/* Checkbox card styling */
 .form-check.card {
     transition: all 0.2s ease;
     border-color: var(--bs-border-color);
@@ -109,22 +88,8 @@
     border-left: 3px solid var(--bs-primary);
 }
 
-/* Modal animations */
-.modal.fade .modal-dialog {
-    transform: translateY(-50px);
-    transition: transform 0.3s ease-out;
-}
-
-.modal.show .modal-dialog {
-    transform: translateY(0);
-}
-
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .modal-dialog {
-        margin: 0.5rem;
-    }
-    
     .form-check.card .card-body {
         padding: 0.75rem !important;
     }
@@ -143,7 +108,7 @@
                     <p class="text-muted mb-0">Manage all class timetables across the school</p>
                 </div>
                 <div class="btn-group">
-                    <a href="{% url 'timetable_create' %}" class="btn btn-primary">
+                    <a href="{% url 'admin_timetable_create' %}" class="btn btn-primary">
                         <i class="fas fa-plus me-2"></i>Create Timetable
                     </a>
                     <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#generateModal">
@@ -355,13 +320,13 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end action-btns">
-                                        <a href="{% url 'timetable_detail' timetable.pk %}" class="btn btn-sm btn-info" title="View">
+                                        <a href="{% url 'admin_timetable_detail' timetable.pk %}" class="btn btn-sm btn-info">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        <a href="{% url 'timetable_manage' timetable.pk %}" class="btn btn-sm btn-warning" title="Edit">
+                                        <a href="{% url 'admin_timetable_manage' timetable.pk %}" class="btn btn-sm btn-warning">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="{% url 'timetable_delete' timetable.pk %}" class="btn btn-sm btn-danger" title="Delete">
+                                        <a href="{% url 'admin_timetable_delete' timetable.pk %}" class="btn btn-sm btn-danger">
                                             <i class="fas fa-trash"></i>
                                         </a>
                                     </td>
@@ -419,11 +384,10 @@
     </div>
 </div>
 
-<!-- Generate Weekly Modal - FIXED VERSION -->
+<!-- Simple Generate Weekly Modal -->
 <div class="modal fade" id="generateModal" tabindex="-1" aria-labelledby="generateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow-lg">
-            <!-- Modal Header -->
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="generateModalLabel">
                     <i class="fas fa-calendar-plus me-2"></i>Generate Weekly Timetable
@@ -431,174 +395,81 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             
-            <!-- Modal Body -->
-            <div class="modal-body p-4">
-                <form method="post" action="{% url 'generate_weekly_timetable' %}" id="generateForm" class="needs-validation" novalidate>
+            <div class="modal-body">
+                <form method="post" action="{% url 'generate_weekly_timetable' %}" id="generateForm">
                     {% csrf_token %}
                     
-                    <div class="alert alert-primary bg-light border-primary mb-4">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-info-circle fa-2x text-primary me-3"></i>
-                            <div>
-                                <h6 class="mb-1">Generate Weekly Timetables</h6>
-                                <p class="mb-0 small">
-                                    This will create timetables for all selected days of the week. 
-                                    You can edit each day individually later.
-                                </p>
-                            </div>
-                        </div>
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This will create timetables for all selected days of the week.
                     </div>
                     
-                    <div class="row g-4">
-                        <!-- Class Level -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select name="class_level" class="form-select" id="generateClass" required style="position: relative; z-index: 1;">
-                                    <option value="">Select Class</option>
-                                    {% for code, name in class_levels %}
-                                        <option value="{{ code }}">{{ name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <label for="generateClass" class="fw-semibold">
-                                    <i class="fas fa-users me-1"></i> Class Level *
-                                </label>
-                                <div class="form-text">Select which class to generate timetable for</div>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Class Level *</label>
+                            <select name="class_level" class="form-select" required id="generateClass">
+                                <option value="">Select Class</option>
+                                {% for code, name in class_levels %}
+                                    <option value="{{ code }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         
-                        <!-- Term -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select name="term" class="form-select" id="generateTerm" required style="position: relative; z-index: 1;">
-                                    <option value="1" {% if default_term == 1 %}selected{% endif %}>Term 1</option>
-                                    <option value="2" {% if default_term == 2 %}selected{% endif %}>Term 2</option>
-                                    <option value="3" {% if default_term == 3 %}selected{% endif %}>Term 3</option>
-                                </select>
-                                <label for="generateTerm" class="fw-semibold">
-                                    <i class="fas fa-calendar-alt me-1"></i> Term *
-                                </label>
-                            </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Term *</label>
+                            <select name="term" class="form-select" required id="generateTerm">
+                                <option value="1" {% if default_term == 1 %}selected{% endif %}>Term 1</option>
+                                <option value="2" {% if default_term == 2 %}selected{% endif %}>Term 2</option>
+                                <option value="3" {% if default_term == 3 %}selected{% endif %}>Term 3</option>
+                            </select>
                         </div>
                         
-                        <!-- Academic Year -->
-                        <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="text" name="academic_year" class="form-control" 
-                                       value="{{ default_academic_year }}" required
-                                       pattern="\d{4}/\d{4}" 
-                                       placeholder="YYYY/YYYY" 
-                                       id="generateYear">
-                                <label for="generateYear" class="fw-semibold">
-                                    <i class="fas fa-calendar me-1"></i> Academic Year *
-                                </label>
-                                <div class="form-text">Format: YYYY/YYYY (e.g., 2024/2025)</div>
-                            </div>
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Academic Year *</label>
+                            <input type="text" name="academic_year" class="form-control" 
+                                   value="{{ default_academic_year }}" required
+                                   pattern="\d{4}/\d{4}" 
+                                   placeholder="YYYY/YYYY" 
+                                   id="generateYear">
+                            <small class="form-text text-muted">Format: YYYY/YYYY (e.g., 2024/2025)</small>
                         </div>
                         
-                        <!-- Days Selection -->
-                        <div class="col-md-12">
-                            <label class="form-label fw-semibold mb-3">
-                                <i class="fas fa-calendar-day me-1"></i> Days to Generate
-                            </label>
-                            <div class="row g-3">
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Days to Generate *</label>
+                            <div class="row">
                                 {% for day_num, day_name in day_choices %}
-                                <div class="col-md-4 col-sm-6">
-                                    <div class="form-check card border">
-                                        <div class="card-body p-3">
-                                            <input class="form-check-input day-checkbox" type="checkbox" 
-                                                   id="day{{ day_num }}" value="{{ day_num }}" checked
-                                                   style="width: 1.2em; height: 1.2em;">
-                                            <label class="form-check-label d-flex align-items-center ms-2" for="day{{ day_num }}">
-                                                {% if day_num == 5 %}
-                                                <span class="badge bg-secondary me-2">
-                                                    <i class="fas fa-calendar-check"></i>
-                                                </span>
-                                                {% elif day_num == 0 %}
-                                                <span class="badge bg-primary me-2">
-                                                    <i class="fas fa-calendar"></i>
-                                                </span>
-                                                {% elif day_num == 1 %}
-                                                <span class="badge bg-success me-2">
-                                                    <i class="fas fa-calendar"></i>
-                                                </span>
-                                                {% elif day_num == 2 %}
-                                                <span class="badge bg-warning me-2">
-                                                    <i class="fas fa-calendar"></i>
-                                                </span>
-                                                {% elif day_num == 3 %}
-                                                <span class="badge bg-info me-2">
-                                                    <i class="fas fa-calendar"></i>
-                                                </span>
-                                                {% elif day_num == 4 %}
-                                                <span class="badge bg-danger me-2">
-                                                    <i class="fas fa-calendar"></i>
-                                                </span>
-                                                {% endif %}
-                                                <span class="fw-medium">{{ day_name }}</span>
-                                            </label>
-                                        </div>
+                                <div class="col-md-4 col-sm-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input day-checkbox" type="checkbox" 
+                                               id="day{{ day_num }}" value="{{ day_num }}" checked>
+                                        <label class="form-check-label" for="day{{ day_num }}">
+                                            {{ day_name }}
+                                        </label>
                                     </div>
                                 </div>
                                 {% endfor %}
                             </div>
                             
-                            <!-- Quick Selection Buttons -->
-                            <div class="mt-3 d-flex gap-2 flex-wrap">
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllDays">
-                                    <i class="fas fa-check-circle me-1"></i> Select All
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-2" id="selectAllDays">
+                                    Select All
                                 </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllDays">
-                                    <i class="fas fa-times-circle me-1"></i> Deselect All
+                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="deselectAllDays">
+                                    Deselect All
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-info" id="selectWeekdays">
-                                    <i class="fas fa-building me-1"></i> Weekdays Only
+                                    Weekdays Only
                                 </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Summary -->
-                        <div class="col-md-12">
-                            <div class="card bg-light border-0 mt-3">
-                                <div class="card-body">
-                                    <h6 class="card-title mb-3">
-                                        <i class="fas fa-clipboard-list me-2"></i>Generation Summary
-                                    </h6>
-                                    <div class="row small">
-                                        <div class="col-md-6">
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="text-muted">Selected Class:</span>
-                                                <span class="fw-medium" id="selectedClassSummary">None</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="text-muted">Academic Year:</span>
-                                                <span class="fw-medium" id="selectedYearSummary">{{ default_academic_year }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="text-muted">Term:</span>
-                                                <span class="fw-medium" id="selectedTermSummary">Term {{ default_term }}</span>
-                                            </div>
-                                            <div class="d-flex justify-content-between mb-2">
-                                                <span class="text-muted">Days Selected:</span>
-                                                <span class="fw-medium" id="selectedDaysSummary">6</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </form>
             </div>
             
-            <!-- Modal Footer -->
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-1"></i> Cancel
-                </button>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" form="generateForm" class="btn btn-primary" id="generateBtn">
-                    <i class="fas fa-magic me-2"></i> Generate Timetables
+                    Generate Timetables
                 </button>
             </div>
         </div>
@@ -655,13 +526,11 @@ $(document).ready(function() {
     // Select all days
     $('#selectAllDays').click(function() {
         $('.day-checkbox').prop('checked', true);
-        updateDaysSummary();
     });
     
     // Deselect all days
     $('#deselectAllDays').click(function() {
         $('.day-checkbox').prop('checked', false);
-        updateDaysSummary();
     });
     
     // Select weekdays only (Monday to Friday)
@@ -669,45 +538,11 @@ $(document).ready(function() {
         $('.day-checkbox').prop('checked', false);
         $('.day-checkbox').each(function() {
             var dayNum = parseInt($(this).val());
-            if (dayNum >= 0 && dayNum <= 4) { // Monday(0) to Friday(4)
+            if (dayNum >= 0 && dayNum <= 4) {
                 $(this).prop('checked', true);
             }
         });
-        updateDaysSummary();
     });
-    
-    // Update summary when class changes
-    $('#generateClass').change(function() {
-        var selectedClass = $(this).find('option:selected').text();
-        $('#selectedClassSummary').text(selectedClass || 'None');
-    });
-    
-    // Update summary when year changes
-    $('#generateYear').on('input', function() {
-        var year = $(this).val();
-        if (year && /^\d{4}\/\d{4}$/.test(year)) {
-            $('#selectedYearSummary').text(year);
-        }
-    });
-    
-    // Update summary when term changes
-    $('#generateTerm').change(function() {
-        var term = $(this).find('option:selected').text();
-        $('#selectedTermSummary').text(term);
-    });
-    
-    // Update days summary when checkboxes change
-    $('.day-checkbox').change(updateDaysSummary);
-    
-    function updateDaysSummary() {
-        var checkedCount = $('.day-checkbox:checked').length;
-        $('#selectedDaysSummary').text(checkedCount);
-    }
-    
-    // Initialize summary
-    updateDaysSummary();
-    $('#generateClass').trigger('change');
-    $('#generateTerm').trigger('change');
     
     // Generate form validation
     $('#generateForm').submit(function(e) {
@@ -716,34 +551,36 @@ $(document).ready(function() {
         const yearPattern = /^\d{4}\/\d{4}$/;
         const checkedDays = $('.day-checkbox:checked').length;
         
-        // Reset error states
-        $('.is-invalid').removeClass('is-invalid');
-        $('.invalid-feedback').remove();
-        
         let hasError = false;
         
         if (!classLevel) {
             $('#generateClass').addClass('is-invalid');
-            $('#generateClass').after('<div class="invalid-feedback">Please select a class level</div>');
             hasError = true;
+        } else {
+            $('#generateClass').removeClass('is-invalid');
         }
         
         if (!yearPattern.test(academicYear)) {
             $('#generateYear').addClass('is-invalid');
-            $('#generateYear').after('<div class="invalid-feedback">Academic year must be in format YYYY/YYYY</div>');
             hasError = true;
+        } else {
+            $('#generateYear').removeClass('is-invalid');
         }
         
         if (checkedDays === 0) {
-            // Add error to days section
-            $('.form-check.card').first().closest('.row').before(
-                '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
-                '<i class="fas fa-exclamation-triangle me-2"></i>' +
-                'Please select at least one day to generate timetables for.' +
-                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>' +
-                '</div>'
-            );
+            // Create alert if not exists
+            if (!$('#daysErrorAlert').length) {
+                $('.modal-body').prepend(
+                    '<div class="alert alert-danger alert-dismissible fade show" id="daysErrorAlert">' +
+                    '<i class="fas fa-exclamation-triangle me-2"></i>' +
+                    'Please select at least one day to generate timetables for.' +
+                    '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>' +
+                    '</div>'
+                );
+            }
             hasError = true;
+        } else {
+            $('#daysErrorAlert').remove();
         }
         
         if (hasError) {
@@ -759,43 +596,20 @@ $(document).ready(function() {
     // Remove validation on input
     $('#generateClass, #generateYear').on('input change', function() {
         $(this).removeClass('is-invalid');
-        $(this).next('.invalid-feedback').remove();
     });
     
-    // Modal show/hide events
-    $('#generateModal').on('show.bs.modal', function() {
-        // Reset form when modal opens
-        $('#generateBtn').html('<i class="fas fa-magic me-2"></i> Generate Timetables');
+    // Remove days error when checking boxes
+    $('.day-checkbox').change(function() {
+        $('#daysErrorAlert').remove();
+    });
+    
+    // Reset form when modal closes
+    $('#generateModal').on('hidden.bs.modal', function() {
+        $('#generateBtn').html('Generate Timetables');
         $('#generateBtn').prop('disabled', false);
-        $('.alert-danger').remove();
         $('.is-invalid').removeClass('is-invalid');
-        $('.invalid-feedback').remove();
+        $('#daysErrorAlert').remove();
     });
-    
-    $('#generateModal').on('shown.bs.modal', function() {
-        // Focus on first input
-        $('#generateClass').focus();
-    });
-
-    // Fix for dropdowns appearing behind modal
-    $('.form-select').on('shown.bs.select', function() {
-        $(this).data('bs.select').$menu.css('z-index', '1061');
-    });
-
-    // Initialize Bootstrap validation
-    (function() {
-        'use strict'
-        var forms = document.querySelectorAll('.needs-validation')
-        Array.prototype.slice.call(forms).forEach(function(form) {
-            form.addEventListener('submit', function(event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault()
-                    event.stopPropagation()
-                }
-                form.classList.add('was-validated')
-            }, false)
-        })
-    })()
 });
 
 function showToast(message, type = 'info') {

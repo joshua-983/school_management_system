@@ -17,8 +17,8 @@ from core.permissions import is_admin, is_teacher, is_student, is_parent
 from ..models import TimeSlot, Timetable, TimetableEntry, Teacher, Subject, Student, ClassAssignment, AcademicTerm
 from ..forms import TimeSlotForm, TimetableForm, TimetableEntryForm, TimetableFilterForm
 from ..models import CLASS_LEVEL_CHOICES
-
-
+from django.views.decorators.http import require_POST
+from django.urls import reverse
 import logging
 logger = logging.getLogger(__name__)
 
@@ -316,10 +316,49 @@ class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def test_func(self):
         return is_admin(self.request.user)
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        timetable = self.object
+        
+        # Initialize all counts to 0
+        context['attendance_count'] = 0
+        context['resource_count'] = 0
+        context['teacher_count'] = 0
+        
+        try:
+            # Try to count teacher assignments
+            context['teacher_count'] = timetable.entries.filter(
+                teacher__isnull=False
+            ).values('teacher').distinct().count()
+            
+            # Try to count related attendance (this is approximate)
+            from ..models import StudentAttendance, AcademicTerm
+            
+            # Get current academic year and term
+            current_year = timezone.now().year
+            academic_year = f"{current_year}/{current_year + 1}"
+            current_term = AcademicTerm.objects.filter(is_active=True).first()
+            
+            if current_term:
+                # Count attendance for students in this class
+                context['attendance_count'] = StudentAttendance.objects.filter(
+                    student__class_level=timetable.class_level,
+                    term=current_term
+                ).count()
+
+        except Exception as e:
+            logger.error(f"Error calculating context data for timetable delete: {e}")
+            # Keep default values of 0
+        
+        # Calculate next academic year for duplication
+        current_year = timezone.now().year
+        context['next_academic_year'] = f"{current_year}/{current_year + 1}"
+        
+        return context
+    
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Timetable deleted successfully')
         return super().delete(request, *args, **kwargs)
-
 # ============================================================================
 # TEACHER TIMETABLE VIEWS
 # ============================================================================
@@ -769,7 +808,7 @@ def get_available_teachers(request):
                     'name': teacher.user.get_full_name(),
                     'email': teacher.user.email,
                     'subjects': list(teacher.subjects.values_list('name', flat=True)),
-                    'qualifications': teacher.qualifications or '',
+                    'qualifications': teacher.qualification or '',  # FIXED HERE
                     'is_active': teacher.user.is_active
                 }
                 for teacher in teachers
@@ -1106,34 +1145,106 @@ def get_timetable_entries(request):
     academic_year = request.GET.get('academic_year')
     term = request.GET.get('term')
     
-    if not all([class_level, day_of_week, academic_year, term]):
-        return JsonResponse({'error': 'Missing parameters'}, status=400)
+    logger.debug(f"get_timetable_entries called with: class_level={class_level}, "
+                 f"day_of_week={day_of_week}, academic_year={academic_year}, term={term}")
+    
+    # Validate required parameters
+    if not day_of_week or not academic_year:
+        logger.warning(f"Missing required parameters: day_of_week={day_of_week}, academic_year={academic_year}")
+        return JsonResponse({'error': 'Missing required parameters: day_of_week and academic_year are required'}, status=400)
     
     try:
-        timetable = Timetable.objects.get(
-            class_level=class_level,
-            day_of_week=day_of_week,
-            academic_year=academic_year,
-            term=term
-        )
-        entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
+        # Convert parameters
+        day_of_week_int = int(day_of_week)
         
-        data = {
-            'entries': [
-                {
-                    'id': entry.id,
-                    'time_slot': str(entry.time_slot),
-                    'subject': entry.subject.name,
-                    'teacher': entry.teacher.get_full_name(),
-                    'classroom': entry.classroom,
-                    'is_break': entry.is_break
-                }
-                for entry in entries.order_by('time_slot__period_number')
-            ]
+        # Build query filters
+        filters = {
+            'day_of_week': day_of_week_int,
+            'academic_year': academic_year,
+            'is_active': True  # Only get active timetables
         }
-        return JsonResponse(data)
-    except Timetable.DoesNotExist:
-        return JsonResponse({'error': 'Timetable not found'}, status=404)
+        
+        # Add optional filters if provided and not empty
+        if class_level and class_level.strip():
+            filters['class_level'] = class_level
+        
+        if term and term.strip():
+            filters['term'] = int(term)
+        
+        logger.debug(f"Searching timetables with filters: {filters}")
+        
+        # Try to find timetable(s)
+        if class_level:
+            # If class_level specified, get specific timetable
+            try:
+                timetable = Timetable.objects.get(**filters)
+                entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
+                data = {
+                    'success': True,
+                    'timetable_id': timetable.id,
+                    'class_level': timetable.class_level,
+                    'class_level_display': timetable.get_class_level_display(),
+                    'entries': [
+                        {
+                            'id': entry.id,
+                            'time_slot': str(entry.time_slot),
+                            'time_slot_id': entry.time_slot.id,
+                            'period_number': entry.time_slot.period_number,
+                            'start_time': entry.time_slot.start_time.strftime('%H:%M'),
+                            'end_time': entry.time_slot.end_time.strftime('%H:%M'),
+                            'subject': entry.subject.name if entry.subject else None,
+                            'subject_id': entry.subject.id if entry.subject else None,
+                            'subject_code': entry.subject.code if entry.subject else None,
+                            'teacher': entry.teacher.get_full_name() if entry.teacher else None,
+                            'teacher_id': entry.teacher.id if entry.teacher else None,
+                            'classroom': entry.classroom,
+                            'is_break': entry.is_break,
+                            'break_name': entry.break_name or ''
+                        }
+                        for entry in entries.order_by('time_slot__period_number')
+                    ]
+                }
+                logger.debug(f"Found timetable for {class_level}, returning {len(data['entries'])} entries")
+                return JsonResponse(data)
+            except Timetable.DoesNotExist:
+                logger.debug(f"No timetable found for filters: {filters}")
+                return JsonResponse({
+                    'success': True,
+                    'message': 'No timetable found for the specified criteria',
+                    'entries': []
+                })
+            except ValueError as e:
+                logger.error(f"Value error in get_timetable_entries: {str(e)}")
+                return JsonResponse({'error': f'Invalid parameter value: {str(e)}'}, status=400)
+        else:
+            # If no class_level specified, get all timetables for that day
+            timetables = Timetable.objects.filter(**filters).select_related('created_by')
+            
+            data = {
+                'success': True,
+                'message': f'Found {timetables.count()} timetables for day {day_of_week_int}',
+                'timetables': [
+                    {
+                        'id': timetable.id,
+                        'class_level': timetable.class_level,
+                        'class_level_display': timetable.get_class_level_display(),
+                        'academic_year': timetable.academic_year,
+                        'term': timetable.term,
+                        'day_of_week': timetable.day_of_week,
+                        'day_name': timetable.get_day_of_week_display(),
+                        'entry_count': timetable.entries.count(),
+                        'is_active': timetable.is_active,
+                        'created_by': timetable.created_by.get_full_name() if timetable.created_by else 'Unknown'
+                    }
+                    for timetable in timetables
+                ]
+            }
+            logger.debug(f"Returning {len(data['timetables'])} timetables (no class_level specified)")
+            return JsonResponse(data)
+            
+    except Exception as e:
+        logger.error(f"Error in get_timetable_entries: {str(e)}", exc_info=True)
+        return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
 
 @login_required
 @user_passes_test(is_admin)
@@ -1345,6 +1456,155 @@ def print_weekly_timetable(request):
     else:
         raise PermissionDenied
 
+
+
+# ============================================================================
+# TIMETABLE ACTION VIEWS (Archive, Deactivate, Duplicate)
+# ============================================================================
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def timetable_archive_view(request, pk):
+    """Archive a timetable instead of deleting it."""
+    timetable = get_object_or_404(Timetable, pk=pk)
+    
+    try:
+        timetable.is_archived = True
+        timetable.is_active = False
+        timetable.save()
+        
+        # Log the action
+        from ..models import AuditLog
+        AuditLog.objects.create(
+            user=request.user,
+            action='ARCHIVE_TIMETABLE',
+            details=f'Archived timetable {timetable}',
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        messages.success(request, f'Timetable "{timetable}" has been archived.')
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'Timetable archived successfully'})
+        return redirect('admin_timetable_list')
+        
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': str(e)}, status=400)
+        messages.error(request, f'Error archiving timetable: {str(e)}')
+        return redirect('admin_timetable_detail', pk=pk)
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def timetable_deactivate_view(request, pk):
+    """Deactivate a timetable."""
+    timetable = get_object_or_404(Timetable, pk=pk)
+    
+    try:
+        timetable.is_active = False
+        timetable.save()
+        
+        # Log the action
+        from ..models import AuditLog
+        AuditLog.objects.create(
+            user=request.user,
+            action='DEACTIVATE_TIMETABLE',
+            details=f'Deactivated timetable {timetable}',
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        messages.success(request, f'Timetable "{timetable}" has been deactivated.')
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'Timetable deactivated successfully'})
+        return redirect('admin_timetable_list')
+        
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': str(e)}, status=400)
+        messages.error(request, f'Error deactivating timetable: {str(e)}')
+        return redirect('admin_timetable_detail', pk=pk)
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def timetable_duplicate_view(request, pk):
+    """Duplicate a timetable."""
+    timetable = get_object_or_404(Timetable, pk=pk)
+    
+    try:
+        # Parse JSON data if sent
+        if request.body:
+            import json
+            data = json.loads(request.body)
+            academic_year = data.get('year')
+            term = data.get('term', 1)
+            copy_resources = data.get('copyResources', False)
+        else:
+            academic_year = request.POST.get('year')
+            term = request.POST.get('term', 1)
+            copy_resources = request.POST.get('copyResources', False)
+        
+        # Generate academic year if not provided
+        if not academic_year:
+            current_year = timezone.now().year
+            academic_year = f"{current_year}/{current_year + 1}"
+        
+        # Create a duplicate timetable
+        new_timetable = Timetable.objects.create(
+            class_level=timetable.class_level,
+            day_of_week=timetable.day_of_week,
+            academic_year=academic_year,
+            term=int(term),
+            is_active=True,
+            created_by=request.user
+        )
+        
+        # Duplicate timetable entries
+        for entry in timetable.entries.all():
+            new_entry = TimetableEntry.objects.create(
+                timetable=new_timetable,
+                time_slot=entry.time_slot,
+                subject=entry.subject,
+                teacher=entry.teacher,
+                classroom=entry.classroom,
+                is_break=entry.is_break,
+                break_name=entry.break_name
+            )
+            
+            # Copy resources if requested
+            if copy_resources and hasattr(entry, 'resources'):
+                for resource in entry.resources.all():
+                    new_entry.resources.add(resource)
+        
+        # Log the action
+        from ..models import AuditLog
+        AuditLog.objects.create(
+            user=request.user,
+            action='DUPLICATE_TIMETABLE',
+            details=f'Duplicated timetable {timetable} to {new_timetable}',
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            from django.urls import reverse
+            return JsonResponse({
+                'success': True,
+                'message': 'Timetable duplicated successfully',
+                'redirect_url': reverse('admin_timetable_detail', args=[new_timetable.pk])
+            })
+        
+        messages.success(request, f'Timetable "{timetable}" duplicated successfully.')
+        return redirect('admin_timetable_detail', pk=new_timetable.pk)
+        
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': str(e)}, status=400)
+        messages.error(request, f'Error duplicating timetable: {str(e)}')
+        return redirect('admin_timetable_detail', pk=pk)
+
 def print_student_weekly_timetable(request, student):
     """Print student's weekly timetable"""
     # Get current academic year and term
@@ -1388,6 +1648,188 @@ def print_student_weekly_timetable(request, student):
     }
     
     return render(request, 'core/timetable/print/weekly_timetable_print.html', context)
+
+
+# ============================================================================
+# CLASS DETAILS VIEW
+# ============================================================================
+
+@login_required
+def get_class_details(request, period_id):
+    """Get class details for a period (AJAX endpoint)"""
+    try:
+        entry = get_object_or_404(TimetableEntry, id=period_id)
+        
+        # Check permissions based on user role
+        user = request.user
+        if is_student(user):
+            # Student can only view their own class entries
+            if entry.timetable.class_level != user.student.class_level:
+                raise PermissionDenied
+        elif is_teacher(user):
+            # Teacher can only view entries they teach or their class entries
+            teacher = user.teacher
+            if entry.teacher != teacher and not ClassAssignment.objects.filter(
+                class_level=entry.timetable.class_level,
+                teacher=teacher
+            ).exists():
+                raise PermissionDenied
+        elif not is_admin(user):
+            # Only admin, teacher, or student can view
+            raise PermissionDenied
+        
+        # Format the details
+        details = {
+            'title': entry.subject.name if entry.subject else entry.break_name,
+            'subject': entry.subject.name if entry.subject else 'Break',
+            'subject_code': entry.subject.code if entry.subject else '',
+            'teacher': entry.teacher.user.get_full_name() if entry.teacher else 'N/A',
+            'teacher_email': entry.teacher.user.email if entry.teacher else '',
+            'time': f"{entry.time_slot.start_time.strftime('%I:%M %p')} - {entry.time_slot.end_time.strftime('%I:%M %p')}",
+            'duration': f"{entry.time_slot.duration} minutes",
+            'classroom': entry.classroom or 'To be assigned',
+            'day': entry.timetable.get_day_of_week_display(),
+            'class_level': entry.timetable.get_class_level_display(),
+            'academic_year': entry.timetable.academic_year,
+            'term': entry.timetable.term,
+            'is_break': entry.is_break,
+            'break_name': entry.break_name or '',
+            'period_number': entry.time_slot.period_number,
+            'notes': get_period_notes(entry),
+            'assignments': get_upcoming_assignments(entry),
+            'resources': get_class_resources(entry)
+        }
+        
+        return JsonResponse(details)
+    except PermissionDenied:
+        return JsonResponse({'error': 'You do not have permission to view this class'}, status=403)
+    except Exception as e:
+        logger.error(f"Error in get_class_details: {str(e)}")
+        return JsonResponse({'error': 'Failed to load class details'}, status=500)
+
+def get_period_notes(entry):
+    """Get any notes for this period"""
+    # You can implement this based on your Note model
+    notes = []
+    if hasattr(entry, 'notes'):
+        notes = [note.content for note in entry.notes.all()[:3]]
+    return notes
+
+def get_upcoming_assignments(entry):
+    """Get upcoming assignments for this subject"""
+    assignments = []
+    if entry.subject and not entry.is_break:
+        from ..models import Assignment
+        try:
+            assignments = Assignment.objects.filter(
+                subject=entry.subject,
+                class_level=entry.timetable.class_level,
+                due_date__gte=timezone.now()
+            ).order_by('due_date')[:5]
+            assignments = [
+                {
+                    'title': a.title,
+                    'due_date': a.due_date.strftime('%b %d, %Y'),
+                    'status': a.status,
+                    'id': a.id
+                }
+                for a in assignments
+            ]
+        except Exception as e:
+            logger.error(f"Error getting assignments: {e}")
+    return assignments
+
+def get_class_resources(entry):
+    """Get resources for this class"""
+    resources = []
+    if entry.subject and not entry.is_break:
+        # Check if you have a Resource model
+        try:
+            from ..models import Resource
+            resources = Resource.objects.filter(
+                subject=entry.subject,
+                class_level=entry.timetable.class_level
+            ).order_by('-uploaded_at')[:5]
+            resources = [
+                {
+                    'name': r.name,
+                    'type': r.resource_type,
+                    'url': r.file.url if r.file else r.url,
+                    'uploaded_at': r.uploaded_at.strftime('%b %d')
+                }
+                for r in resources
+            ]
+        except ImportError:
+            pass
+    return resources
+
+# ============================================================================
+# SUBJECT DETAILS VIEW
+# ============================================================================
+
+@login_required
+def get_subject_details(request, subject_id):
+    """Get subject details (AJAX endpoint)"""
+    try:
+        subject = get_object_or_404(Subject, id=subject_id)
+        
+        details = {
+            'name': subject.name,
+            'code': subject.code,
+            'description': subject.description or 'No description available',
+            'teacher_count': subject.teachers.count(),
+            'class_count': ClassAssignment.objects.filter(subject=subject).count(),
+            'total_periods': TimetableEntry.objects.filter(
+                subject=subject,
+                timetable__is_active=True
+            ).count()
+        }
+        
+        return JsonResponse(details)
+    except Exception as e:
+        logger.error(f"Error in get_subject_details: {str(e)}")
+        return JsonResponse({'error': 'Failed to load subject details'}, status=500)
+
+# ============================================================================
+# ASSIGNMENT DETAILS VIEW
+# ============================================================================
+
+@login_required
+def get_assignment_details(request, assignment_id):
+    """Get assignment details (AJAX endpoint)"""
+    try:
+        from ..models import Assignment
+        assignment = get_object_or_404(Assignment, id=assignment_id)
+        
+        # Check permissions
+        user = request.user
+        if is_student(user):
+            # Student can only view assignments for their class
+            if assignment.class_level != user.student.class_level:
+                raise PermissionDenied
+        elif is_teacher(user):
+            # Teacher can only view assignments they created
+            if assignment.teacher != user.teacher:
+                raise PermissionDenied
+        
+        details = {
+            'title': assignment.title,
+            'description': assignment.description or 'No description',
+            'subject': assignment.subject.name,
+            'due_date': assignment.due_date.strftime('%B %d, %Y %I:%M %p'),
+            'status': assignment.status,
+            'total_marks': assignment.total_marks,
+            'submission_count': assignment.submissions.count(),
+            'submitted': assignment.submissions.filter(student=user.student).exists() if is_student(user) else False
+        }
+        
+        return JsonResponse(details)
+    except PermissionDenied:
+        return JsonResponse({'error': 'You do not have permission to view this assignment'}, status=403)
+    except Exception as e:
+        logger.error(f"Error in get_assignment_details: {str(e)}")
+        return JsonResponse({'error': 'Failed to load assignment details'}, status=500)
+
 
 def print_teacher_weekly_schedule(request, teacher):
     """Print teacher's weekly schedule"""
