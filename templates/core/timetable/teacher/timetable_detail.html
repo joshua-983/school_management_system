@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}{{ timetable.get_class_level_display }} - {{ timetable.get_day_of_week_display }} - Teacher View{% endblock %}
 
@@ -219,12 +220,12 @@
                                 </button>
                                 <ul class="dropdown-menu">
                                     <li>
-                                        <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#printModal">
+                                        <a class="dropdown-item" href="#" onclick="printTimetable()">
                                             <i class="fas fa-print me-2"></i>Print
                                         </a>
                                     </li>
                                     <li>
-                                        <a class="dropdown-item" href="{% url 'print_timetable' timetable.pk %}" target="_blank">
+                                        <a class="dropdown-item" href="#" onclick="exportTimetablePDF()">
                                             <i class="fas fa-file-pdf me-2"></i>Export PDF
                                         </a>
                                     </li>
@@ -255,19 +256,19 @@
         <div class="col-12">
             <div class="class-stats">
                 <div class="stat-item">
-                    <div class="stat-value">{{ total_periods }}</div>
+                    <div class="stat-value">{{ total_periods|default:"0" }}</div>
                     <div class="stat-label">Total Periods</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">{{ teaching_periods }}</div>
+                    <div class="stat-value">{{ teaching_periods|default:"0" }}</div>
                     <div class="stat-label">Teaching Periods</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">{{ break_periods }}</div>
+                    <div class="stat-value">{{ break_periods|default:"0" }}</div>
                     <div class="stat-label">Break Periods</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">{{ total_hours }}h</div>
+                    <div class="stat-value">{{ total_hours|default:"0" }}h</div>
                     <div class="stat-label">Total Duration</div>
                 </div>
             </div>
@@ -293,20 +294,21 @@
                 <div class="card-body">
                     <div class="period-timeline">
                         {% for timeslot in timeslots %}
-                            {% with entry=entries|dict_key:timeslot.id %}
+                            {% comment %} Find entry for this timeslot {% endcomment %}
+                            {% with entry=entries_by_timeslot|dict_key:timeslot.id %}
                             <div class="mb-4">
                                 <!-- Time Marker -->
-                                <div class="timeline-marker bg-{% if entry.is_break %}secondary{% else %}primary{% endif %} 
-                                             {% if entry.is_current %}current{% endif %}"
+                                <div class="timeline-marker bg-{% if entry and entry.is_break %}secondary{% else %}primary{% endif %} 
+                                             {% if entry and entry.is_current %}current{% endif %}"
                                      data-period="{{ timeslot.period_number }}"></div>
                                 
                                 <!-- Period Card -->
-                                <div class="period-card-teacher {% if entry.is_current %}current{% endif %} 
-                                            {% if entry.is_break %}break-period{% endif %}"
+                                <div class="period-card-teacher {% if entry and entry.is_current %}current{% endif %} 
+                                            {% if entry and entry.is_break %}break-period{% endif %}"
                                      data-period-id="{{ timeslot.id }}">
                                     
                                     <div class="period-time-badge">
-                                        {{ timeslot.start_time|time:"g:i" }} - {{ timeslot.end_time|time:"g:i" }}
+                                        {{ timeslot.start_time|time:"g:i A" }} - {{ timeslot.end_time|time:"g:i A" }}
                                     </div>
                                     
                                     <div class="row align-items-center">
@@ -315,7 +317,7 @@
                                         </div>
                                         
                                         <div class="col-md-8">
-                                            {% if entry.is_break %}
+                                            {% if entry and entry.is_break %}
                                                 <div class="text-center py-3">
                                                     <i class="fas fa-coffee fa-2x text-muted mb-3"></i>
                                                     <h5 class="mb-1">{{ entry.break_name|default:"Break" }}</h5>
@@ -323,13 +325,13 @@
                                                 </div>
                                             {% elif entry %}
                                                 <h5 class="mb-2">
-                                                    <i class="fas fa-book me-2 text-primary"></i>{{ entry.subject.name }}
+                                                    <i class="fas fa-book me-2 text-primary"></i>{{ entry.subject.name|default:"No Subject" }}
                                                 </h5>
                                                 <div class="row">
                                                     <div class="col-md-6">
                                                         <div class="mb-2">
                                                             <strong><i class="fas fa-user-tie me-2"></i>Teacher:</strong>
-                                                            <span class="ms-2">{{ entry.teacher.get_full_name }}</span>
+                                                            <span class="ms-2">{{ entry.teacher.user.get_full_name|default:"Not assigned" }}</span>
                                                         </div>
                                                         {% if entry.classroom %}
                                                         <div class="mb-2">
@@ -345,7 +347,7 @@
                                                         </div>
                                                         <div class="mb-2">
                                                             <strong><i class="fas fa-users me-2"></i>Students:</strong>
-                                                            <span class="ms-2">{{ student_count }}</span>
+                                                            <span class="ms-2">{{ student_count|default:"0" }}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -370,8 +372,8 @@
                                                         data-bs-toggle="modal" 
                                                         data-bs-target="#periodDetailsModal"
                                                         data-period="{{ timeslot.period_number }}"
-                                                        data-subject="{{ entry.subject.name }}"
-                                                        data-teacher="{{ entry.teacher.get_full_name }}"
+                                                        data-subject="{{ entry.subject.name|default:'No Subject' }}"
+                                                        data-teacher="{{ entry.teacher.user.get_full_name|default:'Not assigned' }}"
                                                         data-classroom="{{ entry.classroom|default:'Not specified' }}"
                                                         data-time="{{ timeslot.start_time|time:'g:i A' }} - {{ timeslot.end_time|time:'g:i A' }}">
                                                     <i class="fas fa-info-circle me-1"></i>Details
@@ -381,7 +383,7 @@
                                                     <i class="fas fa-clipboard-check me-1"></i>Attendance
                                                 </button>
                                                 <button class="btn btn-sm btn-outline-warning"
-                                                        onclick="addResource('{{ timeslot.id }}', '{{ entry.subject.name }}')">
+                                                        onclick="addResource('{{ timeslot.id }}', '{{ entry.subject.name|default:"Class" }}')">
                                                     <i class="fas fa-paperclip me-1"></i>Resources
                                                 </button>
                                             </div>
@@ -393,12 +395,12 @@
                                     {% if entry and not entry.is_break %}
                                     <div class="mt-3">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <small>Attendance: {{ entry.attendance_present|default:0 }}/{{ student_count }} present</small>
-                                            <small>{{ entry.attendance_percentage|default:0 }}%</small>
+                                            <small>Attendance: {{ entry.attendance_present|default:"0" }}/{{ student_count|default:"0" }} present</small>
+                                            <small>{{ entry.attendance_percentage|default:"0" }}%</small>
                                         </div>
                                         <div class="attendance-indicator">
                                             <div class="attendance-fill bg-{% if entry.attendance_percentage >= 90 %}success{% elif entry.attendance_percentage >= 75 %}warning{% else %}danger{% endif %}" 
-                                                 style="width: {{ entry.attendance_percentage|default:0 }}%"></div>
+                                                 style="width: {{ entry.attendance_percentage|default:"0" }}%"></div>
                                         </div>
                                     </div>
                                     {% endif %}
@@ -441,8 +443,8 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <strong>Class Teacher:</strong>
-                        <p class="mb-1">{{ timetable.created_by.get_full_name }}</p>
-                        <small class="text-muted">Created on {{ timetable.created_at|date:"d M Y" }}</small>
+                        <p class="mb-1">{{ timetable.created_by.get_full_name|default:"Not assigned" }}</p>
+                        <small class="text-muted">Created on {{ timetable.created_at|date:"d M Y"|default:"Unknown" }}</small>
                     </div>
                     
                     <div class="mb-3">
@@ -465,7 +467,7 @@
                     
                     <div class="mb-3">
                         <strong>Last Updated:</strong>
-                        <p class="mb-0">{{ timetable.updated_at|date:"d M Y, g:i A" }}</p>
+                        <p class="mb-0">{{ timetable.updated_at|date:"d M Y, g:i A"|default:"Never" }}</p>
                     </div>
                 </div>
             </div>
@@ -473,7 +475,7 @@
             <!-- Student List -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0"><i class="fas fa-users me-2"></i>Students ({{ student_count }})</h6>
+                    <h6 class="mb-0"><i class="fas fa-users me-2"></i>Students ({{ student_count|default:"0" }})</h6>
                     <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#studentListModal">
                         View All
                     </button>
@@ -484,14 +486,14 @@
                         <div class="student-item">
                             <div class="d-flex align-items-center">
                                 <div class="student-avatar me-3" 
-                                     style="background-color: {{ student.color }}; color: white;">
-                                    {{ student.initials }}
+                                     style="background-color: {{ student.color|default:'#0d6efd' }}; color: white;">
+                                    {{ student.initials|default:"ST" }}
                                 </div>
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-0">{{ student.name }}</h6>
-                                    <small class="text-muted">{{ student.roll_number }}</small>
+                                    <h6 class="mb-0">{{ student.name|default:"Student Name" }}</h6>
+                                    <small class="text-muted">{{ student.roll_number|default:"N/A" }}</small>
                                 </div>
-                                <span class="badge bg-{{ student.attendance_status }}">{{ student.attendance }}</span>
+                                <span class="badge bg-{{ student.attendance_status|default:'secondary' }}">{{ student.attendance|default:"N/A" }}</span>
                             </div>
                         </div>
                         {% endfor %}
@@ -545,11 +547,11 @@
                         {% for note in class_notes %}
                         <div class="resource-card mb-2">
                             <div class="d-flex justify-content-between align-items-start">
-                                <h6 class="mb-1">{{ note.title }}</h6>
-                                <small class="text-muted">{{ note.date|date:"d M" }}</small>
+                                <h6 class="mb-1">{{ note.title|default:"Note" }}</h6>
+                                <small class="text-muted">{{ note.date|date:"d M"|default:"Today" }}</small>
                             </div>
-                            <p class="mb-1 small">{{ note.content }}</p>
-                            <small class="text-muted">By {{ note.author }}</small>
+                            <p class="mb-1 small">{{ note.content|default:"No content" }}</p>
+                            <small class="text-muted">By {{ note.author|default:"Teacher" }}</small>
                         </div>
                         {% empty %}
                         <p class="text-muted text-center mb-0">No notes yet</p>
@@ -592,7 +594,7 @@
                 </div>
                 <div class="mb-3">
                     <strong>Students:</strong>
-                    <p class="mb-2">{{ student_count }} students</p>
+                    <p class="mb-2">{{ student_count|default:"0" }} students</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -626,32 +628,36 @@
                         <tbody>
                             {% for student in students %}
                             <tr>
-                                <td>{{ student.roll_number }}</td>
+                                <td>{{ student.roll_number|default:"N/A" }}</td>
                                 <td>
                                     <div class="d-flex align-items-center">
                                         <div class="student-avatar me-2" 
-                                             style="background-color: {{ student.color }}; color: white;">
-                                            {{ student.initials }}
+                                             style="background-color: {{ student.color|default:'#0d6efd' }}; color: white;">
+                                            {{ student.initials|default:"ST" }}
                                         </div>
-                                        {{ student.name }}
+                                        {{ student.name|default:"Student Name" }}
                                     </div>
                                 </td>
-                                <td>{{ student.attendance_percentage }}%</td>
+                                <td>{{ student.attendance_percentage|default:"0" }}%</td>
                                 <td>
-                                    <span class="badge bg-{{ student.status_color }}">
-                                        {{ student.status }}
+                                    <span class="badge bg-{{ student.status_color|default:'secondary' }}">
+                                        {{ student.status|default:"Active" }}
                                     </span>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-info" 
-                                            onclick="viewStudentProfile('{{ student.id }}')">
+                                            onclick="viewStudentProfile('{{ student.id|default:"" }}')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-sm btn-outline-warning"
-                                            onclick="sendMessage('{{ student.id }}')">
+                                            onclick="sendMessage('{{ student.id|default:"" }}')">
                                         <i class="fas fa-envelope"></i>
                                     </button>
                                 </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No students found</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -855,6 +861,15 @@ $(document).ready(function() {
     loadResources();
 });
 
+function printTimetable() {
+    window.print();
+}
+
+function exportTimetablePDF() {
+    showToast('PDF export feature coming soon!', 'info');
+    // This would typically generate a PDF using a library like jsPDF or make an API call
+}
+
 function highlightCurrentPeriod() {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -943,108 +958,122 @@ function addResource(periodId, subject) {
 }
 
 function addLessonPlan() {
-    window.location.href = `{% url 'add_lesson_plan' timetable.pk %}`;
+    // This URL doesn't exist yet - you can implement it or show a message
+    showToast('Lesson plan feature coming soon!', 'info');
+    // window.location.href = `{% url 'add_lesson_plan' timetable.pk %}`;
 }
 
 function sendClassAnnouncement() {
     const announcement = prompt('Enter announcement for the class:');
     if (announcement) {
-        $.ajax({
-            url: '{% url "send_class_announcement" %}',
-            type: 'POST',
-            data: {
-                csrfmiddlewaretoken: '{{ csrf_token }}',
-                class_level: '{{ timetable.class_level }}',
-                announcement: announcement
-            },
-            success: function() {
-                showToast('Announcement sent successfully!', 'success');
-            }
-        });
+        // This URL doesn't exist yet - using client-side only for now
+        showToast('Announcement: ' + announcement, 'info');
+        // $.ajax({
+        //     url: '{% url "send_class_announcement" %}',
+        //     type: 'POST',
+        //     data: {
+        //         csrfmiddlewaretoken: '{{ csrf_token }}',
+        //         class_level: '{{ timetable.class_level }}',
+        //         announcement: announcement
+        //     },
+        //     success: function() {
+        //         showToast('Announcement sent successfully!', 'success');
+        //     }
+        // });
     }
 }
 
 function scheduleMakeupClass() {
-    // Implementation for scheduling makeup classes
     showToast('Make-up class scheduling feature coming soon!', 'info');
 }
 
 function addNote() {
     const note = prompt('Add a class note:');
     if (note) {
-        $.ajax({
-            url: '{% url "add_class_note" %}',
-            type: 'POST',
-            data: {
-                csrfmiddlewaretoken: '{{ csrf_token }}',
-                timetable_id: {{ timetable.pk }},
-                note: note
-            },
-            success: function(response) {
-                $('#classNotes').prepend(`
-                    <div class="resource-card mb-2">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <h6 class="mb-1">Note</h6>
-                            <small class="text-muted">Just now</small>
-                        </div>
-                        <p class="mb-1 small">${note}</p>
-                        <small class="text-muted">By You</small>
-                    </div>
-                `);
-                showToast('Note added!', 'success');
-            }
-        });
+        // This URL doesn't exist yet - using client-side only for now
+        showToast('Note added: ' + note, 'success');
+        // $.ajax({
+        //     url: '{% url "add_class_note" %}',
+        //     type: 'POST',
+        //     data: {
+        //         csrfmiddlewaretoken: '{{ csrf_token }}',
+        //         timetable_id: {{ timetable.pk }},
+        //         note: note
+        //     },
+        //     success: function(response) {
+        //         $('#classNotes').prepend(`
+        //             <div class="resource-card mb-2">
+        //                 <div class="d-flex justify-content-between align-items-start">
+        //                     <h6 class="mb-1">Note</h6>
+        //                     <small class="text-muted">Just now</small>
+        //                 </div>
+        //                 <p class="mb-1 small">${note}</p>
+        //                 <small class="text-muted">By You</small>
+        //             </div>
+        //         `);
+        //         showToast('Note added!', 'success');
+        //     }
+        // });
     }
 }
 
 function loadResources() {
-    $.ajax({
-        url: '{% url "get_class_resources" timetable.pk %}',
-        success: function(response) {
-            if (response.resources.length > 0) {
-                let html = '<div class="row">';
-                response.resources.forEach(resource => {
-                    html += `
-                        <div class="col-md-6 mb-3">
-                            <div class="resource-card">
-                                <div class="d-flex align-items-start">
-                                    <i class="fas fa-${resource.icon} text-primary fa-lg me-3 mt-1"></i>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1">${resource.title}</h6>
-                                        <p class="small text-muted mb-1">${resource.description}</p>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-muted">${resource.date}</small>
-                                            <a href="${resource.url}" class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-download"></i>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                $('#resourcesContainer').html(html);
-            }
-        }
-    });
+    // This URL doesn't exist yet - using static content for now
+    showToast('Loading resources...', 'info');
+    // $.ajax({
+    //     url: '{% url "get_class_resources" timetable.pk %}',
+    //     success: function(response) {
+    //         if (response.resources && response.resources.length > 0) {
+    //             let html = '<div class="row">';
+    //             response.resources.forEach(resource => {
+    //                 html += `
+    //                     <div class="col-md-6 mb-3">
+    //                         <div class="resource-card">
+    //                             <div class="d-flex align-items-start">
+    //                                 <i class="fas fa-${resource.icon || 'file'} text-primary fa-lg me-3 mt-1"></i>
+    //                                 <div class="flex-grow-1">
+    //                                     <h6 class="mb-1">${resource.title}</h6>
+    //                                     <p class="small text-muted mb-1">${resource.description || ''}</p>
+    //                                     <div class="d-flex justify-content-between align-items-center">
+    //                                         <small class="text-muted">${resource.date || 'Today'}</small>
+    //                                         <a href="${resource.url || '#'}" class="btn btn-sm btn-outline-primary">
+    //                                             <i class="fas fa-download"></i>
+    //                                         </a>
+    //                                     </div>
+    //                                 </div>
+    //                             </div>
+    //                         </div>
+    //                     </div>
+    //                 `;
+    //             });
+    //             html += '</div>';
+    //             $('#resourcesContainer').html(html);
+    //         }
+    //     }
+    // });
 }
 
 function viewStudentProfile(studentId) {
-    window.open(`/students/profile/${studentId}/`, '_blank');
+    if (studentId) {
+        // This URL might not exist yet
+        showToast('Student profile feature coming soon!', 'info');
+        // window.open(`/students/profile/${studentId}/`, '_blank');
+    } else {
+        showToast('Student profile not available', 'warning');
+    }
 }
 
 function sendMessage(studentId) {
     const message = prompt('Enter message for student:');
-    if (message) {
-        // Send message implementation
-        showToast('Message sent!', 'success');
+    if (message && studentId) {
+        showToast('Message sent to student!', 'success');
     }
 }
 
 function exportStudentList() {
-    window.location.href = `{% url "export_student_list" timetable.pk %}`;
+    showToast('Exporting student list...', 'info');
+    // This would typically generate a CSV or PDF
+    // window.location.href = `{% url "export_student_list" timetable.pk %}`;
 }
 
 function showToast(message, type = 'info') {

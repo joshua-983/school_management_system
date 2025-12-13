@@ -4068,3 +4068,198 @@ class GradingQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             ]
         
         return context
+
+
+
+class GradingQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """Enhanced View for grading queue - assignments pending grading with detailed statistics"""
+    model = Assignment
+    template_name = 'core/grades/grading_queue.html'
+    context_object_name = 'assignments'
+    paginate_by = 20
+    
+    def test_func(self):
+        """Permission check for accessing grading queue"""
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_queryset(self):
+        """
+        Get assignments with submitted but ungraded student work
+        """
+        user = self.request.user
+        
+        # Base queryset - assignments with submitted but ungraded student assignments
+        # FIXED: Using 'student_assignments' instead of 'submissions'
+        queryset = Assignment.objects.filter(
+            student_assignments__status__in=['SUBMITTED', 'LATE'],  # Submitted but not graded
+        ).distinct().select_related(
+            'subject', 'class_assignment', 'class_assignment__teacher'
+        ).prefetch_related('student_assignments')
+        
+        # Filter by user role
+        if is_teacher(user):
+            queryset = queryset.filter(class_assignment__teacher=user.teacher)
+        
+        # Apply filters from GET parameters
+        subject_id = self.request.GET.get('subject')
+        class_level = self.request.GET.get('class_level')
+        days_overdue = self.request.GET.get('days_overdue')
+        
+        if subject_id:
+            queryset = queryset.filter(subject_id=subject_id)
+        
+        if class_level:
+            queryset = queryset.filter(class_assignment__class_level=class_level)
+        
+        if days_overdue:
+            try:
+                days = int(days_overdue)
+                cutoff_date = timezone.now() - timezone.timedelta(days=days)
+                queryset = queryset.filter(due_date__lt=cutoff_date)
+            except ValueError:
+                pass
+        
+        # Order by most overdue first
+        return queryset.order_by('due_date')
+    
+    def get_ungraded_count_for_assignment(self, assignment):
+        """Get count of ungraded submissions for a specific assignment"""
+        return assignment.student_assignments.filter(
+            status__in=['SUBMITTED', 'LATE']
+        ).count()
+    
+    def get_graded_count_for_assignment(self, assignment):
+        """Get count of graded submissions for a specific assignment"""
+        return assignment.student_assignments.filter(
+            status='GRADED'
+        ).count()
+    
+    def get_total_students_for_assignment(self, assignment):
+        """Get total number of students for this assignment"""
+        return assignment.student_assignments.count()
+    
+    def get_submission_rate_for_assignment(self, assignment):
+        """Get submission rate percentage for an assignment"""
+        total = self.get_total_students_for_assignment(assignment)
+        if total == 0:
+            return 0
+        submitted = total - assignment.student_assignments.filter(status='PENDING').count()
+        return round((submitted / total) * 100, 1)
+    
+    def get_context_data(self, **kwargs):
+        """Enhanced context with detailed statistics for each assignment"""
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        
+        # Get the FULL queryset (not paginated) for statistics
+        full_queryset = self.get_queryset()
+        
+        # Calculate overdue assignments using the FULL queryset
+        one_week_ago = timezone.now() - timezone.timedelta(days=7)
+        two_weeks_ago = timezone.now() - timezone.timedelta(days=14)
+        
+        overdue_week = full_queryset.filter(due_date__lt=one_week_ago).count()
+        overdue_two_weeks = full_queryset.filter(due_date__lt=two_weeks_ago).count()
+        
+        # Calculate assignment-specific statistics for displayed assignments only
+        assignments = context['assignments']  # This is the paginated list
+        assignment_stats = {}
+        total_ungraded = 0
+        total_graded = 0
+        total_submissions = 0
+        
+        for assignment in assignments:
+            ungraded = self.get_ungraded_count_for_assignment(assignment)
+            graded = self.get_graded_count_for_assignment(assignment)
+            total_students = self.get_total_students_for_assignment(assignment)
+            submission_rate = self.get_submission_rate_for_assignment(assignment)
+            
+            assignment_stats[assignment.id] = {
+                'ungraded_count': ungraded,
+                'graded_count': graded,
+                'total_students': total_students,
+                'submission_rate': submission_rate,
+                'completion_percentage': assignment.get_completion_percentage() if hasattr(assignment, 'get_completion_percentage') else 0,
+                'is_overdue': assignment.due_date < timezone.now(),
+            }
+            
+            total_ungraded += ungraded
+            total_graded += graded
+            total_submissions += total_students
+        
+        # Calculate overall statistics using the FULL queryset
+        total_assignments = full_queryset.count()
+        
+        # Calculate total ungraded and graded from ALL assignments (not just displayed)
+        all_ungraded = 0
+        all_graded = 0
+        for assignment in full_queryset:
+            all_ungraded += self.get_ungraded_count_for_assignment(assignment)
+            all_graded += self.get_graded_count_for_assignment(assignment)
+        
+        # Calculate overall completion rate
+        overall_total = all_ungraded + all_graded
+        overall_completion_rate = round((all_graded / overall_total * 100), 1) if overall_total > 0 else 0
+        
+        # Get filter options
+        if is_admin(user):
+            context['subjects'] = Subject.objects.filter(is_active=True).order_by('name')
+            context['class_levels'] = CLASS_LEVEL_CHOICES
+        else:
+            teacher = user.teacher
+            # Get subjects taught by this teacher
+            teacher_subjects = Assignment.objects.filter(
+                class_assignment__teacher=teacher
+            ).values_list('subject_id', flat=True).distinct()
+            context['subjects'] = Subject.objects.filter(
+                id__in=teacher_subjects, is_active=True
+            ).order_by('name')
+            
+            # Get classes taught by this teacher
+            teacher_classes = ClassAssignment.objects.filter(
+                teacher=teacher,
+                is_active=True
+            ).values_list('class_level', flat=True).distinct()
+            context['class_levels'] = [
+                (code, name) for code, name in CLASS_LEVEL_CHOICES 
+                if code in teacher_classes
+            ]
+        
+        # Add current filter values for template
+        context['current_filters'] = {
+            'subject': self.request.GET.get('subject', ''),
+            'class_level': self.request.GET.get('class_level', ''),
+            'days_overdue': self.request.GET.get('days_overdue', ''),
+        }
+        
+        # Update context with all calculated values
+        context.update({
+            'assignment_stats': assignment_stats,
+            'total_assignments': total_assignments,  # Total from FULL queryset
+            'total_ungraded': all_ungraded,  # Total ungraded from ALL assignments
+            'total_graded': all_graded,      # Total graded from ALL assignments
+            'total_submissions': overall_total,
+            'overall_completion_rate': overall_completion_rate,
+            'overdue_week': overdue_week,
+            'overdue_two_weeks': overdue_two_weeks,
+            'urgent_count': overdue_two_weeks,
+            'has_pending_work': all_ungraded > 0,
+            'current_date': timezone.now().date(),
+            'one_week_ago': one_week_ago,
+            'two_weeks_ago': two_weeks_ago,
+        })
+        
+        return context
+    
+    def get_template_names(self):
+        """Allow custom template based on user role"""
+        user = self.request.user
+        
+        if is_admin(user):
+            # Admin might want a different view
+            return ['core/grades/grading_queue_admin.html', 'core/grades/grading_queue.html']
+        elif is_teacher(user):
+            # Teacher-specific view
+            return ['core/grades/grading_queue_teacher.html', 'core/grades/grading_queue.html']
+        
+        return super().get_template_names()

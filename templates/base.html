@@ -1451,54 +1451,80 @@
                 </div>
             </div>
             
-            <!-- Parent Portal - ONLY for Parents -->
+            <!-- Parent Portal - ONLY for Parents (SIMPLIFIED VERSION) -->
             {% if user.parentguardian %}
             <div class="nav-section">
                 <div class="nav-section-title">Parent Portal</div>
                 
+                <!-- My Children -->
                 <div class="nav-item">
-                    <a class="nav-link" data-bs-toggle="collapse" href="#parentPortalMenu">
-                        <i class="bi bi-people-fill"></i>
-                        <span class="nav-text">Parent Portal</span>
-                        <i class="nav-chevron bi bi-chevron-down"></i>
+                    <a class="nav-link" href="{% url 'parent_children_list' %}">
+                        <i class="bi bi-people"></i>
+                        <span class="nav-text">My Children</span>
                     </a>
-                    <div class="sub-menu collapse" id="parentPortalMenu">
-                        <a class="nav-link" href="{% url 'parent_dashboard' %}">
-                            <i class="bi bi-speedometer"></i>
-                            <span class="nav-text">Dashboard</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_children_list' %}">
-                            <i class="bi bi-people"></i>
-                            <span class="nav-text">My Children</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_attendance_list' %}">
-                            <i class="bi bi-calendar-check"></i>
-                            <span class="nav-text">Attendance</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_fee_list' %}">
-                            <i class="bi bi-credit-card"></i>
-                            <span class="nav-text">Fee Payments</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_report_card_list' %}">
-                            <i class="bi bi-card-checklist"></i>
-                            <span class="nav-text">Report Cards</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_messages' %}">
-                            <i class="bi bi-chat-dots"></i>
-                            <span class="nav-text">Messages</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_announcements' %}">
-                            <i class="bi bi-megaphone"></i>
-                            <span class="nav-text">Announcements</span>
-                        </a>
-                        <a class="nav-link" href="{% url 'parent_calendar' %}">
-                            <i class="bi bi-calendar-event"></i>
-                            <span class="nav-text">Calendar</span>
-                        </a>
-                    </div>
+                </div>
+                
+                <!-- Attendance -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_attendance_list' %}">
+                        <i class="bi bi-calendar-check"></i>
+                        <span class="nav-text">Attendance</span>
+                    </a>
+                </div>
+                
+                <!-- Fees -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_fee_list' %}">
+                        <i class="bi bi-credit-card"></i>
+                        <span class="nav-text">Fees</span>
+                    </a>
+                </div>
+                
+                <!-- Grades & Reports -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_report_card_list' %}">
+                        <i class="bi bi-clipboard-data"></i>
+                        <span class="nav-text">Grades & Reports</span>
+                    </a>
+                </div>
+                
+                <!-- Messages -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_messages' %}">
+                        <i class="bi bi-chat-dots"></i>
+                        <span class="nav-text">Messages</span>
+                    </a>
+                </div>
+                
+                <!-- Announcements -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_announcements' %}">
+                        <i class="bi bi-megaphone"></i>
+                        <span class="nav-text">Announcements</span>
+                    </a>
+                </div>
+                
+                <!-- Calendar -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'parent_calendar' %}">
+                        <i class="bi bi-calendar-event"></i>
+                        <span class="nav-text">Calendar</span>
+                    </a>
+                </div>
+                
+                <!-- Assignments -->
+                <div class="nav-item">
+                    <a class="nav-link" href="{% url 'assignment_list' %}">
+                        <i class="bi bi-journal-text"></i>
+                        <span class="nav-text">Assignments</span>
+                    </a>
                 </div>
             </div>
-            {% endif %}
+            
+            {% else %}
+            <!-- ===================================================== -->
+            <!-- REGULAR USER SIDEBAR (Admin, Teacher, Student) -->
+            <!-- ===================================================== -->
             
             <!-- Academics Section -->
             <div class="nav-section">
@@ -1511,8 +1537,8 @@
                         <i class="nav-chevron bi bi-chevron-down"></i>
                     </a>
                     <div class="sub-menu collapse" id="academicsMenu">
-                        <!-- Assignments - Show to students, parents, teachers and admin -->
-                        {% if user.student or user.parentguardian or user.is_superuser or user.teacher %}
+                        <!-- Assignments -->
+                        {% if user.student or user.is_superuser or user.teacher %}
                         <a class="nav-link" href="{% url 'assignment_list' %}">
                             <i class="bi bi-journal-text"></i>
                             <span class="nav-text">Assignments</span>
@@ -1524,15 +1550,15 @@
                             <span class="nav-text">Assignment Calendar</span>
                         </a>
                         
-                        <!-- Attendance - Show to admin, teachers, and parents -->
-                        {% if user.is_superuser or user.teacher or user.parentguardian %}
+                        <!-- Attendance -->
+                        {% if user.is_superuser or user.teacher %}
                         <a class="nav-link" href="{% url 'attendance_dashboard' %}">
                             <i class="bi bi-calendar-check"></i>
                             <span class="nav-text">Attendance</span>
                         </a>
                         {% endif %}
                         
-                        <!-- Classes - Show to admin and teachers -->
+                        <!-- Classes -->
                         {% if user.is_superuser or user.teacher %}
                         <a class="nav-link" href="{% url 'class_assignment_list' %}">
                             <i class="bi bi-people"></i>
@@ -1540,23 +1566,13 @@
                         </a>
                         {% endif %}
                         
-                        <!-- Grades - Show different options based on user type -->
+                        <!-- Grades -->
                         {% if user.is_authenticated %}
-                            <!-- For Students: Only show "My Grades" -->
                             {% if user.student %}
                             <a class="nav-link" href="{% url 'student_grades' %}">
                                 <i class="bi bi-clipboard-data"></i>
                                 <span class="nav-text">My Grades</span>
                             </a>
-                            
-                            <!-- For Parents: Show "Children's Grades" -->
-                            {% elif user.parentguardian %}
-                            <a class="nav-link" href="{% url 'parent_report_card_list' %}">
-                                <i class="bi bi-clipboard-data"></i>
-                                <span class="nav-text">Children's Grades</span>
-                            </a>
-                            
-                            <!-- For Admin and Teachers: Show general "Grades" -->
                             {% elif user.is_superuser or user.teacher %}
                             <a class="nav-link" href="{% url 'grade_list' %}">
                                 <i class="bi bi-clipboard-data"></i>
@@ -1577,15 +1593,10 @@
                                     <i class="bi bi-card-checklist"></i>
                                     <span class="nav-text">Report Cards</span>
                                 </a>
-                            {% elif user.parentguardian %}
-                                <a class="nav-link" href="{% url 'parent_report_card_list' %}">
-                                    <i class="bi bi-card-checklist"></i>
-                                    <span class="nav-text">Report Cards</span>
-                                </a>
                             {% endif %}
                         {% endif %}
                         
-                        <!-- Subjects - Show to admin and teachers -->
+                        <!-- Subjects -->
                         {% if user.is_superuser or user.teacher %}
                         <a class="nav-link" href="{% url 'subject_list' %}">
                             <i class="bi bi-journal-bookmark"></i>
@@ -1596,7 +1607,7 @@
                 </div>
             </div>
 
-            <!-- TIMETABLE MENU - UPDATED WITH ROLE-BASED LINKS -->
+            <!-- TIMETABLE MENU -->
             <div class="nav-section">
                 <div class="nav-section-title">Schedule</div>
                 
@@ -1607,10 +1618,8 @@
                         <i class="nav-chevron bi bi-chevron-down"></i>
                     </a>
                     <div class="sub-menu collapse" id="timetableMenu">
-                        <!-- Admin and Teacher Access -->
                         {% if user.is_superuser or user.teacher %}
                             {% if user.is_superuser %}
-                            <!-- Admin can manage all timetables -->
                             <a class="nav-link" href="{% url 'timetable_list' %}">
                                 <i class="bi bi-gear"></i>
                                 <span class="nav-text">Manage Timetables</span>
@@ -1621,7 +1630,6 @@
                             </a>
                             {% endif %}
                             
-                            <!-- Teachers can view their class timetables -->
                             {% if user.teacher %}
                             <a class="nav-link" href="{% url 'teacher_timetable_list' %}">
                                 <i class="bi bi-calendar-check"></i>
@@ -1629,14 +1637,12 @@
                             </a>
                             {% endif %}
                             
-                            <!-- Both admin and teachers can view personal schedule -->
                             <a class="nav-link" href="{% url 'teacher_timetable_view' %}">
                                 <i class="bi bi-person"></i>
                                 <span class="nav-text">My Weekly Schedule</span>
                             </a>
                         {% endif %}
                         
-                        <!-- Student Access -->
                         {% if user.student %}
                         <a class="nav-link" href="{% url 'student_timetable_view' %}">
                             <i class="bi bi-calendar"></i>
@@ -1644,15 +1650,6 @@
                         </a>
                         {% endif %}
                         
-                        <!-- Parent Access -->
-                        {% if user.parentguardian %}
-                        <a class="nav-link" href="{% url 'student_timetable_view' %}">
-                            <i class="bi bi-calendar"></i>
-                            <span class="nav-text">Children's Timetable</span>
-                        </a>
-                        {% endif %}
-                        
-                        <!-- Quick links for all authenticated users -->
                         {% if user.is_authenticated %}
                         <div class="nav-divider"></div>
                         <a class="nav-link" href="{% url 'timetable_calendar' %}">
@@ -1664,7 +1661,7 @@
                 </div>
             </div>
 
-            <!-- Announcements Menu - For Admin/Teachers -->
+            <!-- Announcements Menu -->
             {% if user.is_superuser or user.teacher %}
             <div class="nav-section">
                 <div class="nav-section-title">Communication</div>
@@ -1689,7 +1686,7 @@
             </div>
             {% endif %}
 
-            <!-- Parent Management - ONLY for Admin/Teachers - FIXED DROPDOWN -->
+            <!-- Parent Management - ONLY for Admin/Teachers -->
             {% if user.is_superuser or user.teacher %}
             <div class="nav-section">
                 <div class="nav-section-title">Management</div>
@@ -1717,7 +1714,6 @@
                             <i class="bi bi-graph-up"></i>
                             <span class="nav-text">Engagement Dashboard</span>
                         </a>
-                        <!-- NEW: Parent Registration Management -->
                         <a class="nav-link" href="{% url 'parent_management_dashboard' %}">
                             <i class="bi bi-person-plus"></i>
                             <span class="nav-text">Parent Registration</span>
@@ -1773,7 +1769,7 @@
             {% endif %}
             
             <!-- Finance Menu -->
-            {% if user.is_superuser or user.teacher or user.parentguardian %}
+            {% if user.is_superuser or user.teacher %}
             <div class="nav-section">
                 <div class="nav-section-title">Finance</div>
                 
@@ -1877,13 +1873,6 @@
                             <i class="bi bi-file-earmark-text"></i>
                             <span class="nav-text">Fee Reports</span>
                         </a>
-                        
-                        {% elif user.parentguardian %}
-                        <!-- Parent Finance Access -->
-                        <a class="nav-link" href="{% url 'parent_fee_list' %}">
-                            <i class="bi bi-credit-card"></i>
-                            <span class="nav-text">Fee Payments</span>
-                        </a>
                         {% endif %}
                     </div>
                 </div>
@@ -1963,6 +1952,8 @@
             </div>
             {% endif %}
 
+            {% endif %} <!-- End of non-parent user sidebar -->
+            
             {% else %}
             <!-- Show these menu items for non-authenticated users -->
             <div class="nav-section">

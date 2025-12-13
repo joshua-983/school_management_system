@@ -335,46 +335,47 @@
             </div>
             
             {% for day_num, day_name in days_order %}
-            {% with day_data=periods_by_day|dict_key:day_name %}
-                {% with periods=day_data|dict_key:forloop.parentloop.counter0 %}
-                <div class="grid-cell {% if periods and periods.is_current %}current{% endif %} {% if periods and periods.is_break %}break{% endif %}" 
-                     data-day="{{ day_num }}" data-period="{{ forloop.parentloop.counter0 }}">
-                    {% if periods %}
-                        {% if periods.periods %}
-                            {% for period in periods.periods %}
-                            <div class="period-chip {% if period.is_current %}current{% endif %} {% if period.is_break %}break{% endif %}"
+                {% with day_periods=periods_by_day|get_item:day_name %}
+                    {% if day_periods %}
+                        {% with period_data=day_periods|get_item:forloop.parentloop.counter0 %}
+                        <div class="grid-cell {% if period_data and period_data.is_current %}current{% endif %} {% if period_data and period_data.is_break %}break{% endif %}" 
+                             data-day="{{ day_num }}" data-period="{{ forloop.parentloop.counter0 }}">
+                            {% if period_data %}
+                            <div class="period-chip {% if period_data.is_current %}current{% endif %} {% if period_data.is_break %}break{% endif %}"
                                  data-bs-toggle="popover"
                                  data-bs-html="true"
                                  data-bs-content="
-                                    <strong>Subject:</strong> {{ period.subject }}<br>
-                                    <strong>Class:</strong> {{ period.class_level }}<br>
-                                    <strong>Time:</strong> {{ period.time }}<br>
-                                    <strong>Room:</strong> {{ period.classroom|default:'TBA' }}<br>
-                                    <strong>Students:</strong> {{ period.student_count }}
+                                    <strong>Subject:</strong> {{ period_data.subject }}<br>
+                                    <strong>Class:</strong> {{ period_data.class_level }}<br>
+                                    <strong>Time:</strong> {{ period_data.time }}<br>
+                                    <strong>Room:</strong> {{ period_data.classroom|default:'TBA' }}<br>
+                                    <strong>Students:</strong> {{ period_data.student_count }}
                                  ">
-                                <div class="chip-time">{{ period.time_short }}</div>
-                                <div class="chip-subject">{{ period.subject_short }}</div>
-                                <div class="chip-class">{{ period.class_short }}</div>
+                                <div class="chip-time">{{ period_data.time_short }}</div>
+                                <div class="chip-subject">{{ period_data.subject_short }}</div>
+                                <div class="chip-class">{{ period_data.class_short }}</div>
                             </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="period-chip {% if periods.is_current %}current{% endif %} {% if periods.is_break %}break{% endif %}">
-                                <div class="chip-time">{{ periods.time_short }}</div>
-                                <div class="chip-subject">{{ periods.subject_short }}</div>
-                                <div class="chip-class">{{ periods.class_short }}</div>
-                            </div>
-                        {% endif %}
+                            {% else %}
+                                {% if forloop.parentloop.counter0 >= 2 and forloop.parentloop.counter0 <= 6 %}
+                                <div class="empty-day">
+                                    <i class="fas fa-coffee text-muted"></i>
+                                    <small>Free</small>
+                                </div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        {% endwith %}
                     {% else %}
+                    <div class="grid-cell" data-day="{{ day_num }}" data-period="{{ forloop.parentloop.counter0 }}">
                         {% if forloop.parentloop.counter0 >= 2 and forloop.parentloop.counter0 <= 6 %}
                         <div class="empty-day">
                             <i class="fas fa-coffee text-muted"></i>
                             <small>Free</small>
                         </div>
                         {% endif %}
+                    </div>
                     {% endif %}
-                </div>
                 {% endwith %}
-            {% endwith %}
             {% endfor %}
             {% endfor %}
         </div>
@@ -390,9 +391,9 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">{{ day_name }}</h6>
                             <span class="badge bg-primary">
-                                {% with day_periods=periods_by_day|dict_key:day_name %}
-                                    {% if day_periods %}
-                                        {{ day_periods|length }} periods
+                                {% with day_data=periods_by_day|get_item:day_name %}
+                                    {% if day_data %}
+                                        {{ day_data|length }} periods
                                     {% else %}
                                         0 periods
                                     {% endif %}
@@ -401,14 +402,19 @@
                         </div>
                     </div>
                     
-                    {% with day_periods=periods_by_day|dict_key:day_name %}
-                        {% if day_periods %}
+                    {% with day_data=periods_by_day|get_item:day_name %}
+                        {% if day_data %}
                             <div class="day-periods">
-                                {% for period_key, period in day_periods.items %}
-                                {% if period and period.subject %}
+                                {% for period_key, period in day_data.items %}
+                                {% if period %}
                                 <div class="period-chip-list mb-2 p-2 border rounded 
                                          {% if period.is_current %}border-success bg-success bg-opacity-10{% endif %}"
-                                     onclick="showPeriodInfo(this)">
+                                     onclick="showPeriodInfo(this)"
+                                     data-subject="{{ period.subject }}"
+                                     data-class="{{ period.class_level }}"
+                                     data-time="{{ period.time }}"
+                                     data-room="{{ period.classroom }}"
+                                     data-students="{{ period.student_count }}">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
                                             <strong>{{ period.time|default:period.time_short }}</strong>
@@ -608,6 +614,12 @@ $(document).ready(function() {
     if ($('#summaryView').is(':visible')) {
         initializeCharts();
     }
+    
+    // Period click handlers
+    $('.period-chip, .period-chip-list').click(function(e) {
+        e.stopPropagation();
+        showPeriodDetails($(this));
+    });
 });
 
 function loadWeekSchedule() {
@@ -627,14 +639,39 @@ function updateWeekView(data) {
     // This would involve re-rendering the grid with the new schedule
 }
 
-function showPeriodInfo(element) {
-    // Extract period info from the clicked element
-    const periodInfo = $(element).find('div').html();
+function showPeriodDetails(element) {
+    const subject = element.data('subject') || element.find('.chip-subject').text();
+    const classLevel = element.data('class') || element.find('.chip-class').text();
+    const time = element.data('time') || element.find('.chip-time').text();
+    const room = element.data('room') || 'TBA';
+    const students = element.data('students') || 'N/A';
+    
     $('#periodDetailsContent').html(`
         <div class="period-details">
             <h6>Period Information</h6>
             <div class="mb-3">
-                ${periodInfo}
+                <table class="table table-sm">
+                    <tr>
+                        <th style="width: 120px;">Subject:</th>
+                        <td>${subject}</td>
+                    </tr>
+                    <tr>
+                        <th>Class:</th>
+                        <td>${classLevel}</td>
+                    </tr>
+                    <tr>
+                        <th>Time:</th>
+                        <td>${time}</td>
+                    </tr>
+                    <tr>
+                        <th>Room:</th>
+                        <td>${room}</td>
+                    </tr>
+                    <tr>
+                        <th>Students:</th>
+                        <td>${students}</td>
+                    </tr>
+                </table>
             </div>
             <hr>
             <div class="row">
@@ -755,9 +792,9 @@ function initializeCharts() {
         new Chart(classCtx.getContext('2d'), {
             type: 'doughnut',
             data: {
-                labels: [{% for class in classes_teaching %}'{{ class }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: {{ classes_teaching|safe }},
                 datasets: [{
-                    data: [{% for count in class_counts %}{{ count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    data: [{% for class in classes_teaching %}1{% if not forloop.last %}, {% endif %}{% endfor %}],
                     backgroundColor: [
                         '#0d6efd', '#198754', '#dc3545', '#fd7e14',
                         '#6f42c1', '#20c997', '#6610f2', '#d63384'
@@ -779,13 +816,21 @@ function initializeCharts() {
     // Day Distribution Chart
     const dayCtx = document.getElementById('dayDistributionChart');
     if (dayCtx) {
+        // Calculate periods per day
+        const dayCounts = [];
+        {% for day_num, day_name in days_order %}
+            {% with day_data=periods_by_day|get_item:day_name %}
+                dayCounts.push({{ day_data|length|default:0 }});
+            {% endwith %}
+        {% endfor %}
+        
         new Chart(dayCtx.getContext('2d'), {
             type: 'bar',
             data: {
-                labels: [{% for day in days_order %}'{{ day.1|slice:":3" }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+                labels: [{% for day_num, day_name in days_order %}'{{ day_name|slice:":3" }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
                 datasets: [{
                     label: 'Periods',
-                    data: [{% for count in day_counts %}{{ count }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    data: dayCounts,
                     backgroundColor: '#0d6efd',
                     borderColor: '#0a58ca',
                     borderWidth: 1

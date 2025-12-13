@@ -565,25 +565,28 @@ def maintenance_details_api(request, maintenance_id):
 @user_passes_test(is_security_admin)
 def security_events(request):
     """Security events view with proper context variables"""
-    events = SecurityEvent.objects.all().order_by('-created_at')[:50]
+    # Get the full QuerySet first
+    events_queryset = SecurityEvent.objects.all().order_by('-created_at')
     
-    # Calculate counts for template
-    unresolved_count = events.filter(is_resolved=False).count()
-    critical_count = events.filter(severity='CRITICAL').count()
+    # Calculate counts from the FULL QuerySet (before slicing)
+    unresolved_count = events_queryset.filter(is_resolved=False).count()
+    critical_count = events_queryset.filter(severity='CRITICAL').count()
     
-    # Count today's events
+    # Count today's events from the FULL QuerySet
     today = timezone.now().date()
-    today_count = events.filter(created_at__date=today).count()
+    today_count = events_queryset.filter(created_at__date=today).count()
+    
+    # Now slice for display (last 50 events)
+    recent_events = events_queryset[:50]
     
     context = {
         'active_tab': 'security_events',
-        'security_events': events,
+        'security_events': recent_events,
         'unresolved_count': unresolved_count,
         'critical_count': critical_count,
         'today_count': today_count,
     }
     return render(request, 'security/events.html', context)
-
 
 @user_passes_test(is_security_admin)
 def alert_rule_list(request):

@@ -28,7 +28,9 @@ from .views.student_views import (
     StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, 
     StudentDeleteView, StudentGradeListView, StudentAttendanceView, 
     StudentFeeListView, StudentProfileView, StudentDashboardView,
-    StudentParentManagementView,
+    StudentParentManagementView, StudentAssignmentDocumentView, StudentAssignmentLibraryView,
+    StudentAssignmentDetailView, StudentGradedAssignmentsView, StudentSubmittedAssignmentsView,
+    DownloadAssignmentDocumentView,
 )
 
 # ==============================
@@ -160,7 +162,10 @@ from .views.timetable_views import (
     TimetableCalendarView,  print_timetable, get_subjects_for_class, get_available_teachers,
     calendar_data, day_events, event_details, export_calendar,
     timetable_archive_view, timetable_deactivate_view, timetable_duplicate_view, print_weekly_timetable,
-     get_class_details, get_subject_details, get_assignment_details
+     get_class_details, get_subject_details, get_assignment_details,
+    # ADD MISSING URL functions
+    add_class_resource, get_class_resources, add_class_note, send_class_announcement,
+    export_student_list, get_attendance_form
 )
 
 from .views.notifications_views import (
@@ -235,7 +240,7 @@ urlpatterns = [
     path('accounts/password-change/', accounts_views.PasswordChangeView.as_view(), name='accounts_password_change'),
     
     # ==============================
-    # STUDENT MANAGEMENT URLS
+    # STUDENT MANAGEMENT URLS (Admin/Teacher only)
     # ==============================
     path('students/', include([
         path('', StudentListView.as_view(), name='student_list'),
@@ -247,15 +252,28 @@ urlpatterns = [
         path('<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create'),
         path('<int:student_id>/fees/add/', FeeCreateView.as_view(), name='fee_create'),
         path('<int:student_id>/attendance/', AttendanceDashboardView.as_view(), name='student_attendance_summary'),
+        path('submit/<int:pk>/', SubmitAssignmentView.as_view(), name='student_submit_assignment'),
     ])),
     
-    # Student Portal URLs
+    # ==============================
+    # STUDENT PORTAL URLS (Student access only)
+    # ==============================
     path('student/', include([
         path('dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
         path('profile/', StudentProfileView.as_view(), name='student_profile'),
         path('grades/', StudentGradeListView.as_view(), name='student_grades'),
         path('attendance/', StudentAttendanceView.as_view(), name='student_attendance'),
         path('fees/', StudentFeeListView.as_view(), name='student_fees'),
+        
+        # Student Assignment URLs
+        path('assignments/', include([
+            path('', StudentAssignmentLibraryView.as_view(), name='student_assignment_library'),
+            path('documents/', StudentAssignmentDocumentView.as_view(), name='student_assignment_documents'),
+            path('graded/', StudentGradedAssignmentsView.as_view(), name='student_graded_assignments'),
+            path('submitted/', StudentSubmittedAssignmentsView.as_view(), name='student_submitted_assignments'),
+            path('<int:pk>/', StudentAssignmentDetailView.as_view(), name='student_assignment_detail'),
+            path('<int:pk>/download/', DownloadAssignmentDocumentView.as_view(), name='download_assignment_document'),
+        ])),
     ])),
     
     # ==============================
@@ -615,7 +633,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # TIMETABLE URLS - UPDATED STRUCTURE
+    # TIMETABLE URLS - UPDATED STRUCTURE WITH MISSING PATTERNS
     # ==============================
     # Custom Admin Timetable URLs (these will be under /admin/timetable/ in main urls.py)
     path('timetable/', include([
@@ -645,6 +663,17 @@ urlpatterns = [
         path('calendar/day-events/', day_events, name='day_events'),
         path('calendar/event/<str:event_id>/', event_details, name='event_details'),
         path('calendar/export/', export_calendar, name='export_calendar'),
+        
+        # Class resources and attendance
+        path('class/<int:timetable_id>/resources/', get_class_resources, name='get_class_resources'),
+        path('add-resource/', add_class_resource, name='add_class_resource'),
+        path('add-note/', add_class_note, name='add_class_note'),
+        path('send-announcement/', send_class_announcement, name='send_class_announcement'),
+        path('export-students/<int:pk>/', export_student_list, name='export_student_list'),
+        path('get-attendance-form/', get_attendance_form, name='get_attendance_form'),
+        
+        # Print views
+        path('print/', print_weekly_timetable, name='print_weekly_timetable'),
     ])),
     
     # Admin Time Slots (under /admin/timeslots/)
@@ -656,22 +685,28 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # TEACHER TIMETABLE URLS
+    # TEACHER TIMETABLE URLS - UPDATED WITH MISSING PATTERNS
     # ==============================
     path('teacher/timetable/', include([
         path('', TeacherTimetableListView.as_view(), name='teacher_timetable_list'),
         path('<int:pk>/', TeacherTimetableDetailView.as_view(), name='teacher_timetable_detail'),
         path('my-schedule/', TeacherTimetableView.as_view(), name='teacher_my_schedule'),
         path('ajax/entries/', get_timetable_entries, name='teacher_timetable_ajax_entries'),
+        # Add print and resource URLs for teacher
+        path('<int:pk>/print/', print_timetable, name='teacher_print_timetable'),
+        path('class/<int:timetable_id>/resources/', get_class_resources, name='teacher_get_class_resources'),
+        path('add-resource/', add_class_resource, name='teacher_add_class_resource'),
+        path('get-attendance-form/', get_attendance_form, name='teacher_get_attendance_form'),
     ])),
     
     # ==============================
-    # STUDENT TIMETABLE URLS
+    # STUDENT TIMETABLE URLS - UPDATED WITH MISSING PATTERNS
     # ==============================
     path('student/timetable/', include([
         path('', StudentTimetableView.as_view(), name='student_timetable'),
         # Add this line to the student timetable URLs section (around line 491):
         path('print/', print_weekly_timetable, name='print_weekly_timetable'),
+        path('<int:pk>/print/', print_timetable, name='student_print_timetable'),
     ])),
     
     # ==============================
@@ -687,10 +722,22 @@ urlpatterns = [
         path('generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
         path('api/entries/', get_timetable_entries, name='timetable_ajax_entries'),
         
+        # Print functionality
+        path('print/', print_weekly_timetable, name='timetable_print'),
+        path('<int:pk>/print/', print_timetable, name='timetable_print_single'),
+        
+        # Class details
         path('class-details/<int:period_id>/', get_class_details, name='get_class_details'),
         path('subject-details/<int:subject_id>/', get_subject_details, name='get_subject_details'),
         path('assignment-details/<int:assignment_id>/', get_assignment_details, name='get_assignment_details'),
-
+        
+        # Class resources and attendance
+        path('class/<int:timetable_id>/resources/', get_class_resources, name='timetable_get_class_resources'),
+        path('add-resource/', add_class_resource, name='timetable_add_class_resource'),
+        path('add-note/', add_class_note, name='timetable_add_class_note'),
+        path('send-announcement/', send_class_announcement, name='timetable_send_class_announcement'),
+        path('export-students/<int:pk>/', export_student_list, name='timetable_export_student_list'),
+        path('get-attendance-form/', get_attendance_form, name='timetable_get_attendance_form'),
     ])),
     
     # Common timeslot views (non-admin)
@@ -731,6 +778,12 @@ urlpatterns = [
         path('students/', StudentListAPIView.as_view(), name='api_students'),
         path('students/active/', ActiveStudentsAPIView.as_view(), name='api_students_active'),
         path('academic-terms/', AcademicTermAPIView.as_view(), name='api_academic_terms'),
+        
+        # ==============================
+        # STUDENT ASSIGNMENT API ENDPOINTS
+        # ==============================
+        path('student/assignments/', StudentAssignmentLibraryView.as_view(), name='api_student_assignments'),
+        path('student/assignments/active/', StudentAssignmentLibraryView.as_view(), name='api_student_assignments_active'),
         
         # ==============================
         # PARENT API ENDPOINTS

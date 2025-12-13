@@ -1,4 +1,5 @@
-from django.db.models import Q, Count, Avg, Sum
+import os
+from django.db.models import Q, Count, Avg, Sum, F, ExpressionWrapper, DecimalField
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView, FormView
 from django.utils.decorators import method_decorator
@@ -10,10 +11,12 @@ from datetime import timedelta
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 import logging
-
-from .base_views import *
+from django.http import FileResponse
 from ..forms import StudentProfileForm, StudentRegistrationForm, StudentParentAssignmentForm
 from ..models import Student, ClassAssignment, StudentAttendance, Fee, Grade, AcademicTerm, StudentAssignment, Timetable, FeePayment, Bill, BillPayment, BillItem, FeeInstallment, FeeDiscount
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView, FormView, View
+from django.urls import reverse, reverse_lazy
+from .base_views import is_student, is_teacher, is_admin, is_parent
 
 logger = logging.getLogger(__name__)
 
@@ -29,34 +32,192 @@ CLASS_LEVEL_CHOICES = [
     ('J3', 'JHS 3'),
 ]
 
+from django.views.generic import ListView
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.db.models import Count, Q
+from django.utils import timezone
+from django.shortcuts import redirect
+from django.urls import reverse
+import logging
+
+logger = logging.getLogger(__name__)
+
 class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """Comprehensive student list view with role-based access control"""
     model = Student
     template_name = 'core/students/student_list.html'
     context_object_name = 'students'
+    paginate_by = 20
     
     def test_func(self):
-        return is_admin(self.request.user) or is_teacher(self.request.user)
+        """All authenticated users can access, but see different views"""
+        return self.request.user.is_authenticated
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Handle redirection based on user role"""
+        # First, authenticate
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        
+        # Redirect students to their assignment library
+        if is_student(request.user):
+            # Check if student is trying to access assignment-related filters
+            has_document = request.GET.get('has_document')
+            status = request.GET.get('status')
+            q = request.GET.get('q')
+            
+            # If student is using assignment filters, redirect to assignment library
+            if has_document or status or q:
+                return redirect(self.get_student_redirect_url())
+            
+            # Otherwise show limited profile view
+            return self.student_profile_view(request)
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_student_redirect_url(self):
+        """Get the redirect URL for student assignment filters"""
+        url = reverse('student_assignment_library')
+        params = self.request.GET.copy()
+        
+        # Keep only assignment-related parameters
+        assignment_params = {}
+        if params.get('has_document'):
+            assignment_params['has_document'] = params['has_document']
+        if params.get('status'):
+            assignment_params['status'] = params['status']
+        if params.get('q'):
+            assignment_params['q'] = params['q']
+        
+        if assignment_params:
+            from urllib.parse import urlencode
+            url += '?' + urlencode(assignment_params)
+        
+        return url
+    
+    def student_profile_view(self, request):
+        """Render a limited view for students (their own info only)"""
+        from django.shortcuts import render
+        from ..models import StudentAssignment
+        
+        student = request.user.student
+        
+        # Get context data similar to StudentDashboardView
+        context = {
+            'student': student,
+            'is_student': True,
+            'is_admin': False,
+            'is_teacher': False,
+            'class_levels': CLASS_LEVEL_CHOICES,
+            'time_now': timezone.now(),
+        }
+        
+        # Add statistics about the student
+        context['total_assignments'] = StudentAssignment.objects.filter(
+            student=student
+        ).count()
+        
+        context['pending_assignments'] = StudentAssignment.objects.filter(
+            student=student,
+            status__in=['PENDING', 'LATE']
+        ).count()
+        
+        context['graded_assignments'] = StudentAssignment.objects.filter(
+            student=student,
+            status='GRADED'
+        ).count()
+        
+        # Show limited student info (just themselves)
+        context['students'] = [student]
+        
+        return render(request, 'core/students/student_limited_list.html', context)
     
     def get_queryset(self):
-        # Get ALL students without any caching for debugging
-        queryset = Student.objects.all()
+        """Get queryset based on user role"""
+        if is_student(self.request.user):
+            # Students only see themselves
+            return Student.objects.filter(id=self.request.user.student.id)
         
+        # Admin/Teacher: Get ALL students with any caching for debugging
+        queryset = Student.objects.all().select_related('user')
+        
+        # Apply filters for admin/teacher
         class_level = self.request.GET.get('class_level')
         if class_level:
             queryset = queryset.filter(class_level=class_level)
         
+        gender = self.request.GET.get('gender')
+        if gender:
+            queryset = queryset.filter(gender=gender)
+        
+        status = self.request.GET.get('status')
+        if status:
+            if status == 'active':
+                queryset = queryset.filter(is_active=True)
+            elif status == 'inactive':
+                queryset = queryset.filter(is_active=False)
+        
+        # Search functionality
+        search_query = self.request.GET.get('q')
+        if search_query:
+            queryset = queryset.filter(
+                Q(student_id__icontains=search_query) |
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(user__email__icontains=search_query)
+            )
+        
+        # Date filters - FIXED: Use admission_date instead of enrollment_date
+        admission_date_from = self.request.GET.get('admission_date_from')
+        admission_date_to = self.request.GET.get('admission_date_to')
+        if admission_date_from:
+            queryset = queryset.filter(admission_date__gte=admission_date_from)
+        if admission_date_to:
+            queryset = queryset.filter(admission_date__lte=admission_date_to)
+        
+        # Ordering
+        order_by = self.request.GET.get('order_by', 'student_id')
+        if order_by in ['student_id', 'first_name', 'last_name', 'class_level', 'admission_date']:
+            queryset = queryset.order_by(order_by)
+        
         # DEBUG: Print detailed student information
-        print(f"🔍 [STUDENT LIST DEBUG] Total students in database: {queryset.count()}")
+        logger.debug(f"[STUDENT LIST] Total students in database: {queryset.count()}")
         students_info = list(queryset.values_list('id', 'student_id', 'first_name', 'last_name', 'class_level', 'is_active'))
-        print(f"🔍 [STUDENT LIST DEBUG] Students in queryset: {students_info}")
+        logger.debug(f"[STUDENT LIST] Students in queryset: {students_info}")
         
         return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['class_levels'] = CLASS_LEVEL_CHOICES
         
-        # Calculate statistics
+        # Add user role flags
+        context['is_admin'] = is_admin(self.request.user)
+        context['is_teacher'] = is_teacher(self.request.user)
+        context['is_student'] = is_student(self.request.user)
+        
+        # Common context for all users
+        context['class_levels'] = CLASS_LEVEL_CHOICES
+        context['time_now'] = timezone.now()
+        
+        # If student, show limited info
+        if is_student(self.request.user):
+            student = self.request.user.student
+            context['current_student'] = student
+            context['total_students'] = 1
+            
+            # Add some basic statistics for student view
+            from ..models import StudentAssignment
+            assignments = StudentAssignment.objects.filter(student=student)
+            context['assignment_stats'] = {
+                'total': assignments.count(),
+                'pending': assignments.filter(status__in=['PENDING', 'LATE']).count(),
+                'submitted': assignments.filter(status__in=['SUBMITTED', 'LATE']).count(),
+                'graded': assignments.filter(status='GRADED').count(),
+            }
+            
+            return context
+        
+        # Admin/Teacher context
         queryset = self.get_queryset()
         
         # Total students count
@@ -69,7 +230,7 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         # Count distinct active classes
         context['class_count'] = queryset.values('class_level').distinct().count()
         
-        # Class distribution for chart (optional)
+        # Class distribution for chart
         class_distribution = queryset.values('class_level').annotate(
             count=Count('id')
         ).order_by('class_level')
@@ -77,12 +238,31 @@ class StudentListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             item['class_level']: item['count'] for item in class_distribution
         }
         
+        # Status counts
+        context['active_count'] = queryset.filter(is_active=True).count()
+        context['inactive_count'] = queryset.filter(is_active=False).count()
+        
+        # Recent enrollments (last 30 days) - FIXED: Use admission_date instead of enrollment_date
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+        context['recent_enrollments'] = queryset.filter(
+            admission_date__gte=thirty_days_ago
+        ).count()
+        
+        # Add current filters to context
+        context['current_filters'] = {
+            'class_level': self.request.GET.get('class_level', ''),
+            'gender': self.request.GET.get('gender', ''),
+            'status': self.request.GET.get('status', ''),
+            'q': self.request.GET.get('q', ''),
+            'admission_date_from': self.request.GET.get('admission_date_from', ''),  # Updated
+            'admission_date_to': self.request.GET.get('admission_date_to', ''),  # Updated
+            'order_by': self.request.GET.get('order_by', 'student_id'),
+        }
+        
         # DEBUG: Print context data
-        print(f"🔍 [STUDENT LIST DEBUG] Context total_students: {context['total_students']}")
-        print(f"🔍 [STUDENT LIST DEBUG] Students in context: {list(context['students'].values_list('id', 'student_id'))}")
+        logger.debug(f"[STUDENT LIST] Context total_students: {context['total_students']}")
         
         return context
-
 
 class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Student
@@ -125,6 +305,7 @@ class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     def post(self, request, *args, **kwargs):
         """Handle parent management actions"""
         if not is_admin(request.user):
+            from django.core.exceptions import PermissionDenied
             raise PermissionDenied("Only admins can manage parents")
         
         self.object = self.get_object()
@@ -142,6 +323,8 @@ class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     
     def add_parent(self, request):
         """Add existing parent to student"""
+        from ..models import ParentGuardian
+        
         parent_id = request.POST.get('parent_id')
         try:
             parent = ParentGuardian.objects.get(pk=parent_id)
@@ -154,6 +337,8 @@ class StudentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     
     def remove_parent(self, request):
         """Remove parent from student"""
+        from ..models import ParentGuardian
+        
         parent_id = request.POST.get('parent_id')
         try:
             parent = ParentGuardian.objects.get(pk=parent_id)
@@ -195,6 +380,8 @@ class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     
     def get_context_data(self, **kwargs):
         """Add parent statistics to context"""
+        from ..models import ParentGuardian
+        
         context = super().get_context_data(**kwargs)
         # Add parent statistics for the template
         context['total_parents'] = ParentGuardian.objects.count()
@@ -243,6 +430,7 @@ class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
                 parent_phone = "0240000000"  # Default placeholder
             
             # Create parent record
+            from ..models import ParentGuardian
             parent = ParentGuardian.objects.create(
                 relationship=form.cleaned_data.get('parent_relationship', 'G'),
                 email=parent_email,
@@ -254,7 +442,7 @@ class StudentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             parent.students.add(student)
             
             # Create user account for parent
-            if parent_email and parent_email != "parent.{student.student_id}@school.edu.gh":
+            if parent_email and parent_email != f"parent.{student.student_id}@school.edu.gh":
                 try:
                     parent.create_user_account()
                     messages.info(self.request, f'Created parent account for {parent_email}')
@@ -538,7 +726,6 @@ class StudentAttendanceView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         context['monthly_summary'] = monthly_summary
         
         # Add academic terms for the filter dropdown
-        from ..models import AcademicTerm
         context['academic_terms'] = AcademicTerm.objects.all().order_by('-start_date')
         
         # Calculate current streak (simplified implementation)
@@ -600,10 +787,10 @@ class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         # Calculate payment status counts
         status_counts = {
-            'paid': fees.filter(payment_status='PAID').count(),
-            'partial': fees.filter(payment_status='PARTIAL').count(),
-            'unpaid': fees.filter(payment_status='UNPAID').count(),
-            'overdue': fees.filter(payment_status='OVERDUE').count(),
+            'paid': fees.filter(payment_status='paid').count(),
+            'partial': fees.filter(payment_status='partial').count(),
+            'unpaid': fees.filter(payment_status='unpaid').count(),
+            'overdue': fees.filter(payment_status='overdue').count(),
         }
         
         # Summary by academic year and term
@@ -615,7 +802,6 @@ class StudentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         ).order_by('-academic_year', '-term')
         
         # Get recent payments
-        from ..models import FeePayment
         recent_payments = FeePayment.objects.filter(
             fee__student=student
         ).select_related('fee', 'fee__category').order_by('-payment_date')[:5]
@@ -650,22 +836,36 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         academic_year = f"{current_year}/{current_year + 1}"
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         
-        # Get assignments with better organization
+        # ============================================
+        # ASSIGNMENT DATA - ENHANCED WITH LIBRARY FEATURES
+        # ============================================
+        
+        # Get assignments with better organization and document info
         assignments = StudentAssignment.objects.filter(
             student=student
         ).select_related(
             'assignment', 
             'assignment__subject',
             'assignment__class_assignment'
+        ).prefetch_related(
+            'assignment__student_assignments'
         ).order_by('assignment__due_date')
         
-        # Categorize assignments for better UX
+        # Assignment Library Statistics
+        total_assignments = assignments.count()
+        assignments_with_docs = assignments.filter(assignment__attachment__isnull=False).count()
+        submitted_count = assignments.filter(status__in=['SUBMITTED', 'LATE', 'GRADED']).count()
+        
+        # Categorize assignments for enhanced dashboard
         today = timezone.now()
+        
+        # Overdue assignments
         context['overdue_assignments'] = [
             sa for sa in assignments 
             if sa.assignment.due_date < today and sa.status in ['PENDING', 'LATE']
         ]
         
+        # Due soon (within 3 days)
         context['due_soon_assignments'] = [
             sa for sa in assignments 
             if sa.assignment.due_date <= today + timedelta(days=3) 
@@ -673,29 +873,55 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             and sa.assignment.due_date >= today
         ]
         
+        # Upcoming assignments
         context['upcoming_assignments'] = [
             sa for sa in assignments 
             if sa.assignment.due_date > today + timedelta(days=3)
             and sa.status in ['PENDING', 'LATE']
         ]
         
+        # Completed assignments (submitted or graded)
         context['completed_assignments'] = [
             sa for sa in assignments 
             if sa.status in ['SUBMITTED', 'GRADED']
         ]
         
+        # Recent assignments with documents
+        context['recent_assignments_with_docs'] = assignments.filter(
+            assignment__attachment__isnull=False
+        ).order_by('-assignment__created_at')[:5]
+        
         # Progress statistics
-        total_assignments = assignments.count()
         completed_count = len(context['completed_assignments'])
         context['completion_rate'] = round((completed_count / total_assignments * 100), 1) if total_assignments > 0 else 0
         
-        # Assignment counts for dashboard
+        # Assignment counts for dashboard cards
         pending_assignments = len([a for a in assignments if a.status in ['PENDING', 'LATE']])
-        submitted_assignments = len([a for a in assignments if a.status in ['SUBMITTED', 'GRADED']])
+        submitted_assignments = len([a for a in assignments if a.status in ['SUBMITTED', 'LATE']])
         graded_assignments = len([a for a in assignments if a.status == 'GRADED'])
         due_soon_assignments = len(context['due_soon_assignments'])
         
-        # Comprehensive fee data
+        # Assignment Library Stats
+        context['total_assignments'] = total_assignments
+        context['assignments_with_docs'] = assignments_with_docs
+        context['submission_rate'] = round((submitted_count / total_assignments * 100), 1) if total_assignments > 0 else 0
+        
+        # Assignment stats dictionary for cards
+        context['assignment_stats'] = {
+            'total': total_assignments,
+            'pending': pending_assignments,
+            'submitted': submitted_assignments,
+            'graded': graded_assignments,
+            'with_docs': assignments_with_docs,
+            'submission_rate': context['submission_rate'],
+            'due_soon': due_soon_assignments,
+            'overdue': len(context['overdue_assignments']),
+        }
+        
+        # ============================================
+        # FEE DATA - COMPREHENSIVE (FIXED None HANDLING)
+        # ============================================
+        
         fees = Fee.objects.filter(student=student).select_related('category')
         
         # Calculate fee totals with proper handling of None values
@@ -705,23 +931,24 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             total_balance=Sum('balance')
         )
         
+        # Use or 0 to handle None values
         total_payable = fee_aggregates['total_payable'] or 0
         total_paid = fee_aggregates['total_paid'] or 0
-        total_balance = total_payable - total_paid
+        total_balance = total_payable - total_paid  # Calculate balance directly
         
-        # More accurate fee status calculation
-        if total_balance <= 0 and fees.exists():
-            fee_status = 'PAID'
+        # More accurate fee status calculation with None handling
+        if total_balance is not None and total_balance <= 0 and fees.exists():
+            fee_status = 'paid'
             fee_status_class = 'success'
             fee_status_icon = 'bi-check-circle'
             fee_message = 'All fees are paid'
-        elif total_paid > 0:
-            fee_status = 'PARTIAL'
+        elif total_paid is not None and total_paid > 0:
+            fee_status = 'partial'
             fee_status_class = 'warning'
             fee_status_icon = 'bi-exclamation-circle'
-            fee_message = f'GH₵{total_balance} balance remaining'
+            fee_message = f'GH₵{total_balance:,.2f} balance remaining'
         else:
-            fee_status = 'UNPAID'
+            fee_status = 'unpaid'
             fee_status_class = 'danger'
             fee_status_icon = 'bi-x-circle'
             fee_message = 'No payments made yet'
@@ -729,15 +956,15 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         # Check for overdue fees
         overdue_fees = fees.filter(
             due_date__lt=timezone.now().date(),
-            payment_status__in=['UNPAID', 'PARTIAL', 'OVERDUE']
+            payment_status__in=['unpaid', 'partial', 'overdue']
         ).exists()
         
         # Get fee status breakdown
         fee_status_counts = {
-            'paid': fees.filter(payment_status='PAID').count(),
-            'partial': fees.filter(payment_status='PARTIAL').count(),
-            'unpaid': fees.filter(payment_status='UNPAID').count(),
-            'overdue': fees.filter(payment_status='OVERDUE').count(),
+            'paid': fees.filter(payment_status='paid').count(),
+            'partial': fees.filter(payment_status='partial').count(),
+            'unpaid': fees.filter(payment_status='unpaid').count(),
+            'overdue': fees.filter(payment_status='overdue').count(),
             'total': fees.count()
         }
         
@@ -754,7 +981,6 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
         )
         
         # Get recent payments for dashboard
-        from ..models import FeePayment
         recent_payments = FeePayment.objects.filter(
             fee__student=student
         ).select_related('fee', 'fee__category').order_by('-payment_date')[:3]
@@ -766,11 +992,11 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'total_balance': total_balance,
             'overdue_count': fees.filter(
                 due_date__lt=timezone.now().date(),
-                payment_status__in=['UNPAID', 'PARTIAL']
+                payment_status__in=['unpaid', 'partial']
             ).count(),
-            'paid_count': fees.filter(payment_status='PAID').count(),
-            'partial_count': fees.filter(payment_status='PARTIAL').count(),
-            'unpaid_count': fees.filter(payment_status='UNPAID').count(),
+            'paid_count': fees.filter(payment_status='paid').count(),
+            'partial_count': fees.filter(payment_status='partial').count(),
+            'unpaid_count': fees.filter(payment_status='unpaid').count(),
             'status': fee_status,
             'status_class': fee_status_class,
             'status_icon': fee_status_icon,
@@ -778,18 +1004,27 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'has_fees': fees.exists(),
         }
         
+        # ============================================
+        # GRADE DATA
+        # ============================================
+        
         # Calculate average grade for current term
         current_grades = Grade.objects.filter(
             student=student,
             academic_year=academic_year,
             term=current_term.term if current_term else 1
         )
-        average_grade = current_grades.aggregate(Avg('total_score'))['total_score__avg'] or 0
+        average_grade_result = current_grades.aggregate(Avg('total_score'))
+        average_grade = average_grade_result['total_score__avg'] or 0
         
         # Get recent grades
         recent_grades = Grade.objects.filter(
             student=student
         ).select_related('subject').order_by('-last_updated')[:5]
+        
+        # ============================================
+        # ATTENDANCE DATA
+        # ============================================
         
         # Get attendance summary for current month
         current_month = timezone.now().month
@@ -806,10 +1041,14 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             total=Count('id')
         )
         
-        # Calculate attendance percentage
+        # Calculate attendance percentage with None handling
         total_attendance = attendance_summary['total'] or 0
         present_count = attendance_summary['present'] or 0
         attendance_percentage = round((present_count / total_attendance * 100), 1) if total_attendance > 0 else 0
+        
+        # ============================================
+        # TIMETABLE DATA
+        # ============================================
         
         # Get today's timetable
         today_weekday = timezone.now().weekday()
@@ -823,11 +1062,110 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'entries__teacher'
         ).first()
         
-        # Update context with all data
+        # ============================================
+        # KEYBOARD SHORTCUTS FOR ENHANCED NAVIGATION
+        # ============================================
+        
+        context['keyboard_shortcuts'] = {
+            'assignment_library': 'Alt + L',
+            'download_document': 'Alt + D',
+            'navigation_dashboard': 'Alt + 1',
+            'navigation_assignments': 'Alt + 2',
+            'navigation_grades': 'Alt + 3',
+            'navigation_fees': 'Alt + 4',
+            'navigation_attendance': 'Alt + 5',
+        }
+        
+        # ============================================
+        # QUICK ACTIONS FOR DASHBOARD
+        # ============================================
+        
+        context['quick_actions'] = [
+            {
+                'title': 'Assignment Library',
+                'icon': 'bi-journal-text',
+                'url': reverse('student_assignment_library'),
+                'color': 'purple',
+                'description': 'Access all assignments with documents',
+                'shortcut': 'Alt + L'
+            },
+            {
+                'title': 'Submit Assignment',
+                'icon': 'bi-upload',
+                'url': reverse('student_assignment_library'),
+                'color': 'primary',
+                'description': 'Submit pending assignments',
+                'shortcut': 'Alt + S'
+            },
+            {
+                'title': 'View Grades',
+                'icon': 'bi-award',
+                'url': reverse('student_grades'),
+                'color': 'success',
+                'description': 'Check your grades and performance',
+                'shortcut': 'Alt + G'
+            },
+            {
+                'title': 'Pay Fees',
+                'icon': 'bi-cash-coin',
+                'url': reverse('student_fees'),
+                'color': 'warning',
+                'description': 'View and pay school fees',
+                'shortcut': 'Alt + F'
+            },
+            {
+                'title': 'View Timetable',
+                'icon': 'bi-calendar-week',
+                'url': reverse('student_timetable'),
+                'color': 'info',
+                'description': 'See your class schedule',
+                'shortcut': 'Alt + T'
+            },
+        ]
+        
+        # ============================================
+        # RECENT ACTIVITY
+        # ============================================
+        
+        # Get recent activity from multiple sources
+        recent_activities = []
+        
+        # Recent graded assignments
+        for assignment in assignments.filter(status='GRADED').order_by('-graded_date')[:3]:
+            recent_activities.append({
+                'type': 'assignment_graded',
+                'title': f'"{assignment.assignment.title}" graded',
+                'description': f'Score: {assignment.score}/{assignment.assignment.max_score}',
+                'icon': 'bi-check-circle-fill',
+                'color': 'success',
+                'time': assignment.graded_date if assignment.graded_date else assignment.assignment.due_date,
+                'url': reverse('student_assignment_detail', kwargs={'pk': assignment.pk})
+            })
+        
+        # Recent payments
+        for payment in recent_payments:
+            recent_activities.append({
+                'type': 'payment_made',
+                'title': f'Fee payment: GH₵{payment.amount:,.2f}',
+                'description': payment.fee.category.name,
+                'icon': 'bi-cash-stack',
+                'color': 'success',
+                'time': payment.payment_date,
+                'url': reverse('student_fees')
+            })
+        
+        # Sort activities by time
+        recent_activities.sort(key=lambda x: x['time'], reverse=True)
+        context['recent_activities'] = recent_activities[:5]  # Limit to 5 most recent
+        
+        # ============================================
+        # UPDATE CONTEXT WITH ALL DATA
+        # ============================================
+        
         context.update({
             'student': student,
             
-            # Assignment data
+            # Enhanced Assignment data
             'assignments': assignments,
             'pending_assignments': pending_assignments,
             'submitted_assignments': submitted_assignments,
@@ -864,6 +1202,12 @@ class StudentDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             'current_term': current_term,
             'today': timezone.now().date(),
             'now': timezone.now(),
+            
+            # Performance indicators
+            'performance_score': round((context['completion_rate'] + attendance_percentage + (average_grade if average_grade else 0)) / 3, 1),
+            'has_missing_assignments': pending_assignments > 0,
+            'has_overdue_assignments': len(context['overdue_assignments']) > 0,
+            'needs_attention': pending_assignments > 0 or len(context['overdue_assignments']) > 0 or total_balance > 0,
         })
         
         return context
@@ -898,7 +1242,7 @@ class StudentParentManagementView(LoginRequiredMixin, UserPassesTestMixin, FormV
         student = self.get_student()
         
         # Get all parents (for linking existing ones)
-        all_parents = ParentGuardian.objects.all().select_related('user')
+        all_parents = Student.parents.field.model.objects.all().select_related('user')
         
         context.update({
             'student': student,
@@ -933,3 +1277,278 @@ class StudentParentManagementView(LoginRequiredMixin, UserPassesTestMixin, FormV
     def get_success_url(self):
         return reverse_lazy('student_detail', kwargs={'pk': self.kwargs['pk']})
 
+
+#student assignment documents view
+
+class StudentAssignmentDocumentView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """View assignment documents provided by teacher"""
+    model = StudentAssignment
+    template_name = 'core/students/assignment_documents.html'
+    context_object_name = 'assignments'
+    paginate_by = 10
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_queryset(self):
+        student = self.request.user.student
+    
+        # FIXED: Filter out empty strings
+        from django.db.models import Q
+        queryset = StudentAssignment.objects.filter(
+            student=student
+        ).filter(
+            Q(assignment__attachment__isnull=False) & 
+            ~Q(assignment__attachment='')  # Exclude empty strings
+        ).select_related('assignment')
+    
+        # Apply other filters...
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.request.user.student
+        
+        # Get statistics
+        assignments = self.get_queryset()
+        context['assignments_with_docs'] = assignments.filter(
+            assignment__attachment__isnull=False
+        ).count()
+        
+        # Calculate submission rate
+        total_assignments = assignments.count()
+        submitted_count = assignments.filter(status__in=['SUBMITTED', 'LATE', 'GRADED']).count()
+        context['submission_rate'] = round((submitted_count / total_assignments * 100), 1) if total_assignments > 0 else 0
+        
+        # Get subjects for filter dropdown
+        from ..models import Subject
+        context['subjects'] = Subject.objects.filter(
+            classassignment__class_level=student.class_level
+        ).distinct()
+        
+        return context
+
+
+class StudentAssignmentLibraryView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """Complete assignment library for students with document access"""
+    model = StudentAssignment
+    template_name = 'core/students/assignment_library.html'
+    context_object_name = 'student_assignments'
+    paginate_by = 10
+    
+    def test_func(self):
+        return is_student(self.request.user)
+    
+    def get_queryset(self):
+        student = self.request.user.student
+        
+        # Get all student assignments with related data
+        return StudentAssignment.objects.filter(
+            student=student
+        ).select_related(
+            'assignment',
+            'assignment__subject',
+            'assignment__class_assignment',
+            'assignment__class_assignment__teacher',
+            'assignment__class_assignment__teacher__user'
+        ).prefetch_related(
+            'assignment__student_assignments'
+        ).order_by('-assignment__due_date', '-submitted_date')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.request.user.student
+        
+        # Get all student assignments
+        all_assignments = self.get_queryset()
+        
+        # Categorize assignments
+        context['upcoming_assignments'] = [
+            sa for sa in all_assignments 
+            if sa.assignment.due_date >= timezone.now() and sa.status in ['PENDING', 'LATE']
+        ]
+        
+        context['submitted_assignments'] = [
+            sa for sa in all_assignments 
+            if sa.status in ['SUBMITTED', 'LATE'] and sa.submitted_date is not None
+        ]
+        
+        context['graded_assignments'] = [
+            sa for sa in all_assignments 
+            if sa.status == 'GRADED'
+        ]
+        
+        context['overdue_assignments'] = [
+            sa for sa in all_assignments 
+            if sa.assignment.due_date < timezone.now() and sa.status in ['PENDING', 'LATE']
+        ]
+        
+        # Statistics
+        context['total_assignments'] = all_assignments.count()
+        context['graded_count'] = len(context['graded_assignments'])
+        context['submitted_count'] = len(context['submitted_assignments'])
+        context['pending_count'] = len(context['upcoming_assignments']) + len(context['overdue_assignments'])
+        
+        # Calculate submission rate
+        if context['total_assignments'] > 0:
+            context['submission_rate'] = round((context['submitted_count'] + context['graded_count']) / context['total_assignments'] * 100, 1)
+        else:
+            context['submission_rate'] = 0
+            
+        # Check for assignments with teacher documents
+        context['assignments_with_docs'] = all_assignments.filter(
+            assignment__attachment__isnull=False
+        ).count()
+        
+        # Get current term for filtering
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        context['current_term'] = current_term
+        
+        return context
+
+
+
+class StudentAssignmentDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    """Detailed view of a specific assignment with all documents"""
+    model = StudentAssignment
+    template_name = 'core/students/assignment_detail.html'
+    context_object_name = 'student_assignment'
+    
+    def test_func(self):
+        # Only the student who owns this assignment can view it
+        return is_student(self.request.user) and self.get_object().student == self.request.user.student
+    
+    def get_object(self):
+        # Get the student assignment with all related data
+        return get_object_or_404(
+            StudentAssignment.objects.select_related(
+                'assignment',
+                'assignment__subject',
+                'assignment__class_assignment',
+                'assignment__class_assignment__teacher',
+                'assignment__class_assignment__teacher__user',
+                'student'
+            ),
+            pk=self.kwargs['pk'],
+            student=self.request.user.student
+        )
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student_assignment = self.object
+        
+        # Get related assignments in the same subject
+        context['related_assignments'] = StudentAssignment.objects.filter(
+            student=self.request.user.student,
+            assignment__subject=student_assignment.assignment.subject
+        ).exclude(pk=student_assignment.pk).select_related(
+            'assignment'
+        ).order_by('-assignment__due_date')[:5]
+        
+        # Calculate days until due
+        due_date = student_assignment.assignment.due_date
+        if due_date:
+            days_left = (due_date - timezone.now()).days
+            context['days_left'] = days_left
+            context['is_overdue'] = days_left < 0
+            context['due_soon'] = 0 <= days_left <= 3
+        
+        # Check if submission is allowed
+        context['can_submit'] = student_assignment.status in ['PENDING', 'LATE'] and student_assignment.assignment.due_date >= timezone.now()
+        
+        # Check if feedback is available
+        context['has_feedback'] = student_assignment.status == 'GRADED' and (student_assignment.feedback or student_assignment.score is not None)
+        
+        return context
+
+
+class DownloadAssignmentDocumentView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Download teacher's assignment document with proper file format"""
+    
+    def test_func(self):
+        from .base_views import is_student
+        return is_student(self.request.user)
+    
+    def get(self, request, pk):
+        from ..models import Assignment
+        from django.core.exceptions import PermissionDenied
+        import mimetypes
+        
+        assignment = get_object_or_404(
+            Assignment.objects.select_related('class_assignment'),
+            pk=pk
+        )
+        
+        # Verify student is in the same class
+        student = request.user.student
+        if student.class_level != assignment.class_assignment.class_level:
+            raise PermissionDenied("You don't have access to this assignment document.")
+        
+        if assignment.attachment and assignment.attachment.name:
+            try:
+                # Get file information
+                file_name = assignment.attachment.name
+                file_extension = os.path.splitext(file_name)[1].lower()
+                
+                # Map extensions to proper MIME types
+                mime_type_mapping = {
+                    '.doc': 'application/msword',
+                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    '.pdf': 'application/pdf',
+                    '.txt': 'text/plain',
+                    '.rtf': 'application/rtf',
+                    '.odt': 'application/vnd.oasis.opendocument.text',
+                    '.ppt': 'application/vnd.ms-powerpoint',
+                    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    '.xls': 'application/vnd.ms-excel',
+                    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.png': 'image/png',
+                    '.gif': 'image/gif',
+                }
+                
+                # Get MIME type from mapping or use Django's guess
+                content_type = mime_type_mapping.get(file_extension)
+                if not content_type:
+                    content_type, _ = mimetypes.guess_type(file_name)
+                    if not content_type:
+                        content_type = 'application/octet-stream'
+                
+                # Create response with proper headers
+                response = FileResponse(
+                    assignment.attachment.open('rb'),
+                    content_type=content_type,
+                    as_attachment=True,  # This forces download instead of opening in browser
+                    filename=os.path.basename(file_name)
+                )
+                
+                # Critical: Prevent browser from sniffing MIME type
+                response['X-Content-Type-Options'] = 'nosniff'
+                
+                # Add cache control
+                response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                response['Pragma'] = 'no-cache'
+                response['Expires'] = '0'
+                
+                return response
+                
+            except Exception as e:
+                logger.error(f"Error downloading assignment document: {str(e)}")
+                messages.error(request, f"Error downloading file: {str(e)}")
+                return redirect('student_assignment_library')
+        else:
+            messages.error(request, "No document available for this assignment.")
+            return redirect('student_assignment_library')
+
+
+class StudentSubmittedAssignmentsView(StudentAssignmentLibraryView):
+    """Filter view for submitted assignments only"""
+    def get_queryset(self):
+        return super().get_queryset().filter(status__in=['SUBMITTED', 'LATE'])
+
+
+class StudentGradedAssignmentsView(StudentAssignmentLibraryView):
+    """Filter view for graded assignments only"""
+    def get_queryset(self):
+        return super().get_queryset().filter(status='GRADED')

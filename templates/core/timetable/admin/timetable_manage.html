@@ -157,6 +157,14 @@
 .period-item:hover .period-actions {
     opacity: 1;
 }
+
+/* Fix for dropdowns in modal */
+.modal-open .select2-container {
+    z-index: 9999;
+}
+.modal .form-select {
+    z-index: 1060 !important;
+}
 </style>
 {% endblock %}
 
@@ -320,11 +328,9 @@
                         <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Period Details</h6>
                     </div>
                     <div class="card-body">
-                        <div id="periodDetails">
-                            <div class="text-center py-4 text-muted">
-                                <i class="fas fa-hand-pointer fa-2x mb-3"></i>
-                                <p>Select a period to view details</p>
-                            </div>
+                        <div id="periodDetails" class="text-center py-3">
+                            <i class="fas fa-hand-pointer fa-2x mb-3 text-muted"></i>
+                            <p class="text-muted mb-0">Click on a period to view details</p>
                         </div>
                     </div>
                 </div>
@@ -376,6 +382,9 @@
                         <div class="progress mt-3" style="height: 6px;">
                             <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
                         </div>
+                        <div class="mt-2 text-center small text-muted" id="completionText">
+                            0% Complete
+                        </div>
                     </div>
                 </div>
             </div>
@@ -416,14 +425,16 @@
 
                     <div id="classFields">
                         <div class="mb-3">
-                            <label class="form-label">Subject</label>
-                            <select class="form-select" id="editSubject" required>
+                            <label class="form-label">Subject *</label>
+                            <!-- Simple dropdown - FIXED -->
+                            <select class="form-select simple-select" id="editSubject" required style="z-index: 9999">
                                 <option value="">Select Subject</option>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Teacher</label>
-                            <select class="form-select" id="editTeacher" required>
+                            <label class="form-label">Teacher *</label>
+                            <!-- Simple dropdown - FIXED -->
+                            <select class="form-select simple-select" id="editTeacher" required style="z-index: 9999">
                                 <option value="">Select Teacher</option>
                             </select>
                         </div>
@@ -547,7 +558,7 @@ $(document).ready(function() {
     $('#searchSubjects').on('input', filterSubjects);
     $('#searchTeachers').on('input', filterTeachers);
 
-    // Period type toggle
+    // Period type toggle - FIXED to show/hide correctly
     $('input[name="periodType"]').change(function() {
         if ($(this).val() === 'class') {
             $('#classFields').show();
@@ -569,9 +580,17 @@ $(document).ready(function() {
         $.ajax({
             url: '{% url "get_subjects_for_class" timetable.class_level %}',
             success: function(data) {
-                subjects = data.subjects;
-                renderSubjects();
-                populateSubjectSelect();
+                if (data.subjects) {
+                    subjects = data.subjects;
+                    renderSubjects();
+                    populateSubjectSelect();
+                } else {
+                    console.error('No subjects data received');
+                }
+            },
+            error: function() {
+                console.error('Failed to load subjects');
+                showToast('Failed to load subjects', 'error');
             }
         });
     }
@@ -581,16 +600,24 @@ $(document).ready(function() {
             url: '{% url "get_available_teachers" %}',
             data: { class_level: '{{ timetable.class_level }}' },
             success: function(data) {
-                teachers = data.teachers;
-                renderTeachers();
-                populateTeacherSelect();
+                if (data.teachers) {
+                    teachers = data.teachers;
+                    renderTeachers();
+                    populateTeacherSelect();
+                } else {
+                    console.error('No teachers data received');
+                }
+            },
+            error: function() {
+                console.error('Failed to load teachers');
+                showToast('Failed to load teachers', 'error');
             }
         });
     }
 
     function loadExistingSchedule() {
         $.ajax({
-            url: '{% url "timetable_ajax_entries" %}',
+            url: '{% url "admin_timetable_ajax_entries" %}',
             data: {
                 class_level: '{{ timetable.class_level }}',
                 day_of_week: '{{ timetable.day_of_week }}',
@@ -598,11 +625,32 @@ $(document).ready(function() {
                 term: '{{ timetable.term }}'
             },
             success: function(data) {
-                data.entries.forEach(entry => {
-                    scheduleData[entry.time_slot_id] = entry;
-                    renderPeriodInSlot(entry);
-                });
-                updateStatistics();
+                if (data.success && data.entries) {
+                    data.entries.forEach(entry => {
+                        scheduleData[entry.time_slot_id] = {
+                            id: entry.id,
+                            time_slot_id: entry.time_slot_id,
+                            period_number: entry.period_number,
+                            is_break: entry.is_break,
+                            break_name: entry.break_name || '',
+                            subject_id: entry.subject_id,
+                            teacher_id: entry.teacher_id,
+                            subject_name: entry.subject || '',
+                            teacher_name: entry.teacher || '',
+                            classroom: entry.classroom || '',
+                            start_time: entry.start_time,
+                            end_time: entry.end_time
+                        };
+                        renderPeriodInSlot(scheduleData[entry.time_slot_id]);
+                    });
+                    updateStatistics();
+                    updatePeriodDetails();
+                } else {
+                    console.log('No existing schedule found');
+                }
+            },
+            error: function() {
+                console.error('Failed to load existing schedule');
             }
         });
     }
@@ -623,8 +671,10 @@ $(document).ready(function() {
         $(document).on('dragstart', '.period-item', function(e) {
             const slotId = $(this).closest('.period-dropzone').data('slot-id');
             const data = scheduleData[slotId];
-            e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(data));
-            e.originalEvent.dataTransfer.effectAllowed = 'move';
+            if (data) {
+                e.originalEvent.dataTransfer.setData('text/plain', JSON.stringify(data));
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+            }
         });
 
         // Dropzone handlers
@@ -647,33 +697,40 @@ $(document).ready(function() {
                 if (data.type === 'break') {
                     addBreakPeriod(slotId, data.breakName);
                 } else if (data.type === 'class') {
-                    showPeriodModal(slotId, data);
+                    showPeriodModal(slotId, { subjectId: data.subjectId });
+                } else {
+                    // Moving existing period
+                    const oldSlotId = data.time_slot_id;
+                    if (oldSlotId !== slotId) {
+                        scheduleData[slotId] = data;
+                        scheduleData[slotId].time_slot_id = slotId;
+                        renderPeriodInSlot(scheduleData[slotId]);
+                        delete scheduleData[oldSlotId];
+                        $(`#dropzone-${oldSlotId}`).addClass('empty').html('');
+                        updateStatistics();
+                        updatePeriodDetails();
+                    }
                 }
             });
 
-        // Allow dropping on existing periods to replace
-        $(document).on('dragover', '.period-item', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.originalEvent.dataTransfer.dropEffect = 'move';
-            $(this).addClass('drag-over');
+        // Click to select period and show details
+        $(document).on('click', '.period-item', function(e) {
+            if (!$(e.target).closest('.edit-period').length) {
+                const slotId = $(this).closest('.period-dropzone').data('slot-id');
+                const entry = scheduleData[slotId];
+                if (entry) {
+                    updatePeriodDetails(entry, slotId);
+                }
+            }
         });
 
-        $(document).on('dragleave drop', '.period-item', function() {
-            $(this).removeClass('drag-over');
-        });
-
-        $(document).on('drop', '.period-item', function(e) {
-            e.preventDefault();
+        // Edit button click
+        $(document).on('click', '.edit-period', function(e) {
             e.stopPropagation();
-            
             const slotId = $(this).closest('.period-dropzone').data('slot-id');
-            const data = JSON.parse(e.originalEvent.dataTransfer.getData('text/plain'));
-            
-            if (data.type === 'break') {
-                addBreakPeriod(slotId, data.breakName);
-            } else if (data.type === 'class') {
-                showPeriodModal(slotId, data);
+            const entry = scheduleData[slotId];
+            if (entry) {
+                showPeriodModal(slotId, entry);
             }
         });
     }
@@ -683,48 +740,69 @@ $(document).ready(function() {
         const dropzone = $(`#dropzone-${slotId}`);
         
         dropzone.removeClass('empty');
-        dropzone.html(`
-            <div class="period-item ${entry.is_break ? 'break' : ''}" 
-                 draggable="true"
-                 data-slot-id="${slotId}">
-                <div class="d-flex align-items-center h-100">
-                    <div class="drag-handle me-2">
-                        <i class="fas fa-arrows-alt"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                        ${entry.is_break 
-                            ? `<h6 class="period-subject mb-0">
-                                 <i class="fas fa-coffee me-1"></i>${entry.break_name}
-                               </h6>
-                               <small class="text-muted">Break Period</small>`
-                            : `<h6 class="period-subject mb-1">${entry.subject_name}</h6>
-                               <div class="period-teacher">${entry.teacher_name}</div>
-                               ${entry.classroom 
-                                   ? `<span class="period-classroom">${entry.classroom}</span>` 
-                                   : ''}`
-                        }
-                    </div>
-                    <div class="period-actions">
-                        <button class="btn btn-sm btn-link text-muted edit-period" 
-                                title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </button>
+        
+        let periodHtml = '';
+        if (entry.is_break) {
+            periodHtml = `
+                <div class="period-item break" 
+                     draggable="true"
+                     data-slot-id="${slotId}">
+                    <div class="d-flex align-items-center h-100">
+                        <div class="drag-handle me-2">
+                            <i class="fas fa-arrows-alt"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="period-subject mb-0">
+                                <i class="fas fa-coffee me-1"></i>${entry.break_name || 'Break'}
+                            </h6>
+                            <small class="text-muted">Break Period</small>
+                        </div>
+                        <div class="period-actions">
+                            <button class="btn btn-sm btn-link text-muted edit-period" 
+                                    title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `);
+            `;
+        } else {
+            periodHtml = `
+                <div class="period-item" 
+                     draggable="true"
+                     data-slot-id="${slotId}">
+                    <div class="d-flex align-items-center h-100">
+                        <div class="drag-handle me-2">
+                            <i class="fas fa-arrows-alt"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="period-subject mb-1">${entry.subject_name || 'No Subject'}</h6>
+                            <div class="period-teacher">${entry.teacher_name || 'No Teacher'}</div>
+                            ${entry.classroom 
+                                ? `<span class="period-classroom">${entry.classroom}</span>` 
+                                : ''}
+                        </div>
+                        <div class="period-actions">
+                            <button class="btn btn-sm btn-link text-muted edit-period" 
+                                    title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         
-        // Add edit click handler
-        dropzone.find('.edit-period').click(function() {
-            showPeriodModal(slotId, entry);
-        });
+        dropzone.html(periodHtml);
     }
 
     function addBreakPeriod(slotId, breakName) {
         const entry = {
-            time_slot_id: slotId,
+            time_slot_id: parseInt(slotId),
             is_break: true,
             break_name: breakName || 'Break',
+            subject_id: null,
+            teacher_id: null,
             subject_name: null,
             teacher_name: null,
             classroom: null
@@ -733,19 +811,25 @@ $(document).ready(function() {
         scheduleData[slotId] = entry;
         renderPeriodInSlot(entry);
         updateStatistics();
+        updatePeriodDetails(entry, slotId);
         showToast('Break period added', 'success');
     }
 
     function showPeriodModal(slotId, data = null) {
         selectedPeriod = slotId;
         
-        if (data) {
-            $('#editSlotId').val(slotId);
-            $('#editEntryId').val(data.id || '');
-            
+        // Reset form
+        $('#periodForm')[0].reset();
+        $('#classFields').show();
+        $('#breakFields').hide();
+        $('#classPeriod').prop('checked', true);
+        
+        if (data && data.id) {
+            // Editing existing period
+            $('#editEntryId').val(data.id);
             if (data.is_break) {
                 $('#breakPeriod').prop('checked', true);
-                $('#editBreakName').val(data.break_name);
+                $('#editBreakName').val(data.break_name || 'Break');
                 $('#breakFields').show();
                 $('#classFields').hide();
             } else {
@@ -756,19 +840,19 @@ $(document).ready(function() {
                 $('#breakFields').hide();
                 $('#classFields').show();
             }
-        } else {
-            $('#editSlotId').val(slotId);
-            $('#editEntryId').val('');
-            $('#classPeriod').prop('checked', true);
-            $('#editSubject').val('');
-            $('#editTeacher').val('');
-            $('#editClassroom').val('');
-            $('#editBreakName').val($('#breakName').val());
-            $('#breakFields').hide();
-            $('#classFields').show();
+        } else if (data && data.subjectId) {
+            // Adding new class period
+            $('#editSubject').val(data.subjectId);
         }
         
+        $('#editSlotId').val(slotId);
         $('#editPeriodModal').modal('show');
+        
+        // Force dropdowns to work - FIXED
+        setTimeout(() => {
+            $('#editSubject').focus().blur();
+            $('#editTeacher').focus().blur();
+        }, 100);
     }
 
     function savePeriodDetails() {
@@ -777,10 +861,13 @@ $(document).ready(function() {
         
         let entry;
         if (isBreak) {
+            const breakName = $('#editBreakName').val().trim() || 'Break';
             entry = {
-                time_slot_id: slotId,
+                time_slot_id: parseInt(slotId),
                 is_break: true,
-                break_name: $('#editBreakName').val(),
+                break_name: breakName,
+                subject_id: null,
+                teacher_id: null,
                 subject_name: null,
                 teacher_name: null,
                 classroom: null
@@ -788,28 +875,41 @@ $(document).ready(function() {
         } else {
             const subjectId = $('#editSubject').val();
             const teacherId = $('#editTeacher').val();
-            const subject = subjects.find(s => s.id == subjectId);
-            const teacher = teachers.find(t => t.id == teacherId);
             
-            if (!subject || !teacher) {
+            if (!subjectId || !teacherId) {
                 showToast('Please select both subject and teacher', 'error');
                 return;
             }
             
+            const subject = subjects.find(s => s.id == subjectId);
+            const teacher = teachers.find(t => t.id == teacherId);
+            
+            if (!subject || !teacher) {
+                showToast('Selected subject or teacher not found', 'error');
+                return;
+            }
+            
             entry = {
-                time_slot_id: slotId,
+                time_slot_id: parseInt(slotId),
                 is_break: false,
                 subject_id: subjectId,
                 teacher_id: teacherId,
                 subject_name: subject.name,
                 teacher_name: teacher.name,
-                classroom: $('#editClassroom').val()
+                classroom: $('#editClassroom').val().trim()
             };
+        }
+        
+        // Preserve existing ID if editing
+        const existingId = $('#editEntryId').val();
+        if (existingId) {
+            entry.id = existingId;
         }
         
         scheduleData[slotId] = entry;
         renderPeriodInSlot(entry);
         updateStatistics();
+        updatePeriodDetails(entry, slotId);
         
         $('#editPeriodModal').modal('hide');
         showToast('Period saved successfully', 'success');
@@ -817,15 +917,105 @@ $(document).ready(function() {
 
     function deletePeriod() {
         const slotId = $('#editSlotId').val();
-        delete scheduleData[slotId];
+        if (scheduleData[slotId]) {
+            delete scheduleData[slotId];
+            
+            const dropzone = $(`#dropzone-${slotId}`);
+            dropzone.addClass('empty');
+            dropzone.html('');
+            
+            updateStatistics();
+            updatePeriodDetails();
+            $('#editPeriodModal').modal('hide');
+            showToast('Period deleted', 'info');
+        }
+    }
+
+    function updatePeriodDetails(entry = null, slotId = null) {
+        const detailsContainer = $('#periodDetails');
         
-        const dropzone = $(`#dropzone-${slotId}`);
-        dropzone.addClass('empty');
-        dropzone.html('');
+        if (!entry) {
+            detailsContainer.html(`
+                <div class="text-center py-4">
+                    <i class="fas fa-hand-pointer fa-2x mb-3 text-muted"></i>
+                    <p class="text-muted mb-1">Click on a period to view details</p>
+                    <small class="text-muted">Or drag a subject to create a new period</small>
+                </div>
+            `);
+            return;
+        }
         
-        $('#editPeriodModal').modal('hide');
-        updateStatistics();
-        showToast('Period deleted', 'info');
+        let detailsHtml = '';
+        if (entry.is_break) {
+            detailsHtml = `
+                <div class="period-details">
+                    <h6 class="text-center mb-3">
+                        <i class="fas fa-coffee me-2"></i>Break Period
+                    </h6>
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Break Name:</span>
+                            <strong>${entry.break_name}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Time Slot:</span>
+                            <strong>Period ${entry.period_number || slotId}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Duration:</span>
+                            <strong>${entry.start_time || '--:--'} - ${entry.end_time || '--:--'}</strong>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn btn-sm btn-outline-primary edit-period-btn" data-slot-id="${slotId}">
+                            <i class="fas fa-edit me-1"></i>Edit
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            detailsHtml = `
+                <div class="period-details">
+                    <h6 class="text-center mb-3">${entry.subject_name}</h6>
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Teacher:</span>
+                            <strong>${entry.teacher_name}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Time Slot:</span>
+                            <strong>Period ${entry.period_number || slotId}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Time:</span>
+                            <strong>${entry.start_time || '--:--'} - ${entry.end_time || '--:--'}</strong>
+                        </div>
+                        ${entry.classroom ? `
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span>Classroom:</span>
+                            <strong>${entry.classroom}</strong>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn btn-sm btn-outline-primary edit-period-btn" data-slot-id="${slotId}">
+                            <i class="fas fa-edit me-1"></i>Edit
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        detailsContainer.html(detailsHtml);
+        
+        // Add edit button handler
+        detailsContainer.find('.edit-period-btn').click(function() {
+            const slotId = $(this).data('slot-id');
+            const entry = scheduleData[slotId];
+            if (entry) {
+                showPeriodModal(slotId, entry);
+            }
+        });
     }
 
     function saveSchedule() {
@@ -834,14 +1024,12 @@ $(document).ready(function() {
         
         Object.keys(scheduleData).forEach(slotId => {
             const entry = scheduleData[slotId];
+            formData.append(`entry_${slotId}`, entry.id || '');
             formData.append(`timeslot_${slotId}_subject`, entry.subject_id || '');
             formData.append(`timeslot_${slotId}_teacher`, entry.teacher_id || '');
             formData.append(`timeslot_${slotId}_classroom`, entry.classroom || '');
-            formData.append(`timeslot_${slotId}_is_break`, entry.is_break);
+            formData.append(`timeslot_${slotId}_is_break`, entry.is_break ? 'true' : 'false');
             formData.append(`timeslot_${slotId}_break_name`, entry.break_name || '');
-            if (entry.id) {
-                formData.append(`entry_${slotId}`, entry.id);
-            }
         });
         
         $.ajax({
@@ -851,17 +1039,18 @@ $(document).ready(function() {
             processData: false,
             contentType: false,
             beforeSend: function() {
-                $('#saveSchedule').html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+                $('#saveSchedule').html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...').prop('disabled', true);
             },
             success: function(response) {
                 showToast('Schedule saved successfully!', 'success');
                 setTimeout(() => {
-                    $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule');
+                    $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule').prop('disabled', false);
                 }, 1000);
             },
-            error: function() {
-                showToast('Error saving schedule', 'error');
-                $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule');
+            error: function(xhr, status, error) {
+                showToast('Error saving schedule: ' + error, 'error');
+                $('#saveSchedule').html('<i class="fas fa-save me-2"></i>Save Schedule').prop('disabled', false);
+                console.error('Save error:', error);
             }
         });
     }
@@ -874,42 +1063,47 @@ $(document).ready(function() {
     }
 
     function clearAllPeriods() {
-        if (confirm('Are you sure you want to clear all periods?')) {
+        if (confirm('Are you sure you want to clear all periods? This cannot be undone.')) {
             $('.period-dropzone').addClass('empty').html('');
             scheduleData = {};
             updateStatistics();
+            updatePeriodDetails();
             showToast('All periods cleared', 'info');
         }
     }
 
     function generateAutoSchedule() {
-        // This is a simplified auto-schedule generator
-        // In production, this would be more sophisticated
-        
         clearAllPeriods();
         
         const timeSlots = $('.period-dropzone');
-        const subjectCount = Math.min(subjects.length, Math.floor(timeSlots.length * 0.7));
+        const totalSlots = timeSlots.length;
         
-        // Distribute subjects
-        for (let i = 0; i < timeSlots.length; i++) {
+        if (subjects.length === 0 || teachers.length === 0) {
+            showToast('Please wait for subjects and teachers to load', 'warning');
+            return;
+        }
+        
+        // Simple auto-schedule: Fill 70% with classes, 30% with breaks
+        for (let i = 0; i < totalSlots; i++) {
             const slotId = $(timeSlots[i]).data('slot-id');
             
-            if (i % 3 === 2) {
-                // Every 3rd period is a break
-                addBreakPeriod(slotId, i < timeSlots.length / 2 ? 'Short Break' : 'Lunch Break');
-            } else if (i < subjectCount * 2) {
-                // Assign subjects
-                const subjectIndex = Math.floor(i / 2) % subjects.length;
-                const teacherIndex = Math.floor(Math.random() * teachers.length);
+            if (i % 3 === 2) { // Every 3rd period is a break
+                addBreakPeriod(slotId, i < totalSlots / 2 ? 'Short Break' : 'Lunch Break');
+            } else if (i < subjects.length * 2 && i < totalSlots * 0.7) {
+                // Assign available subjects and teachers
+                const subjectIndex = i % subjects.length;
+                const teacherIndex = i % Math.min(teachers.length, 3); // Use first 3 teachers
+                
+                const subject = subjects[subjectIndex];
+                const teacher = teachers[teacherIndex];
                 
                 const entry = {
-                    time_slot_id: slotId,
+                    time_slot_id: parseInt(slotId),
                     is_break: false,
-                    subject_id: subjects[subjectIndex].id,
-                    teacher_id: teachers[teacherIndex].id,
-                    subject_name: subjects[subjectIndex].name,
-                    teacher_name: teachers[teacherIndex].name,
+                    subject_id: subject.id,
+                    teacher_id: teacher.id,
+                    subject_name: subject.name,
+                    teacher_name: teacher.name,
                     classroom: `Room ${101 + subjectIndex}`
                 };
                 
@@ -924,45 +1118,52 @@ $(document).ready(function() {
     }
 
     function copyFromAnotherDay() {
-        // Implementation would involve selecting another day and copying its schedule
         showToast('Feature coming soon!', 'info');
     }
 
     function validateSchedule() {
+        const warnings = [];
         const errors = [];
         
-        // Check for teacher conflicts
-        const teacherSlots = {};
+        // Check for empty required fields in class periods
+        Object.keys(scheduleData).forEach(slotId => {
+            const entry = scheduleData[slotId];
+            if (!entry.is_break) {
+                if (!entry.subject_id || !entry.teacher_id) {
+                    errors.push(`Period ${slotId}: Missing subject or teacher`);
+                }
+            }
+        });
+        
+        // Check for teacher conflicts (simplified)
+        const teacherSchedule = {};
         Object.keys(scheduleData).forEach(slotId => {
             const entry = scheduleData[slotId];
             if (!entry.is_break && entry.teacher_id) {
-                if (!teacherSlots[entry.teacher_id]) {
-                    teacherSlots[entry.teacher_id] = [];
+                if (!teacherSchedule[entry.teacher_id]) {
+                    teacherSchedule[entry.teacher_id] = [];
                 }
-                teacherSlots[entry.teacher_id].push(slotId);
+                teacherSchedule[entry.teacher_id].push(slotId);
+                
+                if (teacherSchedule[entry.teacher_id].length > 1) {
+                    warnings.push(`Teacher ${entry.teacher_name} has multiple periods`);
+                }
             }
         });
         
-        // Check for consecutive same subjects
-        let prevSubjectId = null;
-        $('.period-dropzone').each(function() {
-            const slotId = $(this).data('slot-id');
-            const entry = scheduleData[slotId];
-            
-            if (entry && !entry.is_break) {
-                if (entry.subject_id === prevSubjectId) {
-                    errors.push(`Consecutive ${entry.subject_name} classes`);
-                }
-                prevSubjectId = entry.subject_id;
-            } else {
-                prevSubjectId = null;
-            }
-        });
+        // Update statistics display with validation results
+        const totalSlots = $('.period-dropzone').length;
+        const scheduled = Object.keys(scheduleData).length;
+        const progress = Math.round((scheduled / totalSlots) * 100);
         
         if (errors.length > 0) {
-            showToast(`Found ${errors.length} issues: ${errors.join(', ')}`, 'warning');
+            showToast(`Validation failed: ${errors.length} error(s) found`, 'error');
+            console.error('Validation errors:', errors);
+        } else if (warnings.length > 0) {
+            showToast(`Validation passed with ${warnings.length} warning(s)`, 'warning');
+            console.warn('Validation warnings:', warnings);
         } else {
-            showToast('Schedule validation passed!', 'success');
+            showToast(`Schedule validation passed! ${progress}% complete`, 'success');
         }
     }
 
@@ -972,30 +1173,49 @@ $(document).ready(function() {
         const breakSlots = Object.values(scheduleData).filter(e => e.is_break).length;
         const classSlots = scheduledSlots - breakSlots;
         const emptySlots = totalSlots - scheduledSlots;
+        const progress = Math.round((scheduledSlots / totalSlots) * 100);
         
-        $('#periodsCount').text(`${scheduledSlots} periods scheduled`);
+        // Update display
+        $('#periodsCount').text(`${scheduledSlots}/${totalSlots} periods`);
         $('#totalPeriods').text(scheduledSlots);
         $('#classPeriods').text(classSlots);
         $('#breakPeriods').text(breakSlots);
         $('#emptyPeriods').text(emptySlots);
-        $('#progressBar').css('width', `${(scheduledSlots / totalSlots) * 100}%`);
+        $('#progressBar').css('width', `${progress}%`);
+        $('#completionText').text(`${progress}% Complete`);
         $('#teachersCount').text(teachers.length);
+        
+        // Update badge color based on completion
+        const badge = $('#periodsCount');
+        badge.removeClass('bg-success bg-warning bg-danger');
+        if (progress >= 80) {
+            badge.addClass('bg-success');
+        } else if (progress >= 50) {
+            badge.addClass('bg-warning');
+        } else {
+            badge.addClass('bg-danger');
+        }
     }
 
     function renderSubjects() {
         const container = $('#subjectsList');
         container.empty();
         
+        if (subjects.length === 0) {
+            container.html('<div class="text-center py-3 text-muted">No subjects available</div>');
+            return;
+        }
+        
         subjects.forEach(subject => {
             container.append(`
                 <div class="subject-card" draggable="true" 
                      data-type="class" data-subject-id="${subject.id}"
-                     title="${subject.name} - ${subject.code}">
+                     title="${subject.name} - ${subject.code || 'No code'}">
                     <div class="d-flex align-items-center">
                         <span class="subject-color" style="background-color: ${subject.color || '#6c757d'}"></span>
                         <div class="flex-grow-1">
-                            <h6 class="mb-0">${subject.name}</h6>
-                            <small class="text-muted">${subject.code}</small>
+                            <h6 class="mb-0 small">${subject.name}</h6>
+                            <small class="text-muted">${subject.code || 'No code'}</small>
                         </div>
                         <i class="fas fa-grip-vertical text-muted"></i>
                     </div>
@@ -1008,18 +1228,24 @@ $(document).ready(function() {
         const container = $('#teachersList');
         container.empty();
         
+        if (teachers.length === 0) {
+            container.html('<div class="text-center py-3 text-muted">No teachers available</div>');
+            return;
+        }
+        
         teachers.forEach(teacher => {
-            const initials = teacher.name.split(' ').map(n => n[0]).join('');
+            const initials = teacher.name ? teacher.name.split(' ').map(n => n[0]).join('').toUpperCase() : '??';
             container.append(`
                 <div class="d-flex align-items-center mb-2 teacher-item" 
-                     data-teacher-id="${teacher.id}">
+                     data-teacher-id="${teacher.id}"
+                     title="${teacher.name || 'Unknown'} - ${teacher.subjects ? teacher.subjects.join(', ') : 'No subjects'}">
                     <div class="teacher-avatar me-2" 
-                         style="background-color: ${getColorForString(teacher.name)}">
+                         style="background-color: ${getColorForString(teacher.name || '')}">
                         ${initials}
                     </div>
                     <div class="flex-grow-1">
-                        <h6 class="mb-0 small">${teacher.name}</h6>
-                        <small class="text-muted">${teacher.subjects.join(', ')}</small>
+                        <h6 class="mb-0 small">${teacher.name || 'Unknown Teacher'}</h6>
+                        <small class="text-muted">${teacher.subjects ? teacher.subjects.slice(0, 2).join(', ') : 'No subjects'}</small>
                     </div>
                 </div>
             `);
@@ -1031,7 +1257,7 @@ $(document).ready(function() {
         select.empty();
         select.append('<option value="">Select Subject</option>');
         subjects.forEach(subject => {
-            select.append(`<option value="${subject.id}">${subject.name}</option>`);
+            select.append(`<option value="${subject.id}">${subject.name}${subject.code ? ' (' + subject.code + ')' : ''}</option>`);
         });
     }
 
@@ -1040,7 +1266,7 @@ $(document).ready(function() {
         select.empty();
         select.append('<option value="">Select Teacher</option>');
         teachers.forEach(teacher => {
-            select.append(`<option value="${teacher.id}">${teacher.name}</option>`);
+            select.append(`<option value="${teacher.id}">${teacher.name || 'Unknown Teacher'}</option>`);
         });
     }
 
@@ -1061,6 +1287,7 @@ $(document).ready(function() {
     }
 
     function getColorForString(str) {
+        if (!str) return '#6c757d';
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
             hash = str.charCodeAt(i) + ((hash << 5) - hash);

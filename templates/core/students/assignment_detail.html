@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}Assignment Details - {{ student_assignment.assignment.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Assignment Details</h5>
+                        <div>
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Library
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <!-- Assignment Header -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <h4>{{ student_assignment.assignment.title }}</h4>
+                            <p class="text-muted mb-2">
+                                <i class="bi bi-book"></i> {{ student_assignment.assignment.subject.name }} 
+                                | <i class="bi bi-person"></i> {{ student_assignment.assignment.class_assignment.teacher.get_full_name }}
+                                | <i class="bi bi-calendar"></i> Assigned: {{ student_assignment.assignment.created_at|date:"M d, Y" }}
+                            </p>
+                            
+                            {% if student_assignment.assignment.description %}
+                                <div class="mb-3">
+                                    <h6>Description:</h6>
+                                    <p>{{ student_assignment.assignment.description|linebreaks }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6>Status</h6>
+                                    <span class="badge bg-{{ student_assignment.get_submission_status.color }}">
+                                        {{ student_assignment.get_submission_status.text }}
+                                    </span>
+                                    
+                                    <h6 class="mt-3">Due Date</h6>
+                                    <p class="mb-1">
+                                        <i class="bi bi-calendar-event"></i> {{ student_assignment.assignment.due_date|date:"M d, Y" }}
+                                    </p>
+                                    <p class="mb-0 text-{{ student_assignment.is_overdue|yesno:'danger,success' }}">
+                                        <i class="bi bi-clock"></i> {{ student_assignment.get_time_remaining }}
+                                    </p>
+                                    
+                                    <h6 class="mt-3">Max Score</h6>
+                                    <p>{{ student_assignment.assignment.max_score }} points</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Assignment Documents Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Assignment Documents</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if student_assignment.assignment.attachment and student_assignment.assignment.attachment.name %}
+                                        <div class="d-flex align-items-center mb-3">
+                                            <i class="bi bi-file-earmark-text fs-3 text-primary me-3"></i>
+                                            <div>
+                                                <h6>Teacher's Assignment Document</h6>
+                                                <p class="text-muted mb-0">Download the original assignment file</p>
+                                            </div>
+                                            <div class="ms-auto">
+                                                <a href="{% url 'download_assignment_document' student_assignment.assignment.pk %}" 
+                                                   class="btn btn-primary" 
+                                                   target="_blank"
+                                                   download>
+                                                    <i class="bi bi-download"></i> Download
+                                                </a>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">No documents provided by teacher for this assignment.</p>
+                                    {% endif %}
+                                    
+                                    {% if student_assignment.assignment.instructions %}
+                                        <div class="mb-3">
+                                            <h6>Instructions:</h6>
+                                            <div class="p-3 bg-light rounded">
+                                                {{ student_assignment.assignment.instructions|linebreaks }}
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Student Submission Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Your Submission</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if student_assignment.file %}
+                                        <div class="d-flex align-items-center mb-3">
+                                            <i class="bi bi-file-earmark-arrow-up fs-3 text-success me-3"></i>
+                                            <div>
+                                                <h6>Submitted File</h6>
+                                                <p class="text-muted mb-0">
+                                                    Submitted: {{ student_assignment.submitted_date|date:"M d, Y h:i A" }}
+                                                    {% if student_assignment.is_late %}
+                                                        <span class="badge bg-warning ms-2">Late</span>
+                                                    {% endif %}
+                                                </p>
+                                            </div>
+                                            <div class="ms-auto">
+                                                <a href="{{ student_assignment.file.url }}" 
+                                                   class="btn btn-outline-primary" 
+                                                   target="_blank"
+                                                   download>
+                                                    <i class="bi bi-download"></i> Download
+                                                </a>
+                                            </div>
+                                        </div>
+                                        
+                                        {% if student_assignment.feedback %}
+                                            <div class="mt-3">
+                                                <h6>Your Comments:</h6>
+                                                <div class="p-3 bg-light rounded">
+                                                    {{ student_assignment.feedback|linebreaks }}
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <p class="text-muted">You haven't submitted any work for this assignment yet.</p>
+                                        
+                                        {% if student_assignment.can_student_submit_work.0 %}
+                                            <a href="#" class="btn btn-primary">
+                                                <i class="bi bi-upload"></i> Submit Work
+                                            </a>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Feedback Section -->
+                    {% if student_assignment.can_view_feedback %}
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">Teacher Feedback</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if student_assignment.score is not None %}
+                                        <div class="row mb-4">
+                                            <div class="col-md-6">
+                                                <div class="p-3 bg-light rounded">
+                                                    <h6>Score</h6>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="display-4 fw-bold text-{{ student_assignment.get_grade_color }}">
+                                                            {{ student_assignment.score }}/{{ student_assignment.assignment.max_score }}
+                                                        </div>
+                                                        <div class="ms-3">
+                                                            <span class="badge bg-{{ student_assignment.get_grade_color }} fs-6">
+                                                                {{ student_assignment.get_score_percentage|floatformat:1 }}%
+                                                            </span>
+                                                            <div class="mt-1 small">Grade: {{ student_assignment.get_grade_letter }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <div class="p-3 bg-light rounded">
+                                                    <h6>Graded On</h6>
+                                                    <p class="mb-0">
+                                                        <i class="bi bi-calendar-check"></i> 
+                                                        {{ student_assignment.graded_date|date:"M d, Y" }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if student_assignment.teacher_comments %}
+                                        <div class="mb-3">
+                                            <h6>Teacher Comments:</h6>
+                                            <div class="p-3 bg-light rounded">
+                                                {{ student_assignment.teacher_comments|linebreaks }}
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    {% if student_assignment.feedback_document %}
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-file-earmark-text fs-3 text-primary me-3"></i>
+                                            <div>
+                                                <h6>Feedback Document</h6>
+                                                <p class="text-muted mb-0">Download teacher's feedback document</p>
+                                            </div>
+                                            <div class="ms-auto">
+                                                <a href="{{ student_assignment.feedback_document.url }}" 
+                                                   class="btn btn-outline-primary" 
+                                                   target="_blank"
+                                                   download>
+                                                    <i class="bi bi-download"></i> Download
+                                                </a>
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Related Assignments -->
+                    {% if related_assignments %}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Related Assignments</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="list-group">
+                                        {% for related in related_assignments %}
+                                            <a href="{% url 'student_assignment_detail' pk=related.pk %}" 
+                                               class="list-group-item list-group-item-action">
+                                                <div class="d-flex w-100 justify-content-between">
+                                                    <h6 class="mb-1">{{ related.assignment.title }}</h6>
+                                                    <small class="text-{{ related.is_overdue|yesno:'danger,success' }}">
+                                                        {{ related.get_time_remaining }}
+                                                    </small>
+                                                </div>
+                                                <p class="mb-1 text-muted small">
+                                                    Due: {{ related.assignment.due_date|date:"M d, Y" }}
+                                                </p>
+                                                <small>
+                                                    <span class="badge bg-{{ related.get_submission_status.color }}">
+                                                        {{ related.get_submission_status.text }}
+                                                    </span>
+                                                </small>
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Ensure all download links open in new tab and have download attribute
+        $('a[href*="download_assignment_document"]').each(function() {
+            if (!$(this).attr('target')) {
+                $(this).attr('target', '_blank');
+            }
+            if (!$(this).attr('download')) {
+                $(this).attr('download', '');
+            }
+        });
+        
+        // Also ensure any file download links have proper attributes
+        $('a[href$=".pdf"], a[href$=".doc"], a[href$=".docx"], a[href$=".txt"]').each(function() {
+            if (!$(this).attr('target')) {
+                $(this).attr('target', '_blank');
+            }
+            if (!$(this).attr('download')) {
+                $(this).attr('download', '');
+            }
+        });
+    });
+</script>
+{% endblock %}

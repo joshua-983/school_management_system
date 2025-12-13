@@ -1,0 +1,587 @@
+{% extends 'base.html' %}
+{% load static assignment_filters %}
+
+{% block title %}Assignment Documents - {{ student.get_full_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Title Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="bi bi-file-earmark-text text-primary me-2"></i>
+                Assignment Documents
+            </h1>
+            <p class="mb-0 text-muted">Access and download teacher-provided documents</p>
+        </div>
+        <a href="{% url 'student_assignment_library' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Library
+        </a>
+    </div>
+
+    <!-- Assignment Library Stats Card -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ assignments.count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-journal-text fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Documents Available
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ assignments_with_docs }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-file-earmark-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Submission Rate
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ submission_rate }}%</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-upload fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Recent Downloads
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-download fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Search and Filter -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-search me-2"></i>Search Assignment Documents
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="subject" class="form-label">Subject</label>
+                    <select name="subject" id="subject" class="form-select">
+                        <option value="">All Subjects</option>
+                        {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if request.GET.subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                            {{ subject.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="PENDING" {% if request.GET.status == "PENDING" %}selected{% endif %}>Pending</option>
+                        <option value="SUBMITTED" {% if request.GET.status == "SUBMITTED" %}selected{% endif %}>Submitted</option>
+                        <option value="GRADED" {% if request.GET.status == "GRADED" %}selected{% endif %}>Graded</option>
+                        <option value="LATE" {% if request.GET.status == "LATE" %}selected{% endif %}>Late</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="has_document" class="form-label">Document Type</label>
+                    <select name="has_document" id="has_document" class="form-select">
+                        <option value="">All Documents</option>
+                        <option value="yes" {% if request.GET.has_document == "yes" %}selected{% endif %}>Has Document</option>
+                        <option value="no" {% if request.GET.has_document == "no" %}selected{% endif %}>No Document</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="q" 
+                           placeholder="Search by assignment title or description..." 
+                           value="{{ request.GET.q }}">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="d-grid gap-2 d-md-flex">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-filter me-1"></i> Apply Filters
+                        </button>
+                        <a href="{% url 'student_assignment_documents' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i> Clear
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Documents List -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-file-earmark-text me-2"></i>Assignment Documents
+                <span class="badge bg-primary ms-2">{{ assignments_with_docs }} available</span>
+            </h6>
+            <div>
+                <button class="btn btn-sm btn-outline-primary" id="printBtn">
+                    <i class="bi bi-printer me-1"></i> Print List
+                </button>
+                <button class="btn btn-sm btn-outline-success" id="exportBtn">
+                    <i class="bi bi-download me-1"></i> Export
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if assignments_with_docs == 0 %}
+            <div class="text-center py-5">
+                <div class="mb-3">
+                    <i class="bi bi-file-earmark-x text-muted" style="font-size: 4rem;"></i>
+                </div>
+                <h4 class="text-muted">No assignment documents available</h4>
+                <p class="text-muted">Your teachers haven't uploaded any documents yet.</p>
+                <a href="{% url 'student_assignment_library' %}" class="btn btn-primary mt-2">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Assignment Library
+                </a>
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="documentsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Assignment</th>
+                            <th>Subject</th>
+                            <th>Teacher</th>
+                            <th>Due Date</th>
+                            <th>Document</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in assignments %}
+                            {% if assignment|has_document %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <strong>{{ assignment.assignment.title }}</strong>
+                                    {% if assignment.assignment.description %}
+                                    <p class="text-muted mb-0 small" style="max-width: 200px;">
+                                        {{ assignment.assignment.description|truncate_text:60 }}
+                                    </p>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        {{ assignment.assignment.subject.name }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% with teacher=assignment.assignment.class_assignment.teacher %}
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-sm bg-light rounded-circle d-flex align-items-center justify-content-center me-2">
+                                            <i class="bi bi-person text-dark"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ teacher.get_full_name }}</div>
+                                            <small class="text-muted">{{ teacher.email }}</small>
+                                        </div>
+                                    </div>
+                                    {% endwith %}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-semibold">{{ assignment.assignment.due_date|date:"M d, Y" }}</span>
+                                        <small class="text-muted">{{ assignment.assignment.due_date|time:"g:i A" }}</small>
+                                        {% if assignment|is_overdue %}
+                                        <span class="badge bg-danger mt-1">Overdue</span>
+                                        {% elif assignment|due_soon %}
+                                        <span class="badge bg-warning mt-1">Due Soon</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-2">
+                                            {% if assignment|document_type == "PDF" %}
+                                            <i class="bi bi-filetype-pdf text-danger fs-4"></i>
+                                            {% elif assignment|document_type == "Word" %}
+                                            <i class="bi bi-filetype-docx text-primary fs-4"></i>
+                                            {% elif assignment|document_type == "Image" %}
+                                            <i class="bi bi-filetype-jpg text-success fs-4"></i>
+                                            {% else %}
+                                            <i class="bi bi-file-earmark-text text-secondary fs-4"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ assignment|document_type }}</div>
+                                            <small class="text-muted">{{ assignment|file_size }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if assignment.status == "PENDING" %}
+                                    <span class="badge bg-warning">Pending</span>
+                                    {% elif assignment.status == "SUBMITTED" %}
+                                    <span class="badge bg-info">Submitted</span>
+                                    {% elif assignment.status == "GRADED" %}
+                                    <span class="badge bg-success">Graded</span>
+                                    {% elif assignment.status == "LATE" %}
+                                    <span class="badge bg-danger">Late</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        {% if assignment.assignment.attachment and assignment.assignment.attachment.name %}
+                                        <a href="{% url 'download_assignment_document' assignment.assignment.pk %}"
+                                           class="btn btn-primary"
+                                           title="Download Document"
+                                           data-bs-toggle="tooltip"
+                                           target="_blank"
+                                           download>
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                        {% endif %}
+                                        <a href="{% url 'student_assignment_detail' assignment.pk %}" 
+                                           class="btn btn-info" 
+                                           title="View Details"
+                                           data-bs-toggle="tooltip">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        {% if assignment|can_submit %}
+                                        <a href="{% url 'submit_assignment' assignment.pk %}" 
+                                           class="btn btn-success" 
+                                           title="Submit Work"
+                                           data-bs-toggle="tooltip">
+                                            <i class="bi bi-upload"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Access Section -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-lightning-charge me-2"></i>Quick Access
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="bi bi-journal-text fs-2 mb-2"></i>
+                                <span>Assignment Library</span>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'student_graded_assignments' %}" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="bi bi-award fs-2 mb-2"></i>
+                                <span>Graded Assignments</span>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'student_submitted_assignments' %}" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="bi bi-upload fs-2 mb-2"></i>
+                                <span>Submitted Work</span>
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <a href="{% url 'student_dashboard' %}" class="btn btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="bi bi-speedometer2 fs-2 mb-2"></i>
+                                <span>Dashboard</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-keyboard me-2"></i>Keyboard Shortcuts
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span><kbd>Alt</kbd> + <kbd>L</kbd></span>
+                                <span class="text-muted">Open Assignment Library</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span><kbd>Alt</kbd> + <kbd>D</kbd></span>
+                                <span class="text-muted">Download Document</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span><kbd>Alt</kbd> + <kbd>S</kbd></span>
+                                <span class="text-muted">Submit Assignment</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center py-2">
+                                <span><kbd>Alt</kbd> + <kbd>H</kbd></span>
+                                <span class="text-muted">Show All Shortcuts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .document-icon {
+        font-size: 2rem;
+        transition: transform 0.2s;
+    }
+    
+    .document-icon:hover {
+        transform: scale(1.1);
+    }
+    
+    .assignment-row:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        cursor: pointer;
+    }
+    
+    .badge-document {
+        font-size: 0.75em;
+        padding: 0.25em 0.5em;
+    }
+    
+    kbd {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.875em;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+        
+        // Ensure all download links open in new tab and have download attribute
+        $('a[href*="download_assignment_document"]').each(function() {
+            if (!$(this).attr('target')) {
+                $(this).attr('target', '_blank');
+            }
+            if (!$(this).attr('download')) {
+                $(this).attr('download', '');
+            }
+        });
+        
+        // Print functionality
+        $('#printBtn').click(function() {
+            window.print();
+        });
+        
+        // Export functionality
+        $('#exportBtn').click(function() {
+            // Simple export to CSV
+            let csv = [];
+            let rows = document.querySelectorAll("#documentsTable tr");
+            
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll("td, th");
+                
+                for (let j = 0; j < cols.length; j++) {
+                    // Remove icons and buttons from export
+                    let text = cols[j].innerText.trim();
+                    row.push(text);
+                }
+                
+                csv.push(row.join(","));        
+            }
+            
+            // Download CSV file
+            downloadCSV(csv.join("\n"), 'assignment_documents.csv');
+        });
+        
+        function downloadCSV(csv, filename) {
+            let csvFile;
+            let downloadLink;
+            
+            // CSV file
+            csvFile = new Blob([csv], {type: "text/csv"});
+            
+            // Download link
+            downloadLink = document.createElement("a");
+            
+            // File name
+            downloadLink.download = filename;
+            
+            // Create a link to the file
+            downloadLink.href = window.URL.createObjectURL(csvFile);
+            
+            // Hide download link
+            downloadLink.style.display = "none";
+            
+            // Add the link to DOM
+            document.body.appendChild(downloadLink);
+            
+            // Click download link
+            downloadLink.click();
+        }
+        
+        // Make rows clickable
+        $('#documentsTable tbody tr').click(function(e) {
+            // Don't trigger if clicking on buttons
+            if (!$(e.target).closest('.btn').length) {
+                const viewLink = $(this).find('a[href*="student_assignment_detail"]').attr('href');
+                if (viewLink) {
+                    window.location.href = viewLink;
+                }
+            }
+        });
+        
+        // Keyboard shortcuts
+        $(document).keydown(function(e) {
+            // Alt + L - Assignment Library
+            if (e.altKey && e.keyCode === 76) {
+                e.preventDefault();
+                window.location.href = "{% url 'student_assignment_library' %}";
+            }
+            
+            // Alt + D - Focus on first download button
+            if (e.altKey && e.keyCode === 68) {
+                e.preventDefault();
+                const firstDownload = $('a[href*="download_assignment_document"]').first();
+                if (firstDownload.length) {
+                    firstDownload.focus();
+                }
+            }
+            
+            // Alt + S - Submit assignment
+            if (e.altKey && e.keyCode === 83) {
+                e.preventDefault();
+                const firstSubmit = $('a[href*="submit_assignment"]').first();
+                if (firstSubmit.length) {
+                    window.location.href = firstSubmit.attr('href');
+                }
+            }
+        });
+        
+        // Auto-refresh notifications
+        setInterval(function() {
+            // You could add notification checking here
+            // For example: check for new documents
+        }, 30000); // Every 30 seconds
+    });
+</script>
+{% endblock %}

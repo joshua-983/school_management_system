@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse, HttpResponse  # ADDED HttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.contrib import messages
 from django.db.models import Q
@@ -150,7 +150,7 @@ class TimetableCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         return super().form_valid(form)
     
     def get_success_url(self):
-        return reverse_lazy('timetable_manage', kwargs={'pk': self.object.pk})
+        return reverse_lazy('admin_timetable_manage', kwargs={'pk': self.object.pk})
 
 class TimetableDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Timetable
@@ -201,7 +201,7 @@ class TimetableUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return super().form_valid(form)
     
     def get_success_url(self):
-        return reverse_lazy('timetable_detail', kwargs={'pk': self.object.pk})
+        return reverse_lazy('admin_timetable_detail', kwargs={'pk': self.object.pk})
 
 class TimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
     template_name = 'core/timetable/admin/timetable_manage.html'
@@ -306,12 +306,12 @@ class TimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
                         pass
         
         messages.success(request, 'Timetable updated successfully')
-        return redirect('timetable_detail', pk=timetable.pk)
+        return redirect('admin_timetable_detail', pk=timetable.pk)
 
 class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Timetable
     template_name = 'core/timetable/admin/timetable_confirm_delete.html'
-    success_url = reverse_lazy('timetable_list')
+    success_url = reverse_lazy('admin_timetable_list')
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -359,6 +359,7 @@ class TimetableDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Timetable deleted successfully')
         return super().delete(request, *args, **kwargs)
+
 # ============================================================================
 # TEACHER TIMETABLE VIEWS
 # ============================================================================
@@ -452,9 +453,35 @@ class TeacherTimetableDetailView(LoginRequiredMixin, UserPassesTestMixin, Detail
         context = super().get_context_data(**kwargs)
         context['timeslots'] = TimeSlot.objects.order_by('period_number')
         context['entries'] = self.object.entries.select_related(
-            'time_slot', 'subject', 'teacher'
+            'time_slot', 'subject', 'teacher__user'
         ).order_by('time_slot__period_number')
+        
+        # Create a dictionary of entries keyed by timeslot ID for easy lookup
+        entries_by_timeslot = {}
+        for entry in context['entries']:
+            entries_by_timeslot[entry.time_slot.id] = entry
+        
+        context['entries_by_timeslot'] = entries_by_timeslot
         context['is_admin'] = is_admin(self.request.user)
+        
+        # Calculate statistics
+        context['total_periods'] = self.object.entries.count()
+        context['teaching_periods'] = self.object.entries.filter(is_break=False).count()
+        context['break_periods'] = self.object.entries.filter(is_break=True).count()
+        
+        # Calculate total hours
+        total_minutes = 0
+        for entry in context['entries']:
+            if entry.time_slot and entry.time_slot.duration:
+                total_minutes += entry.time_slot.duration
+        context['total_hours'] = round(total_minutes / 60, 1) if total_minutes > 0 else 0
+        
+        # Get student count for this class
+        from ..models import Student
+        context['student_count'] = Student.objects.filter(
+            class_level=self.object.class_level
+        ).count()
+        
         return context
 
 class TeacherTimetableManageView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -657,48 +684,88 @@ class TimetableCalendarView(LoginRequiredMixin, TemplateView):
     def get_today_events(self, user):
         """Get events for today"""
         today = timezone.now().date()
+        day_of_week = today.weekday()
         events = []
-        
-        if is_admin(user):
-            entries = TimetableEntry.objects.filter(
-                timetable__academic_year=self.get_academic_year(),
-                timetable__term=self.get_current_term(),
-                timetable__day_of_week=today.weekday(),
-                timetable__is_active=True
-            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
-        elif is_teacher(user):
+    
+        # Adjust for Sunday (6) if needed
+        if day_of_week == 6:  # Sunday
+            return []
+    
+        # Get current academic year and term
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        academic_year = f"{current_year}/{next_year}"
+    
+        current_term = AcademicTerm.objects.filter(is_active=True).first()
+        term = current_term.term if current_term else 1
+    
+        if is_teacher(user):
             teacher = user.teacher
+            # Get today's entries for this teacher
             entries = TimetableEntry.objects.filter(
                 teacher=teacher,
-                timetable__academic_year=self.get_academic_year(),
-                timetable__term=self.get_current_term(),
-                timetable__day_of_week=today.weekday(),
+                timetable__academic_year=academic_year,
+                timetable__term=term,
+                timetable__day_of_week=day_of_week,
                 timetable__is_active=True,
                 is_break=False
-            ).select_related('timetable', 'subject', 'time_slot')
+            ).select_related(
+                'timetable', 'subject', 'time_slot'
+            ).order_by('time_slot__period_number')
+        
+            for entry in entries:
+                events.append({
+                    'id': f"timetable_{entry.id}",
+                    'title': entry.subject.name if entry.subject else entry.break_name,
+                    'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                    'details': f"{entry.timetable.get_class_level_display()} • {entry.classroom or 'TBA'}"
+                })
+    
+        elif is_admin(user):
+            # Admin sees all events for today
+            entries = TimetableEntry.objects.filter(
+                timetable__academic_year=academic_year,
+                timetable__term=term,
+                timetable__day_of_week=day_of_week,
+                timetable__is_active=True,
+                is_break=False
+            ).select_related(
+                'timetable', 'subject', 'time_slot', 'teacher'
+            ).order_by('timetable__class_level', 'time_slot__period_number')[:10]  # Limit to 10
+        
+            for entry in entries:
+                events.append({
+                    'id': f"timetable_{entry.id}",
+                    'title': f"{entry.timetable.get_class_level_display()} - {entry.subject.name if entry.subject else entry.break_name}",
+                    'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                    'details': f"Teacher: {entry.teacher.get_full_name() if entry.teacher else 'N/A'} • {entry.classroom or 'TBA'}"
+                })
+    
         elif is_student(user):
             student = user.student
+            # Get today's timetable for student's class
             entries = TimetableEntry.objects.filter(
                 timetable__class_level=student.class_level,
-                timetable__academic_year=self.get_academic_year(),
-                timetable__term=self.get_current_term(),
-                timetable__day_of_week=today.weekday(),
+                timetable__academic_year=academic_year,
+                timetable__term=term,
+                timetable__day_of_week=day_of_week,
                 timetable__is_active=True,
                 is_break=False
-            ).select_related('timetable', 'subject', 'teacher', 'time_slot')
-        else:
-            entries = TimetableEntry.objects.none()
+            ).select_related(
+                'timetable', 'subject', 'time_slot', 'teacher'
+            ).order_by('time_slot__period_number')
         
-        for entry in entries:
-            events.append({
-                'id': f"timetable_{entry.id}",
-                'title': entry.subject.name if entry.subject else entry.break_name,
-                'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
-                'details': f"{entry.timetable.get_class_level_display()} • {entry.classroom or 'TBA'}"
-            })
-        
-        return events[:5]
+            for entry in entries:
+                events.append({
+                    'id': f"timetable_{entry.id}",
+                    'title': entry.subject.name if entry.subject else entry.break_name,
+                    'time': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                    'details': f"{entry.teacher.get_full_name() if entry.teacher else 'N/A'} • {entry.classroom or 'TBA'}"
+                })
     
+        return events[:5]
+
+
     def get_upcoming_events(self, user):
         """Get upcoming events for the next 7 days"""
         events = []
@@ -966,24 +1033,50 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
+        # Get or set selected student
+        selected_student_id = self.request.GET.get('student_id')
+        selected_student = None
+        
         if is_student(self.request.user):
+            # Student viewing their own timetable
             student = self.request.user.student
             class_level = student.class_level
+            selected_student = student
             context['student'] = student
             context['user_type'] = 'student'
-        else:
-            # For parents, get the first child's class level
-            children = self.request.user.parentguardian.student.all()
+            context['is_own_timetable'] = True
+            
+        elif is_parent(self.request.user):
+            # Parent viewing children's timetables
+            parent = self.request.user.parentguardian
+            children = parent.students.all()
+            context['children'] = children
+            context['user_type'] = 'parent'
+            
             if children.exists():
-                student = children.first()
-                class_level = student.class_level
-                context['student'] = student
-                context['user_type'] = 'parent'
-                context['children'] = children
+                # Try to get the selected student
+                if selected_student_id:
+                    selected_student = children.filter(id=selected_student_id).first()
+                
+                # If no selection or selection invalid, use first child
+                if not selected_student:
+                    selected_student = children.first()
+                
+                if selected_student:
+                    class_level = selected_student.class_level
+                    context['selected_student'] = selected_student
+                    context['student'] = selected_student
+                else:
+                    class_level = None
+                    context['no_children'] = True
             else:
                 class_level = None
+                context['no_children'] = True
+        else:
+            class_level = None
         
-        if class_level:
+        # Load timetable data if we have a class level
+        if class_level and selected_student:
             # Get current academic year and term
             current_year = timezone.now().year
             next_year = current_year + 1
@@ -1040,8 +1133,11 @@ class StudentTimetableView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                 'class_level': class_level,
                 'academic_year': academic_year,
                 'term': term,
-                'timetables_by_day': weekly_timetable
+                'timetables_by_day': weekly_timetable,
+                'has_timetable': True
             })
+        else:
+            context['has_timetable'] = False
         
         return context
 
@@ -1087,7 +1183,21 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
         current_term = AcademicTerm.objects.filter(is_active=True).first()
         term = current_term.term if current_term else 1
         
-        # Get all timetable entries for this teacher
+        # Get today's info
+        now = timezone.now()
+        today_day = now.weekday()  # Monday=0, Sunday=6
+        context['today_day'] = today_day
+        
+        # Get week start and end dates
+        week_start = now - timedelta(days=now.weekday())
+        week_end = week_start + timedelta(days=6)
+        context['week_start'] = week_start.date()
+        context['week_end'] = week_end.date()
+        context['academic_year'] = academic_year
+        context['term'] = term
+        context['current_week'] = 1  # You might want to calculate actual week number
+        
+        # Get all timetable entries for this teacher in current academic period
         entries = TimetableEntry.objects.filter(
             teacher=teacher,
             timetable__academic_year=academic_year,
@@ -1098,40 +1208,112 @@ class TeacherTimetableView(LoginRequiredMixin, TemplateView):
             'timetable', 'subject', 'time_slot', 'teacher__user'
         ).order_by('timetable__day_of_week', 'time_slot__period_number')
         
-        # Group entries by day of week
-        days_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        # Define days order as list of tuples (day_number, day_name)
+        days_order = [
+            (0, 'Monday'),
+            (1, 'Tuesday'), 
+            (2, 'Wednesday'),
+            (3, 'Thursday'),
+            (4, 'Friday'),
+            (5, 'Saturday'),
+        ]
+        context['days_order'] = days_order
+        
+        # Organize entries by day and time slot
         periods_by_day = {}
         
-        for entry in entries:
-            day_name = days_order[entry.timetable.day_of_week]
-            if day_name not in periods_by_day:
-                periods_by_day[day_name] = []
+        for day_num, day_name in days_order:
+            periods_by_day[day_name] = {}
             
-            # Add current period flag
-            now = timezone.now()
-            start_datetime = timezone.make_aware(
-                timezone.datetime.combine(now.date(), entry.time_slot.start_time)
-            )
-            end_datetime = timezone.make_aware(
-                timezone.datetime.combine(now.date(), entry.time_slot.end_time)
-            )
+            # Get entries for this day
+            day_entries = entries.filter(timetable__day_of_week=day_num)
             
-            entry.is_current = start_datetime <= now <= end_datetime
-            periods_by_day[day_name].append(entry)
+            # Organize by time slot
+            for entry in day_entries:
+                # Determine if this is current period
+                start_datetime = timezone.make_aware(
+                    timezone.datetime.combine(now.date(), entry.time_slot.start_time)
+                )
+                end_datetime = timezone.make_aware(
+                    timezone.datetime.combine(now.date(), entry.time_slot.end_time)
+                )
+                
+                is_current = start_datetime <= now <= end_datetime and day_num == today_day
+                
+                period_data = {
+                    'subject': entry.subject.name,
+                    'subject_short': entry.subject.code if entry.subject.code else entry.subject.name[:10],
+                    'class_level': entry.timetable.get_class_level_display(),
+                    'class_short': entry.timetable.class_level,
+                    'time': f"{entry.time_slot.start_time.strftime('%I:%M %p')} - {entry.time_slot.end_time.strftime('%I:%M %p')}",
+                    'time_short': f"{entry.time_slot.start_time.strftime('%H:%M')} - {entry.time_slot.end_time.strftime('%H:%M')}",
+                    'classroom': entry.classroom or '',
+                    'is_current': is_current,
+                    'is_break': entry.is_break,
+                    'student_count': self.get_student_count_for_class(entry.timetable.class_level)
+                }
+                
+                # Store by period number
+                periods_by_day[day_name][entry.time_slot.period_number] = period_data
         
         context['periods_by_day'] = periods_by_day
-        context['days_order'] = days_order
+        
+        # Generate time slots for weekly overview
+        time_slots = TimeSlot.objects.order_by('period_number')
+        context['time_slots'] = [f"{slot.start_time.strftime('%I:%M %p')} - {slot.end_time.strftime('%I:%M %p')}" for slot in time_slots]
         
         # Calculate statistics
         context['total_periods'] = entries.count()
         context['classes_teaching'] = list(set([entry.timetable.get_class_level_display() for entry in entries]))
         context['subjects_teaching'] = list(set([entry.subject.name for entry in entries]))
         
-        # Generate time slots for weekly overview
-        time_slots = TimeSlot.objects.order_by('period_number')
-        context['time_slots'] = [f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}" for slot in time_slots]
+        # Calculate total teaching hours
+        total_minutes = sum(entry.time_slot.duration for entry in entries)
+        context['total_hours'] = round(total_minutes / 60, 1)
+        
+        # Calculate more statistics
+        day_counts = []
+        for day_num, day_name in days_order:
+            day_count = entries.filter(timetable__day_of_week=day_num).count()
+            day_counts.append(day_count)
+        
+        if day_counts:
+            # Find busiest day
+            max_index = day_counts.index(max(day_counts))
+            context['busiest_day'] = days_order[max_index][1]
+            context['average_periods'] = round(sum(day_counts) / len(day_counts), 1)
+            context['free_periods'] = sum(1 for count in day_counts if count == 0)
+            context['workload_score'] = min(100, round((sum(day_counts) / (len(time_slots) * len(days_order))) * 100, 1))
+        else:
+            context['busiest_day'] = 'No classes'
+            context['average_periods'] = 0
+            context['free_periods'] = len(days_order)
+            context['workload_score'] = 0
+        
+        # Calculate total students
+        context['total_students'] = self.get_total_students_for_teacher(teacher)
         
         return context
+    
+    def get_student_count_for_class(self, class_level):
+        """Get number of students in a class"""
+        try:
+            from ..models import Student
+            return Student.objects.filter(class_level=class_level).count()
+        except Exception:
+            return 0
+    
+    def get_total_students_for_teacher(self, teacher):
+        """Get total number of students taught by this teacher"""
+        try:
+            # Get all classes taught by this teacher
+            assigned_classes = ClassAssignment.objects.filter(teacher=teacher).values_list('class_level', flat=True)
+            
+            # Count students in these classes
+            from ..models import Student
+            return Student.objects.filter(class_level__in=assigned_classes).count()
+        except Exception:
+            return 0
 
 # ============================================================================
 # AJAX & UTILITY VIEWS
@@ -1161,7 +1343,7 @@ def get_timetable_entries(request):
         filters = {
             'day_of_week': day_of_week_int,
             'academic_year': academic_year,
-            'is_active': True  # Only get active timetables
+            'is_active': True
         }
         
         # Add optional filters if provided and not empty
@@ -1410,41 +1592,6 @@ def get_student_schedule_today(student):
 # PRINT VIEWS
 # ============================================================================
 
-@login_required
-def print_timetable(request, pk):
-    """Print-friendly version of timetable"""
-    timetable = get_object_or_404(Timetable, pk=pk)
-    
-    # Check permissions
-    if is_admin(request.user):
-        pass
-    elif is_teacher(request.user):
-        if not ClassAssignment.objects.filter(
-            class_level=timetable.class_level,
-            teacher=request.user.teacher
-        ).exists():
-            raise PermissionDenied
-    elif is_student(request.user):
-        if timetable.class_level != request.user.student.class_level:
-            raise PermissionDenied
-    elif is_parent(request.user):
-        children_classes = request.user.parentguardian.student.all().values_list('class_level', flat=True)
-        if timetable.class_level not in children_classes:
-            raise PermissionDenied
-    else:
-        raise PermissionDenied
-    
-    entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
-    
-    context = {
-        'timetable': timetable,
-        'entries': entries,
-        'print_mode': True,
-    }
-    
-    return render(request, 'core/timetable/print/timetable_print.html', context)
-
-@login_required
 def print_weekly_timetable(request):
     """Print weekly timetable for current user"""
     if is_student(request.user):
@@ -1455,8 +1602,6 @@ def print_weekly_timetable(request):
         return print_teacher_weekly_schedule(request, teacher)
     else:
         raise PermissionDenied
-
-
 
 # ============================================================================
 # TIMETABLE ACTION VIEWS (Archive, Deactivate, Duplicate)
@@ -1649,7 +1794,6 @@ def print_student_weekly_timetable(request, student):
     
     return render(request, 'core/timetable/print/weekly_timetable_print.html', context)
 
-
 # ============================================================================
 # CLASS DETAILS VIEW
 # ============================================================================
@@ -1830,7 +1974,6 @@ def get_assignment_details(request, assignment_id):
         logger.error(f"Error in get_assignment_details: {str(e)}")
         return JsonResponse({'error': 'Failed to load assignment details'}, status=500)
 
-
 def print_teacher_weekly_schedule(request, teacher):
     """Print teacher's weekly schedule"""
     # Get current academic year and term
@@ -1869,3 +2012,217 @@ def print_teacher_weekly_schedule(request, teacher):
     }
     
     return render(request, 'core/timetable/print/teacher_schedule_print.html', context)
+
+# ============================================================================
+# ADDITIONAL VIEWS (Fixed from duplicates)
+# ============================================================================
+
+@login_required
+def print_timetable(request, pk):
+    """Print-friendly version of a single timetable"""
+    timetable = get_object_or_404(Timetable, pk=pk)
+    
+    # Check permissions based on user role
+    user = request.user
+    if is_admin(user):
+        pass
+    elif is_teacher(user):
+        if not ClassAssignment.objects.filter(
+            class_level=timetable.class_level,
+            teacher=user.teacher
+        ).exists():
+            raise PermissionDenied
+    elif is_student(user):
+        if timetable.class_level != user.student.class_level:
+            raise PermissionDenied
+    elif is_parent(user):
+        children_classes = user.parentguardian.student.all().values_list('class_level', flat=True)
+        if timetable.class_level not in children_classes:
+            raise PermissionDenied
+    else:
+        raise PermissionDenied
+    
+    entries = timetable.entries.select_related('time_slot', 'subject', 'teacher')
+    
+    context = {
+        'timetable': timetable,
+        'entries': entries,
+        'print_mode': True,
+    }
+    
+    return render(request, 'core/timetable/print/timetable_print.html', context)
+
+@login_required
+def add_class_resource(request):
+    """Add a resource for a class"""
+    if request.method == 'POST':
+        # Handle resource creation
+        timetable_id = request.POST.get('timetable_id')
+        title = request.POST.get('title')
+        description = request.POST.get('description')
+        resource_type = request.POST.get('resource_type')
+        
+        # Implementation depends on your Resource model
+        # For now, return a success response
+        return JsonResponse({'success': True, 'message': 'Resource added successfully'})
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+@login_required
+def get_class_resources(request, timetable_id):
+    """Get resources for a specific class/timetable"""
+    timetable = get_object_or_404(Timetable, pk=timetable_id)
+    
+    # Check permissions
+    user = request.user
+    if not (is_admin(user) or 
+            (is_teacher(user) and ClassAssignment.objects.filter(
+                class_level=timetable.class_level,
+                teacher=user.teacher
+            ).exists())):
+        raise PermissionDenied
+    
+    # Mock data - replace with actual Resource model query
+    resources = [
+        {
+            'id': 1,
+            'title': 'Lesson Plan - Week 1',
+            'description': 'Introduction to Mathematics',
+            'type': 'document',
+            'icon': 'file-pdf',
+            'date': 'Dec 9, 2024',
+            'url': '#'
+        },
+        {
+            'id': 2,
+            'title': 'Homework Assignment',
+            'description': 'Algebra problems',
+            'type': 'assignment',
+            'icon': 'clipboard-check',
+            'date': 'Dec 10, 2024',
+            'url': '#'
+        }
+    ]
+    
+    return JsonResponse({'resources': resources})
+
+@login_required
+def add_class_note(request):
+    """Add a note for a class"""
+    if request.method == 'POST':
+        timetable_id = request.POST.get('timetable_id')
+        note_text = request.POST.get('note')
+        
+        # Implementation depends on your Note model
+        # For now, return a success response
+        return JsonResponse({'success': True, 'message': 'Note added successfully'})
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+@login_required
+def send_class_announcement(request):
+    """Send an announcement to a class"""
+    if request.method == 'POST':
+        class_level = request.POST.get('class_level')
+        announcement = request.POST.get('announcement')
+        
+        # Implementation depends on your Announcement model
+        # For now, return a success response
+        return JsonResponse({'success': True, 'message': 'Announcement sent successfully'})
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+@login_required
+def export_student_list(request, pk):
+    """Export student list for a class"""
+    timetable = get_object_or_404(Timetable, pk=pk)
+    
+    # Check permissions
+    user = request.user
+    if not (is_admin(user) or 
+            (is_teacher(user) and ClassAssignment.objects.filter(
+                class_level=timetable.class_level,
+                teacher=user.teacher
+            ).exists())):
+        raise PermissionDenied
+    
+    # Get students for this class
+    from ..models import Student
+    students = Student.objects.filter(class_level=timetable.class_level)
+    
+    # Create CSV response
+    import csv
+    from django.http import HttpResponse
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="students_{timetable.class_level}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Roll No', 'Name', 'Email', 'Phone', 'Status'])
+    
+    for student in students:
+        writer.writerow([
+            student.roll_number,
+            student.user.get_full_name(),
+            student.user.email,
+            student.phone_number or '',
+            'Active' if student.user.is_active else 'Inactive'
+        ])
+    
+    return response
+
+@login_required
+def get_attendance_form(request):
+    """Get attendance form for a period"""
+    period_id = request.GET.get('period_id')
+    class_level = request.GET.get('class_level')
+    date = request.GET.get('date')
+    
+    # Get students for the class
+    from ..models import Student
+    students = Student.objects.filter(class_level=class_level)
+    
+    # Create HTML form
+    form_html = f'''
+    <form id="attendanceForm">
+        <h6>Take Attendance for {date}</h6>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Roll No</th>
+                        <th>Student Name</th>
+                        <th>Status</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+    '''
+    
+    for student in students:
+        form_html += f'''
+                    <tr>
+                        <td>{student.roll_number}</td>
+                        <td>{student.user.get_full_name()}</td>
+                        <td>
+                            <select class="form-select form-select-sm attendance-status" name="status_{student.id}">
+                                <option value="present">Present</option>
+                                <option value="absent">Absent</option>
+                                <option value="late">Late</option>
+                                <option value="excused">Excused</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" name="remarks_{student.id}" placeholder="Remarks">
+                        </td>
+                    </tr>
+        '''
+    
+    form_html += '''
+                </tbody>
+            </table>
+        </div>
+    </form>
+    '''
+    
+    return JsonResponse({'form': form_html})

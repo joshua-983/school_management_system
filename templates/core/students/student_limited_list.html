@@ -1,0 +1,184 @@
+<!-- core/students/student_limited_list.html -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}My Profile - Student Portal{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-person-circle me-2"></i>My Profile
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'student_dashboard' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="{% url 'student_profile' %}" class="btn btn-outline-success">
+                        <i class="bi bi-pencil-square"></i> Edit Profile
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted mb-0">View your student information and statistics</p>
+        </div>
+    </div>
+
+    <!-- Student Information Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Student Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <div class="mb-3">
+                                {% if student.user.profile_picture %}
+                                    <img src="{{ student.user.profile_picture.url }}" 
+                                         alt="Profile Picture" 
+                                         class="img-fluid rounded-circle" 
+                                         style="width: 150px; height: 150px; object-fit: cover;">
+                                {% else %}
+                                    <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center" 
+                                         style="width: 150px; height: 150px; margin: 0 auto;">
+                                        <span class="display-4 text-white">
+                                            {{ student.first_name|first }}{{ student.last_name|first }}
+                                        </span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Student ID:</strong> {{ student.student_id }}</p>
+                                    <p><strong>Name:</strong> {{ student.get_full_name }}</p>
+                                    <p><strong>Class Level:</strong> {{ student.get_class_level_display }}</p>
+                                    <p><strong>Email:</strong> {{ student.user.email|default:"Not set" }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Enrollment Date:</strong> {{ student.enrollment_date|date:"F d, Y" }}</p>
+                                    <p><strong>Date of Birth:</strong> {{ student.date_of_birth|date:"F d, Y"|default:"Not set" }}</p>
+                                    <p><strong>Gender:</strong> {{ student.get_gender_display }}</p>
+                                    <p><strong>Status:</strong> 
+                                        <span class="badge bg-{% if student.is_active %}success{% else %}danger{% endif %}">
+                                            {{ student.is_active|yesno:"Active,Inactive" }}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Total Assignments</h6>
+                            <h2 class="mb-0">{{ assignment_stats.total }}</h2>
+                        </div>
+                        <i class="bi bi-journal-text display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Pending</h6>
+                            <h2 class="mb-0">{{ assignment_stats.pending }}</h2>
+                        </div>
+                        <i class="bi bi-clock display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Submitted</h6>
+                            <h2 class="mb-0">{{ assignment_stats.submitted }}</h2>
+                        </div>
+                        <i class="bi bi-send-check display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title">Graded</h6>
+                            <h2 class="mb-0">{{ assignment_stats.graded }}</h2>
+                        </div>
+                        <i class="bi bi-check-circle display-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                                <i class="bi bi-journal-text display-5 mb-2"></i>
+                                <span>Assignment Library</span>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'student_grades' %}" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                                <i class="bi bi-award display-5 mb-2"></i>
+                                <span>View Grades</span>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'student_attendance' %}" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                                <i class="bi bi-calendar-check display-5 mb-2"></i>
+                                <span>Attendance</span>
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'student_fees' %}" class="btn btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center py-4">
+                                <i class="bi bi-cash-coin display-5 mb-2"></i>
+                                <span>Fee Status</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Add any JavaScript needed for the student profile page
+    console.log("Student profile page loaded");
+});
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@
 
 {% block extra_css %}
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <style>
     :root {
         --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -15,6 +16,12 @@
         --warning-gradient: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
         --danger-gradient: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
         --info-gradient: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        --library-gradient: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%);
+        --dark-gradient: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+        --purple-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        --orange-gradient: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        --teal-gradient: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+        --pink-gradient: linear-gradient(135deg, #ec77ab 0%, #7873f5 100%);
     }
 
     .dashboard-container {
@@ -23,6 +30,7 @@
         padding: 2rem 0;
     }
 
+    /* Enhanced Stats Cards */
     .stats-card {
         border: none;
         border-radius: 20px;
@@ -31,6 +39,7 @@
         transition: all 0.3s ease;
         overflow: hidden;
         position: relative;
+        cursor: pointer;
     }
 
     .stats-card::before {
@@ -47,18 +56,20 @@
     .stats-card .card-body {
         position: relative;
         z-index: 2;
+        padding: 1.5rem;
     }
 
     .stats-card:hover {
-        transform: translateY(-8px);
+        transform: translateY(-8px) scale(1.02);
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
     }
 
     .stats-number {
         font-size: 3rem;
-        font-weight: 700;
+        font-weight: 800;
         margin-bottom: 0.5rem;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     }
 
     .stats-icon {
@@ -71,9 +82,26 @@
     }
 
     .stats-card:hover .stats-icon {
-        transform: scale(1.2) rotate(5deg);
+        transform: scale(1.2) rotate(10deg);
+        opacity: 1;
     }
 
+    .stats-title {
+        font-size: 1rem;
+        font-weight: 600;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+
+    .stats-subtitle {
+        font-size: 0.85rem;
+        opacity: 0.8;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    /* Content Cards */
     .content-card {
         border: none;
         border-radius: 20px;
@@ -81,10 +109,12 @@
         background: white;
         transition: all 0.3s ease;
         margin-bottom: 2rem;
+        overflow: hidden;
     }
 
     .content-card:hover {
         box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+        transform: translateY(-2px);
     }
 
     .card-header {
@@ -93,11 +123,24 @@
         border-radius: 20px 20px 0 0 !important;
         padding: 1.5rem 2rem;
         border: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
+    .card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    /* Table Styles */
     .table {
         border-radius: 15px;
         overflow: hidden;
+        margin: 0;
     }
 
     .table th {
@@ -106,12 +149,16 @@
         font-weight: 600;
         border: none;
         padding: 1.2rem;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
     }
 
     .table td {
         padding: 1.2rem;
         vertical-align: middle;
         border-color: #e9ecef;
+        transition: all 0.2s ease;
     }
 
     .table tr {
@@ -121,20 +168,33 @@
     .table tr:hover {
         background-color: #f8f9fa;
         transform: translateX(8px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
+    /* Enhanced Badges */
     .badge-custom {
         padding: 0.6rem 1rem;
         border-radius: 25px;
         font-weight: 600;
         font-size: 0.85rem;
+        transition: all 0.3s ease;
     }
 
+    .badge-custom:hover {
+        transform: scale(1.05);
+    }
+
+    /* Button Styles */
     .btn-action {
         border-radius: 12px;
         padding: 0.75rem 1.5rem;
         font-weight: 600;
         transition: all 0.3s ease;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
     }
 
     .btn-action:hover {
@@ -142,34 +202,73 @@
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     }
 
+    /* Progress Bars */
     .progress {
         height: 8px;
         border-radius: 10px;
         background: #e9ecef;
+        overflow: hidden;
     }
 
     .progress-bar {
         border-radius: 10px;
         transition: width 1s ease-in-out;
+        position: relative;
+        overflow: hidden;
     }
 
+    .progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background-image: linear-gradient(
+            -45deg, 
+            rgba(255, 255, 255, 0.2) 25%, 
+            transparent 25%, 
+            transparent 50%, 
+            rgba(255, 255, 255, 0.2) 50%, 
+            rgba(255, 255, 255, 0.2) 75%, 
+            transparent 75%, 
+            transparent
+        );
+        background-size: 50px 50px;
+        animation: move 2s linear infinite;
+    }
+
+    @keyframes move {
+        0% { background-position: 0 0; }
+        100% { background-position: 50px 50px; }
+    }
+
+    /* Grade Badges */
     .grade-badge {
         font-size: 0.8rem;
         padding: 0.5rem 0.8rem;
         border-radius: 15px;
         font-weight: 600;
+        transition: all 0.3s ease;
     }
 
+    .grade-badge:hover {
+        transform: scale(1.05);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+
+    /* Assignment Status */
     .assignment-status {
         min-width: 100px;
         text-align: center;
     }
 
-    /* NEW: Assignment category sections */
+    /* Enhanced Assignment Categories */
     .assignment-category {
         margin-bottom: 2rem;
         border-radius: 15px;
         overflow: hidden;
+        border: 1px solid rgba(0,0,0,0.1);
     }
 
     .assignment-category-header {
@@ -178,26 +277,32 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        background: #fff;
+        border-bottom: 2px solid;
     }
 
     .assignment-category.overdue .assignment-category-header {
-        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-        color: white;
+        border-color: #e74c3c;
+        background: linear-gradient(135deg, #fff5f5 0%, #ffe6e6 100%);
+        color: #e74c3c;
     }
 
     .assignment-category.due-soon .assignment-category-header {
-        background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-        color: white;
+        border-color: #f39c12;
+        background: linear-gradient(135deg, #fffbf0 0%, #fff3cd 100%);
+        color: #f39c12;
     }
 
     .assignment-category.upcoming .assignment-category-header {
-        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-        color: white;
+        border-color: #3498db;
+        background: linear-gradient(135deg, #f0f8ff 0%, #e6f7ff 100%);
+        color: #3498db;
     }
 
     .assignment-category.completed .assignment-category-header {
-        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-        color: white;
+        border-color: #27ae60;
+        background: linear-gradient(135deg, #f8fff9 0%, #e8f5e8 100%);
+        color: #27ae60;
     }
 
     .assignment-category-body {
@@ -207,8 +312,11 @@
 
     .empty-category {
         text-align: center;
-        padding: 2rem;
+        padding: 3rem;
         color: #6c757d;
+        background: white;
+        border-radius: 10px;
+        margin: 1rem;
     }
 
     .empty-category i {
@@ -217,10 +325,12 @@
         opacity: 0.5;
     }
 
-    /* NEW: Fee status styles */
+    /* Enhanced Fee Status */
     .fee-status-card {
-        border-left: 4px solid;
+        border-left: 5px solid;
+        border-radius: 15px;
         transition: all 0.3s ease;
+        overflow: hidden;
     }
 
     .fee-status-card.paid {
@@ -244,6 +354,12 @@
         align-items: center;
         padding: 0.75rem 0;
         border-bottom: 1px solid #e9ecef;
+        transition: all 0.2s ease;
+    }
+
+    .fee-breakdown-item:hover {
+        background: rgba(0,0,0,0.02);
+        padding-left: 0.5rem;
     }
 
     .fee-breakdown-item:last-child {
@@ -253,18 +369,21 @@
     .fee-amount {
         font-weight: 600;
         font-size: 1.1rem;
+        color: #2c3e50;
     }
 
     .fee-status-badge {
         font-size: 0.75rem;
         padding: 0.4rem 0.8rem;
+        border-radius: 20px;
     }
 
     .payment-progress {
-        height: 8px;
+        height: 10px;
         border-radius: 10px;
         background: #e9ecef;
         overflow: hidden;
+        margin: 1rem 0;
     }
 
     .payment-progress-bar {
@@ -273,7 +392,72 @@
         transition: width 1s ease-in-out;
     }
 
-    /* Animation classes */
+    /* Enhanced Library Card */
+    .library-card {
+        border-left: 5px solid #9c27b0;
+        background: linear-gradient(135deg, #f9f0ff 0%, #f3e5f5 100%);
+    }
+
+    .library-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .library-stat-item {
+        background: white;
+        border-radius: 12px;
+        padding: 1.2rem;
+        text-align: center;
+        box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border: 1px solid rgba(156, 39, 176, 0.1);
+    }
+
+    .library-stat-item:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+
+    .library-stat-number {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #9c27b0;
+        margin-bottom: 0.5rem;
+    }
+
+    .library-stat-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    .document-badge {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        background: rgba(156, 39, 176, 0.1);
+        color: #9c27b0;
+        border: 1px solid rgba(156, 39, 176, 0.2);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .document-badge.has-doc {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border-color: rgba(40, 167, 69, 0.2);
+    }
+
+    .document-badge.no-doc {
+        background: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+        border-color: rgba(108, 117, 125, 0.2);
+    }
+
+    /* Animation Classes */
     .fade-in {
         animation: fadeIn 0.6s ease-in;
     }
@@ -292,20 +476,34 @@
         to { transform: translateX(0); opacity: 1; }
     }
 
-    /* Assignment specific styles */
+    .pulse {
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    /* Countdown Timer */
     .countdown-timer {
         font-size: 0.85rem;
         font-weight: 600;
-        padding: 0.4rem 0.8rem;
+        padding: 0.5rem 1rem;
         border-radius: 15px;
         background: rgba(255, 193, 7, 0.2);
         color: #856404;
         transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
     }
 
     .countdown-timer.urgent {
         background: rgba(220, 53, 69, 0.2);
         color: #dc3545;
+        animation: pulse 1s infinite;
     }
 
     .countdown-timer.warning {
@@ -313,11 +511,13 @@
         color: #856404;
     }
 
+    /* Grade Progress */
     .grade-progress {
         height: 20px;
         border-radius: 10px;
         background: #e9ecef;
         overflow: hidden;
+        position: relative;
     }
 
     .grade-progress-bar {
@@ -331,11 +531,15 @@
         font-weight: 600;
         color: white;
         text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        position: relative;
     }
 
+    /* Assignment Actions */
     .assignment-actions .btn {
         margin: 0.1rem;
         font-size: 0.8rem;
+        border-radius: 8px;
+        padding: 0.4rem 0.8rem;
     }
 
     .stats-grid {
@@ -346,25 +550,201 @@
     }
 
     .stat-item {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 1rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 1.2rem;
         text-align: center;
         transition: all 0.3s ease;
+        border: 1px solid rgba(0,0,0,0.05);
     }
 
     .stat-item:hover {
-        transform: translateY(-2px);
+        transform: translateY(-4px);
         box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        background: white;
     }
 
     .stat-number {
         font-size: 2rem;
         font-weight: bold;
         color: #4361ee;
+        margin-bottom: 0.5rem;
     }
 
-    /* Responsive adjustments */
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+
+    /* Enhanced Document Action Buttons */
+    .doc-action-btn {
+        position: relative;
+        overflow: hidden;
+        border-radius: 10px;
+    }
+
+    .doc-action-btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+
+    .doc-action-btn:hover::after {
+        width: 300px;
+        height: 300px;
+    }
+
+    /* Library Quick Links */
+    .library-quick-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .library-quick-link {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .library-quick-link:hover {
+        transform: translateY(-2px);
+        text-decoration: none;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+
+    /* Alerts and Notifications */
+    .alert-badge {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #dc3545;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: pulse 2s infinite;
+    }
+
+    /* Welcome Header */
+    .welcome-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .welcome-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+        animation: float 20s linear infinite;
+    }
+
+    @keyframes float {
+        0% { transform: translate(0, 0) rotate(0deg); }
+        100% { transform: translate(20px, 20px) rotate(360deg); }
+    }
+
+    /* Performance Indicators */
+    .performance-indicator {
+        padding: 1rem;
+        border-radius: 15px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .performance-indicator:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+
+    .performance-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .performance-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* Quick Actions */
+    .quick-action-card {
+        border-radius: 15px;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+
+    .quick-action-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        border-color: #4361ee;
+    }
+
+    .quick-action-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Today's Schedule */
+    .schedule-item {
+        padding: 0.75rem;
+        border-left: 3px solid #4361ee;
+        background: white;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .schedule-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .schedule-time {
+        font-weight: 600;
+        color: #4361ee;
+        font-size: 0.9rem;
+    }
+
+    /* Responsive Design */
     @media (max-width: 768px) {
         .dashboard-container {
             padding: 1rem;
@@ -386,10 +766,17 @@
         
         .card-header {
             padding: 1rem;
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
         }
         
         .table-responsive {
             font-size: 0.9rem;
+        }
+        
+        .table th, .table td {
+            padding: 0.75rem;
         }
         
         .assignment-actions .btn {
@@ -404,9 +791,43 @@
         .assignment-category-body {
             padding: 1rem;
         }
+
+        .library-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .library-quick-links {
+            flex-direction: column;
+        }
+
+        .welcome-header {
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .performance-value {
+            font-size: 2rem;
+        }
     }
 
-    /* Custom scrollbar */
+    @media (max-width: 576px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .library-quick-links .btn {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .assignment-category-header {
+            flex-direction: column;
+            gap: 0.5rem;
+            text-align: center;
+        }
+    }
+
+    /* Custom Scrollbar */
     .table-responsive::-webkit-scrollbar {
         height: 8px;
     }
@@ -420,71 +841,208 @@
         background: var(--primary-gradient);
         border-radius: 10px;
     }
+
+    /* Toast Notifications */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+
+    /* Loading States */
+    .loading-shimmer {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* Custom Colors */
+    .btn-purple {
+        background: var(--library-gradient);
+        border: none;
+        color: white;
+    }
+    
+    .btn-purple:hover {
+        background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(156, 39, 176, 0.4);
+    }
+    
+    .btn-outline-purple {
+        color: #9c27b0;
+        border-color: #9c27b0;
+    }
+    
+    .btn-outline-purple:hover {
+        background: var(--library-gradient);
+        border-color: transparent;
+        color: white;
+    }
+    
+    .bg-purple {
+        background: var(--library-gradient) !important;
+        color: white !important;
+    }
+    
+    .text-purple {
+        color: #9c27b0 !important;
+    }
+
+    .bg-teal {
+        background: var(--teal-gradient) !important;
+        color: white !important;
+    }
+
+    .bg-orange {
+        background: var(--orange-gradient) !important;
+        color: white !important;
+    }
+
+    .bg-dark {
+        background: var(--dark-gradient) !important;
+        color: white !important;
+    }
+
+    .bg-pink {
+        background: var(--pink-gradient) !important;
+        color: white !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-container">
     <div class="container">
-        <!-- Welcome Header -->
+        <!-- Enhanced Welcome Header -->
         <div class="row mb-4 slide-in">
             <div class="col-12">
-                <div class="card content-card">
-                    <div class="card-body text-center py-4">
-                        <h1 class="h3 mb-2 fw-bold">
-                            <i class="fas fa-user-graduate me-3 text-primary"></i>
-                            Welcome back, {{ student.get_full_name }}!
-                        </h1>
-                        <p class="mb-0 text-muted">
-                            <i class="fas fa-calendar-alt me-2"></i>
-                            Today is <span id="current-date"></span> • 
-                            <i class="fas fa-clock me-2"></i>
-                            <span id="current-time"></span>
-                        </p>
-                        <div class="mt-2">
-                            <span class="badge bg-primary">{{ student.get_class_level_display }}</span>
-                            <span class="badge bg-secondary">{{ current_academic_year }}</span>
-                            {% if current_term %}
-                            <span class="badge bg-info">Term {{ current_term.term }}</span>
-                            {% endif %}
+                <div class="welcome-header">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h1 class="h2 mb-2 fw-bold">
+                                <i class="fas fa-user-graduate me-3"></i>
+                                Welcome back, {{ student.get_full_name }}!
+                            </h1>
+                            <p class="mb-3 opacity-90">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                <span id="current-date"></span> • 
+                                <i class="fas fa-clock me-2"></i>
+                                <span id="current-time"></span>
+                            </p>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-light text-dark px-3 py-2">
+                                    <i class="fas fa-graduation-cap me-2"></i>
+                                    {{ student.get_class_level_display }}
+                                </span>
+                                <span class="badge bg-light text-dark px-3 py-2">
+                                    <i class="fas fa-calendar me-2"></i>
+                                    {{ current_academic_year }}
+                                </span>
+                                {% if current_term %}
+                                <span class="badge bg-light text-dark px-3 py-2">
+                                    <i class="fas fa-book me-2"></i>
+                                    Term {{ current_term.term }}
+                                </span>
+                                {% endif %}
+                                {% if performance_level %}
+                                <span class="badge bg-{{ performance_color }} px-3 py-2">
+                                    <i class="fas fa-chart-line me-2"></i>
+                                    {{ performance_level }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                            <div class="performance-indicator bg-white text-dark">
+                                <div class="performance-value">{{ performance_score }}%</div>
+                                <div class="performance-label">Overall Performance</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Statistics Cards -->
+        <!-- Enhanced Statistics Cards -->
         <div class="row mb-4">
+            <!-- Assignment Library -->
             <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.1s;">
-                <div class="stats-card" style="background: var(--primary-gradient);">
+                <div class="stats-card" style="background: var(--library-gradient);" 
+                     onclick="window.location.href='{% url 'student_assignment_library' %}'">
+                    <div class="card-body">
+                        <i class="fas fa-book-reader stats-icon"></i>
+                        <h5 class="stats-title">Assignment Library</h5>
+                        <p class="stats-number">{{ total_assignments }}</p>
+                        <div class="stats-subtitle">
+                            <i class="fas fa-file-alt"></i>
+                            <span>{{ assignments_with_docs }} with documents</span>
+                        </div>
+                        <div class="mt-3">
+                            <span class="badge bg-light text-dark">{{ submission_rate|floatformat:0 }}% Submission Rate</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pending Assignments -->
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
+                <div class="stats-card" style="background: var(--primary-gradient);"
+                     onclick="scrollToCategory('overdue')">
                     <div class="card-body">
                         <i class="fas fa-tasks stats-icon"></i>
-                        <h5 class="card-title">Pending Assignments</h5>
+                        <h5 class="stats-title">Pending Assignments</h5>
                         <p class="stats-number">{{ pending_assignments }}</p>
-                        <small class="opacity-80">{{ due_soon }} due soon</small>
+                        <div class="stats-subtitle">
+                            <i class="fas fa-clock"></i>
+                            <span>{{ due_soon }} due soon • {{ overdue_assignments|length }} overdue</span>
+                        </div>
+                        {% if urgent_alerts %}
+                        <div class="mt-2">
+                            <span class="badge bg-danger pulse">Needs Attention!</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             
-            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.2s;">
-                <div class="stats-card" style="background: var(--success-gradient);">
+            <!-- Average Grade -->
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
+                <div class="stats-card" style="background: var(--success-gradient);"
+                     onclick="window.location.href='{% url 'student_grades' %}'">
                     <div class="card-body">
                         <i class="fas fa-chart-line stats-icon"></i>
-                        <h5 class="card-title">Average Grade</h5>
+                        <h5 class="stats-title">Average Grade</h5>
                         <p class="stats-number">{{ average_grade|default:"N/A" }}</p>
-                        <small class="opacity-80">
-                            {% if recent_grades %}{{ recent_grades|length }} recent grades{% endif %}
-                        </small>
+                        <div class="stats-subtitle">
+                            <i class="fas fa-award"></i>
+                            <span>{{ recent_grades|length }} recent grades</span>
+                        </div>
+                        {% if performance_trend %}
+                        <div class="mt-2">
+                            <span class="badge bg-{% if performance_trend == 'improving' %}success{% elif performance_trend == 'declining' %}danger{% else %}info{% endif %}">
+                                {{ performance_trend|title }}
+                            </span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             
-            <!-- IMPROVED FEE STATUS CARD -->
-            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.3s;">
-                <div class="stats-card" style="background: var(--info-gradient);">
+            <!-- Fee Status -->
+            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.4s;">
+                <div class="stats-card" style="background: var(--info-gradient);"
+                     onclick="window.location.href='{% url 'student_fees' %}'">
                     <div class="card-body">
                         <i class="fas fa-money-bill-wave stats-icon"></i>
-                        <h5 class="card-title">Fee Status</h5>
+                        <h5 class="stats-title">Fee Status</h5>
                         <p class="stats-number">
                             {% if fee_summary.status == 'PAID' %}
                                 <span class="badge bg-success">Paid</span>
@@ -494,72 +1052,332 @@
                                 <span class="badge bg-danger">Unpaid</span>
                             {% endif %}
                         </p>
-                        <small class="opacity-80">
-                            {% if fee_summary.overdue_count > 0 %}
-                                {{ fee_summary.overdue_count }} overdue
-                            {% else %}
-                                {{ fee_summary.message }}
-                            {% endif %}
-                        </small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-xl-3 col-md-6 mb-4 fade-in" style="animation-delay: 0.4s;">
-                <div class="stats-card" style="background: var(--warning-gradient);">
-                    <div class="card-body">
-                        <i class="fas fa-calendar-check stats-icon"></i>
-                        <h5 class="card-title">Attendance</h5>
-                        <p class="stats-number">
-                            {{ attendance_percentage }}%
-                        </p>
-                        <small class="opacity-80">
-                            {{ attendance_summary.present }}/{{ attendance_summary.total }} days
-                        </small>
+                        <div class="stats-subtitle">
+                            <i class="fas fa-{% if fee_summary.status == 'PAID' %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+                            <span>{{ fee_summary.message }}</span>
+                        </div>
+                        {% if fee_summary.overdue_count > 0 %}
+                        <div class="mt-2">
+                            <span class="badge bg-danger">{{ fee_summary.overdue_count }} overdue</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- NEW: Detailed Fee Information Card -->
+        <!-- Performance Overview -->
+        <div class="row mb-4">
+            <div class="col-md-6 mb-4">
+                <div class="card content-card fade-in" style="animation-delay: 0.5s;">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Academic Performance
+                        </h5>
+                        <a href="{% url 'student_grades' %}" class="btn btn-light btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i> Details
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="performance-indicator bg-primary text-white mb-3">
+                                    <div class="performance-value">{{ average_grade|default:"0" }}</div>
+                                    <div class="performance-label">Average</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="performance-indicator bg-success text-white mb-3">
+                                    <div class="performance-value">{{ graded_assignments }}</div>
+                                    <div class="performance-label">Graded</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="performance-indicator bg-info text-white mb-3">
+                                    <div class="performance-value">{{ completion_rate|floatformat:0 }}%</div>
+                                    <div class="performance-label">Completion</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if recent_grades %}
+                        <div class="mt-4">
+                            <h6 class="mb-3">Recent Grades</h6>
+                            <div class="list-group">
+                                {% for grade in recent_grades|slice:":3" %}
+                                <div class="list-group-item border-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ grade.subject.name }}</strong>
+                                            <small class="d-block text-muted">{{ grade.get_display_grade }}</small>
+                                        </div>
+                                        <div>
+                                            <span class="grade-badge bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}info{% elif grade.total_score >= 50 %}warning{% else %}danger{% endif %}">
+                                                {{ grade.total_score }}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card content-card fade-in" style="animation-delay: 0.6s;">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-user-check me-2"></i>
+                            Attendance Summary
+                        </h5>
+                        <a href="{% url 'student_attendance' %}" class="btn btn-light btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i> View All
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        {% if attendance_summary %}
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="performance-indicator bg-teal text-white mb-3">
+                                    <div class="performance-value">{{ attendance_summary.present }}</div>
+                                    <div class="performance-label">Present</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="performance-indicator bg-warning text-white mb-3">
+                                    <div class="performance-value">{{ attendance_summary.absent|default:"0" }}</div>
+                                    <div class="performance-label">Absent</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="performance-indicator bg-orange text-white mb-3">
+                                    <div class="performance-value">{{ attendance_percentage|floatformat:0 }}%</div>
+                                    <div class="performance-label">Rate</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Attendance Rate</span>
+                                <span>{{ attendance_percentage|floatformat:1 }}%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-success" style="width: {{ attendance_percentage }}%"></div>
+                            </div>
+                            
+                            {% if attendance_trend %}
+                            <div class="mt-3 text-center">
+                                <span class="badge bg-{% if attendance_trend == 'improving' %}success{% elif attendance_trend == 'declining' %}danger{% else %}info{% endif %}">
+                                    <i class="fas fa-{% if attendance_trend == 'improving' %}arrow-up{% elif attendance_trend == 'declining' %}arrow-down{% else %}minus{% endif %} me-1"></i>
+                                    {{ attendance_trend|title }}
+                                </span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-user-clock display-4 text-muted mb-3"></i>
+                            <h5 class="text-muted">No Attendance Data</h5>
+                            <p class="text-muted">Your attendance records will appear here</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment Library Overview -->
         <div class="row mb-4">
             <div class="col-12">
-                <div class="card content-card fee-status-card {{ fee_summary.status|lower }} fade-in" style="animation-delay: 0.5s;">
+                <div class="card content-card library-card fade-in" style="animation-delay: 0.7s;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-book-reader me-2"></i>
+                            Assignment Library Overview
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-purple me-2">
+                                <i class="fas fa-file-alt me-1"></i>
+                                {{ assignments_with_docs }} Documents Available
+                            </span>
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-external-link-alt me-1"></i> Full Library
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Library Statistics -->
+                        <div class="library-stats">
+                            <div class="library-stat-item">
+                                <div class="library-stat-number">{{ total_assignments }}</div>
+                                <div class="library-stat-label">Total Assignments</div>
+                            </div>
+                            <div class="library-stat-item">
+                                <div class="library-stat-number">{{ assignments_with_docs }}</div>
+                                <div class="library-stat-label">With Documents</div>
+                            </div>
+                            <div class="library-stat-item">
+                                <div class="library-stat-number">{{ submission_rate|floatformat:0 }}%</div>
+                                <div class="library-stat-label">Submission Rate</div>
+                            </div>
+                            <div class="library-stat-item">
+                                <div class="library-stat-number">{{ completion_rate|floatformat:0 }}%</div>
+                                <div class="library-stat-label">Completion Rate</div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="library-quick-links mb-4">
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-purple library-quick-link">
+                                <i class="fas fa-book-open me-1"></i> All Assignments
+                            </a>
+                            <a href="{% url 'student_assignment_library' %}?status=GRADED" class="btn btn-success library-quick-link">
+                                <i class="fas fa-check-circle me-1"></i> Graded Work
+                            </a>
+                            <a href="{% url 'student_assignment_library' %}?status=SUBMITTED" class="btn btn-info library-quick-link">
+                                <i class="fas fa-paper-plane me-1"></i> Submitted
+                            </a>
+                            <a href="{% url 'student_assignment_library' %}?status=PENDING" class="btn btn-warning library-quick-link">
+                                <i class="fas fa-clock me-1"></i> Pending
+                            </a>
+                            <a href="{% url 'student_assignment_library' %}?has_document=yes" class="btn btn-primary library-quick-link">
+                                <i class="fas fa-download me-1"></i> With Documents
+                            </a>
+                        </div>
+
+                        <!-- Recent Documents -->
+                        {% if assignments %}
+                        <div class="mt-4">
+                            <h6 class="mb-3">
+                                <i class="fas fa-history me-2"></i>
+                                Recent Assignment Documents
+                            </h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Assignment</th>
+                                            <th>Subject</th>
+                                            <th>Documents</th>
+                                            <th>Due Date</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for sa in assignments|slice:":5" %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ sa.assignment.title }}</strong>
+                                                <small class="d-block text-muted">{{ sa.assignment.get_assignment_type_display }}</small>
+                                            </td>
+                                            <td>{{ sa.assignment.subject.name }}</td>
+                                            <td>
+                                                {% if sa.assignment.attachment %}
+                                                <span class="document-badge has-doc">
+                                                    <i class="fas fa-file-pdf me-1"></i> Available
+                                                </span>
+                                                {% else %}
+                                                <span class="document-badge no-doc">
+                                                    <i class="fas fa-file me-1"></i> None
+                                                </span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <small class="d-block">{{ sa.assignment.due_date|date:"M d, Y" }}</small>
+                                                <small class="text-muted">{{ sa.assignment.due_date|date:"H:i" }}</small>
+                                            </td>
+                                            <td class="assignment-status">
+                                                <span class="badge badge-custom bg-{% if sa.status == 'GRADED' %}success{% elif sa.status == 'SUBMITTED' %}info{% elif sa.status == 'LATE' %}warning{% else %}secondary{% endif %}">
+                                                    {{ sa.get_status_display }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    {% if sa.assignment.attachment and sa.assignment.attachment.name %}
+                                                    <a href="{{ sa.assignment.attachment.url }}" 
+                                                       class="btn btn-outline-primary" title="Download Document">
+                                                        <i class="fas fa-download"></i>
+                                                    </a>
+                                                    {% endif %}
+                                                    <a href="{% url 'student_assignment_detail' sa.pk %}" 
+                                                       class="btn btn-outline-info" title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </a>
+                                                    {% if sa.status == 'PENDING' or sa.status == 'LATE' %}
+                                                    <a href="{% url 'submit_assignment' sa.pk %}" 
+                                                       class="btn btn-outline-success" title="Submit">
+                                                        <i class="fas fa-paper-plane"></i>
+                                                    </a>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-end mt-3">
+                                <a href="{% url 'student_assignment_library' %}" class="btn btn-purple">
+                                    <i class="fas fa-book-open me-2"></i> View All Documents
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fee Summary -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card content-card fee-status-card {{ fee_summary.status|lower }} fade-in" style="animation-delay: 0.8s;">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-money-bill-wave me-2"></i>
                             Fee Summary
                         </h5>
-                        <div>
+                        <div class="d-flex gap-2">
                             <span class="badge bg-{{ fee_summary.status_class }} me-2">
-                                <i class="fas {{ fee_summary.status_icon }} me-1"></i>
+                                <i class="fas fa-{% if fee_summary.status == 'PAID' %}check-circle{% else %}exclamation-circle{% endif %} me-1"></i>
                                 {{ fee_summary.status }}
                             </span>
                             <a href="{% url 'student_fees' %}" class="btn btn-light btn-sm">
-                                <i class="fas fa-list me-1"></i>View Details
+                                <i class="fas fa-list me-1"></i> View Details
                             </a>
                         </div>
                     </div>
                     <div class="card-body">
                         {% if fee_summary.has_fees %}
-                        <div class="row">
-                            <!-- Financial Summary -->
-                            <div class="col-md-4">
+                        <div class="row mb-4">
+                            <div class="col-md-3">
                                 <div class="text-center p-3">
                                     <h3 class="text-primary mb-2">GH₵{{ fee_summary.total_payable|floatformat:2 }}</h3>
                                     <p class="text-muted mb-0">Total Payable</p>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="text-center p-3">
                                     <h3 class="text-success mb-2">GH₵{{ fee_summary.total_paid|floatformat:2 }}</h3>
                                     <p class="text-muted mb-0">Total Paid</p>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="text-center p-3">
                                     <h3 class="text-{{ fee_summary.status_class }} mb-2">GH₵{{ fee_summary.total_balance|floatformat:2 }}</h3>
                                     <p class="text-muted mb-0">Balance</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center p-3">
+                                    <div class="display-4 text-{{ fee_summary.status_class }} mb-2">{{ fee_summary.progress|floatformat:0 }}%</div>
+                                    <p class="text-muted mb-0">Payment Progress</p>
                                 </div>
                             </div>
                         </div>
@@ -568,17 +1386,11 @@
                         <div class="mb-4">
                             <div class="d-flex justify-content-between mb-2">
                                 <span>Payment Progress</span>
-                                <span>
-                                    {% if fee_summary.total_payable > 0 %}
-                                        {% widthratio fee_summary.total_paid fee_summary.total_payable 100 %}%
-                                    {% else %}
-                                        0%
-                                    {% endif %}
-                                </span>
+                                <span>{{ fee_summary.progress|floatformat:1 }}%</span>
                             </div>
                             <div class="payment-progress">
                                 <div class="payment-progress-bar bg-{{ fee_summary.status_class }}" 
-                                     style="width: {% if fee_summary.total_payable > 0 %}{% widthratio fee_summary.total_paid fee_summary.total_payable 100 %}%{% else %}0%{% endif %}">
+                                     style="width: {{ fee_summary.progress }}%">
                                 </div>
                             </div>
                         </div>
@@ -615,30 +1427,6 @@
                             </div>
                         </div>
 
-                        <!-- Current Term Summary -->
-                        {% if current_term_summary.count > 0 %}
-                        <div class="mt-4 p-3 bg-light rounded">
-                            <h6 class="mb-3">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                Current Term Summary ({{ current_academic_year }} - Term {{ current_term.term }})
-                            </h6>
-                            <div class="row text-center">
-                                <div class="col-4">
-                                    <strong>GH₵{{ current_term_summary.payable|floatformat:2 }}</strong>
-                                    <div class="small text-muted">Payable</div>
-                                </div>
-                                <div class="col-4">
-                                    <strong>GH₵{{ current_term_summary.paid|floatformat:2 }}</strong>
-                                    <div class="small text-muted">Paid</div>
-                                </div>
-                                <div class="col-4">
-                                    <strong class="text-{{ fee_summary.status_class }}">GH₵{{ current_term_summary.balance|floatformat:2 }}</strong>
-                                    <div class="small text-muted">Balance</div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-
                         <!-- Recent Payments -->
                         {% if recent_payments %}
                         <div class="mt-4">
@@ -648,7 +1436,7 @@
                             </h6>
                             <div class="list-group">
                                 {% for payment in recent_payments %}
-                                <div class="list-group-item">
+                                <div class="list-group-item border-0">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
                                             <strong>{{ payment.fee.category.name }}</strong>
@@ -656,7 +1444,7 @@
                                         </div>
                                         <div class="text-end">
                                             <span class="text-success">+GH₵{{ payment.amount|floatformat:2 }}</span>
-                                            <div class="small text-muted">{{ payment.get_payment_method_display }}</div>
+                                            <div class="small text-muted">{{ payment.get_payment_mode_display }}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -677,20 +1465,23 @@
             </div>
         </div>
 
-        <!-- Current Assignments - ENHANCED WITH CATEGORIES -->
-        <div class="card content-card fade-in" style="animation-delay: 0.6s;">
+        <!-- Main Assignments Section -->
+        <div class="card content-card fade-in" style="animation-delay: 0.9s;">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="fas fa-book-open me-2"></i>
                     My Assignments
-                    <span class="badge bg-light text-dark ms-2">{{ assignments.count }} total</span>
+                    <span class="badge bg-light text-dark ms-2">{{ total_assignments }} total</span>
                 </h5>
-                <div>
-                    <a href="{% url 'assignment_list' %}" class="btn btn-light btn-sm me-2">
-                        <i class="fas fa-list me-1"></i>View All
+                <div class="d-flex gap-2">
+                    <a href="{% url 'student_assignment_library' %}" class="btn btn-purple btn-sm">
+                        <i class="fas fa-book-reader me-1"></i> Library
                     </a>
-                    <a href="{% url 'assignment_calendar' %}" class="btn btn-light btn-sm">
-                        <i class="fas fa-calendar me-1"></i>Calendar
+                    <a href="{% url 'assignment_list' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-list me-1"></i> View All
+                    </a>
+                    <a href="{% url 'assignment_calendar' %}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-calendar me-1"></i> Calendar
                     </a>
                 </div>
             </div>
@@ -716,17 +1507,17 @@
                     </div>
                 </div>
 
-                <!-- NEW: Categorized Assignments -->
+                <!-- Assignment Categories -->
                 
                 <!-- Overdue Assignments -->
                 {% if overdue_assignments %}
                 <div class="assignment-category overdue mb-4">
                     <div class="assignment-category-header">
-                        <div>
+                        <div class="d-flex align-items-center">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            Overdue Assignments ({{ overdue_assignments|length }})
+                            <span>Overdue Assignments ({{ overdue_assignments|length }})</span>
                         </div>
-                        <span class="badge bg-danger">Urgent</span>
+                        <span class="badge bg-danger pulse">Urgent</span>
                     </div>
                     <div class="assignment-category-body">
                         <div class="table-responsive">
@@ -741,8 +1532,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for sa in overdue_assignments %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:6 }}0.1s">
+                                    {% for sa in overdue_assignments|slice:":3" %}
+                                    <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-file-alt text-danger me-2"></i>
@@ -761,20 +1552,22 @@
                                         </td>
                                         <td class="assignment-status">
                                             <span class="badge badge-custom bg-danger">
-                                                <i class="fas fa-clock me-1"></i>Overdue
+                                                <i class="fas fa-clock me-1"></i> Overdue
                                             </span>
                                         </td>
                                         <td>
                                             <div class="assignment-actions">
-                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
-                                                   class="btn btn-sm btn-outline-primary mb-1" 
-                                                   title="View Assignment Details">
-                                                    <i class="fas fa-eye"></i>
+                                                {% if sa.assignment.attachment and sa.assignment.attachment.name %}
+                                                <a href="{{ sa.assignment.attachment.url }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="Download Document">
+                                                    <i class="fas fa-download"></i>
                                                 </a>
+                                                {% endif %}
                                                 <a href="{% url 'submit_assignment' sa.pk %}" 
-                                                   class="btn btn-sm btn-warning mb-1"
-                                                   title="Submit Assignment">
-                                                    <i class="fas fa-paper-plane"></i>
+                                                   class="btn btn-sm btn-danger"
+                                                   title="Submit Now">
+                                                    <i class="fas fa-paper-plane"></i> Submit
                                                 </a>
                                             </div>
                                         </td>
@@ -783,6 +1576,13 @@
                                 </tbody>
                             </table>
                         </div>
+                        {% if overdue_assignments|length > 3 %}
+                        <div class="text-end mt-3">
+                            <a href="{% url 'student_assignment_library' %}?status=PENDING&overdue=true" class="btn btn-outline-danger btn-sm">
+                                View All {{ overdue_assignments|length }} Overdue
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -791,9 +1591,9 @@
                 {% if due_soon_assignments %}
                 <div class="assignment-category due-soon mb-4">
                     <div class="assignment-category-header">
-                        <div>
+                        <div class="d-flex align-items-center">
                             <i class="fas fa-clock me-2"></i>
-                            Due Soon (Next 3 Days) ({{ due_soon_assignments|length }})
+                            <span>Due Soon (Next 3 Days) ({{ due_soon_assignments|length }})</span>
                         </div>
                         <span class="badge bg-warning">Priority</span>
                     </div>
@@ -810,8 +1610,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for sa in due_soon_assignments %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:7 }}0.1s">
+                                    {% for sa in due_soon_assignments|slice:":3" %}
+                                    <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-file-alt text-warning me-2"></i>
@@ -837,15 +1637,17 @@
                                         </td>
                                         <td>
                                             <div class="assignment-actions">
-                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
-                                                   class="btn btn-sm btn-outline-primary mb-1" 
-                                                   title="View Assignment Details">
-                                                    <i class="fas fa-eye"></i>
+                                                {% if sa.assignment.attachment and sa.assignment.attachment.name %}
+                                                <a href="{{ sa.assignment.attachment.url }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="Download Document">
+                                                    <i class="fas fa-download"></i>
                                                 </a>
+                                                {% endif %}
                                                 <a href="{% url 'submit_assignment' sa.pk %}" 
-                                                   class="btn btn-sm btn-success mb-1"
+                                                   class="btn btn-sm btn-warning"
                                                    title="Submit Assignment">
-                                                    <i class="fas fa-paper-plane"></i>
+                                                    <i class="fas fa-paper-plane"></i> Submit
                                                 </a>
                                             </div>
                                         </td>
@@ -854,6 +1656,13 @@
                                 </tbody>
                             </table>
                         </div>
+                        {% if due_soon_assignments|length > 3 %}
+                        <div class="text-end mt-3">
+                            <a href="{% url 'student_assignment_library' %}?status=PENDING" class="btn btn-outline-warning btn-sm">
+                                View All {{ due_soon_assignments|length }} Due Soon
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -862,9 +1671,9 @@
                 {% if upcoming_assignments %}
                 <div class="assignment-category upcoming mb-4">
                     <div class="assignment-category-header">
-                        <div>
+                        <div class="d-flex align-items-center">
                             <i class="fas fa-calendar me-2"></i>
-                            Upcoming Assignments ({{ upcoming_assignments|length }})
+                            <span>Upcoming Assignments ({{ upcoming_assignments|length }})</span>
                         </div>
                         <span class="badge bg-info">Future</span>
                     </div>
@@ -881,8 +1690,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for sa in upcoming_assignments %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:8 }}0.1s">
+                                    {% for sa in upcoming_assignments|slice:":3" %}
+                                    <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-file-alt text-info me-2"></i>
@@ -908,15 +1717,17 @@
                                         </td>
                                         <td>
                                             <div class="assignment-actions">
-                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
-                                                   class="btn btn-sm btn-outline-primary mb-1" 
-                                                   title="View Assignment Details">
-                                                    <i class="fas fa-eye"></i>
+                                                {% if sa.assignment.attachment and sa.assignment.attachment.name %}
+                                                <a href="{{ sa.assignment.attachment.url }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="Download Document">
+                                                    <i class="fas fa-download"></i>
                                                 </a>
-                                                <a href="{% url 'submit_assignment' sa.pk %}" 
-                                                   class="btn btn-sm btn-outline-success mb-1"
-                                                   title="Submit Assignment">
-                                                    <i class="fas fa-paper-plane"></i>
+                                                {% endif %}
+                                                <a href="{% url 'student_assignment_detail' sa.pk %}" 
+                                                   class="btn btn-sm btn-outline-info"
+                                                   title="View Details">
+                                                    <i class="fas fa-eye"></i>
                                                 </a>
                                             </div>
                                         </td>
@@ -925,6 +1736,13 @@
                                 </tbody>
                             </table>
                         </div>
+                        {% if upcoming_assignments|length > 3 %}
+                        <div class="text-end mt-3">
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-outline-info btn-sm">
+                                View All {{ upcoming_assignments|length }} Upcoming
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -933,9 +1751,9 @@
                 {% if completed_assignments %}
                 <div class="assignment-category completed">
                     <div class="assignment-category-header">
-                        <div>
+                        <div class="d-flex align-items-center">
                             <i class="fas fa-check-circle me-2"></i>
-                            Completed Assignments ({{ completed_assignments|length }})
+                            <span>Completed Assignments ({{ completed_assignments|length }})</span>
                         </div>
                         <span class="badge bg-success">Done</span>
                     </div>
@@ -953,8 +1771,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for sa in completed_assignments %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:9 }}0.1s">
+                                    {% for sa in completed_assignments|slice:":3" %}
+                                    <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-file-alt text-success me-2"></i>
@@ -978,11 +1796,11 @@
                                         <td class="assignment-status">
                                             {% if sa.status == 'GRADED' %}
                                                 <span class="badge badge-custom bg-success">
-                                                    <i class="fas fa-check me-1"></i>Graded
+                                                    <i class="fas fa-check me-1"></i> Graded
                                                 </span>
                                             {% else %}
                                                 <span class="badge badge-custom bg-info">
-                                                    <i class="fas fa-paper-plane me-1"></i>Submitted
+                                                    <i class="fas fa-paper-plane me-1"></i> Submitted
                                                 </span>
                                             {% endif %}
                                         </td>
@@ -1000,56 +1818,63 @@
                                         </td>
                                         <td>
                                             <div class="assignment-actions">
-                                                <a href="{% url 'assignment_detail' sa.assignment.pk %}" 
-                                                   class="btn btn-sm btn-outline-primary mb-1" 
-                                                   title="View Assignment Details">
+                                                <a href="{% url 'student_assignment_detail' sa.pk %}" 
+                                                   class="btn btn-sm btn-outline-info"
+                                                   title="View Submission">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                <a href="{% url 'submit_assignment' sa.pk %}" 
-                                                   class="btn btn-sm btn-outline-info mb-1"
-                                                   title="View Submission">
-                                                    <i class="fas fa-file-alt"></i>
-                                                </a>
+                                                {% if sa.feedback %}
+                                                <button class="btn btn-sm btn-outline-success" 
+                                                        title="View Feedback"
+                                                        onclick="showFeedback({{ sa.id }}, '{{ sa.feedback }}')">
+                                                    <i class="fas fa-comment"></i>
+                                                </button>
+                                                {% endif %}
                                             </div>
-                                            {% if sa.feedback %}
-                                            <small class="text-success d-block mt-1" title="Teacher Feedback">
-                                                <i class="fas fa-comment"></i> Feedback
-                                            </small>
-                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
                             </table>
                         </div>
+                        {% if completed_assignments|length > 3 %}
+                        <div class="text-end mt-3">
+                            <a href="{% url 'student_assignment_library' %}?status=GRADED" class="btn btn-outline-success btn-sm">
+                                View All {{ completed_assignments|length }} Completed
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
 
-                <!-- Empty States for Categories -->
+                <!-- Empty State -->
                 {% if not overdue_assignments and not due_soon_assignments and not upcoming_assignments and not completed_assignments %}
                 <div class="text-center py-5">
                     <i class="fas fa-book-open display-4 text-muted mb-3"></i>
                     <h5 class="text-muted">No assignments found</h5>
                     <p class="text-muted">You don't have any assignments at the moment.</p>
+                    <a href="{% url 'student_assignment_library' %}" class="btn btn-purple me-2">
+                        <i class="fas fa-book-reader me-2"></i> Browse Library
+                    </a>
                     <a href="{% url 'assignment_list' %}" class="btn btn-primary">
-                        <i class="fas fa-search me-2"></i>Browse All Assignments
+                        <i class="fas fa-search me-2"></i> Browse All Assignments
                     </a>
                 </div>
                 {% endif %}
 
-                <!-- Quick Actions -->
-                <div class="d-flex justify-content-between align-items-center mt-4">
-                    <div>
-                        <a href="{% url 'assignment_list' %}" class="btn btn-outline-primary">
-                            <i class="fas fa-list me-2"></i>View All Assignments
+                <!-- Quick Summary -->
+                <div class="d-flex justify-content-between align-items-center mt-4 pt-4 border-top">
+                    <div class="d-flex gap-3">
+                        <a href="{% url 'student_assignment_library' %}" class="btn btn-purple">
+                            <i class="fas fa-book-reader me-2"></i> Assignment Library
                         </a>
-                        <a href="{% url 'assignment_calendar' %}" class="btn btn-outline-info ms-2">
-                            <i class="fas fa-calendar me-2"></i>Assignment Calendar
+                        <a href="{% url 'assignment_list' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-2"></i> View All Assignments
                         </a>
                     </div>
                     <div class="text-muted">
-                        Total: {{ assignments.count }} assignments • 
+                        <i class="fas fa-chart-line me-1"></i>
                         Completion: {{ completion_rate|floatformat:0 }}%
                     </div>
                 </div>
@@ -1059,25 +1884,31 @@
                     <i class="fas fa-book-open display-4 text-muted mb-3"></i>
                     <h5 class="text-muted">No assignments found</h5>
                     <p class="text-muted">You don't have any assignments at the moment.</p>
+                    <a href="{% url 'student_assignment_library' %}" class="btn btn-purple me-2">
+                        <i class="fas fa-book-reader me-2"></i> Browse Library
+                    </a>
                     <a href="{% url 'assignment_list' %}" class="btn btn-primary">
-                        <i class="fas fa-search me-2"></i>Browse All Assignments
+                        <i class="fas fa-search me-2"></i> Browse All Assignments
                     </a>
                 </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Recent Grades & Quick Actions -->
+        <!-- Recent Activities & Quick Actions -->
         <div class="row">
             <!-- Recent Grades -->
             <div class="col-lg-8">
-                <div class="card content-card fade-in" style="animation-delay: 0.7s;">
+                <div class="card content-card fade-in" style="animation-delay: 1.0s;">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-graduation-cap me-2"></i>
                             Recent Grades
+                            <span class="badge bg-primary ms-2">{{ recent_grades|length }}</span>
                         </h5>
-                        <span class="badge bg-primary rounded-pill">{{ recent_grades|length }} grades</span>
+                        <a href="{% url 'student_grades' %}" class="btn btn-light btn-sm">
+                            <i class="fas fa-external-link-alt me-1"></i> View All
+                        </a>
                     </div>
                     <div class="card-body">
                         {% if recent_grades %}
@@ -1094,10 +1925,13 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for grade in recent_grades %}
-                                    <tr class="fade-in" style="animation-delay: {{ forloop.counter0|add:8 }}0.1s">
+                                    {% for grade in recent_grades|slice:":5" %}
+                                    <tr>
                                         <td>
                                             <strong>{{ grade.subject.name }}</strong>
+                                            {% if grade.class_assignment %}
+                                            <small class="d-block text-muted">{{ grade.class_assignment.get_class_level_display }}</small>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             {% if grade.assignment %}
@@ -1107,18 +1941,11 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <strong>{{ grade.total_score }}</strong>/100
+                                            <strong>{{ grade.total_score|floatformat:1 }}</strong>/100
                                         </td>
                                         <td>
                                             <span class="grade-badge bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}info{% elif grade.total_score >= 50 %}warning{% else %}danger{% endif %}">
-                                                {% if grade.total_score >= 90 %}A+
-                                                {% elif grade.total_score >= 80 %}A
-                                                {% elif grade.total_score >= 70 %}B+
-                                                {% elif grade.total_score >= 60 %}B
-                                                {% elif grade.total_score >= 50 %}C+
-                                                {% elif grade.total_score >= 40 %}C
-                                                {% elif grade.total_score >= 30 %}D
-                                                {% else %}F{% endif %}
+                                                {{ grade.get_display_grade }}
                                             </span>
                                         </td>
                                         <td>
@@ -1128,7 +1955,7 @@
                                             <div class="grade-progress">
                                                 <div class="grade-progress-bar bg-{% if grade.total_score >= 80 %}success{% elif grade.total_score >= 60 %}warning{% else %}danger{% endif %}" 
                                                      style="width: {{ grade.total_score }}%">
-                                                    {{ grade.total_score }}%
+                                                    {{ grade.total_score|floatformat:0 }}%
                                                 </div>
                                             </div>
                                         </td>
@@ -1137,8 +1964,8 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="text-end mt-3">
-                            <a href="{% url 'student_grades' %}" class="btn btn-primary btn-action">
+                        <div class="text-center mt-3">
+                            <a href="{% url 'student_grades' %}" class="btn btn-primary">
                                 <i class="fas fa-list me-2"></i> View All Grades
                             </a>
                         </div>
@@ -1153,9 +1980,10 @@
                 </div>
             </div>
 
-            <!-- Quick Actions -->
+            <!-- Quick Actions & Today's Schedule -->
             <div class="col-lg-4">
-                <div class="card content-card fade-in" style="animation-delay: 0.8s;">
+                <!-- Quick Actions -->
+                <div class="card content-card fade-in mb-4" style="animation-delay: 1.1s;">
                     <div class="card-header">
                         <h5 class="mb-0">
                             <i class="fas fa-bolt me-2"></i>
@@ -1163,47 +1991,79 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="d-grid gap-3">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'student_assignment_library' %}" class="btn btn-outline-purple btn-action text-start">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-book-reader fa-lg me-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong>Assignment Library</strong>
+                                        <small class="d-block text-muted">Browse and download assignments</small>
+                                    </div>
+                                </div>
+                            </a>
+                            
                             <a href="{% url 'student_attendance' %}" class="btn btn-outline-primary btn-action text-start">
-                                <i class="fas fa-calendar-check me-3"></i>
-                                <div>
-                                    <strong>View Attendance</strong>
-                                    <small class="d-block text-muted">Check your attendance record</small>
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-calendar-check fa-lg me-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong>View Attendance</strong>
+                                        <small class="d-block text-muted">Check your attendance record</small>
+                                    </div>
                                 </div>
                             </a>
                             
                             <a href="{% url 'student_fees' %}" class="btn btn-outline-success btn-action text-start">
-                                <i class="fas fa-money-bill-wave me-3"></i>
-                                <div>
-                                    <strong>Fee Payments</strong>
-                                    <small class="d-block text-muted">View and manage fees</small>
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-money-bill-wave fa-lg me-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong>Fee Payments</strong>
+                                        <small class="d-block text-muted">View and manage fees</small>
+                                    </div>
                                 </div>
                             </a>
                             
                             <a href="{% url 'student_profile' %}" class="btn btn-outline-info btn-action text-start">
-                                <i class="fas fa-user-cog me-3"></i>
-                                <div>
-                                    <strong>Profile Settings</strong>
-                                    <small class="d-block text-muted">Manage your profile</small>
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-user-cog fa-lg me-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong>Profile Settings</strong>
+                                        <small class="d-block text-muted">Manage your profile</small>
+                                    </div>
                                 </div>
                             </a>
 
-                            {% if today_timetable %}
-                            <a href="#" class="btn btn-outline-warning btn-action text-start">
-                                <i class="fas fa-clock me-3"></i>
-                                <div>
-                                    <strong>Today's Schedule</strong>
-                                    <small class="d-block text-muted">View today's timetable</small>
+                            <a href="{% url 'notification_list' %}" class="btn btn-outline-warning btn-action text-start">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-bell fa-lg me-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <strong>Notifications</strong>
+                                        <small class="d-block text-muted">
+                                            {% if unread_notifications %}
+                                            <span class="badge bg-danger">{{ unread_notifications }} new</span>
+                                            {% else %}
+                                            View all notifications
+                                            {% endif %}
+                                        </small>
+                                    </div>
                                 </div>
                             </a>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <!-- Today's Timetable -->
+                <!-- Today's Schedule -->
                 {% if today_timetable %}
-                <div class="card content-card fade-in mt-4" style="animation-delay: 0.9s;">
+                <div class="card content-card fade-in" style="animation-delay: 1.2s;">
                     <div class="card-header">
                         <h5 class="mb-0">
                             <i class="fas fa-clock me-2"></i>
@@ -1211,17 +2071,28 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        {% for entry in today_timetable.entries.all %}
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="flex-shrink-0">
-                                <span class="badge bg-primary">{{ entry.time_slot.start_time|time:"H:i" }}</span>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <strong>{{ entry.subject.name }}</strong>
-                                <small class="d-block text-muted">{{ entry.teacher.get_full_name }}</small>
+                        {% for entry in today_timetable.entries.all|slice:":5" %}
+                        <div class="schedule-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="schedule-time">
+                                        {{ entry.time_slot.start_time|time:"H:i" }} - {{ entry.time_slot.end_time|time:"H:i" }}
+                                    </div>
+                                    <strong class="d-block">{{ entry.subject.name }}</strong>
+                                    <small class="text-muted">{{ entry.teacher.get_full_name }}</small>
+                                </div>
+                                <span class="badge bg-light text-dark">{{ entry.time_slot.period_number }}</span>
                             </div>
                         </div>
                         {% endfor %}
+                        
+                        {% if today_timetable.entries.count > 5 %}
+                        <div class="text-center mt-3">
+                            <a href="{% url 'student_timetable' %}" class="btn btn-sm btn-outline-info">
+                                View Full Schedule
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -1229,10 +2100,27 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block footer %}
-
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-comment me-2"></i>
+                    Teacher Feedback
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="feedbackContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1259,7 +2147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDateTime();
     setInterval(updateDateTime, 1000);
 
-    // Enhanced countdown timers with urgency levels
+    // Enhanced countdown timers
     function updateCountdowns() {
         const countdownElements = document.querySelectorAll('.countdown-timer');
         const now = new Date();
@@ -1303,95 +2191,95 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial update and set interval
     updateCountdowns();
-    setInterval(updateCountdowns, 30000); // Update every 30 seconds
+    setInterval(updateCountdowns, 30000);
 
-    // Animate progress bars
-    const progressBars = document.querySelectorAll('.progress-bar, .grade-progress-bar, .payment-progress-bar');
+    // Animate progress bars on load
+    const progressBars = document.querySelectorAll('.progress-bar');
     progressBars.forEach(bar => {
         const width = bar.style.width;
         bar.style.width = '0';
         setTimeout(() => {
             bar.style.width = width;
-        }, 500);
+        }, 300);
     });
 
-    // Add loading states to action buttons
-    document.querySelectorAll('.assignment-actions a').forEach(link => {
-        link.addEventListener('click', function(e) {
-            const originalHTML = this.innerHTML;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            this.style.pointerEvents = 'none';
+    // Add loading animation to action buttons
+    document.querySelectorAll('.btn-action, .doc-action-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            if (!this.href || this.href === '#') return;
             
-            // Restore after 2 seconds or when page navigates
+            const originalHTML = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            this.style.pointerEvents = 'none';
+            this.classList.add('disabled');
+            
             setTimeout(() => {
                 this.innerHTML = originalHTML;
                 this.style.pointerEvents = 'auto';
-            }, 2000);
+                this.classList.remove('disabled');
+            }, 3000);
         });
     });
 
     // Auto-refresh dashboard every 5 minutes
     setInterval(() => {
-        // Visual feedback for refresh
-        const cards = document.querySelectorAll('.content-card');
+        const cards = document.querySelectorAll('.stats-card, .content-card');
         cards.forEach(card => {
             card.style.transform = 'scale(1.01)';
             setTimeout(() => {
-                card.style.transform = 'scale(1)';
+                card.style.transform = '';
             }, 300);
         });
         
         showToast('Info', 'Dashboard updated', 'info');
-    }, 300000); // 5 minutes
+    }, 300000);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
-        // Ctrl+R to refresh
-        if (e.ctrlKey && e.key === 'r') {
+        // Alt + L for Assignment Library
+        if (e.altKey && e.key.toLowerCase() === 'l') {
             e.preventDefault();
-            window.location.reload();
+            window.location.href = "{% url 'student_assignment_library' %}";
         }
-        // Alt+A for assignments
-        if (e.altKey && e.key === 'a') {
+        // Alt + A for assignments
+        if (e.altKey && e.key.toLowerCase() === 'a') {
             e.preventDefault();
             window.location.href = "{% url 'assignment_list' %}";
         }
-        // Alt+G for grades
-        if (e.altKey && e.key === 'g') {
+        // Alt + G for grades
+        if (e.altKey && e.key.toLowerCase() === 'g') {
             e.preventDefault();
             window.location.href = "{% url 'student_grades' %}";
         }
-        // Alt+F for fees
-        if (e.altKey && e.key === 'f') {
+        // Alt + F for fees
+        if (e.altKey && e.key.toLowerCase() === 'f') {
             e.preventDefault();
             window.location.href = "{% url 'student_fees' %}";
         }
-        // Alt+S for first submit button
-        if (e.altKey && e.key === 's') {
+        // Alt + T for timetable
+        if (e.altKey && e.key.toLowerCase() === 't') {
             e.preventDefault();
-            const firstSubmitBtn = document.querySelector('.btn-success');
-            if (firstSubmitBtn) {
-                firstSubmitBtn.focus();
-                firstSubmitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+            window.location.href = "{% url 'student_timetable' %}";
+        }
+        // Alt + N for notifications
+        if (e.altKey && e.key.toLowerCase() === 'n') {
+            e.preventDefault();
+            window.location.href = "{% url 'notification_list' %}";
+        }
+        // Alt + P for profile
+        if (e.altKey && e.key.toLowerCase() === 'p') {
+            e.preventDefault();
+            window.location.href = "{% url 'student_profile' %}";
+        }
+        // Alt + 1-4 for assignment categories
+        if (e.altKey && e.key >= '1' && e.key <= '4') {
+            e.preventDefault();
+            const categories = ['overdue', 'due-soon', 'upcoming', 'completed'];
+            scrollToCategory(categories[parseInt(e.key) - 1]);
         }
     });
 
-    // Add hover effects to table rows
-    const tableRows = document.querySelectorAll('tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateX(5px)';
-            this.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)';
-        });
-        
-        row.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateX(0)';
-            this.style.boxShadow = 'none';
-        });
-    });
-
-    // NEW: Smooth scroll to assignment categories
+    // Smooth scroll to assignment categories
     function scrollToCategory(category) {
         const element = document.querySelector(`.assignment-category.${category}`);
         if (element) {
@@ -1404,28 +2292,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // NEW: Quick navigation for assignment categories
-    document.addEventListener('keydown', function(e) {
-        if (e.altKey) {
-            switch(e.key) {
-                case '1':
-                    e.preventDefault();
-                    scrollToCategory('overdue');
-                    break;
-                case '2':
-                    e.preventDefault();
-                    scrollToCategory('due-soon');
-                    break;
-                case '3':
-                    e.preventDefault();
-                    scrollToCategory('upcoming');
-                    break;
-                case '4':
-                    e.preventDefault();
-                    scrollToCategory('completed');
-                    break;
+    // Stats card click handlers
+    document.querySelectorAll('.stats-card[onclick]').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function() {
+            const clickHandler = this.getAttribute('onclick');
+            if (clickHandler) {
+                eval(clickHandler.replace('window.location.href=', ''));
             }
-        }
+        });
+    });
+
+    // Show feedback modal
+    window.showFeedback = function(assignmentId, feedback) {
+        const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+        document.getElementById('feedbackContent').innerHTML = `
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Feedback for Assignment #${assignmentId}</strong>
+            </div>
+            <div class="feedback-content p-3 bg-light rounded">
+                ${feedback}
+            </div>
+        `;
+        modal.show();
+    };
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 });
 
@@ -1462,14 +2358,6 @@ function showToast(title, message, type = 'info') {
     
     toast.addEventListener('hidden.bs.toast', () => {
         toast.remove();
-    });
-}
-
-// Utility function for smooth scrolling
-function smoothScrollTo(element) {
-    element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
     });
 }
 </script>

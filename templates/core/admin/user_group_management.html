@@ -1,5 +1,6 @@
 <!-- core/templates/core/admin/user_group_management.html -->
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}User Group Management{% endblock %}
 
@@ -99,7 +100,7 @@
                                     </td>
                                     <td>
                                         {% for group in user.groups.all %}
-                                        {% if group.name.startswith 'Timetable' %}
+                                        {% if group.name|slice:"0:9" == "Timetable" or group.name|slice:"0:9" == "timetable" %}
                                         <span class="badge 
                                             {% if group.name == 'Timetable Admin' %}bg-primary
                                             {% elif group.name == 'Timetable Teacher' %}bg-info
@@ -108,7 +109,7 @@
                                             group-badge me-1"
                                             data-bs-toggle="tooltip" 
                                             title="Remove from {{ group.name }}">
-                                            {{ group.name|cut:"Timetable " }}
+                                            {{ group.name|shorten_timetable|truncatechars:15 }}
                                             <i class="bi bi-x remove-group" 
                                                data-user-id="{{ user.id }}"
                                                data-group-id="{{ group.id }}"></i>
@@ -142,7 +143,7 @@
                                                         {% else %}
                                                         <i class="bi bi-people text-warning me-2"></i>
                                                         {% endif %}
-                                                        {{ group.name|cut:"Timetable " }}
+                                                        {{ group.name|shorten_timetable }}
                                                     </a>
                                                 </li>
                                                 {% endfor %}
@@ -247,7 +248,8 @@ $(document).ready(function() {
         
         const userId = $(this).data('user-id');
         const groupId = $(this).data('group-id');
-        const groupName = $(this).closest('.badge').text().trim();
+        const groupElement = $(this).closest('.badge');
+        const groupName = groupElement.attr('title').replace('Remove from ', '');
         
         if (!confirm(`Remove this user from ${groupName}?`)) {
             return;
