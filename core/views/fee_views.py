@@ -29,12 +29,20 @@ from django.contrib import messages
 from django.core.serializers import serialize
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
-from ..forms import BudgetForm
 
 from ..forms import (
     FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, 
     FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm
 )
+
+
+# Import Custom JSON Encoder
+class CustomJSONEncoder(DjangoJSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
+
 
 # Add logger configuration
 logger = logging.getLogger(__name__)
@@ -832,14 +840,15 @@ class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         context['is_teacher'] = is_teacher(self.request.user)
         return context
 
-# In core/views/fee_views.py - FIXED FeeCreateView
+
+# In fee_views.py - Update FeeCreateView
+
 class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Fee
     form_class = FeeForm
     template_name = 'core/finance/fees/fee_form.html'
     
     def test_func(self):
-        """Check if user has permission to create fees"""
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get_form_kwargs(self):
@@ -848,33 +857,35 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         student_id = self.kwargs.get('student_id')
         if student_id:
             kwargs['student_id'] = student_id
-        kwargs['request'] = self.request  # ADDED: Pass request to form
-        
-        print(f"DEBUG FeeCreateView: Form kwargs - student_id: {student_id}")
+        kwargs['request'] = self.request
         return kwargs
     
     def get_form(self, form_class=None):
-        """Get the form and debug it"""
+        """Get the form and ensure category field is properly configured"""
         form = super().get_form(form_class)
         
-        # Debug the category field
+        # CRITICAL FIX: Ensure category queryset is properly set
         if 'category' in form.fields:
-            print(f"DEBUG FeeCreateView: Category field exists")
-            print(f"DEBUG FeeCreateView: Category queryset count: {form.fields['category'].queryset.count()}")
-            print(f"DEBUG FeeCreateView: Available categories: {list(form.fields['category'].queryset.values_list('name', flat=True))}")
-        else:
-            print("DEBUG FeeCreateView: Category field NOT found in form")
+            # Force reload the queryset
+            form.fields['category'].queryset = FeeCategory.objects.filter(is_active=True).order_by('name')
+            
+            # Debug logging
+            logger.info(f"FeeCreateView: Category queryset count: {form.fields['category'].queryset.count()}")
             
         return form
     
     def get_context_data(self, **kwargs):
-        """Add debug information to template context"""
+        """Add context data for template - FIXED VERSION"""
         context = super().get_context_data(**kwargs)
         student_id = self.kwargs.get('student_id')
         
+        # Get all active categories
+        all_categories = FeeCategory.objects.filter(is_active=True).order_by('name')
+        context['all_categories'] = all_categories
+        
         # Add debug information
-        context['debug_categories'] = FeeCategory.objects.filter(is_active=True)
-        context['debug_categories_count'] = context['debug_categories'].count()
+        context['debug_categories'] = all_categories
+        context['debug_categories_count'] = all_categories.count()
         context['debug_student_id'] = student_id
         context['debug_user'] = self.request.user
         
@@ -882,19 +893,30 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             try:
                 student = Student.objects.get(pk=student_id)
                 context['student'] = student
-                print(f"DEBUG FeeCreateView: Student found: {student.get_full_name()}")
+                
+                # Calculate student statistics for display
+                student_fees = Fee.objects.filter(student=student)
+                student_total_fees = student_fees.aggregate(total=Sum('amount_payable'))['total'] or 0
+                student_total_paid = student_fees.aggregate(total=Sum('amount_paid'))['total'] or 0
+                
+                context['student_total_fees'] = student_total_fees
+                context['student_total_paid'] = student_total_paid
+                context['existing_fees'] = student.fees.all().order_by('-date_recorded')[:10]
+                
+                logger.info(f"FeeCreateView: Student found: {student.get_full_name()}")
+                logger.info(f"FeeCreateView: Total fees: {student_total_fees}, Total paid: {student_total_paid}")
             except Student.DoesNotExist:
-                print(f"DEBUG FeeCreateView: Student with ID {student_id} not found")
+                logger.error(f"FeeCreateView: Student with ID {student_id} not found")
                 context['student'] = None
+                messages.error(self.request, 'Student not found')
         else:
             context['student'] = None
             
         return context
     
     def form_valid(self, form):
-        """Handle valid form submission with debugging"""
-        print("DEBUG FeeCreateView: Form is valid")
-        print(f"DEBUG FeeCreateView: Form data: {form.cleaned_data}")
+        logger.info("DEBUG FeeCreateView: Form is valid")
+        logger.info(f"DEBUG FeeCreateView: Form data: {form.cleaned_data}")
         
         # Get student from form data
         student = form.cleaned_data.get('student')
@@ -920,6 +942,10 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             f'Fee record for {student.get_full_name()} created successfully'
         )
         return super().form_valid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('fee_detail', kwargs={'pk': self.object.pk})
+
 
 class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Fee
@@ -2488,489 +2514,6 @@ class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
         except Exception as e:
             logger.error(f"Error calculating financial health score: {e}")
             return 50  # Default neutral score
-
-
-# Budget Management View
-class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
-    template_name = 'core/finance/reports/budget_management.html'
-    
-    def test_func(self):
-        return is_admin(self.request.user)
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Get year from request or use current year
-        current_year = self.request.GET.get('year')
-        try:
-            current_year = int(current_year) if current_year else timezone.now().year
-        except (ValueError, TypeError):
-            current_year = timezone.now().year
-        
-        # Get enhanced budget data with real calculations
-        budget_data = self.get_enhanced_budget_data(current_year)
-        
-        # Calculate summary statistics
-        total_budget = sum(item['budget'] for item in budget_data)
-        total_actual = sum(item['actual'] for item in budget_data)
-        total_variance = total_actual - total_budget
-        total_variance_percent = (total_variance / total_budget * 100) if total_budget > 0 else 0
-        utilization_rate = (total_actual / total_budget * 100) if total_budget > 0 else 0
-        
-        # 🚀 ENHANCEMENT 1: Budget vs Actual Alerts
-        critical_variance = self.get_critical_variance_alerts(budget_data)
-        
-        # Historical spending data
-        historical_spending = self.get_historical_spending_data()
-        
-        # Monthly data for trend chart
-        monthly_data = self.get_monthly_budget_data(current_year)
-        
-        # Available years for filter
-        available_years = self.get_available_years()
-        
-        # Fee categories for budget creation
-        fee_categories = FeeCategory.objects.filter(is_active=True)
-        
-        # Get existing budgets for the current year
-        current_academic_year = f"{current_year}/{current_year + 1}"
-        existing_budgets = Budget.objects.filter(academic_year=current_academic_year)
-        
-        # 🚀 ENHANCEMENT 2: Budget Trends for Major Categories
-        budget_trends = self.get_budget_trends_for_major_categories(current_year)
-        
-        context.update({
-            'current_year': current_year,
-            'budget_data': budget_data,
-            'historical_spending': historical_spending,
-            'monthly_data': monthly_data,
-            'available_years': available_years,
-            'fee_categories': fee_categories,
-            'existing_budgets': existing_budgets,
-            'total_budget': total_budget,
-            'total_actual': total_actual,
-            'total_variance': total_variance,
-            'total_variance_percent': total_variance_percent,
-            'utilization_rate': utilization_rate,
-            # 🚀 New enhancements
-            'critical_alerts': critical_variance,
-            'budget_trends': budget_trends,
-            'alert_count': len(critical_variance),
-        })
-        
-        return context
-    
-    # 🚀 ENHANCEMENT 1: Budget vs Actual Alerts
-    def get_critical_variance_alerts(self, budget_data, threshold=20):
-        """
-        Identify categories with significant budget variances
-        threshold: percentage variance that triggers an alert (default 20%)
-        """
-        critical_alerts = []
-        
-        for item in budget_data:
-            variance_percent = abs(item['variance_percent'])
-            
-            # Check if variance exceeds threshold
-            if variance_percent > threshold:
-                alert_level = 'high' if variance_percent > 50 else 'medium'
-                
-                critical_alerts.append({
-                    'category': item['category'],
-                    'budget': item['budget'],
-                    'actual': item['actual'],
-                    'variance': item['variance'],
-                    'variance_percent': item['variance_percent'],
-                    'alert_level': alert_level,
-                    'message': self.get_alert_message(item, variance_percent),
-                    'recommendation': self.get_alert_recommendation(item, variance_percent)
-                })
-        
-        # Sort by severity (highest variance first)
-        critical_alerts.sort(key=lambda x: abs(x['variance_percent']), reverse=True)
-        
-        return critical_alerts
-    
-    def get_alert_message(self, item, variance_percent):
-        """Generate appropriate alert message based on variance"""
-        category_name = item['category'].name
-        variance_amount = abs(item['variance'])
-        
-        if item['variance'] < 0:
-            return (
-                f"{category_name} is {abs(variance_percent):.1f}% OVER budget "
-                f"(GH₵{variance_amount:,.2f} over planned amount)"
-            )
-        else:
-            return (
-                f"{category_name} is {variance_percent:.1f}% UNDER budget "
-                f"(GH₵{variance_amount:,.2f} below planned amount)"
-            )
-    
-    def get_alert_recommendation(self, item, variance_percent):
-        """Generate recommendations for addressing variances"""
-        if item['variance'] < 0:  # Over budget
-            if variance_percent > 50:
-                return "Immediate review required. Consider reallocating funds or investigating unexpected expenses."
-            elif variance_percent > 30:
-                return "Review spending patterns and implement cost controls."
-            else:
-                return "Monitor closely and adjust future budget allocations."
-        else:  # Under budget
-            if variance_percent > 50:
-                return "Significant under-utilization. Consider reallocating surplus to other categories."
-            elif variance_percent > 30:
-                return "Good cost control. Evaluate if budget can be reduced for next period."
-            else:
-                return "Healthy performance. Maintain current budget levels."
-    
-    # 🚀 ENHANCEMENT 2: Enhanced Budget Trends
-    def get_budget_trends_for_major_categories(self, current_year, years=3):
-        """
-        Get budget performance trends for major categories over multiple years
-        """
-        major_categories = FeeCategory.objects.filter(
-            is_active=True
-        ).annotate(
-            total_budget=Sum('budget__allocated_amount')
-        ).order_by('-total_budget')[:5]  # Top 5 categories by budget size
-        
-        trends_data = {}
-        
-        for category in major_categories:
-            trends_data[category.name] = self.get_budget_trends(category, current_year, years)
-        
-        return trends_data
-    
-    def get_budget_trends(self, category, current_year, years=3):
-        """
-        Show budget performance trends for a specific category over multiple years
-        """
-        trend_data = []
-        
-        for year_offset in range(years - 1, -1, -1):  # Current year first, then previous years
-            year = current_year - year_offset
-            
-            try:
-                budget_amount = self.get_budget_amount_for_year(category, year)
-                actual_spending = self.get_actual_spending_for_year(category, year)
-                variance = actual_spending - budget_amount
-                variance_percent = (variance / budget_amount * 100) if budget_amount > 0 else 0
-                
-                trend_data.append({
-                    'year': year,
-                    'academic_year': f"{year}/{year + 1}",
-                    'budget': budget_amount,
-                    'actual': actual_spending,
-                    'variance': variance,
-                    'variance_percent': variance_percent,
-                    'utilization_rate': (actual_spending / budget_amount * 100) if budget_amount > 0 else 0
-                })
-            except Exception as e:
-                logger.error(f"Error getting trend data for {category.name} in {year}: {str(e)}")
-                # Add placeholder data for missing years
-                trend_data.append({
-                    'year': year,
-                    'academic_year': f"{year}/{year + 1}",
-                    'budget': Decimal('0.00'),
-                    'actual': Decimal('0.00'),
-                    'variance': Decimal('0.00'),
-                    'variance_percent': 0.0,
-                    'utilization_rate': 0.0,
-                    'data_available': False
-                })
-        
-        return trend_data
-    
-    def get_budget_amount_for_year(self, category, year):
-        """Get budget amount for a specific category and year"""
-        academic_year = f"{year}/{year + 1}"
-        
-        try:
-            budget = Budget.objects.filter(
-                category=category,
-                academic_year=academic_year
-            ).first()
-            
-            if budget:
-                return budget.allocated_amount
-        except Exception as e:
-            logger.warning(f"Error getting budget for {category.name} in {year}: {str(e)}")
-        
-        # Fallback calculation
-        return self.get_budget_amount(category, year)
-    
-    def get_actual_spending_for_year(self, category, year):
-        """Get actual spending for a specific category and year"""
-        try:
-            actual_spending = FeePayment.objects.filter(
-                fee__category=category,
-                payment_date__year=year,
-                is_confirmed=True
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            
-            return actual_spending
-        except Exception as e:
-            logger.error(f"Error getting actual spending for {category.name} in {year}: {str(e)}")
-            return Decimal('0.00')
-    
-    def get_enhanced_budget_data(self, year):
-        """Get enhanced budget vs actual data with real calculations"""
-        # Use the same academic year format as Budget model
-        academic_year = f"{year}/{year + 1}"
-        
-        # First, try to get data from Budget model
-        budgets = Budget.objects.filter(academic_year=academic_year)
-        
-        if budgets.exists():
-            budget_data = []
-            colors = [
-                'rgba(58, 123, 213, 1)', 'rgba(40, 167, 69, 1)', 
-                'rgba(255, 193, 7, 1)', 'rgba(220, 53, 69, 1)', 
-                'rgba(23, 162, 184, 1)', 'rgba(108, 117, 125, 1)',
-                'rgba(111, 66, 193, 1)', 'rgba(253, 126, 20, 1)'
-            ]
-            
-            for i, budget in enumerate(budgets):
-                try:
-                    # Calculate actual spending from fee payments for this category and year
-                    actual_spending = FeePayment.objects.filter(
-                        fee__category=budget.category,
-                        payment_date__year=year,
-                        is_confirmed=True
-                    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                    
-                    variance = actual_spending - budget.allocated_amount
-                    variance_percent = (variance / budget.allocated_amount * 100) if budget.allocated_amount > 0 else 0
-                    
-                    budget_data.append({
-                        'category': budget.category,
-                        'budget': budget.allocated_amount,
-                        'actual': actual_spending,
-                        'variance': variance,
-                        'variance_percent': variance_percent,
-                        'color': colors[i % len(colors)],
-                        'has_budget_record': True
-                    })
-                    
-                except Exception as e:
-                    logger.error(f"Error processing budget data for category {budget.category.name}: {str(e)}")
-                    continue
-            
-            return budget_data
-        
-        # Fallback to fee categories if no budgets exist
-        categories = FeeCategory.objects.filter(is_active=True)
-        
-        if not categories.exists():
-            # Return empty placeholder if no categories exist
-            return [
-                {
-                    'category': {'name': 'Tuition Fees'},
-                    'budget': Decimal('50000.00'),
-                    'actual': Decimal('45000.00'),
-                    'variance': Decimal('-5000.00'),
-                    'variance_percent': -10.0,
-                    'color': 'rgba(58, 123, 213, 1)',
-                    'has_budget_record': False
-                },
-                {
-                    'category': {'name': 'Feeding Program'},
-                    'budget': Decimal('20000.00'),
-                    'actual': Decimal('18000.00'),
-                    'variance': Decimal('-2000.00'),
-                    'variance_percent': -10.0,
-                    'color': 'rgba(40, 167, 69, 1)',
-                    'has_budget_record': False
-                },
-                {
-                    'category': {'name': 'Transportation'},
-                    'budget': Decimal('10000.00'),
-                    'actual': Decimal('9500.00'),
-                    'variance': Decimal('-500.00'),
-                    'variance_percent': -5.0,
-                    'color': 'rgba(255, 193, 7, 1)',
-                    'has_budget_record': False
-                },
-            ]
-        
-        budget_data = []
-        colors = [
-            'rgba(58, 123, 213, 1)', 'rgba(40, 167, 69, 1)', 
-            'rgba(255, 193, 7, 1)', 'rgba(220, 53, 69, 1)', 
-            'rgba(23, 162, 184, 1)', 'rgba(108, 117, 125, 1)',
-            'rgba(111, 66, 193, 1)', 'rgba(253, 126, 20, 1)'
-        ]
-        
-        for i, category in enumerate(categories):
-            try:
-                # Calculate actual spending from fee payments for this category and year
-                actual_spending = FeePayment.objects.filter(
-                    fee__category=category,
-                    payment_date__year=year,
-                    is_confirmed=True
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                
-                # Get budget amount using fallback calculation
-                budget_amount = self.get_budget_amount(category, year)
-                
-                variance = actual_spending - budget_amount
-                variance_percent = (variance / budget_amount * 100) if budget_amount > 0 else 0
-                
-                budget_data.append({
-                    'category': category,
-                    'budget': budget_amount,
-                    'actual': actual_spending,
-                    'variance': variance,
-                    'variance_percent': variance_percent,
-                    'color': colors[i % len(colors)],
-                    'has_budget_record': False
-                })
-                
-            except Exception as e:
-                logger.error(f"Error processing budget data for category {category.name}: {str(e)}")
-                continue
-        
-        return budget_data
-    
-    def get_budget_amount(self, category, year):
-        """Get budget amount for a category - with fallback to realistic estimates"""
-        try:
-            # Try to get from Budget model if it exists
-            academic_year = f"{year}/{year + 1}"
-            budget = Budget.objects.filter(
-                category=category, 
-                academic_year=academic_year
-            ).first()
-            
-            if budget:
-                return budget.allocated_amount
-            
-            # Fallback: Calculate based on category default amount and student count
-            active_students = Student.objects.filter(is_active=True).count()
-            base_amount = category.default_amount * Decimal('10')  # Base multiplier
-            
-            # Adjust based on category type and student count
-            if 'tuition' in category.name.lower():
-                budget_amount = base_amount * Decimal(str(active_students)) * Decimal('0.8')
-            elif 'feeding' in category.name.lower():
-                budget_amount = base_amount * Decimal(str(active_students)) * Decimal('0.3')
-            elif 'transport' in category.name.lower():
-                budget_amount = base_amount * Decimal(str(active_students)) * Decimal('0.2')
-            else:
-                budget_amount = base_amount * Decimal(str(max(active_students, 1)))
-                
-            return budget_amount
-            
-        except Exception as e:
-            logger.warning(f"Could not calculate budget amount for {category.name}: {str(e)}")
-            return Decimal('10000.00')  # Default fallback
-    
-    def get_historical_spending_data(self):
-        """Get historical spending data for the last 5 years"""
-        current_year = timezone.now().year
-        historical_data = []
-        
-        for year in range(current_year - 4, current_year + 1):
-            try:
-                yearly_spending = FeePayment.objects.filter(
-                    payment_date__year=year,
-                    is_confirmed=True
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                
-                historical_data.append({
-                    'date__year': year,
-                    'total': float(yearly_spending)
-                })
-            except Exception as e:
-                logger.error(f"Error getting historical data for {year}: {str(e)}")
-                historical_data.append({
-                    'date__year': year,
-                    'total': 0.0
-                })
-        
-        return historical_data
-    
-    def get_monthly_budget_data(self, year):
-        """Get monthly budget vs actual data for trend chart"""
-        monthly_data = []
-        
-        for month in range(1, 13):
-            try:
-                # Monthly actual spending
-                monthly_actual = FeePayment.objects.filter(
-                    payment_date__year=year,
-                    payment_date__month=month,
-                    is_confirmed=True
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                
-                # Monthly budget estimate (based on annual budget / 12)
-                total_annual_budget = sum([
-                    self.get_budget_amount(category, year) 
-                    for category in FeeCategory.objects.filter(is_active=True)
-                ])
-                monthly_budget = total_annual_budget / Decimal('12') if total_annual_budget > 0 else Decimal('50000.00')
-                
-                monthly_data.append({
-                    'month': month,
-                    'budget': float(monthly_budget),
-                    'actual': float(monthly_actual)
-                })
-                
-            except Exception as e:
-                logger.error(f"Error getting monthly data for month {month}: {str(e)}")
-                monthly_data.append({
-                    'month': month,
-                    'budget': 50000.0,
-                    'actual': 45000.0
-                })
-        
-        return monthly_data
-    
-    def get_available_years(self):
-        """Get available years for filter dropdown"""
-        current_year = timezone.now().year
-        return list(range(current_year - 4, current_year + 1))
-
-
-class BudgetCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
-    model = Budget
-    form_class = BudgetForm
-    template_name = 'core/finance/reports/budget_form.html'
-    success_url = reverse_lazy('budget_management')
-    
-    def test_func(self):
-        return is_admin(self.request.user)
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = 'Create New Budget'
-        return context
-    
-    def form_valid(self, form):
-        # Check for duplicate budget
-        academic_year = form.cleaned_data['academic_year']
-        category = form.cleaned_data['category']
-        
-        existing_budget = Budget.objects.filter(
-            academic_year=academic_year,
-            category=category
-        ).exists()
-        
-        if existing_budget:
-            form.add_error(None, f'A budget already exists for {category.name} in {academic_year}')
-            return self.form_invalid(form)
-        
-        messages.success(
-            self.request, 
-            f'Budget created successfully: GH₵{form.instance.allocated_amount:,.2f} for {form.instance.category.name}'
-        )
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, 'Please correct the errors below.')
-        return super().form_invalid(form)
-
 
 # Payment Summary View - FIXED AND ENHANCED VERSION
 class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):

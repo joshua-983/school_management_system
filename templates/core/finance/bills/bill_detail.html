@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load financial_utils %}
 
 {% block title %}Bill #{{ bill.bill_number }} - Details{% endblock %}
 
@@ -300,9 +301,10 @@
                                         GH₵{{ fee.balance|floatformat:2 }}
                                     </td>
                                     <td>
-                                        <span class="badge bg-{% if fee.payment_status == 'paid' %}success{% elif fee.payment_status == 'partial' %}warning{% elif fee.payment_status == 'overdue' %}danger{% else %}secondary{% endif %}">
-                                            {{ fee.get_payment_status_display }}
-                                        </span>
+                                        {% load financial_utils %}
+                                    <span class="badge bg-{{ fee.payment_status|status_color }}">
+                                        {{ fee.payment_status|status_display }}
+                                    </span>
                                     </td>
                                     <td>
                                         <a href="{% url 'fee_detail' pk=fee.pk %}" class="btn btn-sm btn-outline-primary">

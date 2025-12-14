@@ -71,9 +71,13 @@ from .views.fee_views import (
     FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView,
     FeeStatusReportView, BillPaymentCreateView, GenerateTermFeesView,
     BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView,
-    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView, BudgetManagementView,
-    PaymentSummaryView, RefreshPaymentDataView, BudgetCreateView,
+    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
+    PaymentSummaryView, RefreshPaymentDataView,
     BulkFeeImportView, BulkFeeCreationView, DownloadFeeTemplateView
+)
+
+from .views.budget_views import (
+    BudgetManagementView, BudgetCreateView, BudgetUpdateView, BudgetDeleteView
 )
 
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
@@ -385,10 +389,9 @@ urlpatterns = [
         path('dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
         path('revenue-analytics/', RevenueAnalyticsView.as_view(), name='revenue_analytics'),
         path('financial-health/', FinancialHealthView.as_view(), name='financial_health'),
-        path('budget-management/', BudgetManagementView.as_view(), name='budget_management'),
         path('payment-summary/', PaymentSummaryView.as_view(), name='payment_summary'),
         path('payment-summary/refresh/', RefreshPaymentDataView.as_view(), name='refresh_payment_data'),
-        path('budget/create/', BudgetCreateView.as_view(), name='budget_create'),
+        
     ])),
     
     # Fee Reports & Analytics
@@ -396,6 +399,14 @@ urlpatterns = [
         path('fees/', FeeReportView.as_view(), name='fee_report'),
         path('fee-status/', FeeStatusReportView.as_view(), name='fee_status_report'),
         path('fee-analytics/', FeeAnalyticsView.as_view(), name='fee_analytics'),
+    ])),
+    
+    # Add to urlpatterns:
+    path('finance/budget/', include([
+        path('', BudgetManagementView.as_view(), name='budget_management'),
+        path('create/', BudgetCreateView.as_view(), name='budget_create'),
+        path('<int:pk>/update/', BudgetUpdateView.as_view(), name='budget_update'),
+        path('<int:pk>/delete/', BudgetDeleteView.as_view(), name='budget_delete'),
     ])),
     
     # ==============================

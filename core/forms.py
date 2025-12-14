@@ -2659,9 +2659,6 @@ TERM_CHOICES = [
     (3, 'Term 3'),
 ]
 
-
-# ===== FEE CATEGORY FORMS =====
-
 # ===== FEE CATEGORY FORMS =====
 
 class FeeCategoryForm(forms.ModelForm):
@@ -2718,37 +2715,24 @@ class FeeCategoryForm(forms.ModelForm):
                     raise ValidationError(f"Invalid class level: {level}. Valid levels are: {', '.join(valid_levels)}")
         return class_levels
 
-# ===== FEE FORMS =====
-
-# In core/forms.py - FIXED FeeForm
-# ===== FEE FORMS =====
 
 class FeeForm(forms.ModelForm):
-    student = forms.ModelChoiceField(
-        queryset=Student.objects.filter(is_active=True),
-        widget=forms.Select(attrs={
-            'class': 'form-control select2',
-            'data-placeholder': 'Select student...'
-        })
-    )
-    
-    # Explicit category field with proper queryset and ordering
-    category = forms.ModelChoiceField(
-        queryset=FeeCategory.objects.filter(is_active=True).order_by('name'),
-        widget=forms.Select(attrs={
-            'class': 'form-control',
-            'id': 'id_category'
-        }),
-        label="Fee Category",
-        required=True,
-        empty_label="Select Fee Category"
-    )
     
     class Meta:
         model = Fee
         fields = ['student', 'category', 'academic_year', 'term', 
-                 'amount_payable', 'amount_paid', 'payment_mode', 'payment_date', 'due_date', 'notes']
+                 'amount_payable', 'amount_paid', 'payment_status', 'payment_mode', 
+                 'payment_date', 'due_date', 'notes']
         widgets = {
+            'student': forms.Select(attrs={
+                'class': 'form-control',
+                'data-placeholder': 'Select student...'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_category',
+                'required': True
+            }),
             'academic_year': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'YYYY/YYYY e.g., 2024/2025'
@@ -2767,6 +2751,10 @@ class FeeForm(forms.ModelForm):
                 'placeholder': '0.00',
                 'step': '0.01',
                 'min': '0'
+            }),
+            'payment_status': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_payment_status'
             }),
             'payment_mode': forms.Select(attrs={
                 'class': 'form-control'
@@ -2797,40 +2785,113 @@ class FeeForm(forms.ModelForm):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         
+        logger.info(f"FeeForm initialized with student_id: {self.student_id}")
+        
+        # CRITICAL FIX: Ensure category field has proper queryset
+        if 'category' in self.fields:
+            # Get active categories - use the same method as in views
+            active_categories = FeeCategory.objects.filter(is_active=True).order_by('name')
+            self.fields['category'].queryset = active_categories
+            self.fields['category'].empty_label = "--------- Select Fee Category ---------"
+            
+            # Log categories for debugging
+            logger.info(f"FeeForm: Available categories: {active_categories.count()}")
+            for cat in active_categories:
+                logger.info(f"  - {cat.get_name_display()} (ID: {cat.id})")
+        
         print(f"DEBUG FeeForm: student_id = {self.student_id}")
         print(f"DEBUG FeeForm: Initial data = {self.initial}")
+        
+        # CRITICAL FIX 1: Ensure category field exists and has proper queryset
+        if 'category' in self.fields:
+            # Get active categories
+            active_categories = FeeCategory.objects.filter(is_active=True)
+            print(f"DEBUG FeeForm: Active categories in DB = {active_categories.count()}")
+            
+            # Set the queryset
+            self.fields['category'].queryset = active_categories.order_by('name')
+            
+            # Set empty label
+            self.fields['category'].empty_label = "--------- Select Fee Category ---------"
+            
+            # Make required
+            self.fields['category'].required = True
+            
+            # Debug print all categories
+            for cat in self.fields['category'].queryset:
+                print(f"  - ID: {cat.id}, Name: {cat.get_name_display()}, Active: {cat.is_active}")
+        
+        # CRITICAL FIX 2: Set student queryset
+        if 'student' in self.fields:
+            self.fields['student'].queryset = Student.objects.filter(is_active=True)
+            print(f"DEBUG FeeForm: Active students = {self.fields['student'].queryset.count()}")
         
         # Set current academic year as default
         current_year = timezone.now().year
         next_year = current_year + 1
         self.fields['academic_year'].initial = f"{current_year}/{next_year}"
         
-        # Set current date as default for payment_date
-        self.fields['payment_date'].initial = timezone.now().date()
+        # Set term default
+        self.fields['term'].initial = 1
         
-        # Set due date to 30 days from now
-        self.fields['due_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
+        # Set payment date default (empty for new fees)
+        if not self.instance.pk:
+            self.fields['payment_date'].initial = None
+        else:
+            self.fields['payment_date'].initial = timezone.now().date()
         
-        # DEBUG: Check category field
-        print(f"DEBUG FeeForm: Category field exists = {'category' in self.fields}")
-        if 'category' in self.fields:
-            print(f"DEBUG FeeForm: Category queryset count = {self.fields['category'].queryset.count()}")
-            print(f"DEBUG FeeForm: Available categories = {list(self.fields['category'].queryset.values_list('name', flat=True))}")
+        # Set due date to 30 days from now for new fees
+        if not self.instance.pk:
+            self.fields['due_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
         
-        # If student_id is provided, set the student field and make it read-only
+        # Set default payment status
+        self.fields['payment_status'].initial = 'unpaid'
+        
+        # If student_id is provided, set the student field
         if self.student_id:
             try:
                 student = Student.objects.get(pk=self.student_id)
+                # Set initial value
+                self.initial['student'] = student
+                
+                # Set the field value
                 self.fields['student'].initial = student
+                
+                # Make field read-only
                 self.fields['student'].widget.attrs['readonly'] = True
                 self.fields['student'].disabled = True
-                print(f"DEBUG FeeForm: Student set to {student}")
+                
+                # Add hidden input to ensure value is submitted
+                self.fields['student'].widget = forms.HiddenInput()
+                
+                print(f"DEBUG FeeForm: Student set to {student.get_full_name()} (ID: {student.id})")
+                
             except Student.DoesNotExist:
-                print(f"DEBUG FeeForm: Student with ID {self.student_id} not found")
-                pass
+                print(f"DEBUG FeeForm: ERROR - Student with ID {self.student_id} not found")
+                # Show error in form
+                self.add_error(None, f"Student with ID {self.student_id} not found")
+        
+        # Debug: Check all field values
+        print("\nDEBUG FeeForm: Field Values:")
+        for field_name, field in self.fields.items():
+            print(f"  {field_name}:")
+            print(f"    - Initial: {self.initial.get(field_name, 'Not set')}")
+            print(f"    - Required: {field.required}")
+            print(f"    - Queryset: {field.queryset.count() if hasattr(field, 'queryset') else 'N/A'} items")
+            print(f"    - Choices: {len(field.choices) if hasattr(field, 'choices') else 'N/A'} choices")
+        
+        # Add a hidden field to track if categories are loaded
+        self.fields['_categories_loaded'] = forms.BooleanField(
+            initial=True, 
+            required=False,
+            widget=forms.HiddenInput()
+        )
 
     def clean_academic_year(self):
         academic_year = self.cleaned_data.get('academic_year')
+        if not academic_year:
+            raise ValidationError("Academic year is required")
+        
         if not re.match(r'^\d{4}/\d{4}$', academic_year):
             raise ValidationError("Academic year must be in format YYYY/YYYY (e.g., 2024/2025)")
         
@@ -2853,6 +2914,7 @@ class FeeForm(forms.ModelForm):
         if amount_payable and amount_paid > amount_payable:
             # Allow overpayment but show warning
             self.cleaned_data['has_overpayment'] = True
+            print(f"DEBUG: Overpayment detected - Payable: {amount_payable}, Paid: {amount_paid}")
         else:
             self.cleaned_data['has_overpayment'] = False
             
@@ -2873,6 +2935,8 @@ class FeeForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        
+        # Get form data
         student = cleaned_data.get('student')
         category = cleaned_data.get('category')
         academic_year = cleaned_data.get('academic_year')
@@ -2880,9 +2944,15 @@ class FeeForm(forms.ModelForm):
         amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
         payment_mode = cleaned_data.get('payment_mode')
         payment_date = cleaned_data.get('payment_date')
+        payment_status = cleaned_data.get('payment_status', 'unpaid')
 
         print(f"DEBUG FeeForm clean: Student = {student}, Category = {category}")
 
+        # CRITICAL: Check if category is selected
+        if not category:
+            self.add_error('category', 'Please select a fee category')
+            print("DEBUG: Category validation error - not selected")
+        
         # Check for duplicate fee records
         if student and category and academic_year and term:
             existing_fee = Fee.objects.filter(
@@ -2893,21 +2963,25 @@ class FeeForm(forms.ModelForm):
             ).exclude(pk=self.instance.pk if self.instance else None)
             
             if existing_fee.exists():
-                raise ValidationError(
+                self.add_error(
+                    None,
                     f"A fee record already exists for {student} - {category} "
                     f"for {academic_year} Term {term}"
                 )
+                print(f"DEBUG: Duplicate fee found for {student} - {category}")
 
-        # Validate payment details if amount is paid
-        if amount_paid and amount_paid > Decimal('0.00'):
+        # Validate payment details
+        if payment_status == 'paid':
             if not payment_mode:
-                raise ValidationError({
-                    'payment_mode': 'Payment method is required when an amount is paid'
-                })
+                self.add_error('payment_mode', 'Payment method is required for paid status')
             if not payment_date:
-                raise ValidationError({
-                    'payment_date': 'Payment date is required when an amount is paid'
-                })
+                self.add_error('payment_date', 'Payment date is required for paid status')
+        elif amount_paid and amount_paid > Decimal('0.00'):
+            # If there's payment but status is not 'paid', validate payment details
+            if not payment_mode:
+                self.add_error('payment_mode', 'Payment method is required when an amount is paid')
+            if not payment_date:
+                self.add_error('payment_date', 'Payment date is required when an amount is paid')
 
         return cleaned_data
 
