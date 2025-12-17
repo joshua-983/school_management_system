@@ -13,10 +13,10 @@ import json
 from datetime import datetime, timedelta
 import csv
 
-# Import your models
+from django.contrib.auth.models import User
 from ..models import (
-    AuditLog, Student, Grade, ClassAssignment, Assignment, 
-    StudentAssignment, Fee, Teacher, ParentGuardian, User,
+    AuditLog, Student, Grade, ClassAssignment, Assignment,
+    StudentAssignment, Fee, Teacher, ParentGuardian,
     Notification, AttendanceSummary, Bill, BillPayment
 )
 

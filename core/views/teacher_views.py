@@ -1,3 +1,6 @@
+"""
+Teacher management views for the school management system.
+"""
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
@@ -6,11 +9,11 @@ from django.utils import timezone
 from django.db.models import Count, Avg, Q
 from datetime import timedelta
 
-from .base_views import *
+from core.utils import is_admin, is_teacher
 from ..models import Teacher, Assignment, StudentAssignment, ClassAssignment, Subject
 from ..forms import TeacherRegistrationForm
-from django.apps import apps
 from django.contrib.auth import get_user_model
+
 
 class TeacherListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = Teacher
@@ -28,6 +31,7 @@ class TeacherListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             if teacher.user:
                 print(f"DEBUG: -> Name: '{teacher.user.get_full_name()}', Email: '{teacher.user.email}'")
         return context
+
 
 class TeacherCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Teacher
@@ -65,6 +69,7 @@ class TeacherCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             messages.error(self.request, error_message)
             return self.form_invalid(form)
 
+
 class TeacherUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Teacher
     form_class = TeacherRegistrationForm
@@ -78,6 +83,7 @@ class TeacherUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         messages.success(self.request, 'Teacher updated successfully')
         return super().form_valid(form)
 
+
 class TeacherDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Teacher
     template_name = 'core/hr/teacher_confirm_delete.html'
@@ -89,6 +95,7 @@ class TeacherDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Teacher deleted successfully')
         return super().delete(request, *args, **kwargs)
+
 
 # Enhanced Teacher Analytics Views
 class TeacherAssignmentAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
@@ -306,6 +313,7 @@ class TeacherAssignmentAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, Te
             })
         
         return monthly_data
+
 
 class TeacherDetailAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Detailed analytics for a specific teacher"""

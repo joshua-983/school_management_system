@@ -1,0 +1,372 @@
+"""
+Fee management forms for handling student fees, discounts, and installments.
+"""
+from decimal import Decimal
+import re
+import logging
+from django import forms
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+
+from core.models import (
+    FeeCategory, Fee, FeeDiscount, FeeInstallment,
+    Student, CLASS_LEVEL_CHOICES, TERM_CHOICES
+)
+
+logger = logging.getLogger(__name__)
+
+
+class FeeCategoryForm(forms.ModelForm):
+    class Meta:
+        model = FeeCategory
+        fields = ['name', 'description', 'default_amount', 'frequency', 
+                 'is_mandatory', 'is_active', 'applies_to_all', 'class_levels']
+        widgets = {
+            'name': forms.Select(attrs={
+                'class': 'form-control',
+                'placeholder': 'Select fee category type'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Enter description...'
+            }),
+            'default_amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0'
+            }),
+            'frequency': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'class_levels': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'P1,P2,P3 or leave blank for all'
+            }),
+        }
+        labels = {
+            'name': 'Category Type',
+            'default_amount': 'Default Amount (GH₵)',
+            'is_mandatory': 'Mandatory Fee',
+            'applies_to_all': 'Applies to All Classes',
+            'class_levels': 'Specific Class Levels',
+        }
+
+    def clean_default_amount(self):
+        amount = self.cleaned_data.get('default_amount')
+        if amount and amount < Decimal('0.01'):
+            raise ValidationError("Default amount must be at least GH₵0.01")
+        return amount
+
+    def clean_class_levels(self):
+        class_levels = self.cleaned_data.get('class_levels', '').strip()
+        if class_levels:
+            valid_levels = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'J1', 'J2', 'J3']
+            levels_list = [level.strip() for level in class_levels.split(',')]
+            for level in levels_list:
+                if level not in valid_levels:
+                    raise ValidationError(f"Invalid class level: {level}. Valid levels are: {', '.join(valid_levels)}")
+        return class_levels
+
+
+class FeeForm(forms.ModelForm):
+    
+    class Meta:
+        model = Fee
+        fields = ['student', 'category', 'academic_year', 'term', 
+                 'amount_payable', 'amount_paid', 'payment_status', 'payment_mode', 
+                 'payment_date', 'due_date', 'notes']
+        widgets = {
+            'student': forms.Select(attrs={
+                'class': 'form-control',
+                'data-placeholder': 'Select student...'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_category',
+                'required': True
+            }),
+            'academic_year': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'YYYY/YYYY e.g., 2024/2025'
+            }),
+            'term': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'amount_payable': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'amount_paid': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0'
+            }),
+            'payment_status': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_payment_status'
+            }),
+            'payment_mode': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'payment_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'due_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 2,
+                'placeholder': 'Additional notes...'
+            }),
+        }
+        labels = {
+            'amount_payable': 'Amount Payable (GH₵)',
+            'amount_paid': 'Amount Paid (GH₵)',
+            'payment_mode': 'Payment Method',
+            'payment_date': 'Payment Date',
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.student_id = kwargs.pop('student_id', None)
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        
+        logger.info(f"FeeForm initialized with student_id: {self.student_id}")
+        
+        if 'category' in self.fields:
+            active_categories = FeeCategory.objects.filter(is_active=True).order_by('name')
+            self.fields['category'].queryset = active_categories
+            self.fields['category'].empty_label = "--------- Select Fee Category ---------"
+            
+            logger.info(f"FeeForm: Available categories: {active_categories.count()}")
+            for cat in active_categories:
+                logger.info(f"  - {cat.get_name_display()} (ID: {cat.id})")
+        
+        if 'student' in self.fields:
+            self.fields['student'].queryset = Student.objects.filter(is_active=True)
+        
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        self.fields['academic_year'].initial = f"{current_year}/{next_year}"
+        
+        self.fields['term'].initial = 1
+        
+        if not self.instance.pk:
+            self.fields['payment_date'].initial = None
+        else:
+            self.fields['payment_date'].initial = timezone.now().date()
+        
+        if not self.instance.pk:
+            self.fields['due_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
+        
+        self.fields['payment_status'].initial = 'unpaid'
+        
+        if self.student_id:
+            try:
+                student = Student.objects.get(pk=self.student_id)
+                self.initial['student'] = student
+                self.fields['student'].initial = student
+                self.fields['student'].widget.attrs['readonly'] = True
+                self.fields['student'].disabled = True
+                self.fields['student'].widget = forms.HiddenInput()
+                
+            except Student.DoesNotExist:
+                self.add_error(None, f"Student with ID {self.student_id} not found")
+        
+        self.fields['_categories_loaded'] = forms.BooleanField(
+            initial=True, 
+            required=False,
+            widget=forms.HiddenInput()
+        )
+
+    def clean_academic_year(self):
+        academic_year = self.cleaned_data.get('academic_year')
+        if not academic_year:
+            raise ValidationError("Academic year is required")
+        
+        if not re.match(r'^\d{4}/\d{4}$', academic_year):
+            raise ValidationError("Academic year must be in format YYYY/YYYY (e.g., 2024/2025)")
+        
+        year1, year2 = map(int, academic_year.split('/'))
+        if year2 != year1 + 1:
+            raise ValidationError("The second year must be exactly one year after the first year")
+            
+        return academic_year
+
+    def clean_amount_payable(self):
+        amount = self.cleaned_data.get('amount_payable')
+        if amount and amount < Decimal('0.01'):
+            raise ValidationError("Amount payable must be at least GH₵0.01")
+        return amount
+
+    def clean_amount_paid(self):
+        amount_paid = self.cleaned_data.get('amount_paid') or Decimal('0.00')
+        amount_payable = self.cleaned_data.get('amount_payable')
+        
+        if amount_payable and amount_paid > amount_payable:
+            self.cleaned_data['has_overpayment'] = True
+        else:
+            self.cleaned_data['has_overpayment'] = False
+            
+        return amount_paid
+
+    def clean_payment_date(self):
+        payment_date = self.cleaned_data.get('payment_date')
+        if payment_date and payment_date > timezone.now().date():
+            raise ValidationError("Payment date cannot be in the future")
+        return payment_date
+
+    def clean_due_date(self):
+        due_date = self.cleaned_data.get('due_date')
+        if due_date and due_date < timezone.now().date():
+            if not self.instance.pk:
+                raise ValidationError("Due date cannot be in the past for new fees")
+        return due_date
+
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        student = cleaned_data.get('student')
+        category = cleaned_data.get('category')
+        academic_year = cleaned_data.get('academic_year')
+        term = cleaned_data.get('term')
+        amount_paid = cleaned_data.get('amount_paid', Decimal('0.00'))
+        payment_mode = cleaned_data.get('payment_mode')
+        payment_date = cleaned_data.get('payment_date')
+        payment_status = cleaned_data.get('payment_status', 'unpaid')
+
+        if not category:
+            self.add_error('category', 'Please select a fee category')
+        
+        if student and category and academic_year and term:
+            existing_fee = Fee.objects.filter(
+                student=student,
+                category=category,
+                academic_year=academic_year,
+                term=term
+            ).exclude(pk=self.instance.pk if self.instance else None)
+            
+            if existing_fee.exists():
+                self.add_error(
+                    None,
+                    f"A fee record already exists for {student} - {category} "
+                    f"for {academic_year} Term {term}"
+                )
+
+        if payment_status == 'paid':
+            if not payment_mode:
+                self.add_error('payment_mode', 'Payment method is required for paid status')
+            if not payment_date:
+                self.add_error('payment_date', 'Payment date is required for paid status')
+        elif amount_paid and amount_paid > Decimal('0.00'):
+            if not payment_mode:
+                self.add_error('payment_mode', 'Payment method is required when an amount is paid')
+            if not payment_date:
+                self.add_error('payment_date', 'Payment date is required when an amount is paid')
+
+        return cleaned_data
+
+
+class FeeDiscountForm(forms.ModelForm):
+    class Meta:
+        model = FeeDiscount
+        fields = ['student', 'category', 'discount_type', 'amount', 
+                 'reason', 'start_date', 'end_date']
+        widgets = {
+            'student': forms.Select(attrs={
+                'class': 'form-control select2',
+                'data-placeholder': 'Select student...'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'discount_type': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'reason': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Reason for discount...'
+            }),
+            'start_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'end_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        # Set default dates
+        self.fields['start_date'].initial = timezone.now().date()
+        self.fields['end_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
+        
+        # Filter to active students and categories
+        self.fields['student'].queryset = Student.objects.filter(is_active=True)
+        self.fields['category'].queryset = FeeCategory.objects.filter(is_active=True)
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        discount_type = self.cleaned_data.get('discount_type')
+        
+        if discount_type == 'PERCENT' and amount > 100:
+            raise ValidationError("Percentage discount cannot exceed 100%")
+        elif amount <= 0:
+            raise ValidationError("Discount amount must be greater than 0")
+            
+        return amount
+
+    def clean_end_date(self):
+        start_date = self.cleaned_data.get('start_date')
+        end_date = self.cleaned_data.get('end_date')
+        
+        if start_date and end_date and end_date < start_date:
+            raise ValidationError("End date must be after start date")
+            
+        return end_date
+
+
+class FeeInstallmentForm(forms.ModelForm):
+    class Meta:
+        model = FeeInstallment
+        fields = ['amount', 'due_date']
+        widgets = {
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'due_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+        }
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount and amount < Decimal('0.01'):
+            raise ValidationError("Installment amount must be at least GH₵0.01")
+        return amount
+
+    def clean_due_date(self):
+        due_date = self.cleaned_data.get('due_date')
+        if due_date and due_date < timezone.now().date():
+            raise ValidationError("Due date cannot be in the past")
+        return due_date

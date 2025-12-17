@@ -1,5 +1,5 @@
-# core/views/security_views.py - ADD MISSING IMPORTS AT TOP
-from core.models import SecurityEvent, AuditAlertRule, UserProfile, AuditLog, ScheduledMaintenance, User, MaintenanceMode
+from django.contrib.auth.models import User
+from core.models import SecurityEvent, AuditAlertRule, UserProfile, AuditLog, ScheduledMaintenance, MaintenanceMode
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required

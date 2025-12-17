@@ -26,6 +26,40 @@ from django.utils.translation import gettext_lazy as _
 from django.core.files.storage import default_storage
 from django.db.models.functions import ExtractYear, ExtractMonth
 
+
+"""
+MAIN MODELS FILE - HYBRID APPROACH
+
+This file now imports from the split modules.
+For backward compatibility, all models are still accessible from here.
+"""
+
+# Import from split modules
+from .models.base import *
+from .models.student import Student
+from .models.parent import (
+    ParentGuardian,
+    ParentAnnouncement,
+    ParentMessage,
+    ParentEvent,
+)
+
+__all__ = [
+    # This file now serves as a bridge to the split models
+    # All imports are handled by the models/__init__.py
+]
+
+
+from .constants.financial import (
+    BILL_STATUS_CHOICES,
+    FEE_STATUS_CHOICES,
+    PAYMENT_METHOD_CHOICES,
+    FEE_CATEGORY_TYPES,
+    FEE_FREQUENCY_CHOICES,
+    PAYMENT_TOLERANCE,
+    PAYMENT_GRACE_PERIOD,
+)
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -3233,29 +3267,9 @@ class AssignmentTemplate(models.Model):
 
 # ===== FEE MANAGEMENT =====
 
-# ===== FEE MANAGEMENT =====
-
 class FeeCategory(models.Model):
-    CATEGORY_TYPES = [
-        ('TUITION', 'Tuition Fees'),
-        ('ADMISSION', 'Admission Fees'),
-        ('TRANSPORT', 'Transport Fees'),
-        ('TECHNOLOGY', 'Technology Fee'),
-        ('EXAMINATION', 'Examination Fees'),
-        ('UNIFORM', 'Uniform Fees'),
-        ('PTA', 'PTA Fees'),
-        ('EXTRA_CLASSES', 'Extra Classes Fees'),
-    ]
-    
-    FREQUENCY_CHOICES = [
-        ('one_time', 'One Time'),
-        ('termly', 'Per Term'),
-        ('monthly', 'Monthly'),
-        ('quarterly', 'Quarterly'),
-        ('semester', 'Per Semester'),
-        ('annual', 'Annual'),
-        ('custom', 'Custom'),
-    ]
+    CATEGORY_TYPES = FEE_CATEGORY_TYPES
+    FREQUENCY_CHOICES = FEE_FREQUENCY_CHOICES
     
     name = models.CharField(max_length=100, choices=CATEGORY_TYPES)
     description = models.TextField(blank=True)
@@ -3407,16 +3421,10 @@ class Bill(models.Model):
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
-    # FIXED: Consistent lowercase statuses
+    # FIXED: Use consistent statuses from constants
     status = models.CharField(
-        max_length=10, 
-        choices=[
-            ('issued', 'Issued'),
-            ('paid', 'Paid'),
-            ('partial', 'Partially Paid'),
-            ('overdue', 'Overdue'),
-            ('cancelled', 'Cancelled')
-        ], 
+        max_length=20,  # Increased from 10 to accommodate 'refunded'
+        choices=BILL_STATUS_CHOICES,
         default='issued'
     )
     
@@ -3443,21 +3451,9 @@ class Bill(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.bill_number:
-            current_year = str(timezone.now().year)
-            last_bill = Bill.objects.filter(bill_number__startswith=f'BILL{current_year}').order_by('-bill_number').first()
-            
-            if last_bill:
-                try:
-                    last_sequence = int(last_bill.bill_number[-6:])
-                    new_sequence = last_sequence + 1
-                except ValueError:
-                    new_sequence = 1
-            else:
-                new_sequence = 1
-                
-            self.bill_number = f"BILL{current_year}{new_sequence:06d}"
+            self.bill_number = self.generate_bill_number()
         
-        # FIXED: Ensure all amounts are Decimal before calculation
+        # Use Decimal for calculations
         total_amount = Decimal(str(self.total_amount)) if self.total_amount else Decimal('0.00')
         amount_paid = Decimal(str(self.amount_paid)) if self.amount_paid else Decimal('0.00')
         
@@ -3465,17 +3461,34 @@ class Bill(models.Model):
         self.balance = total_amount - amount_paid
         
         # Auto-update status based on payments and due date
-        if amount_paid >= total_amount:
-            self.status = 'paid'
-        elif amount_paid > Decimal('0.00'):
-            self.status = 'partial'
-        elif timezone.now().date() > self.due_date:
-            self.status = 'overdue'
+        self.update_status()
         
         super().save(*args, **kwargs)
     
+    def generate_bill_number(self):
+        """Generate unique bill number"""
+        current_year = str(timezone.now().year)
+        last_bill = Bill.objects.filter(
+            bill_number__startswith=f'BILL{current_year}'
+        ).order_by('-bill_number').first()
+        
+        if last_bill:
+            try:
+                last_sequence = int(last_bill.bill_number[-6:])
+                new_sequence = last_sequence + 1
+            except ValueError:
+                new_sequence = 1
+        else:
+            new_sequence = 1
+            
+        return f"BILL{current_year}{new_sequence:06d}"
+    
+    
     def update_status(self):
         """Update bill status based on payments and due date"""
+        from .constants.financial import PAYMENT_TOLERANCE
+        
+        # Get total payments for this bill
         total_payments = self.bill_payments.aggregate(
             total=Sum('amount')
         )['total'] or Decimal('0.00')
@@ -3483,12 +3496,12 @@ class Bill(models.Model):
         self.amount_paid = total_payments
         self.balance = self.total_amount - self.amount_paid
         
-        # Don't update status if cancelled
-        if self.status == 'cancelled':
+        # Don't update status if cancelled or refunded
+        if self.status in ['cancelled', 'refunded']:
             return
         
         # Determine new status
-        if self.amount_paid >= self.total_amount:
+        if abs(self.amount_paid - self.total_amount) <= PAYMENT_TOLERANCE:
             self.status = 'paid'
         elif self.amount_paid > 0:
             self.status = 'partial'
@@ -3496,8 +3509,6 @@ class Bill(models.Model):
             self.status = 'overdue'
         else:
             self.status = 'issued'
-        
-        self.save(update_fields=['status', 'amount_paid', 'balance', 'updated_at'])
     
     def get_payment_progress(self):
         """Get payment progress percentage"""
@@ -3580,21 +3591,9 @@ class BillPayment(models.Model):
 
 
 class Fee(models.Model):
-    # FIXED: Use lowercase statuses consistently
-    PAYMENT_STATUS_CHOICES = [
-        ('paid', 'Paid'),
-        ('unpaid', 'Unpaid'),
-        ('partial', 'Part Payment'),
-        ('overdue', 'Overdue'),
-    ]
-    
-    PAYMENT_MODE_CHOICES = [
-        ('cash', 'Cash'),
-        ('check', 'Check'),
-        ('bank_transfer', 'Bank Transfer'),
-        ('mobile_money', 'Mobile Money'),
-        ('other', 'Other'),
-    ]
+    # FIXED: Use consistent statuses from constants
+    PAYMENT_STATUS_CHOICES = FEE_STATUS_CHOICES  # Now consistent with Bill
+    PAYMENT_MODE_CHOICES = PAYMENT_METHOD_CHOICES  # Consistent naming
 
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fees')
     category = models.ForeignKey(FeeCategory, on_delete=models.PROTECT, related_name='fees')
@@ -3605,8 +3604,13 @@ class Fee(models.Model):
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
     
-    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='unpaid')
-    payment_mode = models.CharField(max_length=15, choices=PAYMENT_MODE_CHOICES, blank=True, null=True)
+    # FIXED: Now using the same statuses as Bill (just adding 'draft' and 'unpaid')
+    payment_status = models.CharField(
+        max_length=20, 
+        choices=FEE_STATUS_CHOICES, 
+        default='unpaid'  # Changed from 'issued' to 'unpaid' for new fees
+    )
+    payment_mode = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
     payment_date = models.DateField(blank=True, null=True)
     due_date = models.DateField()
     
@@ -3634,26 +3638,32 @@ class Fee(models.Model):
 
     def update_payment_status(self):
         """Update payment status with proper overpayment handling"""
-        tolerance = Decimal('1.00')
-        grace_period = 5
+        from .constants.financial import PAYMENT_TOLERANCE, PAYMENT_GRACE_PERIOD
+        
+        tolerance = PAYMENT_TOLERANCE
+        grace_period = PAYMENT_GRACE_PERIOD
         today = timezone.now().date()
         effective_due_date = self.due_date + timedelta(days=grace_period)
+        
+        # Don't update if status is cancelled or refunded
+        if self.payment_status in ['cancelled', 'refunded']:
+            return
         
         # Calculate the actual difference
         difference = self.amount_payable - self.amount_paid
         
-        # Handle overpayment (amount_paid > amount_payable)
-        if self.amount_paid >= self.amount_payable:
-            if abs(difference) <= tolerance:
-                self.payment_status = 'paid'
-            else:
-                self.payment_status = 'paid'  # Still mark as paid for overpayment
+        # Handle full payment with tolerance
+        if abs(difference) <= tolerance:
+            self.payment_status = 'paid'
+            if not self.payment_date:
+                self.payment_date = today
         elif self.amount_paid > Decimal('0.00'):
             self.payment_status = 'partial'
         elif today > effective_due_date:
             self.payment_status = 'overdue'
         else:
             self.payment_status = 'unpaid'
+
 
     @property
     def overpayment_amount(self):
@@ -5104,14 +5114,3 @@ def is_parent(user):
     return hasattr(user, 'parentguardian')
 
 
-# Add this to the end of your models.py (before the last line if it has imports)
-class DataCleanup(models.Model):
-    """Proxy model for data cleanup operations"""
-    
-    class Meta:
-        verbose_name = "Data Maintenance"
-        verbose_name_plural = "Data Maintenance"
-        proxy = True
-    
-    def __str__(self):
-        return "Data Maintenance"

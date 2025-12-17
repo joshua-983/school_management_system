@@ -23,7 +23,7 @@ from ..models import (
     ClassAssignment, SchoolConfiguration
 )
 from .base_views import is_student, is_teacher, is_admin
-from ..forms import ReportCardForm, ReportCardFilterForm
+from ..forms import ReportCardGenerationForm, ReportCardFilterForm
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,7 @@ class QuickViewReportCardPDFView(LoginRequiredMixin, View):
 
 class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = ReportCard
-    form_class = ReportCardForm
+    form_class = ReportCardGenerationForm
     template_name = 'core/academics/report_cards/create_report_card.html'
     success_url = reverse_lazy('report_card_dashboard')
     

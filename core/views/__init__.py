@@ -1,6 +1,12 @@
+"""
+Views package initialization with CSRF handling.
+"""
 from django.shortcuts import render
 from django.middleware.csrf import CsrfViewMiddleware
 from django.utils.decorators import decorator_from_middleware
+
+# FIX THIS LINE - Import from core.models, not core.views
+from core.models import Budget, Expense
 
 def csrf_failure(request, reason=""):
     """

@@ -9,7 +9,8 @@ import csv
 from datetime import datetime, timedelta
 import logging
 
-from .models import ParentGuardian, Student, User
+from django.contrib.auth.models import User
+from .models import ParentGuardian, Student
 from .parent_forms import ParentCreationForm, BulkParentForm, ParentMessageForm, AdminParentRegistrationForm
 
 logger = logging.getLogger(__name__)

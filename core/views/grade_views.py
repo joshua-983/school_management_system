@@ -42,7 +42,7 @@ from ..models import (
     Subject, ClassAssignment, AcademicTerm, AuditLog, Teacher,
     CLASS_LEVEL_CHOICES
 )
-from ..forms import GradeEntryForm, ReportCardForm, ReportCardFilterForm, BulkGradeUploadForm
+from ..forms import GradeEntryForm, ReportCardGenerationForm, ReportCardFilterForm, BulkGradeUploadForm
 from ..utils import is_admin, is_teacher, is_student, is_parent
 from ..utils.validation import validate_grade_data, validate_bulk_grade_data
 

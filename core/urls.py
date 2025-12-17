@@ -9,6 +9,7 @@ from accounts import views as accounts_views
 from .views.base_views import dashboard
 
 from . import views_group_management
+from core.models import Teacher
 
 from django.views.generic import RedirectView, TemplateView
 from .api_views import (

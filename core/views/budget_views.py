@@ -17,7 +17,7 @@ from django.http import HttpResponse, JsonResponse
 
 from .base_views import is_admin
 from ..models import Budget, Expense, FeeCategory
-from ..forms import BudgetForm
+from ..forms.budget_forms import BudgetForm
 from ..constants.financial import BUDGET_CATEGORY_CHOICES
 
 logger = logging.getLogger(__name__)

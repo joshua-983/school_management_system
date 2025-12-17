@@ -23,7 +23,7 @@ from django.utils.timezone import make_aware
 
 from .base_views import is_admin, is_teacher, is_student
 from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment, Bill, BillPayment, StudentCredit, Expense, Budget  # ADDED Expense, Budget
-from ..forms import FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, FeeStatusReportForm
+from ..forms import FeeCategoryForm, FeeForm, BillPaymentForm, FeeFilterForm, FeeStatusReportForm
 from django.contrib import messages
 
 from django.core.serializers import serialize
@@ -31,8 +31,8 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from ..forms import (
-    FeeCategoryForm, FeeForm, FeePaymentForm, FeeFilterForm, 
-    FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm
+    FeeCategoryForm, FeeForm, BillPaymentForm, FeeFilterForm,
+    FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm       
 )
 
 
@@ -987,7 +987,7 @@ class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 # Fee Payment Views
 class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeePayment
-    form_class = FeePaymentForm
+    form_class = BillPaymentForm
     template_name = 'core/finance/fees/fee_payment_form.html'
     
     def test_func(self):
