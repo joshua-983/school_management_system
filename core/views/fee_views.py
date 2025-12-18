@@ -1,5 +1,7 @@
+# Correct imports section:
 import logging
 import json
+import csv
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.contrib.auth.models import User
@@ -13,30 +15,29 @@ from django.db.models import Sum, Count, Q, Avg
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from decimal import Decimal
-from openpyxl import Workbook
+from decimal import Decimal, InvalidOperation
+from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
-from io import BytesIO
+from io import BytesIO, StringIO
 from django.db.models import F, ExpressionWrapper, DecimalField
 from django.utils.timezone import make_aware
 
+# ADD THIS IMPORT (only once):
+from django.core.serializers.json import DjangoJSONEncoder
+
 from .base_views import is_admin, is_teacher, is_student
-from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, Student, ClassAssignment, Bill, BillPayment, StudentCredit, Expense, Budget  # ADDED Expense, Budget
+from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, BillPayment, Bill, Student, ClassAssignment, StudentCredit, Expense, Budget
 from ..forms import FeeCategoryForm, FeeForm, BillPaymentForm, FeeFilterForm, FeeStatusReportForm
 from django.contrib import messages
 
-from django.core.serializers import serialize
-from django.core.serializers.json import DjangoJSONEncoder
-from django.db import models
-
+# At the top of fee_views.py, in your imports section
 from ..forms import (
-    FeeCategoryForm, FeeForm, BillPaymentForm, FeeFilterForm,
+    FeeCategoryForm, FeeForm, PaymentForm, FeeFilterForm,
     FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm       
 )
 
 
-# Import Custom JSON Encoder
 class CustomJSONEncoder(DjangoJSONEncoder):
     def default(self, obj):
         if isinstance(obj, Decimal):
@@ -46,6 +47,156 @@ class CustomJSONEncoder(DjangoJSONEncoder):
 
 # Add logger configuration
 logger = logging.getLogger(__name__)
+
+
+# Helper function for case-insensitive category lookup
+def find_fee_category(category_name):
+    """
+    Find fee category with case-insensitive matching and smart suggestions.
+    Returns (category_object, error_message) tuple.
+    """
+    if not category_name:
+        return None, "Category name is required"
+    
+    category_name = str(category_name).strip()
+    
+    # First try exact case-insensitive match
+    try:
+        category = FeeCategory.objects.get(name__iexact=category_name)
+        return category, None
+    except FeeCategory.DoesNotExist:
+        pass
+    
+    # Try to match with common variations
+    category_mapping = {
+        # Tuition variations
+        'tuition': 'TUITION',
+        'tuition fee': 'TUITION',
+        'tuition-fee': 'TUITION',
+        'tuition_fee': 'TUITION',
+        'tuitionfee': 'TUITION',
+        
+        # Admission variations
+        'admission': 'ADMISSION',
+        'admission fee': 'ADMISSION',
+        'admission-fee': 'ADMISSION',
+        'admission_fee': 'ADMISSION',
+        'admissionfee': 'ADMISSION',
+        
+        # Transport variations
+        'transport': 'TRANSPORT',
+        'transport fee': 'TRANSPORT',
+        'transport-fee': 'TRANSPORT',
+        'transport_fee': 'TRANSPORT',
+        'transportfee': 'TRANSPORT',
+        
+        # Technology variations
+        'technology': 'TECHNOLOGY',
+        'technology fee': 'TECHNOLOGY',
+        'technology-fee': 'TECHNOLOGY',
+        'technology_fee': 'TECHNOLOGY',
+        'technologyfee': 'TECHNOLOGY',
+        'tech': 'TECHNOLOGY',
+        'tech fee': 'TECHNOLOGY',
+        'tech-fee': 'TECHNOLOGY',
+        'tech_fee': 'TECHNOLOGY',
+        'techfee': 'TECHNOLOGY',
+        
+        # Examination variations
+        'exam': 'EXAMINATION',
+        'examination': 'EXAMINATION',
+        'exam fee': 'EXAMINATION',
+        'examination fee': 'EXAMINATION',
+        'examination-fee': 'EXAMINATION',
+        'examination_fee': 'EXAMINATION',
+        'examfee': 'EXAMINATION',
+        'examinationfee': 'EXAMINATION',
+        
+        # Uniform variations
+        'uniform': 'UNIFORM',
+        'uniform fee': 'UNIFORM',
+        'uniform-fee': 'UNIFORM',
+        'uniform_fee': 'UNIFORM',
+        'uniformfee': 'UNIFORM',
+        
+        # PTA variations
+        'pta': 'PTA',
+        'pta fee': 'PTA',
+        'pta-fee': 'PTA',
+        'pta_fee': 'PTA',
+        'ptafee': 'PTA',
+        
+        # Extra Classes variations
+        'extra classes': 'EXTRA_CLASSES',
+        'extra-classes': 'EXTRA_CLASSES',
+        'extra_classes': 'EXTRA_CLASSES',
+        'extra': 'EXTRA_CLASSES',
+        'extra class': 'EXTRA_CLASSES',
+        
+        # Title case variations
+        'Tuition': 'TUITION',
+        'Tuition Fee': 'TUITION',
+        'Admission': 'ADMISSION',
+        'Admission Fee': 'ADMISSION',
+        'Transport': 'TRANSPORT',
+        'Transport Fee': 'TRANSPORT',
+        'Technology': 'TECHNOLOGY',
+        'Tech': 'TECHNOLOGY',
+        'Exam': 'EXAMINATION',
+        'Examination': 'EXAMINATION',
+        'Uniform': 'UNIFORM',
+        'Pta': 'PTA',
+        'Extra Classes': 'EXTRA_CLASSES',
+    }
+    
+    # Clean the input for matching
+    cleaned = category_name.lower().replace(' ', '').replace('-', '').replace('_', '')
+    
+    # Check if we have a mapping for this cleaned input
+    for key, value in category_mapping.items():
+        if key.lower().replace(' ', '').replace('-', '').replace('_', '') == cleaned:
+            try:
+                category = FeeCategory.objects.get(name=value)
+                return category, None
+            except FeeCategory.DoesNotExist:
+                pass
+    
+    # Try partial match (at least 3 characters)
+    if len(category_name) >= 3:
+        categories = FeeCategory.objects.filter(name__icontains=category_name)
+        if categories.count() == 1:
+            return categories.first(), None
+        
+        # If multiple matches, provide suggestions
+        if categories.exists():
+            suggestions = ", ".join([cat.name for cat in categories])
+            return None, f"Multiple categories found. Did you mean one of: {suggestions}?"
+    
+    # Try to find by cleaning the database names
+    all_categories = FeeCategory.objects.all()
+    for category in all_categories:
+        db_clean = category.name.lower().replace(' ', '').replace('-', '').replace('_', '')
+        if cleaned == db_clean:
+            return category, None
+    
+    # No match found - provide helpful error
+    available_categories = ", ".join([cat.name for cat in FeeCategory.objects.all()])
+    return None, f"Fee category '{category_name}' not found. Available categories: {available_categories}"
+
+
+def get_category_display_name(category):
+    """
+    Get user-friendly display name for a category.
+    """
+    if isinstance(category, str):
+        try:
+            category_obj = FeeCategory.objects.get(name=category)
+            return category_obj.get_name_display()
+        except FeeCategory.DoesNotExist:
+            return category.replace('_', ' ').title()
+    
+    # If it's a FeeCategory instance
+    return category.get_name_display()
 
 
 # Fee management
@@ -66,6 +217,7 @@ class FeeCategoryListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
         
         return context
 
+
 class FeeCategoryCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeeCategory
     form_class = FeeCategoryForm
@@ -78,6 +230,7 @@ class FeeCategoryCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView)
     def form_valid(self, form):
         messages.success(self.request, 'Fee category created successfully')
         return super().form_valid(form)
+
 
 class FeeCategoryDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = FeeCategory
@@ -126,6 +279,7 @@ class FeeCategoryDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
         
         return context
 
+
 class FeeCategoryUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = FeeCategory
     form_class = FeeCategoryForm
@@ -139,6 +293,7 @@ class FeeCategoryUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView)
         messages.success(self.request, 'Fee category updated successfully')
         return super().form_valid(form)
 
+
 class FeeCategoryDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = FeeCategory
     template_name = 'core/finance/categories/fee_category_confirm_delete.html'
@@ -150,6 +305,7 @@ class FeeCategoryDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView)
     def delete(self, request, *args, **kwargs):
         messages.success(request, 'Fee category deleted successfully')
         return super().delete(request, *args, **kwargs)
+
 
 class DownloadFeeTemplateView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Download fee import template"""
@@ -181,28 +337,44 @@ class DownloadFeeTemplateView(LoginRequiredMixin, UserPassesTestMixin, View):
         for col_num, header in enumerate(headers, 1):
             ws.cell(row=1, column=col_num, value=header).font = Font(bold=True)
         
-        # Sample data
+        # Sample data with proper category names
         sample_data = [
-            ['STU001', 'Tuition Fee', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
-            ['STU002', 'Transport Fee', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+            ['STU001', 'TUITION', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
+            ['STU002', 'TRANSPORT', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+            ['STU003', 'ADMISSION', '500.00', '500.00', '2024-12-31', 'paid', 'Admission fee'],
+            ['STU004', 'EXAMINATION', '150.00', '0.00', '2024-12-31', 'unpaid', 'Term exam fee'],
+            ['STU005', 'PTA', '100.00', '100.00', '2024-12-31', 'paid', 'PTA fee'],
+            ['STU006', 'UNIFORM', '300.00', '150.00', '2024-12-31', 'partial', 'School uniform'],
+            ['STU007', 'TECHNOLOGY', '200.00', '200.00', '2024-12-31', 'paid', 'Tech fee'],
+            ['STU008', 'EXTRA_CLASSES', '250.00', '0.00', '2024-12-31', 'unpaid', 'Extra classes'],
         ]
         
         for row_num, row_data in enumerate(sample_data, 2):
             for col_num, value in enumerate(row_data, 1):
                 ws.cell(row=row_num, column=col_num, value=value)
         
+        # Add category help sheet
+        help_ws = wb.create_sheet(title="Category Help")
+        help_ws.append(['Available Fee Categories (Use these exact names):'])
+        help_ws.append([''])
+        
+        categories = FeeCategory.objects.all().order_by('name')
+        for category in categories:
+            help_ws.append([category.name, f"Description: {category.description}"])
+        
         # Auto-size columns
-        for col in ws.columns:
-            max_length = 0
-            column_letter = col[0].column_letter
-            for cell in col:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min((max_length + 2), 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
+        for sheet in [ws, help_ws]:
+            for col in sheet.columns:
+                max_length = 0
+                column_letter = col[0].column_letter
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min((max_length + 2), 50)
+                sheet.column_dimensions[column_letter].width = adjusted_width
         
         wb.save(response)
         return response
@@ -220,8 +392,9 @@ class DownloadFeeTemplateView(LoginRequiredMixin, UserPassesTestMixin, View):
         writer.writerow(headers)
         
         sample_data = [
-            ['STU001', 'Tuition Fee', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
-            ['STU002', 'Transport Fee', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+            ['STU001', 'TUITION', '1000.00', '500.00', '2024-12-31', 'partial', 'First term tuition'],
+            ['STU002', 'TRANSPORT', '200.00', '0.00', '2024-12-31', 'unpaid', 'Monthly transport'],
+            ['STU003', 'ADMISSION', '500.00', '500.00', '2024-12-31', 'paid', 'Admission fee'],
         ]
         
         for row in sample_data:
@@ -243,6 +416,7 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
             'form': form,
             'template_headers': self.get_template_headers(),
             'sample_data': self.get_sample_data(),
+            'available_categories': self.get_available_categories(),
         }
         return render(request, 'core/finance/fees/bulk_fee_import.html', context)
     
@@ -274,13 +448,26 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
             else:
                 return render(request, 'core/finance/fees/bulk_fee_import.html', {
                     'form': form,
-                    'import_results': results
+                    'import_results': results,
+                    'available_categories': self.get_available_categories(),
                 })
                 
         except Exception as e:
             logger.error(f"Bulk import error: {str(e)}")
             messages.error(request, f'Error processing file: {str(e)}')
             return render(request, 'core/finance/fees/bulk_fee_import.html', {'form': form})
+    
+    def get_available_categories(self):
+        """Get available categories for display"""
+        categories = FeeCategory.objects.filter(is_active=True).order_by('name')
+        return [
+            {
+                'code': cat.name,
+                'display_name': cat.get_name_display(),
+                'description': cat.description
+            }
+            for cat in categories
+        ]
     
     def process_excel_file(self, file, academic_year, term, update_existing):
         """Process Excel file for bulk fee import"""
@@ -408,7 +595,7 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
         column_map = {}
         standard_columns = {
             'student_id': ['student_id', 'student', 'student id', 'id'],
-            'category_name': ['category', 'fee_category', 'category_name', 'fee type'],
+            'category_name': ['category', 'fee_category', 'category_name', 'fee type', 'fee_type'],
             'amount_payable': ['amount', 'amount_payable', 'payable', 'fee_amount', 'total'],
             'amount_paid': ['amount_paid', 'paid', 'paid_amount'],
             'due_date': ['due_date', 'due date', 'due'],
@@ -500,7 +687,7 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
         return value if value not in [None, ''] else default
     
     def validate_fee_data(self, fee_data):
-        """Validate fee data before creation"""
+        """Validate fee data before creation with case-insensitive category handling"""
         try:
             # Check required fields
             if not fee_data['student_id']:
@@ -516,12 +703,15 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
             except Student.DoesNotExist:
                 return {'is_valid': False, 'error': f"Student with ID {fee_data['student_id']} not found"}
             
-            # Validate category exists
-            try:
-                category = FeeCategory.objects.get(name__iexact=fee_data['category_name'].strip())
-                fee_data['category'] = category
-            except FeeCategory.DoesNotExist:
-                return {'is_valid': False, 'error': f"Fee category '{fee_data['category_name']}' not found"}
+            # IMPORTANT FIX: Use case-insensitive category lookup
+            category_name = fee_data['category_name']
+            category, error = find_fee_category(category_name)
+            
+            if error:
+                return {'is_valid': False, 'error': error}
+            
+            fee_data['category'] = category
+            fee_data['category_name'] = category.name  # Store the actual uppercase name
             
             # Validate amounts
             try:
@@ -608,20 +798,50 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
     
     def show_import_results(self, request, results):
         """Show import results to user"""
+        # Clear previous results first
+        if 'import_errors' in request.session:
+            del request.session['import_errors']
+        if 'skipped_warnings' in request.session:
+            del request.session['skipped_warnings']
+    
         if results['success_count'] > 0:
             messages.success(request, f'Successfully imported {results["success_count"]} fee records')
-        
+    
         if results['error_count'] > 0:
             messages.error(request, f'Failed to import {results["error_count"]} records. Check errors below.')
             # Store errors in session for display
             request.session['import_errors'] = results['errors'][:10]  # Show first 10 errors
-        
+    
         if results['skipped'] > 0:
             messages.warning(request, f'Skipped {results["skipped"]} existing records')
-        
+            # Store skipped warnings
+            request.session['skipped_warnings'] = results['warnings'][:5]
+    
         if results['warnings']:
             for warning in results['warnings'][:5]:  # Show first 5 warnings
                 messages.warning(request, warning)
+    
+        # Debug: Print to console
+        print("\n" + "="*50)
+        print("IMPORT RESULTS:")
+        print(f"Success: {results['success_count']}")
+        print(f"Errors: {results['error_count']}")
+        print(f"Skipped: {results['skipped']}")
+        print(f"Warnings: {len(results['warnings'])}")
+    
+        if results['error_count'] > 0:
+            print("\nERRORS:")
+            for error in results['errors'][:5]:
+                print(f"  - {error}")
+    
+        if results['warnings']:
+            print("\nWARNINGS:")
+            for warning in results['warnings'][:5]:
+                print(f"  - {warning}")
+        print("="*50 + "\n")
+    
+        # Save the session
+        request.session.modified = True
     
     def get_template_headers(self):
         """Get template headers for download"""
@@ -640,7 +860,7 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
         return [
             {
                 'student_id': 'STU001',
-                'category': 'Tuition Fee',
+                'category': 'TUITION',
                 'amount_payable': '1000.00',
                 'amount_paid': '500.00',
                 'due_date': '2024-12-31',
@@ -649,20 +869,25 @@ class BulkFeeImportView(LoginRequiredMixin, UserPassesTestMixin, View):
             },
             {
                 'student_id': 'STU002', 
-                'category': 'Transport Fee',
+                'category': 'TRANSPORT',
                 'amount_payable': '200.00',
                 'amount_paid': '0.00',
                 'due_date': '2024-12-31',
                 'payment_status': 'unpaid',
                 'description': 'Monthly transport'
+            },
+            {
+                'student_id': 'STU003',
+                'category': 'ADMISSION',
+                'amount_payable': '500.00',
+                'amount_paid': '500.00',
+                'due_date': '2024-12-31',
+                'payment_status': 'paid',
+                'description': 'Admission fee'
             }
         ]
 
 
-
-    
-# Fee Views
-# Fee Views
 class FeeListView(LoginRequiredMixin, ListView):
     model = Fee
     template_name = 'core/finance/fees/fee_list.html'
@@ -733,6 +958,12 @@ class FeeListView(LoginRequiredMixin, ListView):
         partial_count = queryset.filter(payment_status='partial').count()
         overdue_count = queryset.filter(payment_status='overdue').count()
         
+        # Add display names to categories
+        categories_in_view = FeeCategory.objects.filter(
+            id__in=queryset.values_list('category', flat=True).distinct()
+        )
+        category_display_map = {cat.id: cat.get_name_display() for cat in categories_in_view}
+        
         context.update({
             'total_payable': total_payable,
             'total_paid': total_paid,
@@ -745,6 +976,7 @@ class FeeListView(LoginRequiredMixin, ListView):
             'overdue_count': overdue_count,
             'is_admin': is_admin(self.request.user),
             'is_teacher': is_teacher(self.request.user),
+            'category_display_map': category_display_map,
         })
         
         # Add all students for the modal - FIXED
@@ -788,7 +1020,7 @@ class FeeListView(LoginRequiredMixin, ListView):
             ws[f'A{row_num}'] = fee.student.student_id
             ws[f'B{row_num}'] = fee.student.get_full_name()
             ws[f'C{row_num}'] = fee.student.get_class_level_display()
-            ws[f'D{row_num}'] = str(fee.category)
+            ws[f'D{row_num}'] = fee.category.get_name_display()  # Use display name
             ws[f'E{row_num}'] = fee.academic_year
             ws[f'F{row_num}'] = fee.get_term_display()
             ws[f'G{row_num}'] = float(fee.amount_payable)
@@ -814,6 +1046,7 @@ class FeeListView(LoginRequiredMixin, ListView):
         wb.save(response)
         return response
 
+
 class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Fee
     template_name = 'core/finance/fees/fee_dashboard.html'
@@ -838,6 +1071,10 @@ class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         context['payments'] = self.object.payments.all().order_by('-payment_date')
         context['is_admin'] = is_admin(self.request.user)
         context['is_teacher'] = is_teacher(self.request.user)
+        
+        # Add display name for category
+        context['category_display_name'] = self.object.category.get_name_display()
+        
         return context
 
 
@@ -879,9 +1116,21 @@ class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         context = super().get_context_data(**kwargs)
         student_id = self.kwargs.get('student_id')
         
-        # Get all active categories
+        # Get all active categories with display names
         all_categories = FeeCategory.objects.filter(is_active=True).order_by('name')
         context['all_categories'] = all_categories
+        
+        # Add categories with display names for template
+        context['categories_with_display'] = [
+            {
+                'id': cat.id,
+                'name': cat.name,
+                'display_name': cat.get_name_display(),
+                'description': cat.description,
+                'default_amount': cat.default_amount
+            }
+            for cat in all_categories
+        ]
         
         # Add debug information
         context['debug_categories'] = all_categories
@@ -955,6 +1204,12 @@ class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def test_func(self):
         return is_admin(self.request.user)
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add display name for category
+        context['category_display_name'] = self.object.category.get_name_display()
+        return context
+    
     def form_valid(self, form):
         form.instance.balance = form.cleaned_data['amount_payable'] - form.cleaned_data['amount_paid']
         
@@ -970,6 +1225,7 @@ class FeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def get_success_url(self):
         return reverse_lazy('fee_detail', kwargs={'pk': self.object.pk})
 
+
 class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Fee
     template_name = 'core/finance/fees/fee_confirm_delete.html'
@@ -984,10 +1240,11 @@ class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         messages.success(request, 'Fee record deleted successfully')
         return super().delete(request, *args, **kwargs)
 
+
 # Fee Payment Views
 class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeePayment
-    form_class = BillPaymentForm
+    form_class = PaymentForm
     template_name = 'core/finance/fees/fee_payment_form.html'
     
     def test_func(self):
@@ -1006,7 +1263,6 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
             print(f"DEBUG: Fee with ID {fee_id} does not exist")
         
         kwargs['fee_id'] = fee_id
-        kwargs['request'] = self.request  # Pass request to form
         return kwargs
     
     def get_context_data(self, **kwargs):
@@ -1016,6 +1272,8 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
         try:
             fee = Fee.objects.get(pk=fee_id)
             context['fee'] = fee
+            # Add display name for category
+            context['category_display_name'] = fee.category.get_name_display()
             print(f"DEBUG: Fee added to context: {fee}")
         except Fee.DoesNotExist:
             context['fee'] = None
@@ -1093,7 +1351,7 @@ class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
                         is_used=False,
                         defaults={
                             'credit_amount': fee.overpayment_amount,
-                            'reason': f'Overpayment for {fee.category.name}'
+                            'reason': f'Overpayment for {fee.category.get_name_display()}'
                         }
                     )
                     if not created:
@@ -1195,24 +1453,7 @@ class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     def get_success_url(self):
         return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
 
-# NEW: Bill Payment Views
-class BillPaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
-    model = BillPayment
-    fields = ['amount', 'payment_mode', 'payment_date', 'notes']
-    template_name = 'core/finance/bills/bill_payment_form.html'
-    
-    def test_func(self):
-        return is_admin(self.request.user)
-    
-    def form_valid(self, form):
-        bill = get_object_or_404(Bill, pk=self.kwargs['bill_id'])
-        form.instance.bill = bill
-        form.instance.recorded_by = self.request.user
-        messages.success(self.request, f'Payment of GH₵{form.instance.amount:.2f} recorded for bill #{bill.bill_number}')
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        return reverse_lazy('bill_detail', kwargs={'pk': self.kwargs['bill_id']})
+
 
 # NEW: Automated Fee Generation
 class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -1440,7 +1681,6 @@ class BulkFeeCreationView(LoginRequiredMixin, UserPassesTestMixin, View):
             return render(request, 'core/finance/fees/bulk_fee_creation.html', {'form': form})
 
 
-
 # NEW: Payment Reminders
 class SendPaymentRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
@@ -1457,11 +1697,12 @@ class SendPaymentRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
         for fee in overdue_fees:
             # In a real implementation, this would send emails/SMS
             # For now, just log the action
-            print(f"Reminder sent for {fee.student.get_full_name()} - Fee: {fee.category.name}")
+            print(f"Reminder sent for {fee.student.get_full_name()} - Fee: {fee.category.get_name_display()}")
             reminder_count += 1
         
         messages.success(request, f'Payment reminders sent for {reminder_count} overdue fees')
         return redirect('fee_list')
+
 
 # NEW: Fee Analytics
 class FeeAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
@@ -1501,6 +1742,7 @@ class FeeAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         })
         
         return context
+
 
 # Reports
 class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -1594,7 +1836,7 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
             ws[f'A{row_num}'] = fee.student.student_id
             ws[f'B{row_num}'] = fee.student.get_full_name()
             ws[f'C{row_num}'] = fee.student.get_class_level_display()
-            ws[f'D{row_num}'] = str(fee.category)
+            ws[f'D{row_num}'] = fee.category.get_name_display()  # Use display name
             ws[f'E{row_num}'] = fee.academic_year
             ws[f'F{row_num}'] = fee.get_term_display()
             ws[f'G{row_num}'] = float(fee.amount_payable)
@@ -1619,6 +1861,7 @@ class FeeReportView(LoginRequiredMixin, UserPassesTestMixin, View):
         
         wb.save(response)
         return response
+
 
 # Fee Status Report
 class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -1736,7 +1979,7 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
                 fee.student.student_id,
                 fee.student.get_full_name(),
                 fee.student.get_class_level_display(),
-                str(fee.category),
+                fee.category.get_name_display(),  # Use display name
                 float(fee.amount_payable),
                 float(fee.amount_paid),
                 float(fee.balance),
@@ -1757,6 +2000,7 @@ class FeeStatusReportView(LoginRequiredMixin, UserPassesTestMixin, View):
                     pass
             adjusted_width = min((max_length + 2) * 1.2, 30)
             ws.column_dimensions[column].width = adjusted_width
+
 
 class FeeDashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'core/finance/fees/fee_dashboard.html'
@@ -1804,6 +2048,7 @@ class FeeDashboardView(LoginRequiredMixin, TemplateView):
             paid=Sum('amount_paid'),
             count=Count('id')
         ).order_by('student__class_level')
+
 
 # Fee generation automation
 def generate_term_fees(request_user=None):
@@ -2180,7 +2425,7 @@ class RevenueAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             ws_outstanding.cell(row=row_num, column=1, value=fee.student.get_full_name())
             ws_outstanding.cell(row=row_num, column=2, value=fee.student.student_id)
             ws_outstanding.cell(row=row_num, column=3, value=fee.student.get_class_level_display())
-            ws_outstanding.cell(row=row_num, column=4, value=str(fee.category))
+            ws_outstanding.cell(row=row_num, column=4, value=fee.category.get_name_display())  # Use display name
             ws_outstanding.cell(row=row_num, column=5, value=float(fee.amount_payable))
             ws_outstanding.cell(row=row_num, column=6, value=float(fee.amount_paid))
             ws_outstanding.cell(row=row_num, column=7, value=float(fee.balance))
@@ -2345,7 +2590,7 @@ class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
     def get_cash_flow_data(self):
         """Get cash flow data for the last 90 days"""
         ninety_days_ago = timezone.now() - timedelta(days=90)
-        
+    
         try:
             cash_flow_data = FeePayment.objects.filter(
                 payment_date__gte=ninety_days_ago.date(),
@@ -2355,23 +2600,40 @@ class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
             }).values('payment_date').annotate(
                 income=Sum('amount')
             ).order_by('payment_date')
-            
-            # Format the data for the template
+        
+            # Format the data for the template - FIXED VERSION
             formatted_data = []
             for item in cash_flow_data:
+                # Check if payment_date is already a string or date object
+                payment_date = item['payment_date']
+                if isinstance(payment_date, str):
+                    # If it's a string, try to convert to date
+                    try:
+                        from datetime import datetime
+                        date_obj = datetime.strptime(payment_date, '%Y-%m-%d').date()
+                        iso_date = date_obj.isoformat()
+                    except (ValueError, AttributeError):
+                        iso_date = payment_date  # Use as-is if conversion fails
+                elif hasattr(payment_date, 'isoformat'):
+                    iso_date = payment_date.isoformat()
+                else:
+                    iso_date = str(payment_date)  # Fallback to string
+            
                 formatted_data.append({
-                    'payment_date': item['payment_date'].isoformat(),
-                    'income': float(item['income'])
+                    'payment_date': iso_date,
+                    'income': float(item['income']) if item['income'] else 0.0
                 })
-            
+        
             return formatted_data
-            
+        
         except Exception as e:
             logger.error(f"Error getting cash flow data: {e}")
             return []
     
     def get_liabilities_data(self):
         """Get actual liabilities data from unpaid bills"""
+        from ..models import Bill  # Add this import
+    
         try:
             unpaid_bills = Bill.objects.filter(
                 status__in=['issued', 'partial', 'overdue']
@@ -2514,6 +2776,7 @@ class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
         except Exception as e:
             logger.error(f"Error calculating financial health score: {e}")
             return 50  # Default neutral score
+
 
 # Payment Summary View - FIXED AND ENHANCED VERSION
 class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
@@ -2854,3 +3117,19 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         except Exception as e:
             logger.error(f"Error in export_to_excel: {str(e)}")
             raise
+
+
+class ClearImportResultsView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Clear import results from session"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def post(self, request):
+        # Clear import-related session data
+        if 'import_errors' in request.session:
+            del request.session['import_errors']
+        if 'skipped_warnings' in request.session:
+            del request.session['skipped_warnings']
+        
+        return JsonResponse({'success': True})

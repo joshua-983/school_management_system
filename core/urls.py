@@ -7,6 +7,7 @@ from . import views
 from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
 from .views.base_views import dashboard
+from .views.fee_views import ClearImportResultsView
 
 from . import views_group_management
 from core.models import Teacher
@@ -70,7 +71,7 @@ from .views.fee_views import (
     FeeCategoryListView, FeeCategoryCreateView, FeeCategoryUpdateView, FeeCategoryDeleteView,
     FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
     FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView,
-    FeeStatusReportView, BillPaymentCreateView, GenerateTermFeesView,
+    FeeStatusReportView, GenerateTermFeesView,
     BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView,
     FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
     PaymentSummaryView, RefreshPaymentDataView,
@@ -185,7 +186,8 @@ from .views.notifications_views import (
 # ==============================
 from .views.bill_views import (
     BillListView, BillDetailView, BillGenerateView, BillPaymentView, BillCancelView,
-    BulkSendRemindersView, BulkExportBillsView, BulkMarkPaidView, BulkDeleteBillsView
+    BulkSendRemindersView, BulkExportBillsView, BulkMarkPaidView, BulkDeleteBillsView,
+    BillPaymentCreateView
 )
 
 # ==============================
@@ -873,4 +875,6 @@ urlpatterns = [
     path('system/status/', 
          TemplateView.as_view(template_name='core/admin/system_status.html'), 
          name='system_status'),
+    
+    path('clear-import-results/', ClearImportResultsView.as_view(), name='clear_import_results'),
 ]

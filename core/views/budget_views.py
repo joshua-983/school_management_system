@@ -199,13 +199,24 @@ class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
     
     def get_alert_message(self, item, variance_percent):
         """Generate appropriate alert message based on variance"""
-        if isinstance(item['category'], dict):
-            category_name = item['category']['name']
+        # Handle different types of category data
+        category = item['category']
+    
+        if isinstance(category, dict):
+            # It's a dictionary with 'name' key
+            category_name = category['name']
+        elif hasattr(category, 'name'):
+            # It's a FeeCategory object
+            category_name = category.name
+        elif hasattr(category, 'get_name_display'):
+            # It's a FeeCategory object with display method
+            category_name = category.get_name_display()
         else:
-            category_name = item['category'].name
-            
+            # It's a string
+            category_name = str(category)
+
         variance_amount = abs(item['variance'])
-        
+    
         if item['variance'] < 0:
             return (
                 f"{category_name} is {abs(variance_percent):.1f}% OVER budget "
@@ -216,9 +227,21 @@ class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                 f"{category_name} is {variance_percent:.1f}% UNDER budget "
                 f"(GH₵{variance_amount:,.2f} below planned amount)"
             )
-    
+
     def get_alert_recommendation(self, item, variance_percent):
         """Generate recommendations for addressing variances"""
+        # Handle category name extraction same as above
+        category = item['category']
+    
+        if isinstance(category, dict):
+            category_name = category['name']
+        elif hasattr(category, 'name'):
+            category_name = category.name
+        elif hasattr(category, 'get_name_display'):
+            category_name = category.get_name_display()
+        else:
+            category_name = str(category)
+    
         if item['variance'] < 0:  # Over budget
             if variance_percent > 50:
                 return "Immediate review required. Consider reallocating funds or investigating unexpected expenses."
@@ -234,47 +257,156 @@ class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
             else:
                 return "Healthy performance. Maintain current budget levels."
     
+    
     def get_budget_trends_for_major_categories(self, current_year, years=3):
         """Get budget performance trends for major categories over multiple years"""
-        major_categories = FeeCategory.objects.filter(
-            is_active=True
-        ).annotate(
-            total_budget=Sum('budget__allocated_amount')
-        ).order_by('-total_budget')[:5]
+        from django.db.models import Sum, Count, Q
+    
+        current_academic_year = f"{current_year}/{current_year + 1}"
+    
+        try:
+            # Try to get top budget categories for current year
+            top_budget_categories = Budget.objects.filter(
+                academic_year=current_academic_year
+            ).values('category').annotate(
+            total_budget=Sum('allocated_amount'),
+            count=Count('id')
+            ).order_by('-total_budget')[:5]
         
-        trends_data = {}
+            trends_data = {}
         
-        for category in major_categories:
-            trends_data[category.name] = self.get_budget_trends(category, current_year, years)
+            if top_budget_categories:
+                # We have budget data - use it
+                for budget_data in top_budget_categories:
+                    category_name = budget_data['category']
+                
+                    # Try to find matching FeeCategory
+                    try:
+                        fee_category = FeeCategory.objects.get(
+                            Q(name__iexact=category_name) | 
+                            Q(name__iexact=category_name.replace('_', ' ').replace('-', ' '))
+                        )
+                    except (FeeCategory.DoesNotExist, FeeCategory.MultipleObjectsReturned):
+                        # Create a placeholder category object
+                        class PlaceholderCategory:
+                            def __init__(self, name):
+                                self.name = name
+                                self.id = None
+                    
+                        fee_category = PlaceholderCategory(category_name)
+                
+                    # Get trend data
+                    trend = self.get_budget_trends(fee_category, current_year, years)
+                    if any(t['budget'] > 0 or t['actual'] > 0 for t in trend):
+                        trends_data[category_name] = trend
         
+            if not trends_data:
+                # Fallback: Use top active FeeCategories
+                major_categories = FeeCategory.objects.filter(
+                    is_active=True
+                ).order_by('name')[:5]
+            
+                for category in major_categories:
+                    trend = self.get_budget_trends(category, current_year, years)
+                    if any(t['budget'] > 0 or t['actual'] > 0 for t in trend):
+                        trends_data[category.name] = trend
+                    else:
+                        # Create sample trend data for display
+                        sample_trend = self.create_sample_trend_data(category.name, current_year, years)
+                        trends_data[category.name] = sample_trend
+    
+        except Exception as e:
+            logger.error(f"Error in get_budget_trends_for_major_categories: {str(e)}")
+            # Ultimate fallback
+            major_categories = FeeCategory.objects.filter(
+                is_active=True
+            ).order_by('name')[:5]
+        
+            trends_data = {}
+            for category in major_categories:
+                trends_data[category.name] = self.create_sample_trend_data(category.name, current_year, years)
+    
         return trends_data
+
+    
+    def create_sample_trend_data(self, category_name, current_year, years=3):
+        """Create sample trend data for demonstration when no real data exists"""
+        from decimal import Decimal
+    
+        trend_data = []
+        for year_offset in range(years - 1, -1, -1):
+            year = current_year - year_offset
+            academic_year = f"{year}/{year + 1}"
+
+            # Create sample data (can be customized based on category)
+            if 'tuition' in category_name.lower():
+                budget = Decimal('50000.00') * Decimal(str(years - year_offset))
+                actual = budget * Decimal('0.85')
+            elif 'transport' in category_name.lower():
+                budget = Decimal('20000.00') * Decimal(str(years - year_offset))
+                actual = budget * Decimal('0.9')
+            else:
+                budget = Decimal('10000.00') * Decimal(str(years - year_offset))
+                actual = budget * Decimal('0.8')
+        
+            variance = actual - budget
+            variance_percent = (variance / budget * 100) if budget > 0 else 0
+        
+            trend_data.append({
+                'year': year,
+                'academic_year': academic_year,
+                'budget': budget,
+                'actual': actual,
+                'variance': variance,
+                'variance_percent': variance_percent,
+                'utilization_rate': (actual / budget * 100) if budget > 0 else 0,
+                'is_sample_data': True
+            })
+    
+        return trend_data
+
     
     def get_budget_trends(self, category, current_year, years=3):
         """Show budget performance trends for a specific category over multiple years"""
         trend_data = []
-        
+
+        # Get category name
+        if hasattr(category, 'name'):
+            category_name = category.name
+        else:
+            category_name = str(category)
+
         for year_offset in range(years - 1, -1, -1):
             year = current_year - year_offset
-            
+        
             try:
-                # Get budget amount for this year
                 academic_year = f"{year}/{year + 1}"
+            
+                # Try to get real budget data
                 budget = Budget.objects.filter(
-                    category=category,
+                    category=category_name,
                     academic_year=academic_year
                 ).first()
+            
+                if budget:
+                    # Real data exists
+                    budget_amount = budget.allocated_amount
+                    actual_spending = budget.actual_spent
                 
-                budget_amount = budget.allocated_amount if budget else Decimal('0.00')
-                
-                # Get actual spending
-                actual_spending = Expense.objects.filter(
-                    category=category.name,  # Expense uses string category
-                    date__year=year
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                
+                    # Also check expenses if actual_spent is 0
+                    if actual_spending == 0:
+                        actual_spending = Expense.objects.filter(
+                            category=category_name,
+                            date__year=year
+                        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                else:
+                    # No budget data for this year
+                    budget_amount = Decimal('0.00')
+                    actual_spending = Decimal('0.00')
+            
                 variance = actual_spending - budget_amount
                 variance_percent = (variance / budget_amount * 100) if budget_amount > 0 else 0
-                
+            
                 trend_data.append({
                     'year': year,
                     'academic_year': academic_year,
@@ -282,10 +414,12 @@ class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                     'actual': actual_spending,
                     'variance': variance,
                     'variance_percent': variance_percent,
-                    'utilization_rate': (actual_spending / budget_amount * 100) if budget_amount > 0 else 0
+                    'utilization_rate': (actual_spending / budget_amount * 100) if budget_amount > 0 else 0,
+                    'has_real_data': budget is not None
                 })
+            
             except Exception as e:
-                logger.error(f"Error getting trend data for {category.name} in {year}: {str(e)}")
+                logger.error(f"Error getting trend data for {category_name} in {year}: {str(e)}")
                 trend_data.append({
                     'year': year,
                     'academic_year': f"{year}/{year + 1}",
@@ -294,10 +428,12 @@ class BudgetManagementView(LoginRequiredMixin, UserPassesTestMixin, TemplateView
                     'variance': Decimal('0.00'),
                     'variance_percent': 0.0,
                     'utilization_rate': 0.0,
-                    'data_available': False
+                    'has_real_data': False,
+                    'error': str(e)
                 })
-        
+
         return trend_data
+
     
     def get_historical_spending_data(self):
         """Get historical spending data for the last 5 years"""

@@ -1,7 +1,8 @@
+# bill_views.py
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
-from django.views.generic import ListView, DetailView, View
+from django.views.generic import ListView, DetailView, View, CreateView
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -165,6 +166,7 @@ class BillListView(LoginRequiredMixin, ListView):
         
         return context
 
+
 class BillDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
     model = Bill
     template_name = 'core/finance/bills/bill_detail.html'
@@ -287,8 +289,80 @@ class BillGenerateView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, self.template_name, context)
 
 
+# NEW: Bill Payment Create View
+class BillPaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    model = BillPayment
+    fields = ['amount', 'payment_mode', 'payment_date', 'notes']
+    template_name = 'core/finance/bills/bill_payment_form.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        bill_id = self.kwargs['bill_id']
+        bill = get_object_or_404(Bill, pk=bill_id)
+        context['bill'] = bill
+        return context
+    
+    def form_valid(self, form):
+        bill = get_object_or_404(Bill, pk=self.kwargs['bill_id'])
+        
+        # Check if bill can accept payments
+        if not bill.can_accept_payment():
+            messages.error(self.request, 'This bill cannot accept payments (either paid or cancelled)')
+            return redirect('bill_detail', pk=bill.pk)
+        
+        # Validate payment amount
+        payment_amount = form.cleaned_data['amount']
+        if payment_amount <= 0:
+            form.add_error('amount', 'Payment amount must be greater than zero')
+            return self.form_invalid(form)
+        
+        if payment_amount > bill.balance:
+            form.add_error('amount', f'Payment amount cannot exceed the bill balance of GH₵{bill.balance:.2f}')
+            return self.form_invalid(form)
+        
+        try:
+            with transaction.atomic():
+                # Save the payment
+                form.instance.bill = bill
+                form.instance.recorded_by = self.request.user
+                
+                # Create the payment
+                payment = form.save()
+                
+                # Update bill status
+                bill.update_status()
+                
+                messages.success(
+                    self.request, 
+                    f'Payment of GH₵{form.instance.amount:.2f} recorded for bill #{bill.bill_number}'
+                )
+                
+                # Log the payment
+                logger.info(
+                    f"Payment recorded via CreateView - Bill: {bill.bill_number}, "
+                    f"Amount: {payment.amount}, Mode: {payment.payment_mode}"
+                )
+                
+                return super().form_valid(form)
+                
+        except Exception as e:
+            logger.error(f"Error recording payment for bill {bill.pk}: {str(e)}")
+            messages.error(
+                self.request, 
+                f'Error recording payment: {str(e)}'
+            )
+            return self.form_invalid(form)
+    
+    def get_success_url(self):
+        return reverse_lazy('bill_detail', kwargs={'pk': self.kwargs['bill_id']})
+
+
+# Existing Bill Payment View (POST method for form submission)
 class BillPaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
-    """View to handle bill payments"""
+    """View to handle bill payments via POST"""
     
     def test_func(self):
         return is_admin(self.request.user)
@@ -344,6 +418,7 @@ class BillPaymentView(LoginRequiredMixin, UserPassesTestMixin, View):
         
         return redirect('bill_detail', pk=bill.pk)
 
+
 class BillCancelView(LoginRequiredMixin, UserPassesTestMixin, View):
     """View to cancel a bill"""
     
@@ -365,6 +440,7 @@ class BillCancelView(LoginRequiredMixin, UserPassesTestMixin, View):
             messages.warning(request, f'Bill #{bill.bill_number} is already cancelled')
         
         return redirect('bill_detail', pk=bill.pk)
+
 
 # Bulk Action Views
 class BulkSendRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -400,6 +476,7 @@ class BulkSendRemindersView(LoginRequiredMixin, UserPassesTestMixin, View):
                 'success': False,
                 'message': f'Error sending reminders: {str(e)}'
             }, status=400)
+
 
 class BulkExportBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Export multiple bills to Excel"""
@@ -519,6 +596,7 @@ class BulkMarkPaidView(LoginRequiredMixin, UserPassesTestMixin, View):
                 'message': f'Error marking bills as paid: {str(e)}'
             }, status=400)
 
+
 class BulkDeleteBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Delete multiple bills"""
     
@@ -556,4 +634,3 @@ class BulkDeleteBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
                 'success': False,
                 'message': f'Error deleting bills: {str(e)}'
             }, status=400)
-

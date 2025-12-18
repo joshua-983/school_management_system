@@ -48,6 +48,10 @@
     color: white;
     border-radius: 10px;
 }
+.error-list, .warning-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
 </style>
 {% endblock %}
 
@@ -68,6 +72,79 @@
             <p class="text-muted">Import multiple fee records from Excel or CSV files</p>
         </div>
     </div>
+
+    <!-- Messages Display -->
+    {% if messages %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for message in messages %}
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                {{ message|safe }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Import Results Display -->
+    {% if request.session.import_errors or request.session.skipped_warnings %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header {% if request.session.import_errors %}bg-danger{% else %}bg-warning{% endif %} text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Import Results
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if request.session.import_errors %}
+                    <div class="alert alert-danger">
+                        <h6><i class="fas fa-times-circle me-2"></i>Import Errors:</h6>
+                        <div class="error-list">
+                            <ul class="mb-0 ps-3">
+                                {% for error in request.session.import_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-info-circle me-1"></i>
+                            These records failed validation and were not imported. Please fix the errors and try again.
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    {% if request.session.skipped_warnings %}
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Import Warnings:</h6>
+                        <div class="warning-list">
+                            <ul class="mb-0 ps-3">
+                                {% for warning in request.session.skipped_warnings %}
+                                <li>{{ warning }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-info-circle me-1"></i>
+                            These records were skipped because they already exist. Check "Update Existing" to overwrite them.
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Results will clear automatically on page refresh or new import.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row">
         <!-- Import Guide -->
@@ -322,6 +399,13 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            <strong>Tips:</strong> Make sure student IDs exist in the system. Category names must match exactly. 
+                            Amounts should be numbers without currency symbols. Dates must be in YYYY-MM-DD format.
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -466,5 +550,20 @@ $(document).ready(function() {
         }
     });
 });
+
+// Function to check if there are import results in session
+function hasImportResults() {
+    return {% if request.session.import_errors or request.session.skipped_warnings %}true{% else %}false{% endif %};
+}
+
+// Scroll to results if they exist
+if (hasImportResults()) {
+    setTimeout(() => {
+        const resultsElement = document.querySelector('.alert-danger, .alert-warning');
+        if (resultsElement) {
+            resultsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 500);
+}
 </script>
 {% endblock %}

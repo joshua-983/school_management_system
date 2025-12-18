@@ -1,6 +1,3 @@
-"""
-Financial management models: Fees, Bills, Payments, etc.
-"""
 import logging
 from decimal import Decimal
 from django.db import models
@@ -10,6 +7,9 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.db.models import Sum
+
+# ADD THIS LINE:
+from datetime import timedelta, datetime
 
 from core.models.base import TERM_CHOICES
 from core.models.student import Student

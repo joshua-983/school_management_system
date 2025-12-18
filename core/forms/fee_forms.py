@@ -7,9 +7,10 @@ import logging
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from datetime import datetime, timedelta
 
 from core.models import (
-    FeeCategory, Fee, FeeDiscount, FeeInstallment,
+    FeeCategory, Fee, FeePayment, FeeDiscount, FeeInstallment,  # ADDED FeePayment
     Student, CLASS_LEVEL_CHOICES, TERM_CHOICES
 )
 
@@ -370,3 +371,99 @@ class FeeInstallmentForm(forms.ModelForm):
         if due_date and due_date < timezone.now().date():
             raise ValidationError("Due date cannot be in the past")
         return due_date
+
+
+
+class PaymentForm(forms.ModelForm):
+    """Form for recording payments against a specific fee (FeePayment model)"""
+    class Meta:
+        model = FeePayment
+        fields = ['amount', 'payment_mode', 'payment_date', 'notes', 'bank_reference']
+        widgets = {
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0.01'
+            }),
+            'payment_mode': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'payment_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Payment notes...'
+            }),
+            'bank_reference': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Bank transaction reference...'
+            }),
+        }
+        labels = {
+            'amount': 'Payment Amount (GH₵)',
+            'bank_reference': 'Transaction Reference',
+        }
+    
+    def __init__(self, *args, **kwargs):
+        # Extract fee_id and request from kwargs
+        self.fee_id = kwargs.pop('fee_id', None)
+        self.fee = kwargs.pop('fee', None)
+        self.request = kwargs.pop('request', None)  # Store but don't pass to parent
+        super().__init__(*args, **kwargs)
+        
+        # Set initial payment date to today
+        self.fields['payment_date'].initial = timezone.now().date()
+        
+        # Get fee object if we have fee_id
+        fee_obj = self.fee
+        if not fee_obj and self.fee_id:
+            try:
+                fee_obj = Fee.objects.get(id=self.fee_id)
+            except Fee.DoesNotExist:
+                pass
+        
+        # Set max amount based on fee balance
+        if fee_obj and hasattr(fee_obj, 'balance'):
+            balance = fee_obj.balance
+            self.fields['amount'].widget.attrs.update({
+                'max': float(balance) if balance > 0 else None
+            })
+            if balance > 0:
+                self.fields['amount'].help_text = f'Maximum: GH₵{balance:.2f}'
+            else:
+                self.fields['amount'].help_text = 'Fee is already fully paid'
+    
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount:
+            amount_decimal = Decimal(str(amount))
+            
+            # Validate against fee balance
+            if hasattr(self, 'fee') and self.fee:
+                balance = self.fee.balance
+                if amount_decimal > balance:
+                    raise forms.ValidationError(
+                        f"Payment amount cannot exceed balance due of GH₵{balance:.2f}"
+                    )
+            
+            if amount_decimal <= Decimal('0.00'):
+                raise forms.ValidationError("Payment amount must be greater than zero")
+        
+        return amount
+    
+    def clean_payment_date(self):
+        from datetime import datetime  # Add this import
+        payment_date = self.cleaned_data.get('payment_date')
+        if payment_date:
+            # Convert to date if it's a datetime
+            if isinstance(payment_date, datetime):
+                payment_date = payment_date.date()
+            
+            # Now compare with today's date
+            if payment_date > timezone.now().date():
+                raise forms.ValidationError("Payment date cannot be in the future")
+        return payment_date
