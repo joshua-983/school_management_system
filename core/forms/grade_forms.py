@@ -1,105 +1,224 @@
 """
-Grade forms for entering and managing student grades.
+Grade forms for entering and managing student grades - UPDATED FOR PERCENTAGE SYSTEM
 """
 import logging
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from decimal import Decimal
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 from core.models import (
     Grade, Student, Subject, ClassAssignment, 
     Assignment, AcademicTerm, Teacher,
     CLASS_LEVEL_CHOICES, TERM_CHOICES
 )
+from core.models.configuration import SchoolConfiguration
 from core.utils import is_teacher, is_admin
 
 logger = logging.getLogger(__name__)
 
 
 class GradeEntryForm(forms.ModelForm):
-    class_level = forms.ChoiceField(
-        choices=CLASS_LEVEL_CHOICES,
-        required=True,
-        widget=forms.Select(attrs={
-            'class': 'form-select',
-            'id': 'id_class_level'
-        }),
-        help_text="Select the student's class level"
-    )
+    """Form for entering grades with percentage-based system"""
     
     class Meta:
         model = Grade
         fields = [
             'student', 'subject', 'class_level', 'academic_year', 'term',
-            'classwork_score', 'homework_score', 'test_score', 'exam_score', 'remarks'
+            'homework_percentage', 'classwork_percentage', 
+            'test_percentage', 'exam_percentage', 'remarks'
         ]
         widgets = {
+            'student': forms.Select(attrs={'class': 'form-select', 'data-live-search': 'true'}),
+            'subject': forms.Select(attrs={'class': 'form-select'}),
+            'class_level': forms.Select(attrs={'class': 'form-select'}),
             'academic_year': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'YYYY/YYYY'
+                'placeholder': 'YYYY/YYYY',
+                'pattern': '\d{4}/\d{4}'
             }),
             'term': forms.Select(attrs={'class': 'form-select'}),
+            'homework_percentage': forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%'
+            }),
+            'classwork_percentage': forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%'
+            }),
+            'test_percentage': forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%'
+            }),
+            'exam_percentage': forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%'
+            }),
             'remarks': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'Optional teacher remarks...'
-            }),
-            'classwork_score': forms.NumberInput(attrs={
-                'class': 'form-control score-input',
-                'step': '0.01',
-                'min': '0',
-                'max': '30',
-                'placeholder': '0-30'
-            }),
-            'homework_score': forms.NumberInput(attrs={
-                'class': 'form-control score-input',
-                'step': '0.01',
-                'min': '0',
-                'max': '10',
-                'placeholder': '0-10'
-            }),
-            'test_score': forms.NumberInput(attrs={
-                'class': 'form-control score-input',
-                'step': '0.01',
-                'min': '0',
-                'max': '10',
-                'placeholder': '0-10'
-            }),
-            'exam_score': forms.NumberInput(attrs={
-                'class': 'form-control score-input',
-                'step': '0.01',
-                'min': '0',
-                'max': '50',
-                'placeholder': '0-50'
+                'placeholder': 'Optional remarks or comments...'
             }),
         }
-
+        labels = {
+            'homework_percentage': 'Homework Score (%)',
+            'classwork_percentage': 'Classwork Score (%)',
+            'test_percentage': 'Test Score (%)',
+            'exam_percentage': 'Exam Score (%)',
+        }
+        help_texts = {
+            'homework_percentage': 'Enter percentage score (0-100%)',
+            'classwork_percentage': 'Enter percentage score (0-100%)',
+            'test_percentage': 'Enter percentage score (0-100%)',
+            'exam_percentage': 'Enter percentage score (0-100%)',
+        }
+    
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
+        self.config = kwargs.pop('config', None)
         super().__init__(*args, **kwargs)
         
-        # Set current academic year and term
-        current_year = timezone.now().year
-        self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
+        # Set current academic year if not provided
+        if not self.instance.pk and not self.data.get('academic_year'):
+            from django.utils import timezone
+            current_year = timezone.now().year
+            self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
         
-        try:
-            active_term = AcademicTerm.objects.filter(is_active=True).first()
-            if active_term:
-                self.initial['term'] = active_term.term
-            else:
-                self.initial['term'] = 1
-        except:
+        # Set default term if not provided
+        if not self.instance.pk and not self.data.get('term'):
             self.initial['term'] = 1
         
-        # Set initial class_level for existing instances
-        if self.instance and self.instance.pk and self.instance.student:
-            self.initial['class_level'] = self.instance.student.class_level
+        # Add configuration info to form
+        if self.config:
+            self.fields['homework_percentage'].help_text += f" (Weight: {self.config.homework_weight}%)"
+            self.fields['classwork_percentage'].help_text += f" (Weight: {self.config.classwork_weight}%)"
+            self.fields['test_percentage'].help_text += f" (Weight: {self.config.test_weight}%)"
+            self.fields['exam_percentage'].help_text += f" (Weight: {self.config.exam_weight}%)"
+    
+    def clean(self):
+        cleaned_data = super().clean()
         
-        # Filter students and subjects based on user role
-        if self.user and is_teacher(self.user):
-            self.setup_teacher_form()
-        else:
-            self.setup_admin_form()
+        # Validate percentage scores
+        percentage_fields = [
+            'homework_percentage',
+            'classwork_percentage',
+            'test_percentage',
+            'exam_percentage'
+        ]
+        
+        for field in percentage_fields:
+            value = cleaned_data.get(field)
+            if value is not None:
+                try:
+                    decimal_value = Decimal(str(value))
+                    if decimal_value < Decimal('0.00'):
+                        self.add_error(field, 'Percentage cannot be negative')
+                    elif decimal_value > Decimal('100.00'):
+                        self.add_error(field, 'Percentage cannot exceed 100%')
+                except (ValueError, TypeError):
+                    self.add_error(field, 'Invalid percentage value')
+        
+        # Validate class level matches student
+        student = cleaned_data.get('student')
+        class_level = cleaned_data.get('class_level')
+        
+        if student and class_level and student.class_level != class_level:
+            self.add_error('class_level', 
+                f"Class level must match student's current class ({student.get_class_level_display()})")
+        
+        # Calculate and validate weighted total
+        if self.config and all(field in cleaned_data for field in percentage_fields):
+            try:
+                homework = cleaned_data.get('homework_percentage', Decimal('0.00'))
+                classwork = cleaned_data.get('classwork_percentage', Decimal('0.00'))
+                test = cleaned_data.get('test_percentage', Decimal('0.00'))
+                exam = cleaned_data.get('exam_percentage', Decimal('0.00'))
+                
+                # Calculate weighted total
+                weighted_total = (
+                    (homework * self.config.homework_weight / 100) +
+                    (classwork * self.config.classwork_weight / 100) +
+                    (test * self.config.test_weight / 100) +
+                    (exam * self.config.exam_weight / 100)
+                )
+                
+                if weighted_total > 100:
+                    self.add_error(None, 
+                        f"Weighted total cannot exceed 100%. Calculated: {weighted_total:.1f}%")
+                    
+                # Store calculated total for display
+                self.calculated_total = weighted_total
+                
+            except Exception as e:
+                logger.warning(f"Error calculating weighted total: {str(e)}")
+        
+        return cleaned_data
+
+    def clean_academic_year(self):
+            """Validate academic year format"""
+            year = self.cleaned_data.get('academic_year')
+            if year:
+                import re
+                pattern = r'^\d{4}/\d{4}$'
+                if not re.match(pattern, year):
+                    raise ValidationError('Academic year must be in format YYYY/YYYY')
+            
+                # Check consecutive years
+                years = year.split('/')
+                try:
+                    year1 = int(years[0])
+                    year2 = int(years[1])
+                    if year2 != year1 + 1:
+                        raise ValidationError('Academic years must be consecutive (e.g., 2024/2025)')
+                except ValueError:
+                    raise ValidationError('Invalid year values')
+        
+            return year
+
+    def _configure_percentage_fields(self):
+        """Configure percentage fields with 0-100% validation"""
+        percentage_fields = {
+            'homework_percentage': 'Homework percentage score',
+            'classwork_percentage': 'Classwork percentage score',
+            'test_percentage': 'Test percentage score',
+            'exam_percentage': 'Exam percentage score',
+        }
+        
+        for field_name, help_text in percentage_fields.items():
+            self.fields[field_name].widget = forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%',
+                'data-type': 'percentage'
+            })
+            self.fields[field_name].help_text = f'{help_text} (0-100%)'
+            
+            # Set validators for percentage fields
+            self.fields[field_name].validators = [
+                MinValueValidator(
+                    Decimal('0.00'), 
+                    message='Percentage cannot be negative'
+                ),
+                MaxValueValidator(
+                    Decimal('100.00'), 
+                    message='Percentage cannot exceed 100%'
+                )
+            ]
 
     def setup_teacher_form(self):
         """Setup form for teacher users with comprehensive fallback"""
@@ -167,6 +286,7 @@ class GradeEntryForm(forms.ModelForm):
     def clean(self):
         """
         Comprehensive validation for grade entry including class level matching
+        and configuration-based validation
         """
         cleaned_data = super().clean()
         student = cleaned_data.get('student')
@@ -175,7 +295,7 @@ class GradeEntryForm(forms.ModelForm):
         academic_year = cleaned_data.get('academic_year')
         term = cleaned_data.get('term')
 
-        # Validate student-class level match (CRITICAL FIX)
+        # Validate student-class level match
         if student and class_level:
             if student.class_level != class_level:
                 student_class_display = student.get_class_level_display()
@@ -216,8 +336,44 @@ class GradeEntryForm(forms.ModelForm):
                         f'for {academic_year} Term {term}. Please update the existing grade instead.'
                     )
                 })
+        
+        # Calculate and validate weighted total doesn't exceed 100%
+        if self.school_config:
+            weighted_total = self.calculate_weighted_total(cleaned_data)
+            
+            if weighted_total > Decimal('100.00'):
+                raise ValidationError({
+                    '__all__': f'Weighted total cannot exceed 100%. Current total: {weighted_total:.2f}%'
+                })
     
         return cleaned_data
+    
+    def calculate_weighted_total(self, cleaned_data):
+        """Calculate weighted total from percentages"""
+        if not self.school_config:
+            return Decimal('0.00')
+        
+        # Get percentages or default to 0
+        homework_percentage = cleaned_data.get('homework_percentage', Decimal('0.00'))
+        classwork_percentage = cleaned_data.get('classwork_percentage', Decimal('0.00'))
+        test_percentage = cleaned_data.get('test_percentage', Decimal('0.00'))
+        exam_percentage = cleaned_data.get('exam_percentage', Decimal('0.00'))
+        
+        # Get weights from config
+        homework_weight = self.school_config.homework_weight / Decimal('100.00')
+        classwork_weight = self.school_config.classwork_weight / Decimal('100.00')
+        test_weight = self.school_config.test_weight / Decimal('100.00')
+        exam_weight = self.school_config.exam_weight / Decimal('100.00')
+        
+        # Calculate weighted contributions
+        homework_contribution = (homework_percentage / Decimal('100.00')) * homework_weight * Decimal('100.00')
+        classwork_contribution = (classwork_percentage / Decimal('100.00')) * classwork_weight * Decimal('100.00')
+        test_contribution = (test_percentage / Decimal('100.00')) * test_weight * Decimal('100.00')
+        exam_contribution = (exam_percentage / Decimal('100.00')) * exam_weight * Decimal('100.00')
+        
+        total = homework_contribution + classwork_contribution + test_contribution + exam_contribution
+        
+        return total
 
     def get_available_subjects_for_class_level(self, class_level):
         """Get subjects available for a specific class level based on user role"""
@@ -340,10 +496,6 @@ class GradeEntryForm(forms.ModelForm):
             except Exception as e:
                 pass
         
-        # Calculate total score and grades
-        self.instance.calculate_total_score()
-        self.instance.determine_grades()
-    
         # Set recorded_by if available
         if hasattr(self, 'user') and self.user:
             self.instance.recorded_by = self.user
@@ -351,7 +503,48 @@ class GradeEntryForm(forms.ModelForm):
         return super().save(commit=commit)
 
 
+class GradeUpdateForm(forms.ModelForm):
+    """Simplified form for updating existing grades (percentage-based)"""
+    
+    class Meta:
+        model = Grade
+        fields = [
+            'homework_percentage',
+            'classwork_percentage', 
+            'test_percentage',
+            'exam_percentage',
+            'remarks'
+        ]
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Configure percentage fields
+        percentage_fields = {
+            'homework_percentage': 'Homework percentage',
+            'classwork_percentage': 'Classwork percentage',
+            'test_percentage': 'Test percentage',
+            'exam_percentage': 'Exam percentage',
+        }
+        
+        for field_name, label in percentage_fields.items():
+            self.fields[field_name].widget = forms.NumberInput(attrs={
+                'class': 'form-control percentage-input',
+                'step': '0.1',
+                'min': '0',
+                'max': '100',
+                'placeholder': '0-100%'
+            })
+            self.fields[field_name].label = f'{label} (%)'
+            self.fields[field_name].validators = [
+                MinValueValidator(Decimal('0.00'), message='Percentage cannot be negative'),
+                MaxValueValidator(Decimal('100.00'), message='Percentage cannot exceed 100%')
+            ]
+
+
 class BulkGradeUploadForm(forms.Form):
+    """Form for bulk grade upload - UPDATED FOR PERCENTAGE SYSTEM"""
+    
     assignment = forms.ModelChoiceField(
         queryset=Assignment.objects.none(),
         label="Assignment",
@@ -366,8 +559,8 @@ class BulkGradeUploadForm(forms.Form):
     )
     
     file = forms.FileField(
-        label="Grade File",
-        help_text="CSV or Excel file with student_id and score columns",
+        label="Grade File (CSV/Excel)",
+        help_text="File must contain columns: student_id, homework_%, classwork_%, test_%, exam_%",
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.csv,.xlsx,.xls'
@@ -411,3 +604,158 @@ class BulkGradeUploadForm(forms.Form):
                 raise ValidationError("File size must be less than 5MB")
         
         return file
+
+
+class QuickGradeEntryForm(forms.Form):
+    """Quick grade entry form for multiple students at once"""
+    
+    subject = forms.ModelChoiceField(
+        queryset=Subject.objects.filter(is_active=True),
+        label="Subject",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    academic_year = forms.CharField(
+        max_length=9,
+        initial=f"{timezone.now().year}/{timezone.now().year + 1}",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'YYYY/YYYY'
+        })
+    )
+    
+    term = forms.TypedChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        coerce=int,
+        label="Term",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.user and is_teacher(self.user):
+            teacher = self.user.teacher
+            self.fields['subject'].queryset = Subject.objects.filter(
+                classassignment__teacher=teacher,
+                classassignment__is_active=True,
+                is_active=True
+            ).distinct()
+
+
+class GradeConfigurationForm(forms.ModelForm):
+    """Form for updating grade configuration"""
+    class Meta:
+        from core.models.configuration import SchoolConfiguration
+        model = SchoolConfiguration
+        fields = [
+            'grading_system',
+            'school_level',
+            'grade_1_min', 'grade_2_min', 'grade_3_min', 'grade_4_min', 
+            'grade_5_min', 'grade_6_min', 'grade_7_min', 'grade_8_min', 'grade_9_max',
+            'letter_a_plus_min', 'letter_a_min', 'letter_b_plus_min', 'letter_b_min',
+            'letter_c_plus_min', 'letter_c_min', 'letter_d_plus_min', 'letter_d_min', 'letter_f_max',
+            'classwork_weight', 'homework_weight', 'test_weight', 'exam_weight',
+            'passing_mark',
+            'is_locked',
+        ]
+        widgets = {
+            'grading_system': forms.Select(attrs={'class': 'form-select'}),
+            'school_level': forms.Select(attrs={'class': 'form-select'}),
+            'passing_mark': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0',
+                'max': '100'
+            }),
+            'is_locked': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Add CSS classes to all number fields
+        for field_name, field in self.fields.items():
+            if isinstance(field, forms.DecimalField):
+                field.widget.attrs.update({
+                    'class': 'form-control grade-boundary-input',
+                    'step': '0.01',
+                    'min': '0',
+                    'max': '100'
+                })
+    
+    def clean(self):
+        """Validate grade boundaries and weights"""
+        cleaned_data = super().clean()
+        
+        # Validate grade boundaries are in descending order
+        grade_boundaries = [
+            cleaned_data.get('grade_1_min'),
+            cleaned_data.get('grade_2_min'),
+            cleaned_data.get('grade_3_min'),
+            cleaned_data.get('grade_4_min'),
+            cleaned_data.get('grade_5_min'),
+            cleaned_data.get('grade_6_min'),
+            cleaned_data.get('grade_7_min'),
+            cleaned_data.get('grade_8_min')
+        ]
+        
+        for i in range(len(grade_boundaries) - 1):
+            if grade_boundaries[i] <= grade_boundaries[i + 1]:
+                self.add_error(f'grade_{i+1}_min', 
+                    f'Grade {i+1} minimum must be greater than Grade {i+2} minimum')
+        
+        # Validate letter grade boundaries
+        letter_boundaries = [
+            cleaned_data.get('letter_a_plus_min'),
+            cleaned_data.get('letter_a_min'),
+            cleaned_data.get('letter_b_plus_min'),
+            cleaned_data.get('letter_b_min'),
+            cleaned_data.get('letter_c_plus_min'),
+            cleaned_data.get('letter_c_min'),
+            cleaned_data.get('letter_d_plus_min'),
+            cleaned_data.get('letter_d_min')
+        ]
+        
+        for i in range(len(letter_boundaries) - 1):
+            if letter_boundaries[i] <= letter_boundaries[i + 1]:
+                boundary_names = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D+', 'D']
+                self.add_error(f'letter_{boundary_names[i].lower().replace("+", "_plus")}_min',
+                    f'{boundary_names[i]} minimum must be greater than {boundary_names[i+1]} minimum')
+        
+        # Validate weights total 100%
+        total_weight = sum([
+            cleaned_data.get('classwork_weight', Decimal('0.00')),
+            cleaned_data.get('homework_weight', Decimal('0.00')),
+            cleaned_data.get('test_weight', Decimal('0.00')),
+            cleaned_data.get('exam_weight', Decimal('0.00'))
+        ])
+        
+        if abs(total_weight - Decimal('100.00')) > Decimal('0.01'):
+            self.add_error('__all__', 
+                f'Assessment weights must total 100%. Current total: {total_weight:.2f}%')
+        
+        return cleaned_data
+
+
+class GradingSystemSelectorForm(forms.Form):
+    """Simple form for selecting grading system"""
+    grading_system = forms.ChoiceField(
+        choices=SchoolConfiguration.GRADING_SYSTEM_CHOICES,
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'onchange': 'this.form.submit()'
+        }),
+        label="Select Grading System"
+    )
+
+
+__all__ = [
+    'GradeEntryForm',
+    'GradeUpdateForm',
+    'BulkGradeUploadForm',
+    'QuickGradeEntryForm',
+    'GradeConfigurationForm',
+    'GradingSystemSelectorForm',
+]

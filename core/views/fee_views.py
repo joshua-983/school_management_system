@@ -1,4 +1,4 @@
-# Correct imports section:
+
 import logging
 import json
 import csv
@@ -28,15 +28,15 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 from .base_views import is_admin, is_teacher, is_student
 from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, BillPayment, Bill, Student, ClassAssignment, StudentCredit, Expense, Budget
-from ..forms import FeeCategoryForm, FeeForm, BillPaymentForm, FeeFilterForm, FeeStatusReportForm
+from ..forms.billing_forms import BillPaymentForm
 from django.contrib import messages
 
-# At the top of fee_views.py, in your imports section
-from ..forms import (
-    FeeCategoryForm, FeeForm, PaymentForm, FeeFilterForm,
-    FeeStatusReportForm, BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm       
-)
 
+# IMPORT FROM FEE_FORMS.PY (KEEP ONLY THIS ONE)
+from ..forms.fee_forms import (
+    FeeCategoryForm, FeeForm, FeeFilterForm, FeeStatusReportForm,
+    BulkFeeImportForm, BulkFeeUpdateForm, BulkFeeCreationForm, PaymentForm
+)
 
 class CustomJSONEncoder(DjangoJSONEncoder):
     def default(self, obj):

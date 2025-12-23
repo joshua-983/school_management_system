@@ -10,6 +10,9 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, RegexValidator
 from django.utils import timezone
 
+from core.models import Student, ClassAssignment
+from core.utils import is_teacher, is_admin
+
 from core.models import (
     ReportCard, Student, Grade, AcademicTerm,
     CLASS_LEVEL_CHOICES, TERM_CHOICES
@@ -17,10 +20,133 @@ from core.models import (
 
 logger = logging.getLogger(__name__)
 
+# ===== REPORT CARD FORMS =====
 
-class ReportCardGenerationForm(forms.Form):
+class ReportCardForm(forms.ModelForm):
+    class Meta:
+        model = ReportCard
+        fields = ['student', 'academic_year', 'term', 'is_published', 'teacher_remarks', 'principal_remarks']
+        widgets = {
+            'academic_year': forms.Select(choices=[
+                ('', 'Select Academic Year'),
+                ('2023/2024', '2023/2024'),
+                ('2024/2025', '2024/2025'),
+                ('2025/2026', '2025/2026'),
+            ], attrs={'class': 'form-select'}),
+            'term': forms.Select(choices=[
+                ('', 'Select Term'),
+                (1, 'Term 1'),
+                (2, 'Term 2'),
+                (3, 'Term 3'),
+            ], attrs={'class': 'form-select'}),
+            'student': forms.Select(attrs={'class': 'form-select'}),
+            'is_published': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'teacher_remarks': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'principal_remarks': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        # FIX: Extract 'user' AND let Django handle 'instance' automatically
+        self.user = kwargs.pop('user', None)
+        
+        # Call parent __init__ FIRST to let Django handle instance properly
+        super().__init__(*args, **kwargs)
+        
+        current_year = timezone.now().year
+        next_year = current_year + 1
+        current_academic_year = f"{current_year}/{next_year}"
+        
+        if not self.instance.pk:
+            self.initial['academic_year'] = current_academic_year
+        
+        from .models import Student, ClassAssignment
+        from .utils import is_teacher, is_admin
+        
+        if self.user and self.user.is_authenticated:
+            if is_teacher(self.user):
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=self.user.teacher
+                ).values_list('class_level', flat=True)
+                
+                self.fields['student'].queryset = Student.objects.filter(
+                    class_level__in=teacher_classes,
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            elif is_admin(self.user):
+                self.fields['student'].queryset = Student.objects.filter(
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            else:
+                self.fields['student'].queryset = Student.objects.none()
+        else:
+            self.fields['student'].queryset = Student.objects.none()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        student = cleaned_data.get('student')
+        academic_year = cleaned_data.get('academic_year')
+        term = cleaned_data.get('term')
+
+        if student and academic_year and term:
+            existing_report_card = ReportCard.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term
+            )
+            
+            if self.instance.pk:
+                existing_report_card = existing_report_card.exclude(pk=self.instance.pk)
+            
+            if existing_report_card.exists():
+                raise forms.ValidationError(
+                    f"A report card already exists for {student.get_full_name()} "
+                    f"for {academic_year} Term {term}."
+                )
+
+        return cleaned_data
+
+
+
+class ReportCardSelectionForm(forms.Form):
     student = forms.ModelChoiceField(
         queryset=Student.objects.filter(is_active=True),
+        required=True,
+        empty_label="Select a student...",
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'student-select'})
+    )
+    academic_year = forms.ChoiceField(
+        choices=[],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'academic-year-select'})
+    )
+    term = forms.ChoiceField(
+        choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'term-select'})
+    )
+    view_as = forms.ChoiceField(
+        choices=[('web', 'Web View'), ('pdf', 'PDF Download')],
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'view-as-select'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        # Handle request parameter if passed
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+        # Populate academic years dynamically
+        current_year = timezone.now().year
+        academic_years = []
+        for year in range(current_year - 2, current_year + 1):
+            academic_years.append((f"{year}/{year+1}", f"{year}/{year+1}"))
+        self.fields['academic_year'].choices = academic_years
+
+
+
+# In forms/report_card_forms.py
+class ReportCardGenerationForm(forms.Form):
+    student = forms.ModelChoiceField(
+        queryset=Student.objects.none(),  # Will be set in __init__
         required=True,
         widget=forms.Select(attrs={
             'class': 'form-control select2',
@@ -28,15 +154,10 @@ class ReportCardGenerationForm(forms.Form):
         })
     )
     
-    academic_year = forms.CharField(
-        max_length=9,
+    academic_year = forms.ChoiceField(
+        choices=[],  # Will be populated dynamically
         required=True,
-        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Enter a valid academic year in format YYYY/YYYY')],
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'e.g., 2024/2025',
-            'pattern': r'\d{4}/\d{4}'
-        })
+        widget=forms.Select(attrs={'class': 'form-control'})
     )
     
     term = forms.ChoiceField(
@@ -45,44 +166,47 @@ class ReportCardGenerationForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     
-    generate_pdf = forms.BooleanField(
+    is_published = forms.BooleanField(
         required=False,
-        initial=True,
-        label="Generate PDF",
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    
-    include_comments = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="Include teacher comments",
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    
-    include_attendance = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="Include attendance summary",
+        initial=False,
+        label="Publish immediately",
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
-        current_year = timezone.now().year
-        self.fields['academic_year'].initial = f"{current_year}/{current_year + 1}"
-    
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data.get('academic_year')
-        if academic_year:
-            try:
-                year1, year2 = map(int, academic_year.split('/'))
-                if year2 != year1 + 1:
-                    raise ValidationError("The second year should be exactly one year after the first year")
-            except (ValueError, IndexError):
-                raise ValidationError("Invalid academic year format. Use YYYY/YYYY")
         
-        return academic_year
+        # Populate academic years
+        current_year = timezone.now().year
+        academic_years = []
+        for i in range(3):  # Last 3 years and next year
+            year = current_year - i
+            academic_years.append((f"{year}/{year+1}", f"{year}/{year+1}"))
+        
+        self.fields['academic_year'].choices = [('', 'Select Academic Year')] + academic_years
+        
+        # Set default academic year to current
+        self.fields['academic_year'].initial = f"{current_year}/{current_year+1}"
+        
+        # Filter students based on user role
+        if self.request and self.request.user.is_authenticated:
+            if is_teacher(self.request.user):
+                # Get teacher's assigned classes
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=self.request.user.teacher
+                ).values_list('class_level', flat=True)
+                
+                self.fields['student'].queryset = Student.objects.filter(
+                    class_level__in=teacher_classes,
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            elif is_admin(self.request.user):
+                self.fields['student'].queryset = Student.objects.filter(
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+            else:
+                self.fields['student'].queryset = Student.objects.none()
     
     def clean(self):
         cleaned_data = super().clean()
@@ -99,12 +223,13 @@ class ReportCardGenerationForm(forms.Form):
             ).exists()
             
             if existing:
-                self.add_error(
-                    None,
-                    f"A report card already exists for {student} for {academic_year} Term {term}"
+                raise forms.ValidationError(
+                    f"A report card already exists for {student.get_full_name()} "
+                    f"for {academic_year} Term {term}. Please view or edit the existing one."
                 )
         
         return cleaned_data
+
 
 
 class ReportCardFilterForm(forms.Form):

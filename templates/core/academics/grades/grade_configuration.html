@@ -1,0 +1,538 @@
+{% extends 'base.html' %}
+{% load static crispy_forms_tags %}
+
+{% block title %}Grade Configuration - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-cog me-2"></i>Grade Configuration
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Grades
+                    </a>
+                    <a href="{% url 'grade_calculator' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-calculator me-1"></i>Grade Calculator
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">
+                Configure grading systems, grade boundaries, and assessment weights.
+            </p>
+        </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-info-circle me-2"></i>Current System Status
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <strong>Active System:</strong>
+                                <span class="badge bg-primary ms-2">{{ form.instance.get_grading_system_display_name }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-{% if form.instance.is_locked %}danger{% else %}success{% endif %}">
+                                <strong>Configuration:</strong>
+                                <span class="badge {% if form.instance.is_locked %}bg-danger{% else %}bg-success{% endif %} ms-2">
+                                    {% if form.instance.is_locked %}Locked{% else %}Editable{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-secondary">
+                                <strong>School Level:</strong>
+                                <span class="badge bg-secondary ms-2">{{ form.instance.get_school_level_display_name }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Presets -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Presets
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Apply standard configurations for different school levels:
+                    </p>
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary w-100 preset-btn" data-level="primary">
+                                <i class="fas fa-school me-1"></i>Primary School
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary w-100 preset-btn" data-level="jhs">
+                                <i class="fas fa-graduation-cap me-1"></i>Junior High School
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary w-100 preset-btn" data-level="shs">
+                                <i class="fas fa-university me-1"></i>Senior High School
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-secondary w-100" onclick="resetToDefaults()">
+                                <i class="fas fa-undo me-1"></i>Reset to Defaults
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Configuration Form -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-edit me-2"></i>Configuration Settings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="gradeConfigForm">
+                        {% csrf_token %}
+                        
+                        <!-- Grading System Selection -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-chart-bar me-2"></i>Grading System
+                                </h6>
+                                {{ form.grading_system|as_crispy_field }}
+                                {{ form.school_level|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-sliders-h me-2"></i>Assessment Weights
+                                </h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        {{ form.classwork_weight|as_crispy_field }}
+                                    </div>
+                                    <div class="col-6">
+                                        {{ form.homework_weight|as_crispy_field }}
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        {{ form.test_weight|as_crispy_field }}
+                                    </div>
+                                    <div class="col-6">
+                                        {{ form.exam_weight|as_crispy_field }}
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-2" id="weightTotal">
+                                    <strong>Total:</strong> <span id="totalWeight">0.00</span>%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Grade Boundaries -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-sort-amount-down me-2"></i>Grade Boundaries
+                                </h6>
+                                <p class="text-muted">
+                                    Set minimum percentages for each grade. Values must be in descending order.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- GES Grade Boundaries -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">GES Number System (1-9)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Grade</th>
+                                                <th>Description</th>
+                                                <th>Minimum Score (%)</th>
+                                                <th>Maximum Score (%)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>1</strong></td>
+                                                <td>Excellent</td>
+                                                <td>{{ form.grade_1_min }}</td>
+                                                <td>100.00</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>2</strong></td>
+                                                <td>Very Good</td>
+                                                <td>{{ form.grade_2_min }}</td>
+                                                <td>{{ form.grade_1_min.value|floatformat:2 }} (Grade 1 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>3</strong></td>
+                                                <td>Good</td>
+                                                <td>{{ form.grade_3_min }}</td>
+                                                <td>{{ form.grade_2_min.value|floatformat:2 }} (Grade 2 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>4</strong></td>
+                                                <td>Satisfactory</td>
+                                                <td>{{ form.grade_4_min }}</td>
+                                                <td>{{ form.grade_3_min.value|floatformat:2 }} (Grade 3 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>5</strong></td>
+                                                <td>Fair</td>
+                                                <td>{{ form.grade_5_min }}</td>
+                                                <td>{{ form.grade_4_min.value|floatformat:2 }} (Grade 4 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>6</strong></td>
+                                                <td>Marginal (Pass)</td>
+                                                <td>{{ form.grade_6_min }}</td>
+                                                <td>{{ form.grade_5_min.value|floatformat:2 }} (Grade 5 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>7</strong></td>
+                                                <td>Poor</td>
+                                                <td>{{ form.grade_7_min }}</td>
+                                                <td>{{ form.grade_6_min.value|floatformat:2 }} (Grade 6 min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>8</strong></td>
+                                                <td>Very Poor</td>
+                                                <td>{{ form.grade_8_min }}</td>
+                                                <td>{{ form.grade_7_min.value|floatformat:2 }} (Grade 7 min - 0.01)</td>
+                                            </tr>
+                                            <tr class="table-danger">
+                                                <td><strong>9</strong></td>
+                                                <td>Fail</td>
+                                                <td>0.00</td>
+                                                <td>{{ form.grade_8_min.value|floatformat:2 }} (Grade 8 min - 0.01)</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Letter Grade Boundaries -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">Letter Grading System (A-F)</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Grade</th>
+                                                <th>Description</th>
+                                                <th>Minimum Score (%)</th>
+                                                <th>Maximum Score (%)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><strong>A+</strong></td>
+                                                <td>Outstanding</td>
+                                                <td>{{ form.letter_a_plus_min }}</td>
+                                                <td>100.00</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>A</strong></td>
+                                                <td>Excellent</td>
+                                                <td>{{ form.letter_a_min }}</td>
+                                                <td>{{ form.letter_a_plus_min.value|floatformat:2 }} (A+ min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>B+</strong></td>
+                                                <td>Very Good</td>
+                                                <td>{{ form.letter_b_plus_min }}</td>
+                                                <td>{{ form.letter_a_min.value|floatformat:2 }} (A min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>B</strong></td>
+                                                <td>Good</td>
+                                                <td>{{ form.letter_b_min }}</td>
+                                                <td>{{ form.letter_b_plus_min.value|floatformat:2 }} (B+ min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>C+</strong></td>
+                                                <td>Satisfactory</td>
+                                                <td>{{ form.letter_c_plus_min }}</td>
+                                                <td>{{ form.letter_b_min.value|floatformat:2 }} (B min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>C</strong></td>
+                                                <td>Fair</td>
+                                                <td>{{ form.letter_c_min }}</td>
+                                                <td>{{ form.letter_c_plus_min.value|floatformat:2 }} (C+ min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>D+</strong></td>
+                                                <td>Marginal</td>
+                                                <td>{{ form.letter_d_plus_min }}</td>
+                                                <td>{{ form.letter_c_min.value|floatformat:2 }} (C min - 0.01)</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>D</strong></td>
+                                                <td>Poor</td>
+                                                <td>{{ form.letter_d_min }}</td>
+                                                <td>{{ form.letter_d_plus_min.value|floatformat:2 }} (D+ min - 0.01)</td>
+                                            </tr>
+                                            <tr class="table-danger">
+                                                <td><strong>F</strong></td>
+                                                <td>Fail</td>
+                                                <td>0.00</td>
+                                                <td>{{ form.letter_d_min.value|floatformat:2 }} (D min - 0.01)</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Passing Mark and Lock -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-check-circle me-2"></i>Passing Criteria
+                                </h6>
+                                {{ form.passing_mark|as_crispy_field }}
+                                <div class="alert alert-warning">
+                                    <small>
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        Note: Passing mark cannot be higher than Grade 6 minimum.
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-lock me-2"></i>Security Settings
+                                </h6>
+                                {{ form.is_locked|as_crispy_field }}
+                                <div class="alert alert-info">
+                                    <small>
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        When locked, only administrators can modify these settings.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'grade_list' %}" class="btn btn-secondary">
+                                        <i class="fas fa-times me-1"></i>Cancel
+                                    </a>
+                                    <div>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save me-1"></i>Save Configuration
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" onclick="testConfiguration()">
+                                            <i class="fas fa-play me-1"></i>Test Configuration
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preset-btn:hover {
+        transform: translateY(-2px);
+        transition: transform 0.2s;
+    }
+    .grade-boundary-input {
+        width: 120px;
+    }
+    table td {
+        vertical-align: middle;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Calculate total weight
+        function calculateTotalWeight() {
+            let total = 0;
+            $('input[id$="_weight"]').each(function() {
+                const value = parseFloat($(this).val()) || 0;
+                total += value;
+            });
+            $('#totalWeight').text(total.toFixed(2));
+            
+            if (Math.abs(total - 100) < 0.01) {
+                $('#weightTotal').removeClass('alert-danger').addClass('alert-success');
+            } else {
+                $('#weightTotal').removeClass('alert-success').addClass('alert-danger');
+            }
+        }
+        
+        // Initial calculation
+        calculateTotalWeight();
+        
+        // Update on input change
+        $('input[id$="_weight"]').on('input', calculateTotalWeight);
+        
+        // Preset buttons
+        $('.preset-btn').click(function() {
+            const level = $(this).data('level');
+            const presets = {
+                'primary': {
+                    school_level: 'PRIMARY',
+                    grade_6_min: 40.00,
+                    grade_7_min: 30.00,
+                    passing_mark: 40.00,
+                    classwork_weight: 40.00,
+                    homework_weight: 0.00,
+                    test_weight: 0.00,
+                    exam_weight: 60.00,
+                    grading_system: 'GES'
+                },
+                'jhs': {
+                    school_level: 'JHS',
+                    grade_6_min: 45.00,
+                    grade_7_min: 35.00,
+                    passing_mark: 45.00,
+                    classwork_weight: 30.00,
+                    homework_weight: 10.00,
+                    test_weight: 10.00,
+                    exam_weight: 50.00,
+                    grading_system: 'GES'
+                },
+                'shs': {
+                    school_level: 'SHS',
+                    grade_6_min: 45.00,
+                    grade_7_min: 35.00,
+                    passing_mark: 45.00,
+                    classwork_weight: 40.00,
+                    homework_weight: 10.00,
+                    test_weight: 10.00,
+                    exam_weight: 40.00,
+                    grading_system: 'BOTH'
+                }
+            };
+            
+            if (confirm(`Apply ${level.toUpperCase()} preset configuration? This will override current values.`)) {
+                const preset = presets[level];
+                for (const [key, value] of Object.entries(preset)) {
+                    $(`#id_${key}`).val(value);
+                }
+                calculateTotalWeight();
+                alert('Preset applied! Please review and save.');
+            }
+        });
+    });
+    
+    function testConfiguration() {
+        const score = prompt('Enter a test score to see how it would be graded:');
+        if (score !== null && !isNaN(parseFloat(score))) {
+            const numScore = parseFloat(score);
+            
+            // Calculate GES grade
+            let gesGrade = '9';
+            const gesMins = {
+                '1': parseFloat($('#id_grade_1_min').val()),
+                '2': parseFloat($('#id_grade_2_min').val()),
+                '3': parseFloat($('#id_grade_3_min').val()),
+                '4': parseFloat($('#id_grade_4_min').val()),
+                '5': parseFloat($('#id_grade_5_min').val()),
+                '6': parseFloat($('#id_grade_6_min').val()),
+                '7': parseFloat($('#id_grade_7_min').val()),
+                '8': parseFloat($('#id_grade_8_min').val())
+            };
+            
+            for (const [grade, min] of Object.entries(gesMins)) {
+                if (numScore >= min) {
+                    gesGrade = grade;
+                    break;
+                }
+            }
+            
+            // Calculate letter grade
+            let letterGrade = 'F';
+            const letterMins = {
+                'A+': parseFloat($('#id_letter_a_plus_min').val()),
+                'A': parseFloat($('#id_letter_a_min').val()),
+                'B+': parseFloat($('#id_letter_b_plus_min').val()),
+                'B': parseFloat($('#id_letter_b_min').val()),
+                'C+': parseFloat($('#id_letter_c_plus_min').val()),
+                'C': parseFloat($('#id_letter_c_min').val()),
+                'D+': parseFloat($('#id_letter_d_plus_min').val()),
+                'D': parseFloat($('#id_letter_d_min').val())
+            };
+            
+            for (const [grade, min] of Object.entries(letterMins)) {
+                if (numScore >= min) {
+                    letterGrade = grade;
+                    break;
+                }
+            }
+            
+            // Check passing
+            const passingMark = parseFloat($('#id_passing_mark').val());
+            const isPassing = numScore >= passingMark;
+            
+            // Show result
+            const result = `
+                <div class="alert alert-info">
+                    <strong>Test Score:</strong> ${numScore.toFixed(2)}%
+                    <br><strong>GES Grade:</strong> ${gesGrade}
+                    <br><strong>Letter Grade:</strong> ${letterGrade}
+                    <br><strong>Status:</strong> ${isPassing ? '<span class="text-success">PASSING</span>' : '<span class="text-danger">FAILING</span>'}
+                    <br><strong>Passing Mark:</strong> ${passingMark}%
+                </div>
+            `;
+            
+            Swal.fire({
+                title: 'Test Result',
+                html: result,
+                icon: 'info',
+                confirmButtonText: 'OK'
+            });
+        }
+    }
+    
+    function resetToDefaults() {
+        if (confirm('Reset all values to GES standard defaults?')) {
+            $('input.grade-boundary-input').each(function() {
+                const defaultValue = $(this).attr('data-default') || '0.00';
+                $(this).val(defaultValue);
+            });
+            calculateTotalWeight();
+        }
+    }
+</script>
+{% endblock %}

@@ -467,3 +467,251 @@ class PaymentForm(forms.ModelForm):
             if payment_date > timezone.now().date():
                 raise forms.ValidationError("Payment date cannot be in the future")
         return payment_date
+
+
+# Add this to core/forms/fee_forms.py
+
+class FeeFilterForm(forms.Form):
+    """Form for filtering fees"""
+    academic_year = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    term = forms.ChoiceField(
+        choices=[('', 'All Terms')] + list(TERM_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    payment_status = forms.ChoiceField(
+        choices=[('', 'All Statuses'), ('paid', 'Paid'), ('unpaid', 'Unpaid'), 
+                ('partial', 'Partial'), ('overdue', 'Overdue')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    category = forms.ModelChoiceField(
+        queryset=FeeCategory.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Categories",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    student = forms.ModelChoiceField(
+        queryset=Student.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Students",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    has_bill = forms.ChoiceField(
+        choices=[('', 'All'), ('yes', 'Has Bill'), ('no', 'No Bill')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+
+# Add these additional forms to your fee_forms.py file
+
+class FeeStatusReportForm(forms.Form):
+    """Form for fee status reporting"""
+    REPORT_TYPE_CHOICES = [
+        ('summary', 'Summary Report'),
+        ('detailed', 'Detailed Report'),
+        ('overdue', 'Overdue Fees Report'),
+        ('unbilled', 'Unbilled Fees Report'),
+    ]
+    
+    report_type = forms.ChoiceField(
+        choices=REPORT_TYPE_CHOICES,
+        initial='summary',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    academic_year = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    term = forms.ChoiceField(
+        choices=[('', 'All Terms')] + list(TERM_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    class_level = forms.ChoiceField(
+        choices=[('', 'All Classes')] + list(CLASS_LEVEL_CHOICES),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    payment_status = forms.ChoiceField(
+        choices=[('', 'All Statuses'), ('paid', 'Paid'), ('unpaid', 'Unpaid'), 
+                ('partial', 'Partial'), ('overdue', 'Overdue')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    bill_status = forms.ChoiceField(
+        choices=[('', 'All'), ('billed', 'Billed'), ('unbilled', 'Unbilled')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+
+class BulkFeeImportForm(forms.Form):
+    """Form for bulk fee import"""
+    file = forms.FileField(
+        label='Select file',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.xlsx,.xls,.csv'
+        })
+    )
+    file_type = forms.ChoiceField(
+        choices=[('excel', 'Excel (.xlsx, .xls)'), ('csv', 'CSV (.csv)')],
+        initial='excel',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    academic_year = forms.CharField(
+        required=True,
+        initial=f"{timezone.now().year}/{timezone.now().year + 1}",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    term = forms.ChoiceField(
+        choices=TERM_CHOICES,
+        initial=1,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    update_existing = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Update existing fees',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+
+class BulkFeeUpdateForm(forms.Form):
+    """Form for bulk fee updates"""
+    ACTION_CHOICES = [
+        ('update_status', 'Update Payment Status'),
+        ('update_due_date', 'Update Due Date'),
+        ('adjust_amount', 'Adjust Amount'),
+        ('mark_paid', 'Mark as Paid'),
+        ('mark_overdue', 'Mark as Overdue'),
+        ('add_payment', 'Add Payment'),
+    ]
+    
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    fee_ids = forms.CharField(
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Enter fee IDs separated by commas (e.g., 1,2,3,4)'
+        }),
+        help_text='Enter fee IDs separated by commas'
+    )
+    new_status = forms.ChoiceField(
+        choices=[('', 'Select Status'), ('paid', 'Paid'), ('unpaid', 'Unpaid'), 
+                ('partial', 'Partial'), ('overdue', 'Overdue')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    new_due_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    amount_adjustment = forms.DecimalField(
+        required=False,
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '0.00'
+        })
+    )
+    adjustment_type = forms.ChoiceField(
+        choices=[('', 'Select Type'), ('increase', 'Increase'), ('decrease', 'Decrease'), ('set', 'Set to Amount')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+
+class BulkFeeCreationForm(forms.Form):
+    """Form for bulk fee creation"""
+    student_ids = forms.CharField(
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Enter student IDs separated by commas (e.g., STU001,STU002,STU003)'
+        }),
+        help_text='Enter student IDs separated by commas or one per line'
+    )
+    category = forms.ModelChoiceField(
+        queryset=FeeCategory.objects.filter(is_active=True),
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    amount_payable = forms.DecimalField(
+        required=True,
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.01',
+            'placeholder': '0.00'
+        })
+    )
+    academic_year = forms.CharField(
+        required=True,
+        initial=f"{timezone.now().year}/{timezone.now().year + 1}",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., 2024/2025'
+        })
+    )
+    term = forms.ChoiceField(
+        choices=TERM_CHOICES,
+        initial=1,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    due_date = forms.DateField(
+        required=True,
+        initial=timezone.now().date() + timedelta(days=30),
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Optional description...'
+        })
+    )

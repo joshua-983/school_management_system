@@ -1,6 +1,4 @@
-# grade_views.py - Complete and Functional Implementation
-
-# Add these Django imports
+from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
@@ -19,8 +17,6 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.db.models import F, ExpressionWrapper, FloatField
-
-# ADD ALL REQUIRED IMPORTS
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView, DetailView, View
 from django.views import View
 
@@ -33,6 +29,7 @@ from decimal import Decimal, InvalidOperation
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import re
+from core.models.configuration import SchoolConfiguration, ReportCardConfiguration, PromotionConfiguration
 
 # Import your mixins and models
 from ..mixins import TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogMixin
@@ -42,7 +39,15 @@ from ..models import (
     Subject, ClassAssignment, AcademicTerm, AuditLog, Teacher,
     CLASS_LEVEL_CHOICES
 )
-from ..forms import GradeEntryForm, ReportCardGenerationForm, ReportCardFilterForm, BulkGradeUploadForm
+
+from ..forms import (
+    GradeEntryForm,
+    ReportCardGenerationForm,
+    ReportCardFilterForm,
+    BulkGradeUploadForm,
+    GradeConfigurationForm,
+)
+
 from ..utils import is_admin, is_teacher, is_student, is_parent
 from ..utils.validation import validate_grade_data, validate_bulk_grade_data
 
@@ -487,8 +492,10 @@ class GradeListView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, ListView):
         # Use the CORRECT URL name that we confirmed works
         return redirect('student_dashboard')  # ✅ This will work!
 
+# In grade_views.py - UPDATED GradeCreateView
+
 class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
-    """Enhanced Grade Create View with rate limiting and comprehensive validation"""
+    """Enhanced Grade Create View with percentage-based grading system"""
     model = Grade
     form_class = GradeEntryForm
     template_name = 'core/academics/grades/grade_form.html'
@@ -522,9 +529,7 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             return super().dispatch(request, *args, **kwargs)
 
     def test_func(self):
-        """
-        Permission checking for grade creation
-        """
+        """Permission checking for grade creation"""
         try:
             user = self.request.user
             return user.is_superuser or is_admin(user) or is_teacher(user)
@@ -536,10 +541,18 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
         """Add user to form kwargs"""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
+        
+        # Add school configuration for form validation
+        try:
+            from core.models.configuration import SchoolConfiguration
+            kwargs['config'] = SchoolConfiguration.get_config()
+        except Exception as e:
+            logger.warning(f"Could not load school configuration: {e}")
+            
         return kwargs
 
     def get_context_data(self, **kwargs):
-        """Enhanced context with additional information"""
+        """Enhanced context with configuration data"""
         context = super().get_context_data(**kwargs)
         
         # Add student and subject information if provided via GET parameters
@@ -558,10 +571,51 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             except Subject.DoesNotExist:
                 pass
         
+        # Get school configuration for display
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            
+            context.update({
+                'school_config': config,
+                'assessment_weights': {
+                    'homework': float(config.homework_weight),
+                    'classwork': float(config.classwork_weight),
+                    'test': float(config.test_weight),
+                    'exam': float(config.exam_weight),
+                },
+                'passing_mark': float(config.passing_mark),
+                'grading_system': config.grading_system,
+                'max_percentage': 100.00,  # Percentage system max
+            })
+        except Exception as e:
+            logger.error(f"Error loading school configuration: {str(e)}")
+            context.update({
+                'assessment_weights': {
+                    'homework': 20.00,
+                    'classwork': 30.00,
+                    'test': 10.00,
+                    'exam': 40.00,
+                },
+                'passing_mark': 40.00,
+                'grading_system': 'GES',
+                'max_percentage': 100.00,
+            })
+        
+        # Add grade descriptions
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            context['grade_descriptions'] = config.get_grade_descriptions()
+        except:
+            pass
+        
         context.update({
             'is_teacher': is_teacher(self.request.user),
-            'page_title': 'Create New Grade',
+            'is_admin': is_admin(self.request.user),
+            'page_title': 'Create New Grade (Percentage System)',
             'current_view': 'grade_create',
+            'percentage_system': True,  # Flag for template
         })
         
         return context
@@ -569,11 +623,11 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
     @transaction.atomic
     def form_valid(self, form):
         """
-        Handle form validation with comprehensive transaction safety
+        Handle form validation with percentage-based grading
         """
         try:
             # Pre-save validation
-            validation_errors = self._validate_grade_creation(form.cleaned_data)
+            validation_errors = self._validate_grade_creation_percentage(form.cleaned_data)
             if validation_errors:
                 for field, error in validation_errors.items():
                     form.add_error(field, error)
@@ -582,16 +636,34 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             # Set recorded_by user
             form.instance.recorded_by = self.request.user
             
-            # Save the form
+            # Set class level from student
+            if form.cleaned_data.get('student'):
+                form.instance.class_level = form.cleaned_data['student'].class_level
+            
+            # Save the form (Grade model's save() will calculate total and grades)
             response = super().form_valid(form)
             
             # Post-save operations
             self._handle_post_save_operations()
             
+            # Get school configuration for display
+            try:
+                from core.models.configuration import SchoolConfiguration
+                config = SchoolConfiguration.get_config()
+                
+                if config.grading_system == 'BOTH':
+                    grade_display = f"{self.object.ges_grade} ({self.object.letter_grade})"
+                elif config.grading_system == 'GES':
+                    grade_display = self.object.ges_grade
+                else:
+                    grade_display = self.object.letter_grade
+            except:
+                grade_display = self.object.ges_grade
+            
             messages.success(
                 self.request, 
-                f'Grade successfully created for {self.object.student.get_full_name()}! '
-                f'Total: {self.object.total_score} - {self.object.get_ges_grade_display()}'
+                f'✅ Grade successfully created for {self.object.student.get_full_name()}! '
+                f'Total: {self.object.total_score}% - {grade_display}'
             )
             
             return response
@@ -605,9 +677,9 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             messages.error(self.request, 'Failed to create grade. Please try again.')
             return self.form_invalid(form)
 
-    def _validate_grade_creation(self, cleaned_data):
+    def _validate_grade_creation_percentage(self, cleaned_data):
         """
-        Comprehensive validation for grade creation
+        Comprehensive validation for percentage-based grade creation
         """
         errors = {}
         
@@ -631,25 +703,48 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
                     f"for {academic_year} Term {term}. Please update the existing grade instead."
                 )
         
-        # Validate score limits
-        max_scores = {
-            'classwork_score': 30,
-            'homework_score': 10,
-            'test_score': 10,
-            'exam_score': 50
+        # Validate percentage scores (0-100%)
+        percentage_fields = {
+            'homework_percentage': 'Homework',
+            'classwork_percentage': 'Classwork',
+            'test_percentage': 'Test',
+            'exam_percentage': 'Exam'
         }
         
-        for field, max_score in max_scores.items():
-            score = cleaned_data.get(field, 0)
+        for field, display_name in percentage_fields.items():
+            score = cleaned_data.get(field, Decimal('0.00'))
             if score < 0:
-                errors[field] = f"{field.replace('_', ' ').title()} cannot be negative"
-            elif score > max_score:
-                errors[field] = f"{field.replace('_', ' ').title()} cannot exceed {max_score}%"
+                errors[field] = f"{display_name} percentage cannot be negative"
+            elif score > 100:
+                errors[field] = f"{display_name} percentage cannot exceed 100%"
         
-        # Validate total score doesn't exceed 100%
-        total_score = sum(cleaned_data.get(field, 0) for field in max_scores.keys())
-        if total_score > 100:
-            errors['__all__'] = f"Total score cannot exceed 100%. Current total: {total_score}%"
+        # Validate total weighted score doesn't exceed 100%
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            
+            # Calculate weighted total
+            homework_contrib = (cleaned_data.get('homework_percentage', 0) * config.homework_weight / 100)
+            classwork_contrib = (cleaned_data.get('classwork_percentage', 0) * config.classwork_weight / 100)
+            test_contrib = (cleaned_data.get('test_percentage', 0) * config.test_weight / 100)
+            exam_contrib = (cleaned_data.get('exam_percentage', 0) * config.exam_weight / 100)
+            
+            total_weighted = homework_contrib + classwork_contrib + test_contrib + exam_contrib
+            
+            if total_weighted > 100:
+                errors['__all__'] = f"Weighted total cannot exceed 100%. Calculated: {total_weighted:.1f}%"
+                
+        except Exception as e:
+            logger.warning(f"Error calculating weighted total during validation: {str(e)}")
+        
+        # Validate class level matches student
+        student = cleaned_data.get('student')
+        class_level = cleaned_data.get('class_level')
+        
+        if student and class_level and student.class_level != class_level:
+            errors['class_level'] = (
+                f"Class level must match student's current class ({student.get_class_level_display()})"
+            )
         
         return errors
 
@@ -659,10 +754,10 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
         """
         try:
             # Log the creation
-            self._log_grade_creation()
+            self._log_grade_creation_percentage()
             
             # Send notifications
-            self._send_creation_notifications()
+            self._send_creation_notifications_percentage()
             
             # Update analytics cache
             self._update_analytics_cache()
@@ -671,9 +766,14 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             logger.error(f"Post-save operations failed: {str(e)}")
             # Don't raise exception here as the grade was already created successfully
 
-    def _log_grade_creation(self):
-        """Log grade creation for audit purposes"""
+    def _log_grade_creation_percentage(self):
+        """Log grade creation for audit purposes with percentage details"""
         try:
+            from decimal import Decimal
+            
+            # Get weighted contributions
+            contributions = self.object.get_weighted_contributions()
+            
             AuditLog.objects.create(
                 user=self.request.user,
                 action='CREATE',
@@ -686,9 +786,18 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
                     'subject_name': self.object.subject.name,
                     'academic_year': self.object.academic_year,
                     'term': self.object.term,
-                    'total_score': float(self.object.total_score) if self.object.total_score else 0,
+                    'percentage_scores': {
+                        'homework': float(self.object.homework_percentage) if self.object.homework_percentage else 0.0,
+                        'classwork': float(self.object.classwork_percentage) if self.object.classwork_percentage else 0.0,
+                        'test': float(self.object.test_percentage) if self.object.test_percentage else 0.0,
+                        'exam': float(self.object.exam_percentage) if self.object.exam_percentage else 0.0,
+                    },
+                    'weighted_contributions': contributions,
+                    'total_score': float(self.object.total_score) if self.object.total_score else 0.0,
                     'ges_grade': self.object.ges_grade,
+                    'letter_grade': self.object.letter_grade,
                     'class_level': self.object.student.class_level,
+                    'is_passing': self.object.is_passing(),
                     'created_by': self.request.user.get_full_name()
                 },
                 ip_address=self._get_client_ip()
@@ -706,18 +815,29 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             ip = self.request.META.get('REMOTE_ADDR')
         return ip
 
-    def _send_creation_notifications(self):
-        """Send notifications about grade creation"""
+    def _send_creation_notifications_percentage(self):
+        """Send notifications about grade creation with percentage details"""
         try:
             student = self.object.student
             subject = self.object.subject
             
+            # Get school configuration for grade display
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            
+            if config.grading_system == 'BOTH':
+                grade_display = f"{self.object.ges_grade} ({self.object.letter_grade})"
+            elif config.grading_system == 'GES':
+                grade_display = self.object.ges_grade
+            else:
+                grade_display = self.object.letter_grade
+            
             # Send notification to student
             notification_data = {
                 'type': 'send_notification',
-                'notification_type': 'GRADE_CREATED',
+                'notification_type': 'GRADE_CREATED_PERCENTAGE',
                 'title': 'New Grade Recorded',
-                'message': f'A new grade has been recorded for {subject.name}',
+                'message': f'A new grade of {self.object.total_score}% ({grade_display}) has been recorded for {subject.name}',
                 'related_object_id': self.object.id,
                 'timestamp': timezone.now().isoformat(),
                 'icon': 'bi-journal-plus',
@@ -730,6 +850,16 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
                 notification_data
             )
             
+            # Also notify teacher if not the creator
+            if is_teacher(self.request.user) and self.request.user.teacher != self.object.class_assignment.teacher:
+                teacher = self.object.class_assignment.teacher
+                notification_data['notification_type'] = 'GRADE_CREATED_BY_COLLEAGUE'
+                notification_data['message'] = f'{self.request.user.get_full_name()} recorded a grade for {student.get_full_name()} in {subject.name}'
+                self._send_websocket_notification(
+                    f'notifications_{teacher.user.id}',
+                    notification_data
+                )
+            
         except Exception as e:
             logger.error(f"Failed to send creation notifications: {str(e)}")
 
@@ -739,7 +869,10 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             channel_layer = get_channel_layer()
             async_to_sync(channel_layer.group_send)(
                 group_name,
-                notification_data
+                {
+                    'type': 'send_notification',
+                    'notification_data': notification_data
+                }
             )
         except Exception as e:
             logger.error(f"WebSocket notification failed: {str(e)}")
@@ -753,7 +886,9 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             cache_keys_to_clear = [
                 f"class_performance_{self.object.subject.id}_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}",
                 f"student_progress_{self.object.student.id}_{self.object.academic_year}",
-                f"term_report_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}"
+                f"term_report_{self.object.student.class_level}_{self.object.academic_year}_{self.object.term}",
+                f"subject_stats_{self.object.subject.id}",
+                f"teacher_grades_{self.object.recorded_by.id if self.object.recorded_by else ''}",
             ]
             
             for cache_key in cache_keys_to_clear:
@@ -770,8 +905,13 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             return self.get_success_url()
 
     def form_invalid(self, form):
-        """Enhanced form invalid handling"""
+        """Enhanced form invalid handling for percentage system"""
         logger.warning(f"Grade creation form invalid - Errors: {form.errors}")
+        
+        # Add specific error messages for percentage system
+        if any('percentage' in field for field in form.errors):
+            messages.error(self.request, 
+                "Please check percentage scores. They must be between 0% and 100%.")
         
         # Add generic error message if no specific field errors
         if not form.errors:
@@ -779,7 +919,6 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
         
         return super().form_invalid(form)
 
-# In grade_views.py - Complete updated GradeUpdateView class
 
 class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateView):
     """
@@ -1791,7 +1930,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         return kwargs
 
 class GradeDetailView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, DetailView):
-    """Grade Detail View for viewing individual grade records"""
+    """Grade Detail View for viewing individual grade records with percentage details"""
     model = Grade
     template_name = 'core/academics/grades/grade_detail.html'
     context_object_name = 'grade'
@@ -1820,22 +1959,55 @@ class GradeDetailView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, DetailVi
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        grade = self.get_object()
-    
+        grade = self.object
+        
+        # Get school configuration
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            context['school_config'] = config
+        except:
+            context['school_config'] = None
+        
+        # Get weighted contributions
+        contributions = grade.get_weighted_contributions()
+        
         context.update({
             'student': grade.student,
             'subject': grade.subject,
             'can_edit': self.request.user.is_superuser or is_admin(self.request.user),
-            'score_breakdown': {
-                'classwork': grade.classwork_score,
-                'homework': grade.homework_score,
-                'test': grade.test_score,
-                'exam': grade.exam_score,
+            'percentage_scores': {
+                'homework': {
+                    'percentage': float(grade.homework_percentage) if grade.homework_percentage else 0,
+                    'weight': contributions['homework']['weight'],
+                    'contribution': contributions['homework']['contribution']
+                },
+                'classwork': {
+                    'percentage': float(grade.classwork_percentage) if grade.classwork_percentage else 0,
+                    'weight': contributions['classwork']['weight'],
+                    'contribution': contributions['classwork']['contribution']
+                },
+                'test': {
+                    'percentage': float(grade.test_percentage) if grade.test_percentage else 0,
+                    'weight': contributions['test']['weight'],
+                    'contribution': contributions['test']['contribution']
+                },
+                'exam': {
+                    'percentage': float(grade.exam_percentage) if grade.exam_percentage else 0,
+                    'weight': contributions['exam']['weight'],
+                    'contribution': contributions['exam']['contribution']
+                },
             },
-            'performance_level': grade.get_performance_level_display(),  # Use the model method
+            'total_weighted_score': float(grade.total_score) if grade.total_score else 0,
+            'performance_level': grade.get_performance_level(),
+            'is_passing': grade.is_passing(),
+            'display_grade': grade.get_display_grade(),
+            'created_by': grade.recorded_by.get_full_name() if grade.recorded_by else 'System',
+            'created_at': grade.created_at.strftime('%Y-%m-%d %H:%M') if grade.created_at else 'Unknown',
+            'last_updated': grade.last_updated.strftime('%Y-%m-%d %H:%M') if grade.last_updated else 'Unknown',
         })
+        
         return context
-
 
     def get_performance_level(self, score):
         """Get performance level category"""
@@ -2211,165 +2383,91 @@ class GradeUploadTemplateView(View):
         return response
 
 
-
-# In grade_views.py - Update GradeEntryView class
 class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Grade
-    form_class = GradeEntryForm
+    form_class = GradeEntryForm  # We'll update this form next
     template_name = 'core/academics/grades/grade_entry.html'
     success_url = reverse_lazy('grade_list')
 
     def test_func(self):
         return is_admin(self.request.user) or is_teacher(self.request.user)
 
-    def get_initial(self):
-        """Set initial data based on GET parameters with class level auto-matching"""
-        initial = super().get_initial()
-        student_id = self.request.GET.get('student')
-        subject_id = self.request.GET.get('subject')
-        
-        print(f"DEBUG GradeEntryView: GET params - student: {student_id}, subject: {subject_id}")
-        
-        if student_id:
-            try:
-                student = Student.objects.get(pk=student_id)
-                initial['student'] = student
-                # CRITICAL: Auto-set class level to match student's actual class
-                initial['class_level'] = student.class_level
-                print(f"DEBUG: Auto-setting class level to {student.class_level} for student {student.get_full_name()}")
-                
-                # Set current academic year if not provided
-                current_year = timezone.now().year
-                initial['academic_year'] = f"{current_year}/{current_year + 1}"
-                initial['term'] = 1  # Default to first term
-                
-            except (Student.DoesNotExist, ValueError) as e:
-                print(f"DEBUG: Error loading student {student_id}: {e}")
-                messages.warning(self.request, 'Selected student not found.')
-        
-        if subject_id:
-            try:
-                subject = Subject.objects.get(pk=subject_id)
-                initial['subject'] = subject
-                print(f"DEBUG: Setting subject to {subject.name}")
-            except (Subject.DoesNotExist, ValueError) as e:
-                print(f"DEBUG: Error loading subject {subject_id}: {e}")
-        
-        return initial
-
     def get_form_kwargs(self):
-        """Add user and ensure proper initial data"""
+        """Add user to form kwargs"""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         
-        # Ensure initial data is passed correctly for GET requests
-        if self.request.method == 'GET':
-            initial = self.get_initial()
-            kwargs['initial'] = initial
-            print(f"DEBUG: Form kwargs initial - {initial}")
-        
+        # Add configuration for form validation
+        try:
+            config = SchoolConfiguration.get_config()
+            kwargs['config'] = config
+        except:
+            pass
+            
         return kwargs
 
+    @transaction.atomic
+    def form_valid(self, form):
+        """Handle form validation with configuration-based validation"""
+        try:
+            # Get school configuration
+            config = SchoolConfiguration.get_config()
+            
+            # Set recorded_by
+            form.instance.recorded_by = self.request.user
+            
+            # Calculate total score using configuration
+            form.instance.calculate_total_score()
+            form.instance.determine_grades()
+            
+            response = super().form_valid(form)
+            
+            messages.success(
+                self.request, 
+                f'✅ Grade recorded for {self.object.student.get_full_name()}! '
+                f'Total: {self.object.total_score}% - {self.object.get_display_grade()}'
+            )
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error saving grade: {str(e)}", exc_info=True)
+            messages.error(self.request, 'Error saving grade. Please check the scores.')
+            return self.form_invalid(form)
+
     def get_context_data(self, **kwargs):
-        """Enhanced context with safe object access"""
+        """Enhanced context with configuration data"""
         context = super().get_context_data(**kwargs)
         
-        # Safely get the object (if it exists)
-        grade = None
-        if hasattr(self, 'object') and self.object:
-            grade = self.object
-        elif self.request.method == 'POST' and hasattr(self, 'form') and self.form.instance:
-            grade = self.form.instance
+        # Get school configuration for display
+        try:
+            config = SchoolConfiguration.get_config()
+            context['school_config'] = config
+            context['assessment_weights'] = {
+                'homework': float(config.homework_weight),
+                'classwork': float(config.classwork_weight),
+                'test': float(config.test_weight),
+                'exam': float(config.exam_weight),
+            }
+            context['grading_system'] = config.grading_system
+        except Exception as e:
+            logger.error(f"Error getting school configuration: {str(e)}")
+            context['school_config'] = None
+            context['assessment_weights'] = {
+                'homework': 20.00,
+                'classwork': 30.00,
+                'test': 10.00,
+                'exam': 40.00,
+            }
+            context['grading_system'] = 'GES'
         
-        # Get selected student and subject for template context
-        student_id = self.request.GET.get('student')
-        subject_id = self.request.GET.get('subject')
-        
-        selected_student = None
-        selected_subject = None
-        
-        if student_id:
-            try:
-                selected_student = Student.objects.get(pk=student_id)
-            except Student.DoesNotExist:
-                pass
-        
-        if subject_id:
-            try:
-                selected_subject = Subject.objects.get(pk=subject_id)
-            except Subject.DoesNotExist:
-                pass
-        
-        # Get available subjects based on user role for template display
-        if is_teacher(self.request.user):
-            teacher = self.request.user.teacher
-            try:
-                class_assignments = ClassAssignment.objects.filter(
-                    teacher=teacher,
-                    is_active=True
-                ).select_related('subject')
-                
-                subject_ids = class_assignments.values_list('subject_id', flat=True).distinct()
-                
-                available_subjects = Subject.objects.filter(
-                    id__in=subject_ids,
-                    is_active=True
-                ).distinct().order_by('name')
-                
-                # Fallbacks if no subjects found
-                if not available_subjects.exists():
-                    available_subjects = teacher.subjects.filter(is_active=True).order_by('name')
-                
-                if not available_subjects.exists():
-                    available_subjects = Subject.objects.filter(is_active=True).order_by('name')
-                    
-            except Exception as e:
-                logger.error(f"Error getting available subjects: {e}")
-                available_subjects = Subject.objects.filter(is_active=True).order_by('name')
-        else:
-            available_subjects = Subject.objects.filter(is_active=True).order_by('name')
-        
-        # Get students based on user role for template context
-        if is_teacher(self.request.user):
-            teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher,
-                is_active=True
-            ).values_list('class_level', flat=True).distinct()
-            
-            students = Student.objects.filter(
-                class_level__in=teacher_classes, 
-                is_active=True
-            ).order_by('last_name', 'first_name')
-        else:
-            students = Student.objects.filter(is_active=True).order_by('last_name', 'first_name')
-        
-        # Prepare context with grade data if available
-        if grade:
-            context.update({
-                'grade': grade,
-                'student': grade.student,
-                'subject': grade.subject,
-                'score_breakdown': grade.score_breakdown if hasattr(grade, 'score_breakdown') else {},
-            })
-        
-        # Always add these context variables
-        context.update({
-            'selected_student': selected_student,
-            'selected_subject': selected_subject,
-            'available_subjects': available_subjects,
-            'students': students,
-            'class_levels': CLASS_LEVEL_CHOICES,
-            'is_teacher': is_teacher(self.request.user),
-            'is_admin': is_admin(self.request.user),
-            'has_grade_object': bool(grade),
-        })
-                
         return context
+
 
     @transaction.atomic
     def form_valid(self, form):
         """
-        Handle form validation with class level enforcement
+        Handle form validation with class level enforcement and configuration-based validation
         """
         try:
             # CRITICAL: Double-check that class level matches student's class
@@ -2389,6 +2487,18 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
             
             # Set recorded_by user
             form.instance.recorded_by = self.request.user
+            
+            # Get school configuration for grade calculation
+            try:
+                school_config = SchoolConfiguration.get_config()
+                
+                # Calculate grades using configuration
+                if form.instance.total_score is not None:
+                    total_score = float(form.instance.total_score)
+                    form.instance.ges_grade = school_config.get_ges_grade_for_score(total_score)
+                    form.instance.letter_grade = school_config.get_letter_grade_for_score(total_score)
+            except Exception as e:
+                logger.error(f"Error calculating grades with configuration: {str(e)}")
             
             # Let the form handle class assignment creation and grade calculation
             response = super().form_valid(form)
@@ -2413,32 +2523,6 @@ class GradeEntryView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVie
                 'Error saving grade. Please check that all information is correct and try again.')
             return self.form_invalid(form)
 
-    def form_invalid(self, form):
-        """Enhanced form invalid handling with specific error messages"""
-        print(f"DEBUG GradeEntryView: Form invalid - Errors: {form.errors}")
-        logger.warning(f"Grade entry form invalid - Errors: {form.errors}")
-        
-        # Add specific error messages for common issues
-        if 'class_level' in form.errors:
-            messages.error(self.request, 
-                "Class level error. Please ensure the class level matches the student's current class.")
-        elif 'student' in form.errors:
-            messages.error(self.request, 
-                "Student selection error. Please verify the student exists and is active.")
-        elif 'subject' in form.errors:
-            messages.error(self.request, 
-                "Subject selection error. Please verify the subject is available for this class level.")
-        elif any(field in form.errors for field in ['classwork_score', 'homework_score', 'test_score', 'exam_score']):
-            messages.error(self.request, 
-                "Please check the score values. They must be within the allowed ranges.")
-        elif '__all__' in form.errors:
-            # Show non-field errors
-            for error in form.errors['__all__']:
-                messages.error(self.request, error)
-        else:
-            messages.error(self.request, "Please correct the errors below.")
-        
-        return super().form_invalid(form)
 
     def _log_grade_creation(self):
         """Log grade creation for audit purposes"""
@@ -2547,30 +2631,139 @@ class GradeReportView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, Template
         
         return context
 
+
+# In grade_views.py - Update the BestStudentsView class
+
 class BestStudentsView(TwoFactorLoginRequiredMixin, TemplateView):
     template_name = 'core/academics/grades/best_students.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get current academic year
-        current_year = timezone.now().year
-        academic_year = f"{current_year}/{current_year + 1}"
+        # Get filter parameters from request
+        academic_year = self.request.GET.get('academic_year', '')
+        term = self.request.GET.get('term', '')
+        class_level = self.request.GET.get('class_level', '')
         
-        # Get top students by average grade
-        top_students = Student.objects.annotate(
-            avg_grade=Avg('grade__total_score')
+        # If no academic year provided, use current
+        if not academic_year:
+            current_year = timezone.now().year
+            academic_year = f"{current_year}/{current_year + 1}"
+        
+        # Build query filters
+        filters = Q(grades__total_score__isnull=False, is_active=True)
+        
+        if academic_year:
+            filters &= Q(grades__academic_year=academic_year)
+        
+        if term and term.isdigit():
+            filters &= Q(grades__term=int(term))
+        
+        if class_level:
+            filters &= Q(class_level=class_level)
+        
+        # Get all qualified students first (without slice)
+        qualified_students = Student.objects.filter(filters).annotate(
+            avg_grade=Avg('grades__total_score'),
+            subject_count=Count('grades__subject', distinct=True),
+            grade_count=Count('grades')
         ).filter(
-            grade__academic_year=academic_year,
-            is_active=True
-        ).order_by('-avg_grade')[:10]
+            grade_count__gt=0,  # Only include students with grades
+            avg_grade__isnull=False  # Ensure avg_grade is not null
+        ).order_by('-avg_grade')
         
+        # Now get the top 10
+        top_students = list(qualified_students[:10])
+        
+        # Calculate overall average
+        overall_average = 0
+        if top_students:
+            total_avg = sum(student.avg_grade or 0 for student in top_students)
+            overall_average = total_avg / len(top_students)
+        
+        # Calculate performance distribution from the FULL queryset (not sliced)
+        performance_counts = {
+            'excellent': qualified_students.filter(avg_grade__gte=80).count(),
+            'good': qualified_students.filter(avg_grade__gte=60, avg_grade__lt=80).count(),
+            'fair': qualified_students.filter(avg_grade__gte=40, avg_grade__lt=60).count(),
+            'poor': qualified_students.filter(avg_grade__lt=40).count()
+        }
+        
+        # Get class level performance data from the FULL queryset
+        class_performance = []
+        class_levels_in_data = qualified_students.values_list('class_level', flat=True).distinct()
+        for level in class_levels_in_data:
+            class_students = qualified_students.filter(class_level=level)
+            if class_students.exists():
+                class_avg = class_students.aggregate(avg=Avg('avg_grade'))['avg'] or 0
+                class_performance.append({
+                    'class_level': level,
+                    'average_score': class_avg
+                })
+        
+        # Get unique academic years for filter dropdown
+        academic_years = Grade.objects.values_list('academic_year', flat=True).distinct().order_by('-academic_year')
+        
+        # Add performance level to each student
+        for student in top_students:
+            if student.avg_grade >= 80:
+                student.performance_level = 'Excellent'
+            elif student.avg_grade >= 60:
+                student.performance_level = 'Good'
+            elif student.avg_grade >= 40:
+                student.performance_level = 'Fair'
+            else:
+                student.performance_level = 'Poor'
+            
+            # Add missing methods for template compatibility
+            if not hasattr(student, 'get_initials'):
+                student.get_initials = lambda: student.first_name[0] + student.last_name[0] if student.first_name and student.last_name else '??'
+            
+            if not hasattr(student, 'get_avg_ges_grade'):
+                student.get_avg_ges_grade = self._get_ges_grade_for_score(student.avg_grade)
+            
+            if not hasattr(student, 'get_avg_letter_grade'):
+                student.get_avg_letter_grade = self._get_letter_grade_for_score(student.avg_grade)
+        
+        # Update context with all required variables
         context.update({
             'top_students': top_students,
-            'current_year': current_year,
-            'academic_year': academic_year
+            'academic_year': academic_year,
+            'selected_year': academic_year,
+            'selected_term': term,
+            'selected_class': class_level,
+            'academic_years': academic_years,
+            'class_levels': CLASS_LEVEL_CHOICES,
+            'total_students': len(top_students),
+            'overall_average': overall_average,
+            'excellent_count': performance_counts['excellent'],
+            'good_count': performance_counts['good'],
+            'fair_count': performance_counts['fair'],
+            'poor_count': performance_counts['poor'],
+            'class_performance': class_performance,
+            'has_students': bool(top_students)
         })
+        
         return context
+    
+    def _get_ges_grade_for_score(self, score):
+        """Helper method to get GES grade for a score"""
+        try:
+            from core.grading_utils import get_all_grades
+            grades = get_all_grades(score or 0)
+            return grades['ges_grade'] or 'N/A'
+        except:
+            return 'N/A'
+    
+    def _get_letter_grade_for_score(self, score):
+        """Helper method to get letter grade for a score"""
+        try:
+            from core.grading_utils import get_all_grades
+            grades = get_all_grades(score or 0)
+            return grades['letter_grade'] or 'N/A'
+        except:
+            return 'N/A'
+
 
 class GradeDeleteView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogMixin, DeleteView):
     """
@@ -2851,6 +3044,7 @@ class GradeDeleteView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogM
             logger.error(f"Error checking if grade can be deleted: {str(e)}")
             return False
 
+
     def _handle_post_deletion_operations(self, grade_details, deletion_reason):
         """
         Handle all operations that should occur after successful grade deletion
@@ -3038,31 +3232,174 @@ class GradeDeleteView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogM
         
         return super().get_success_url()
 
-# Function-based view wrapper for URL compatibility
-def grade_delete(request, pk):
-    """
-    Function-based wrapper for GradeDeleteView
-    """
-    return GradeDeleteView.as_view()(request, pk=pk)
 
-# Additional utility functions for grade management
-def student_grade_summary(request, student_id):
-    """Get grade summary for a specific student"""
+
+    def grade_delete(request, pk):
+        """
+        Function-based wrapper for GradeDeleteView
+        """
+        return GradeDeleteView.as_view()(request, pk=pk)
+
+
+# In grade_views.py - Keep this ONE and remove the function-based version
+class StudentGradeSummaryAPI(TwoFactorLoginRequiredMixin, View):
+    """Simplified API endpoint for student grade summary - Use this one"""
+    
+    def get(self, request, student_id):
+        try:
+            logger.info(f"[GRADE SUMMARY API] Request for student_id: {student_id}")
+            
+            # Check permissions
+            user = request.user
+            
+            # Admins can see any student
+            if is_admin(user) or user.is_superuser:
+                student = get_object_or_404(Student, pk=student_id, is_active=True)
+            # Teachers can see students in their classes
+            elif is_teacher(user):
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=user.teacher
+                ).values_list('class_level', flat=True).distinct()
+                
+                student = get_object_or_404(
+                    Student, 
+                    pk=student_id,
+                    class_level__in=teacher_classes,
+                    is_active=True
+                )
+            # Students can only see themselves
+            elif is_student(user):
+                if user.student.id != int(student_id):
+                    return JsonResponse({
+                        'error': 'Permission denied',
+                        'message': 'You can only view your own grades'
+                    }, status=403)
+                student = get_object_or_404(Student, pk=student_id, is_active=True)
+            else:
+                return JsonResponse({
+                    'error': 'Permission denied',
+                    'message': 'You do not have permission to view grades'
+                }, status=403)
+            
+            # Get grades with optimization
+            grades = Grade.objects.filter(
+                student=student,
+                total_score__isnull=False
+            ).select_related('subject').order_by('-academic_year', '-term', 'subject__name')
+            
+            # Calculate comprehensive summary - CONVERT ALL DECIMALS TO FLOATS
+            grades_count = grades.count()
+            avg_result = grades.aggregate(Avg('total_score'))
+            average_score = float(avg_result['total_score__avg'] or 0)  # ← Convert to float
+            passing_count = grades.filter(total_score__gte=40).count()
+            passing_rate = round((passing_count / grades_count * 100), 1) if grades_count > 0 else 0
+            
+            summary = {
+                'student': {
+                    'id': student.id,
+                    'name': student.get_full_name(),
+                    'student_id': student.student_id,
+                    'class_level': student.class_level,
+                    'class_level_display': student.get_class_level_display(),
+                },
+                'grades_summary': {
+                    'total_subjects': grades_count,
+                    'average_score': average_score,  # ← Already converted to float
+                    'passing_subjects': passing_count,
+                    'passing_rate': passing_rate,
+                },
+                'recent_grades': [],
+                'grades_by_term': {}
+            }
+            
+            # Add recent grades (last 10) - CONVERT DECIMALS TO FLOATS
+            for grade in grades[:10]:
+                summary['recent_grades'].append({
+                    'subject': grade.subject.name,
+                    'score': float(grade.total_score) if grade.total_score else 0,
+                    'total_score': float(grade.total_score) if grade.total_score else 0,
+                    'ges_grade': grade.ges_grade,
+                    'letter_grade': grade.letter_grade,
+                    'is_passing': grade.is_passing(),
+                    'academic_year': grade.academic_year,
+                    'term': grade.term,
+                    'grade_display': grade.get_display_grade(),
+                })
+            
+            # Group by academic year and term for accordion view - CONVERT DECIMALS TO FLOATS
+            for grade in grades:
+                term_key = f"{grade.academic_year} Term {grade.term}"
+                
+                if term_key not in summary['grades_by_term']:
+                    summary['grades_by_term'][term_key] = {
+                        'academic_year': grade.academic_year,
+                        'term': grade.term,
+                        'grades': [],
+                    }
+                
+                summary['grades_by_term'][term_key]['grades'].append({
+                    'subject': grade.subject.name,
+                    'score': float(grade.total_score) if grade.total_score else 0,
+                    'ges_grade': grade.ges_grade,
+                    'letter_grade': grade.letter_grade,
+                    'is_passing': grade.is_passing(),
+                    'grade_display': grade.get_display_grade(),
+                })
+            
+            logger.info(f"[GRADE SUMMARY API] Success - Student: {student.student_id}, Grades: {grades_count}")
+            
+            return JsonResponse(summary)
+            
+        except Student.DoesNotExist:
+            logger.warning(f"[GRADE SUMMARY API] Student not found - ID: {student_id}")
+            return JsonResponse({
+                'error': 'Student not found',
+                'message': 'The requested student does not exist'
+            }, status=404)
+        except Exception as e:
+            logger.error(f"[GRADE SUMMARY API] Error: {str(e)}", exc_info=True)
+            return JsonResponse({
+                'error': 'Server error',
+                'message': 'Unable to fetch grade summary. Please try again later.'
+            }, status=500)
+
+
+def student_subject_grades(request, student_id):
+    """Get subject grades for a specific student"""
     try:
-        student = get_object_or_404(Student, pk=student_id)
-        grades = Grade.objects.filter(student=student).select_related('subject')
+        student = get_object_or_404(Student, pk=student_id, is_active=True)
         
-        summary = {
-            'student': student,
-            'total_subjects': grades.count(),
-            'average_score': grades.aggregate(Avg('total_score'))['total_score__avg'],
-            'grades_by_term': {},
-        }
+        # Get grades with subject information
+        grades = Grade.objects.filter(
+            student=student
+        ).select_related('subject').order_by('subject__name')
         
-        return JsonResponse(summary)
+        # Format the data
+        subject_grades = []
+        for grade in grades:
+            subject_grades.append({
+                'subject': grade.subject.name,
+                'score': float(grade.total_score) if grade.total_score else 0,
+                'ges_grade': grade.ges_grade,
+                'letter_grade': grade.letter_grade,
+                'academic_year': grade.academic_year,
+                'term': grade.term,
+                'is_passing': grade.is_passing(),
+            })
+        
+        return JsonResponse({
+            'student_id': student.id,
+            'student_name': student.get_full_name(),
+            'subject_grades': subject_grades,
+            'total_subjects': len(subject_grades),
+        })
+        
     except Exception as e:
-        logger.error(f"Error getting student grade summary: {str(e)}")
-        return JsonResponse({'error': 'Unable to fetch grade summary'}, status=500)
+        logger.error(f"Error getting student subject grades: {str(e)}")
+        return JsonResponse({
+            'error': 'Failed to load student grades'
+        }, status=500)
+
 
 def get_students_by_class(request):
     """Get students by class level for AJAX requests"""
@@ -3193,76 +3530,6 @@ def clear_grade_review(request, pk):
         messages.error(request, 'Error clearing grade review.')
     
     return redirect('grade_list')
-
-
-# In grade_views.py - Update the CalculateGradeAPI class
-class CalculateGradeAPI(TwoFactorLoginRequiredMixin, View):
-    """
-    API endpoint for calculating grades in real-time based on system configuration
-    """
-    def post(self, request):
-        try:
-            data = json.loads(request.body)
-            
-            # Calculate total score
-            classwork = float(data.get('classwork_score', 0))
-            homework = float(data.get('homework_score', 0)) 
-            test = float(data.get('test_score', 0))
-            exam = float(data.get('exam_score', 0))
-            
-            total_score = classwork + homework + test + exam
-            
-            # Get both grades
-            from core.grading_utils import get_all_grades, get_grading_system, get_grade_descriptions, get_display_grade, get_grade_description
-            
-            grading_system = get_grading_system()
-            grades = get_all_grades(total_score)
-            descriptions = get_grade_descriptions()
-            
-            response_data = {
-                'total_score': round(total_score, 1),
-                'is_passing': grades['is_passing'],
-                'grading_system': grading_system,
-                'ges_grade': grades['ges_grade'],
-                'letter_grade': grades['letter_grade'],
-            }
-            
-            # Add display information based on active system
-            response_data['display_grade'] = get_display_grade(grades['ges_grade'], grades['letter_grade'])
-            response_data['grade_description'] = get_grade_description(grades['ges_grade'], grades['letter_grade'])
-            response_data['performance_level'] = self.get_performance_level(total_score)
-            response_data['grade_color'] = self.get_grade_color(grades['ges_grade'])
-            
-            return JsonResponse(response_data)
-            
-        except Exception as e:
-            logger.error(f"Error calculating grade: {str(e)}")
-            return JsonResponse({'error': 'Invalid data provided'}, status=400)
-    
-    def get_performance_level(self, score):
-        """Get performance level category"""
-        if score >= 80: return 'Excellent'
-        elif score >= 70: return 'Very Good'
-        elif score >= 60: return 'Good'
-        elif score >= 50: return 'Satisfactory' 
-        elif score >= 40: return 'Fair'
-        else: return 'Poor'
-    
-    def get_grade_color(self, ges_grade):
-        """Get color for grade display"""
-        colors = {
-            '1': 'success',    # Green
-            '2': 'success',    # Green
-            '3': 'info',       # Blue
-            '4': 'info',       # Blue
-            '5': 'warning',    # Yellow
-            '6': 'warning',    # Yellow
-            '7': 'danger',     # Red
-            '8': 'danger',     # Red
-            '9': 'danger',     # Red
-        }
-        return colors.get(ges_grade, 'secondary')
-
 
 
 class GradeExportView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, View):
@@ -4263,3 +4530,529 @@ class GradingQueueView(LoginRequiredMixin, UserPassesTestMixin, ListView):
             return ['core/grades/grading_queue_teacher.html', 'core/grades/grading_queue.html']
         
         return super().get_template_names()
+
+
+class GradeConfigurationView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, UpdateView):
+    """View for managing grade configuration"""
+    model = SchoolConfiguration
+    form_class = GradeConfigurationForm
+    template_name = 'core/academics/grades/grade_configuration.html'
+    success_url = reverse_lazy('grade_configuration')
+    
+    def get_object(self, queryset=None):
+        """Get the single configuration instance"""
+        return SchoolConfiguration.get_config()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get current configuration
+        config = self.get_object()
+        
+        # Get default configurations for different school levels
+        context['default_configs'] = {
+            'primary': {
+                'grade_6_min': 40.00,
+                'grade_7_min': 30.00,
+                'passing_mark': 40.00,
+                'classwork_weight': 40.00,
+                'exam_weight': 60.00,
+            },
+            'jhs': {
+                'grade_6_min': 45.00,
+                'grade_7_min': 35.00,
+                'passing_mark': 45.00,
+                'classwork_weight': 30.00,
+                'homework_weight': 10.00,
+                'test_weight': 10.00,
+                'exam_weight': 50.00,
+            },
+            'shs': {
+                'grade_6_min': 45.00,
+                'grade_7_min': 35.00,
+                'passing_mark': 45.00,
+                'classwork_weight': 40.00,
+                'homework_weight': 10.00,
+                'test_weight': 10.00,
+                'exam_weight': 40.00,
+            }
+        }
+        
+        # Get grade descriptions
+        context['ges_descriptions'] = config.get_grade_descriptions()['GES']
+        context['letter_descriptions'] = config.get_grade_descriptions()['LETTER']
+        
+        return context
+    
+    def form_valid(self, form):
+        """Handle form submission"""
+        response = super().form_valid(form)
+        messages.success(self.request, 'Grade configuration updated successfully!')
+        
+        # Clear cache if needed
+        from django.core.cache import cache
+        cache.delete_pattern('grade_calculations_*')
+        
+        return response
+
+
+class GradeCalculatorView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Interactive grade calculator using current configuration"""
+    template_name = 'core/academics/grades/grade_calculator.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get current configuration
+        config = SchoolConfiguration.get_config()
+        
+        # Prepare grade boundaries for display
+        context['ges_boundaries'] = [
+            {'grade': '1', 'min': config.grade_1_min, 'description': 'Excellent'},
+            {'grade': '2', 'min': config.grade_2_min, 'description': 'Very Good'},
+            {'grade': '3', 'min': config.grade_3_min, 'description': 'Good'},
+            {'grade': '4', 'min': config.grade_4_min, 'description': 'Credit'},
+            {'grade': '5', 'min': config.grade_5_min, 'description': 'Credit'},
+            {'grade': '6', 'min': config.grade_6_min, 'description': 'Pass'},
+            {'grade': '7', 'min': config.grade_7_min, 'description': 'Pass'},
+            {'grade': '8', 'min': config.grade_8_min, 'description': 'Weak'},
+            {'grade': '9', 'max': config.grade_9_max, 'description': 'Fail'},
+        ]
+        
+        context['letter_boundaries'] = [
+            {'grade': 'A+', 'min': config.letter_a_plus_min, 'description': 'Excellent'},
+            {'grade': 'A', 'min': config.letter_a_min, 'description': 'Excellent'},
+            {'grade': 'B+', 'min': config.letter_b_plus_min, 'description': 'Very Good'},
+            {'grade': 'B', 'min': config.letter_b_min, 'description': 'Good'},
+            {'grade': 'C+', 'min': config.letter_c_plus_min, 'description': 'Satisfactory'},
+            {'grade': 'C', 'min': config.letter_c_min, 'description': 'Fair'},
+            {'grade': 'D+', 'min': config.letter_d_plus_min, 'description': 'Weak'},
+            {'grade': 'D', 'min': config.letter_d_min, 'description': 'Very Weak'},
+            {'grade': 'F', 'max': config.letter_f_max, 'description': 'Fail'},
+        ]
+        
+        context['assessment_weights'] = config.get_assessment_weights()
+        context['passing_mark'] = config.passing_mark
+        context['grading_system'] = config.grading_system
+        
+        return context
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CalculateGradeAPI(TwoFactorLoginRequiredMixin, View):
+    """
+    API endpoint for calculating grades in real-time using current configuration
+    """
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            # Get individual scores
+            classwork = float(data.get('classwork_score', 0))
+            homework = float(data.get('homework_score', 0)) 
+            test = float(data.get('test_score', 0))
+            exam = float(data.get('exam_score', 0))
+            
+            total_score = classwork + homework + test + exam
+            
+            # Get school configuration
+            config = SchoolConfiguration.get_config()
+            
+            # Get grades using configuration
+            ges_grade = config.get_ges_grade_for_score(total_score)
+            letter_grade = config.get_letter_grade_for_score(total_score)
+            is_passing = config.is_score_passing(total_score)
+            
+            # Get grade descriptions
+            grade_descriptions = config.get_grade_descriptions()
+            ges_description = grade_descriptions['GES'].get(ges_grade, 'Not graded')
+            letter_description = grade_descriptions['LETTER'].get(letter_grade, 'Not graded')
+            
+            response_data = {
+                'total_score': round(total_score, 1),
+                'is_passing': is_passing,
+                'grading_system': config.grading_system,
+                'ges_grade': ges_grade,
+                'letter_grade': letter_grade,
+                'display_grade': config.get_display_grade_for_score(total_score),
+                'ges_description': ges_description,
+                'letter_description': letter_description,
+                'grade_color': config.get_grade_color(ges_grade),
+                'performance_level': self.get_performance_level(total_score),
+            }
+            
+            return JsonResponse(response_data)
+            
+        except Exception as e:
+            logger.error(f"Error calculating grade: {str(e)}")
+            return JsonResponse({'error': 'Invalid data provided'}, status=400)
+    
+    def get_performance_level(self, score):
+        """Get performance level category"""
+        if score >= 80: return 'Excellent'
+        elif score >= 70: return 'Very Good'
+        elif score >= 60: return 'Good'
+        elif score >= 50: return 'Satisfactory' 
+        elif score >= 40: return 'Fair'
+        else: return 'Poor'
+
+class PromotionCheckView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """View for checking student promotion eligibility"""
+    template_name = 'core/academics/grades/promotion_check.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get promotion configuration
+        try:
+            config = PromotionConfiguration.get_or_create_for_school()
+            context['promotion_config'] = config
+        except Exception as e:
+            logger.error(f"Error getting promotion configuration: {str(e)}")
+            context['promotion_config'] = None
+        
+        # Get filter parameters
+        class_level = self.request.GET.get('class_level')
+        student_id = self.request.GET.get('student')
+        
+        if class_level:
+            context['selected_class'] = class_level
+            context['students'] = Student.objects.filter(
+                class_level=class_level,
+                is_active=True
+            ).order_by('last_name', 'first_name')
+        
+        if student_id:
+            try:
+                student = Student.objects.get(pk=student_id)
+                context['selected_student'] = student
+                
+                # Get student's grades for current academic year
+                current_year = timezone.now().year
+                academic_year = f"{current_year}/{current_year + 1}"
+                
+                grades = Grade.objects.filter(
+                    student=student,
+                    academic_year=academic_year
+                ).select_related('subject')
+                
+                # Get attendance (if available)
+                try:
+                    attendance = student.attendance_records.filter(
+                        academic_year=academic_year
+                    ).first()
+                    attendance_percentage = attendance.attendance_percentage if attendance else 0
+                except:
+                    attendance_percentage = 0
+                
+                # Check promotion eligibility
+                if grades.exists():
+                    can_promote, reason = config.can_student_be_promoted(
+                        student, 
+                        grades, 
+                        attendance_percentage
+                    )
+                    
+                    context.update({
+                        'student_grades': grades,
+                        'attendance_percentage': attendance_percentage,
+                        'can_promote': can_promote,
+                        'promotion_reason': reason,
+                        'total_subjects': grades.count(),
+                        'failed_subjects': grades.filter(total_score__lt=config.get_pass_mark_for_level(student.class_level)).count(),
+                        'average_score': grades.aggregate(Avg('total_score'))['total_score__avg'] or 0,
+                    })
+                
+            except Student.DoesNotExist:
+                messages.error(self.request, 'Student not found.')
+        
+        # Get class levels
+        context['class_levels'] = CLASS_LEVEL_CHOICES
+        
+        return context
+
+
+class PromotionListView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, ListView):
+    """View for listing all students eligible for promotion"""
+    template_name = 'core/academics/grades/promotion_list.html'
+    context_object_name = 'students'
+    
+    def get_queryset(self):
+        # Get current academic year
+        current_year = timezone.now().year
+        academic_year = f"{current_year}/{current_year + 1}"
+        
+        # Get promotion configuration
+        config = PromotionConfiguration.get_or_create_for_school()
+        
+        # Get all active students
+        students = Student.objects.filter(is_active=True).order_by('class_level', 'last_name')
+        
+        results = []
+        for student in students:
+            # Get student's grades for current year
+            grades = Grade.objects.filter(
+                student=student,
+                academic_year=academic_year
+            )
+            
+            if grades.exists():
+                # Get attendance
+                try:
+                    attendance = student.attendance_records.filter(
+                        academic_year=academic_year
+                    ).first()
+                    attendance_percentage = attendance.attendance_percentage if attendance else 0
+                except:
+                    attendance_percentage = 0
+                
+                # Check promotion eligibility
+                can_promote, reason = config.can_student_be_promoted(
+                    student, 
+                    grades, 
+                    attendance_percentage
+                )
+                
+                results.append({
+                    'student': student,
+                    'can_promote': can_promote,
+                    'reason': reason,
+                    'total_subjects': grades.count(),
+                    'failed_subjects': grades.filter(
+                        total_score__lt=config.get_pass_mark_for_level(student.class_level)
+                    ).count(),
+                    'average_score': grades.aggregate(Avg('total_score'))['total_score__avg'] or 0,
+                    'attendance_percentage': attendance_percentage,
+                })
+        
+        return results
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get promotion configuration
+        context['promotion_config'] = PromotionConfiguration.get_or_create_for_school()
+        
+        # Calculate statistics
+        eligible_count = sum(1 for s in context['students'] if s['can_promote'])
+        total_count = len(context['students'])
+        
+        context.update({
+            'eligible_count': eligible_count,
+            'total_count': total_count,
+            'current_year': timezone.now().year,
+        })
+        
+        return context
+
+
+class PromoteStudentsView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, View):
+    """View for promoting students to next class level"""
+    template_name = 'core/academics/grades/promote_students.html'
+    
+    @transaction.atomic
+    def post(self, request):
+        try:
+            student_ids = request.POST.getlist('student_ids')
+            if not student_ids:
+                messages.error(request, 'No students selected for promotion.')
+                return redirect('promotion_list')
+            
+            promoted_count = 0
+            failed_promotions = []
+            
+            for student_id in student_ids:
+                try:
+                    student = Student.objects.get(pk=student_id, is_active=True)
+                    
+                    # Promote to next class level
+                    if self.promote_student(student):
+                        promoted_count += 1
+                    else:
+                        failed_promotions.append(student.get_full_name())
+                        
+                except Student.DoesNotExist:
+                    continue
+                except Exception as e:
+                    logger.error(f"Error promoting student {student_id}: {str(e)}")
+                    failed_promotions.append(f"Student ID: {student_id}")
+            
+            if promoted_count > 0:
+                messages.success(request, f'Successfully promoted {promoted_count} student(s).')
+            
+            if failed_promotions:
+                messages.warning(
+                    request, 
+                    f'Failed to promote {len(failed_promotions)} student(s): {", ".join(failed_promotions[:5])}'
+                )
+            
+            return redirect('promotion_list')
+            
+        except Exception as e:
+            logger.error(f"Error in promote students: {str(e)}")
+            messages.error(request, 'Failed to promote students. Please try again.')
+            return redirect('promotion_list')
+    
+    def promote_student(self, student):
+        """Promote a student to the next class level"""
+        try:
+            current_class = student.class_level
+            
+            # Define promotion sequence
+            promotion_sequence = {
+                'P1': 'P2',
+                'P2': 'P3',
+                'P3': 'P4',
+                'P4': 'P5',
+                'P5': 'P6',
+                'P6': 'J1',  # Primary to JHS
+                'J1': 'J2',
+                'J2': 'J3',
+                'J3': None,  # End of basic education
+            }
+            
+            next_class = promotion_sequence.get(current_class)
+            
+            if not next_class:
+                # Student has completed highest class level
+                student.is_active = False
+                student.graduation_date = timezone.now().date()
+                student.save()
+                logger.info(f"Student {student.get_full_name()} has graduated.")
+                return True
+            
+            # Update student class level
+            student.class_level = next_class
+            student.save()
+            
+            # Log the promotion
+            AuditLog.objects.create(
+                user=self.request.user,
+                action='PROMOTION',
+                model_name='Student',
+                object_id=student.id,
+                details={
+                    'student_id': student.id,
+                    'student_name': student.get_full_name(),
+                    'from_class': current_class,
+                    'to_class': next_class,
+                    'promoted_by': self.request.user.get_full_name(),
+                    'timestamp': timezone.now().isoformat(),
+                }
+            )
+            
+            logger.info(f"Promoted student {student.get_full_name()} from {current_class} to {next_class}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to promote student {student.get_full_name()}: {str(e)}")
+            return False
+
+
+class PromotionConfigurationView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, UpdateView):
+    """View for managing promotion configuration"""
+    model = PromotionConfiguration
+    template_name = 'core/academics/grades/promotion_configuration.html'
+    fields = [
+        'primary_pass_mark',
+        'primary_must_pass_english',
+        'primary_must_pass_maths',
+        'primary_max_failed_subjects',
+        'jhs_pass_mark',
+        'jhs_must_pass_core',
+        'jhs_max_failed_electives',
+        'automatic_promotion_to_p4',
+        'require_bnce_for_jhs3',
+        'offer_remedial_classes',
+        'remedial_pass_mark',
+        'max_remedial_attempts',
+        'allow_conditional_promotion',
+        'conditional_promotion_min_attendance',
+    ]
+    success_url = reverse_lazy('promotion_config')
+    
+    def get_object(self):
+        """Get or create the promotion configuration"""
+        return PromotionConfiguration.get_or_create_for_school()
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add configuration summary
+        config = self.get_object()
+        context.update({
+            'school_config': config.school_config,
+            'is_primary': config.school_config.school_level in ['PRIMARY', 'COMBINED'],
+            'is_jhs': config.school_config.school_level in ['JHS', 'COMBINED'],
+        })
+        
+        return context
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Promotion configuration updated successfully.')
+        return super().form_valid(form)
+
+def grade_delete(request, pk):
+        """
+        Function-based wrapper for GradeDeleteView
+        Used for URL pattern: /grades/delete/<pk>/
+        """
+        return GradeDeleteView.as_view()(request, pk=pk)
+
+
+
+# Add API endpoints for grade calculations
+class CalculateWeightedTotalAPI(TwoFactorLoginRequiredMixin, View):
+    """API for calculating weighted totals in real-time"""
+    
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            # Get percentage scores
+            homework = Decimal(data.get('homework', 0))
+            classwork = Decimal(data.get('classwork', 0))
+            test = Decimal(data.get('test', 0))
+            exam = Decimal(data.get('exam', 0))
+            
+            # Get configuration
+            config = SchoolConfiguration.get_config()
+            
+            # Calculate weighted total
+            homework_contribution = homework * config.homework_weight / 100
+            classwork_contribution = classwork * config.classwork_weight / 100
+            test_contribution = test * config.test_weight / 100
+            exam_contribution = exam * config.exam_weight / 100
+            
+            total = homework_contribution + classwork_contribution + test_contribution + exam_contribution
+            
+            # Get grades
+            ges_grade = config.get_ges_grade_for_score(total)
+            letter_grade = config.get_letter_grade_for_score(total)
+            
+            return JsonResponse({
+                'success': True,
+                'total_score': float(total),
+                'ges_grade': ges_grade,
+                'letter_grade': letter_grade,
+                'is_passing': total >= config.passing_mark,
+                'contributions': {
+                    'homework': float(homework_contribution),
+                    'classwork': float(classwork_contribution),
+                    'test': float(test_contribution),
+                    'exam': float(exam_contribution)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error calculating weighted total: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid data provided'
+            }, status=400)

@@ -179,22 +179,32 @@ class ClassAssignmentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateV
             )
         else:
             messages.success(self.request, 'Class assignment created successfully!')
-        
-        # Always set the teacher - either from the form or from the current user
-        if not form.instance.teacher:
-            if is_teacher(self.request.user):
-                form.instance.teacher = self.request.user.teacher
-            else:
-                # For admins, you might want to handle this differently
-                # Maybe add the teacher field to the form for admins
-                form.add_error(None, "Teacher is required")
-                return self.form_invalid(form)
-        
+    
+        # FIX 1: Check if teacher exists BEFORE saving
+        teacher = None
+    
+        # Try to get teacher from form data first
+        if form.cleaned_data.get('teacher'):
+            teacher = form.cleaned_data['teacher']
+        # If teacher not in form data and user is a teacher, use current user's teacher
+        elif is_teacher(self.request.user):
+            teacher = self.request.user.teacher
+        # If admin and no teacher selected, show error
+        elif is_admin(self.request.user) and not teacher:
+            form.add_error('teacher', "Teacher is required for class assignment")
+            return self.form_invalid(form)
+    
+        # Set the teacher on the form instance
+        if teacher:
+            form.instance.teacher = teacher
+    
+        # FIX 2: Save the form with the teacher
         response = super().form_valid(form)
-        
+    
         # Add created parameter to redirect URL
         redirect_url = reverse_lazy('class_assignment_list') + '?created=true'
         return redirect(redirect_url)
+    
     
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')

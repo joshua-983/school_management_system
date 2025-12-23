@@ -13,7 +13,7 @@ from core.models import (
     Student, Teacher, Subject, AuditLog, ClassAssignment, 
     Assignment, StudentAssignment, Grade, Fee, ParentGuardian, 
     ParentAnnouncement, ParentMessage, Bill, BillPayment,
-    StudentAttendance, ParentEvent, AcademicTerm
+    StudentAttendance, ParentEvent, AcademicTerm, ReportCard
 )
 
 logger = logging.getLogger(__name__)

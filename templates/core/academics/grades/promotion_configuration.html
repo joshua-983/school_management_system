@@ -1,0 +1,576 @@
+{% extends 'base.html' %}
+{% load static crispy_forms_tags %}
+
+{% block title %}Promotion Configuration - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-cog me-2"></i>Promotion Configuration
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'promotion_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>Promotion List
+                    </a>
+                    <a href="{% url 'grade_configuration' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-sliders-h me-1"></i>Grade Settings
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">
+                Configure promotion rules and criteria for different school levels.
+            </p>
+        </div>
+    </div>
+
+    <!-- School Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="fas fa-school me-2"></i>School Information
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-4">School Name:</dt>
+                                <dd class="col-sm-8">{{ school_config.school_name }}</dd>
+                                
+                                <dt class="col-sm-4">School Level:</dt>
+                                <dd class="col-sm-8">{{ school_config.get_school_level_display_name }}</dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-4">Academic Year:</dt>
+                                <dd class="col-sm-8">{{ school_config.academic_year }}</dd>
+                                
+                                <dt class="col-sm-4">Grading System:</dt>
+                                <dd class="col-sm-8">{{ school_config.get_grading_system_display_name }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Configuration Form -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-edit me-2"></i>Promotion Rules Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="promotionConfigForm">
+                        {% csrf_token %}
+                        
+                        <!-- Primary School Rules -->
+                        {% if is_primary %}
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-child me-2 text-primary"></i>Primary School Rules (P1-P6)
+                                </h6>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                {{ form.primary_pass_mark|as_crispy_field }}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                {{ form.primary_max_failed_subjects|as_crispy_field }}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Mandatory Subjects</h6>
+                                        <div class="form-check mb-2">
+                                            {{ form.primary_must_pass_english }}
+                                            <label class="form-check-label" for="{{ form.primary_must_pass_english.id_for_label }}">
+                                                Must Pass English
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            {{ form.primary_must_pass_maths }}
+                                            <label class="form-check-label" for="{{ form.primary_must_pass_maths.id_for_label }}">
+                                                Must Pass Mathematics
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 mt-3">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Special Rules</h6>
+                                        <div class="form-check">
+                                            {{ form.automatic_promotion_to_p4 }}
+                                            <label class="form-check-label" for="{{ form.automatic_promotion_to_p4.id_for_label }}">
+                                                Automatic Promotion P1-P3
+                                            </label>
+                                            <small class="text-muted d-block">
+                                                Automatically promote students from P1 to P3 regardless of performance
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- JHS Rules -->
+                        {% if is_jhs %}
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-graduation-cap me-2 text-info"></i>Junior High School Rules (JHS1-JHS3)
+                                </h6>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                {{ form.jhs_pass_mark|as_crispy_field }}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                {{ form.jhs_max_failed_electives|as_crispy_field }}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Core Subjects</h6>
+                                        <div class="form-check">
+                                            {{ form.jhs_must_pass_core }}
+                                            <label class="form-check-label" for="{{ form.jhs_must_pass_core.id_for_label }}">
+                                                Must Pass Core Subjects
+                                            </label>
+                                            <small class="text-muted d-block">
+                                                Core subjects: English, Mathematics, Science, Social Studies
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 mt-3">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">BNCE Requirement</h6>
+                                        <div class="form-check">
+                                            {{ form.require_bnce_for_jhs3 }}
+                                            <label class="form-check-label" for="{{ form.require_bnce_for_jhs3.id_for_label }}">
+                                                Require BNCE for JHS3
+                                            </label>
+                                            <small class="text-muted d-block">
+                                                Basic Education Certificate required for JHS3 promotion
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Remedial Settings -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="fas fa-life-ring me-2 text-warning"></i>Remedial & Support Settings
+                                </h6>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Remedial Classes</h6>
+                                        <div class="form-check mb-3">
+                                            {{ form.offer_remedial_classes }}
+                                            <label class="form-check-label" for="{{ form.offer_remedial_classes.id_for_label }}">
+                                                Offer Remedial Classes
+                                            </label>
+                                        </div>
+                                        
+                                        {% if form.offer_remedial_classes.value %}
+                                        <div id="remedialSettings">
+                                            <div class="mb-3">
+                                                {{ form.remedial_pass_mark|as_crispy_field }}
+                                            </div>
+                                            <div class="mb-3">
+                                                {{ form.max_remedial_attempts|as_crispy_field }}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Conditional Promotion</h6>
+                                        <div class="form-check mb-3">
+                                            {{ form.allow_conditional_promotion }}
+                                            <label class="form-check-label" for="{{ form.allow_conditional_promotion.id_for_label }}">
+                                                Allow Conditional Promotion
+                                            </label>
+                                            <small class="text-muted d-block">
+                                                Allow promotion with specific conditions
+                                            </small>
+                                        </div>
+                                        
+                                        {% if form.allow_conditional_promotion.value %}
+                                        <div id="conditionalSettings">
+                                            {{ form.conditional_promotion_min_attendance|as_crispy_field }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-info-circle me-2"></i>About Remedial
+                                        </h6>
+                                        <p class="card-text small">
+                                            Remedial classes help struggling students catch up before promotion decisions.
+                                            Conditional promotion allows students with good attendance but borderline grades to advance.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Summary -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-chart-pie me-2"></i>Configuration Summary
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6>Primary School:</h6>
+                                                <ul class="list-unstyled">
+                                                    <li>
+                                                        <i class="fas fa-check-circle me-2 text-success"></i>
+                                                        Pass Mark: <strong id="primaryPassMark">{{ form.primary_pass_mark.value }}%</strong>
+                                                    </li>
+                                                    <li>
+                                                        <i class="fas fa-times-circle me-2 text-danger"></i>
+                                                        Max Failed: <strong id="primaryMaxFailed">{{ form.primary_max_failed_subjects.value }}</strong>
+                                                    </li>
+                                                    <li>
+                                                        <i class="fas fa-graduation-cap me-2 text-info"></i>
+                                                        Auto Promotion P1-P3: 
+                                                        <strong id="autoPromotion">{{ form.automatic_promotion_to_p4.value|yesno:"Yes,No" }}</strong>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6>Junior High:</h6>
+                                                <ul class="list-unstyled">
+                                                    <li>
+                                                        <i class="fas fa-check-circle me-2 text-success"></i>
+                                                        Pass Mark: <strong id="jhsPassMark">{{ form.jhs_pass_mark.value }}%</strong>
+                                                    </li>
+                                                    <li>
+                                                        <i class="fas fa-times-circle me-2 text-danger"></i>
+                                                        Max Failed Electives: <strong id="jhsMaxElectives">{{ form.jhs_max_failed_electives.value }}</strong>
+                                                    </li>
+                                                    <li>
+                                                        <i class="fas fa-certificate me-2 text-warning"></i>
+                                                        BNCE Required: 
+                                                        <strong id="bnceRequired">{{ form.require_bnce_for_jhs3.value|yesno:"Yes,No" }}</strong>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'promotion_list' %}" class="btn btn-secondary">
+                                        <i class="fas fa-times me-1"></i>Cancel
+                                    </a>
+                                    
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-primary" onclick="testPromotionRules()">
+                                            <i class="fas fa-play me-1"></i>Test Rules
+                                        </button>
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save me-1"></i>Save Configuration
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rule Examples -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Rule Examples
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title text-success">
+                                        <i class="fas fa-check-circle me-2"></i>Example 1: Eligible Student
+                                    </h6>
+                                    <p class="card-text small">
+                                        <strong>P5 Student:</strong><br>
+                                        • Average Score: 65%<br>
+                                        • English: PASS<br>
+                                        • Mathematics: PASS<br>
+                                        • Failed Subjects: 1 (out of {{ form.primary_max_failed_subjects.value }})<br>
+                                        • Attendance: 85%<br>
+                                        <span class="text-success">✓ Would be promoted</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title text-warning">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>Example 2: Conditional
+                                    </h6>
+                                    <p class="card-text small">
+                                        <strong>J2 Student:</strong><br>
+                                        • Average Score: 44%<br>
+                                        • Core Subjects: All PASS<br>
+                                        • Failed Electives: 2<br>
+                                        • Attendance: 90%<br>
+                                        {% if form.allow_conditional_promotion.value %}
+                                        <span class="text-warning">⚠ Might qualify for conditional promotion</span>
+                                        {% else %}
+                                        <span class="text-danger">✗ Would not be promoted</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title text-danger">
+                                        <i class="fas fa-times-circle me-2"></i>Example 3: Not Eligible
+                                    </h6>
+                                    <p class="card-text small">
+                                        <strong>P6 Student:</strong><br>
+                                        • Average Score: 38%<br>
+                                        • English: FAIL<br>
+                                        • Mathematics: PASS<br>
+                                        • Failed Subjects: 3<br>
+                                        • Attendance: 70%<br>
+                                        {% if form.offer_remedial_classes.value %}
+                                        <span class="text-info">ℹ Would be offered remedial classes</span>
+                                        {% else %}
+                                        <span class="text-danger">✗ Would repeat class</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-title {
+        color: var(--bs-primary);
+    }
+    .form-check-input:checked {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+    .card.bg-light {
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toggle remedial settings
+    $('#{{ form.offer_remedial_classes.id_for_label }}').change(function() {
+        if (this.checked) {
+            $('#remedialSettings').slideDown();
+        } else {
+            $('#remedialSettings').slideUp();
+        }
+    });
+    
+    // Toggle conditional settings
+    $('#{{ form.allow_conditional_promotion.id_for_label }}').change(function() {
+        if (this.checked) {
+            $('#conditionalSettings').slideDown();
+        } else {
+            $('#conditionalSettings').slideUp();
+        }
+    });
+    
+    // Update summary in real-time
+    $('input, select').on('input change', function() {
+        const fieldId = this.id;
+        const value = this.value || this.checked;
+        
+        if (fieldId === '{{ form.primary_pass_mark.id_for_label }}') {
+            $('#primaryPassMark').text(value + '%');
+        } else if (fieldId === '{{ form.primary_max_failed_subjects.id_for_label }}') {
+            $('#primaryMaxFailed').text(value);
+        } else if (fieldId === '{{ form.automatic_promotion_to_p4.id_for_label }}') {
+            $('#autoPromotion').text(value ? 'Yes' : 'No');
+        } else if (fieldId === '{{ form.jhs_pass_mark.id_for_label }}') {
+            $('#jhsPassMark').text(value + '%');
+        } else if (fieldId === '{{ form.jhs_max_failed_electives.id_for_label }}') {
+            $('#jhsMaxElectives').text(value);
+        } else if (fieldId === '{{ form.require_bnce_for_jhs3.id_for_label }}') {
+            $('#bnceRequired').text(value ? 'Yes' : 'No');
+        }
+    });
+    
+    // Test promotion rules
+    function testPromotionRules() {
+        const testCases = [
+            {
+                name: 'P5 Student - Good Performance',
+                classLevel: 'P5',
+                scores: [75, 80, 65, 70, 85, 60], // 6 subjects
+                attendance: 90,
+                englishPass: true,
+                mathsPass: true
+            },
+            {
+                name: 'J2 Student - Borderline',
+                classLevel: 'J2',
+                scores: [45, 50, 40, 55, 42, 48, 46], // 7 subjects
+                attendance: 85,
+                corePass: true
+            },
+            {
+                name: 'P6 Student - Failing English',
+                classLevel: 'P6',
+                scores: [35, 80, 70, 65, 75, 68],
+                attendance: 75,
+                englishPass: false,
+                mathsPass: true
+            }
+        ];
+        
+        let resultsHtml = '<h5>Test Results</h5><div class="row">';
+        
+        testCases.forEach((testCase, index) => {
+            // Simplified logic for demo
+            const avgScore = testCase.scores.reduce((a, b) => a + b, 0) / testCase.scores.length;
+            const failedCount = testCase.scores.filter(s => s < 40).length;
+            
+            let eligible = true;
+            let reason = 'Meets all requirements';
+            
+            if (testCase.classLevel.startsWith('P')) {
+                // Primary rules
+                if (!testCase.englishPass || !testCase.mathsPass) {
+                    eligible = false;
+                    reason = 'Failed mandatory subject (English/Maths)';
+                } else if (failedCount > {{ form.primary_max_failed_subjects.value }}) {
+                    eligible = false;
+                    reason = `Too many failed subjects (${failedCount})`;
+                } else if (avgScore < {{ form.primary_pass_mark.value }}) {
+                    eligible = false;
+                    reason = `Below pass mark (${avgScore.toFixed(1)}% < {{ form.primary_pass_mark.value }}%)`;
+                }
+            } else if (testCase.classLevel.startsWith('J')) {
+                // JHS rules
+                if (!testCase.corePass) {
+                    eligible = false;
+                    reason = 'Failed core subjects';
+                } else if (avgScore < {{ form.jhs_pass_mark.value }}) {
+                    eligible = false;
+                    reason = `Below JHS pass mark (${avgScore.toFixed(1)}% < {{ form.jhs_pass_mark.value }}%)`;
+                }
+            }
+            
+            resultsHtml += `
+                <div class="col-md-4">
+                    <div class="card ${eligible ? 'border-success' : 'border-danger'}">
+                        <div class="card-body">
+                            <h6 class="card-title ${eligible ? 'text-success' : 'text-danger'}">
+                                ${testCase.name}
+                            </h6>
+                            <p class="card-text small">
+                                <strong>Class:</strong> ${testCase.classLevel}<br>
+                                <strong>Avg Score:</strong> ${avgScore.toFixed(1)}%<br>
+                                <strong>Failed:</strong> ${failedCount} subjects<br>
+                                <strong>Attendance:</strong> ${testCase.attendance}%<br>
+                                <strong>Result:</strong> 
+                                <span class="${eligible ? 'text-success' : 'text-danger'}">
+                                    ${eligible ? 'ELIGIBLE' : 'NOT ELIGIBLE'}
+                                </span><br>
+                                <strong>Reason:</strong> ${reason}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        resultsHtml += '</div>';
+        
+        Swal.fire({
+            title: 'Promotion Rule Test',
+            html: resultsHtml,
+            icon: 'info',
+            width: 800,
+            confirmButtonText: 'OK'
+        });
+    }
+    
+    // Initialize
+    $(document).ready(function() {
+        // Hide/show sections based on initial values
+        if (!$('#{{ form.offer_remedial_classes.id_for_label }}').is(':checked')) {
+            $('#remedialSettings').hide();
+        }
+        if (!$('#{{ form.allow_conditional_promotion.id_for_label }}').is(':checked')) {
+            $('#conditionalSettings').hide();
+        }
+    });
+</script>
+{% endblock %}

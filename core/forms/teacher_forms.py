@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
+from core.models import ClassAssignment
 import logging
 import re
 
@@ -147,6 +148,8 @@ class TeacherRegistrationForm(forms.ModelForm):
         
         return teacher
 
+# In your teacher_forms.py file
+
 class ClassAssignmentForm(forms.ModelForm):
     add_qualification = forms.BooleanField(
         required=False,
@@ -156,7 +159,7 @@ class ClassAssignmentForm(forms.ModelForm):
     )
     
     class Meta:
-        # Meta without model - will be set in __new__
+        model = ClassAssignment  # IMPORTANT: Define model here, not in __new__
         fields = ['class_level', 'subject', 'teacher', 'academic_year', 'is_active']
         widgets = {
             'academic_year': forms.TextInput(attrs={
@@ -169,27 +172,30 @@ class ClassAssignmentForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
     
-    def __new__(cls, *args, **kwargs):
-        # Resolve the model when creating form instances
-        from django.apps import apps
-        cls._meta.model = apps.get_model('core', 'ClassAssignment')
-        return super().__new__(cls, *args, **kwargs)
     
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
         
+        # If teacher is logged in and creating an assignment
         if self.request and hasattr(self.request.user, 'teacher'):
-            self.fields['teacher'].queryset = Teacher.objects.filter(pk=self.request.user.teacher.pk)
-            self.fields['teacher'].initial = self.request.user.teacher
-            self.fields['teacher'].disabled = True
+            teacher = self.request.user.teacher
+            
+            # Set the teacher field to current teacher
+            self.fields['teacher'].queryset = Teacher.objects.filter(pk=teacher.pk)
+            self.fields['teacher'].initial = teacher
+            
+            # Make field readonly instead of disabled
+            self.fields['teacher'].widget.attrs['readonly'] = True
+            self.fields['teacher'].widget.attrs['class'] = 'form-control readonly-field'
+            
+            # Hide the qualification checkbox for teachers
+            self.fields['add_qualification'].widget = forms.HiddenInput()
         
+        # Set default academic year for new assignments
         if not self.instance.pk:
             current_year = timezone.now().year
             self.initial['academic_year'] = f"{current_year}/{current_year + 1}"
-            
-        if self.request and hasattr(self.request.user, 'teacher'):
-            self.fields['add_qualification'].widget = forms.HiddenInput()
 
     def clean(self):
         cleaned_data = super().clean()
@@ -199,9 +205,9 @@ class ClassAssignmentForm(forms.ModelForm):
         academic_year = cleaned_data.get('academic_year')
         add_qualification = cleaned_data.get('add_qualification', False)
         
+        # Check for duplicate assignments
         if class_level and subject and teacher and academic_year:
-            # Get model from self._meta
-            existing = self._meta.model.objects.filter(
+            existing = ClassAssignment.objects.filter(
                 class_level=class_level,
                 subject=subject,
                 teacher=teacher,
@@ -213,12 +219,14 @@ class ClassAssignmentForm(forms.ModelForm):
                     "This teacher is already assigned to teach this subject for this class level and academic year"
                 )
         
+        # Check if teacher is qualified for the subject
         if teacher and subject:
             if subject not in teacher.subjects.all():
                 self.qualification_warning = True
                 self.unqualified_subject = subject
                 self.unqualified_teacher = teacher
                 
+                # Add subject to teacher's qualifications if checkbox is checked
                 if add_qualification:
                     teacher.subjects.add(subject)
                     teacher.save()

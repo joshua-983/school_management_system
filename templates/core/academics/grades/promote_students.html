@@ -1,0 +1,446 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Promote Students - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-user-graduate me-2"></i>Confirm Student Promotion
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'promotion_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to List
+                    </a>
+                    <a href="{% url 'promotion_check' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-search me-1"></i>Check Student
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">
+                Review and confirm student promotions for the new academic year.
+            </p>
+        </div>
+    </div>
+
+    <!-- Warning -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <div class="d-flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="alert-heading">Important Notice</h5>
+                        <p class="mb-1">
+                            Student promotion is a critical administrative action. Please review all changes carefully before confirming.
+                        </p>
+                        <ul class="mb-0">
+                            <li>This action cannot be undone automatically</li>
+                            <li>Promoted students will be moved to the next class level</li>
+                            <li>Graduated students will be marked as inactive</li>
+                            <li>All promotion actions are logged for audit purposes</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promotion Summary -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clipboard-list me-2"></i>Promotion Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Promotion Details</h6>
+                            <dl class="row">
+                                <dt class="col-sm-4">Total Students:</dt>
+                                <dd class="col-sm-8">{{ students_to_promote|length }}</dd>
+                                
+                                <dt class="col-sm-4">New Class Levels:</dt>
+                                <dd class="col-sm-8">
+                                    {% regroup students_to_promote by get_new_class_level as new_classes %}
+                                    {% for class in new_classes %}
+                                    {{ class.grouper }} ({{ class.list|length }}){% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Graduating:</dt>
+                                <dd class="col-sm-8">
+                                    {% with graduates=students_to_promote|filter_by:"will_graduate" %}
+                                    {{ graduates|length }} student(s)
+                                    {% endwith %}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Effective Date:</dt>
+                                <dd class="col-sm-8">{% now "F j, Y" %}</dd>
+                                
+                                <dt class="col-sm-4">Academic Year:</dt>
+                                <dd class="col-sm-8">{{ current_year }}/{{ current_year|add:1 }}</dd>
+                            </dl>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>System Information</h6>
+                            <dl class="row">
+                                <dt class="col-sm-4">Current Year:</dt>
+                                <dd class="col-sm-8">{{ current_year }}</dd>
+                                
+                                <dt class="col-sm-4">Promoted By:</dt>
+                                <dd class="col-sm-8">{{ user.get_full_name }}</dd>
+                                
+                                <dt class="col-sm-4">Timestamp:</dt>
+                                <dd class="col-sm-8">{% now "F j, Y H:i:s" %}</dd>
+                                
+                                <dt class="col-sm-4">Audit Log:</dt>
+                                <dd class="col-sm-8">Will be created for each promotion</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Students List -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0 d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas fa-users me-2"></i>
+                            Students to Promote ({{ students_to_promote|length }})
+                        </span>
+                        <span class="badge bg-primary">
+                            Review All Changes Below
+                        </span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if students_to_promote %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Student</th>
+                                    <th>Current Class</th>
+                                    <th>New Class</th>
+                                    <th>Avg. Score</th>
+                                    <th>Status</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student_data in students_to_promote %}
+                                <tr class="{% if student_data.will_graduate %}table-success{% else %}table-info{% endif %}">
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar avatar-sm bg-primary rounded-circle me-2">
+                                                <span class="text-white">{{ student_data.student.get_initials }}</span>
+                                            </div>
+                                            <div>
+                                                <strong>{{ student_data.student.get_full_name }}</strong>
+                                                <br>
+                                                <small class="text-muted">{{ student_data.student.student_id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ student_data.student.get_class_level_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if student_data.will_graduate %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-graduation-cap me-1"></i>GRADUATE
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-primary">
+                                            {{ student_data.get_new_class_level_display }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if student_data.average_score >= 60 %}bg-success
+                                            {% elif student_data.average_score >= 40 %}bg-warning
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ student_data.average_score|floatformat:2 }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if student_data.will_graduate %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-graduation-cap me-1"></i>Graduating
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-primary">
+                                            <i class="fas fa-arrow-right me-1"></i>Promoting
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if student_data.will_graduate %}
+                                        <small class="text-success">
+                                            <i class="fas fa-check-circle me-1"></i>
+                                            Will graduate and become inactive
+                                        </small>
+                                        {% else %}
+                                        <small class="text-primary">
+                                            <i class="fas fa-arrow-right me-1"></i>
+                                            Moving to {{ student_data.get_new_class_level_display }}
+                                        </small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-user-graduate fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Students Selected</h5>
+                        <p class="text-muted">No students have been selected for promotion.</p>
+                        <a href="{% url 'promotion_list' %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Promotion List
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation -->
+    {% if students_to_promote %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle me-2"></i>Final Confirmation
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <div class="d-flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle fa-2x"></i>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h5 class="alert-heading">This Action Cannot Be Undone</h5>
+                                <p class="mb-1">
+                                    By confirming this promotion, you acknowledge that:
+                                </p>
+                                <ul>
+                                    <li>{{ students_to_promote|length }} student(s) will be promoted/graduated</li>
+                                    <li>All changes are permanent and will affect class registers</li>
+                                    <li>This action will be logged for audit purposes</li>
+                                    <li>You are responsible for verifying all student data</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Confirmation Checkboxes -->
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="confirmChanges" 
+                               onchange="updateConfirmButton()">
+                        <label class="form-check-label" for="confirmChanges">
+                            <strong>I have verified all student information is correct</strong>
+                        </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="confirmIrreversible" 
+                               onchange="updateConfirmButton()">
+                        <label class="form-check-label" for="confirmIrreversible">
+                            <strong>I understand this action is irreversible</strong>
+                        </label>
+                    </div>
+                    
+                    <div class="form-check mb-4">
+                        <input type="checkbox" class="form-check-input" id="confirmResponsibility" 
+                               onchange="updateConfirmButton()">
+                        <label class="form-check-label" for="confirmResponsibility">
+                            <strong>I take full responsibility for these promotions</strong>
+                        </label>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'promotion_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel Promotion
+                        </a>
+                        
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-outline-primary" 
+                                    onclick="printPromotionList()">
+                                <i class="fas fa-print me-1"></i>Print Summary
+                            </button>
+                            
+                            <form method="post" action="{% url 'promote_students' %}" class="d-inline">
+                                {% csrf_token %}
+                                {% for student_data in students_to_promote %}
+                                <input type="hidden" name="student_ids" value="{{ student_data.student.id }}">
+                                {% endfor %}
+                                <button type="submit" id="confirmButton" class="btn btn-success" disabled>
+                                    <i class="fas fa-user-graduate me-1"></i>
+                                    Confirm Promotion of {{ students_to_promote|length }} Student(s)
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+    }
+    .avatar-sm {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+    .form-check-input:checked {
+        background-color: var(--bs-danger);
+        border-color: var(--bs-danger);
+    }
+    .form-check-label {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Update confirm button state
+    function updateConfirmButton() {
+        const confirmChanges = document.getElementById('confirmChanges');
+        const confirmIrreversible = document.getElementById('confirmIrreversible');
+        const confirmResponsibility = document.getElementById('confirmResponsibility');
+        const confirmButton = document.getElementById('confirmButton');
+        
+        confirmButton.disabled = !(confirmChanges.checked && 
+                                   confirmIrreversible.checked && 
+                                   confirmResponsibility.checked);
+    }
+    
+    // Print promotion list
+    function printPromotionList() {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Promotion Summary - {% now "F j, Y" %}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                    th { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+                    td { border: 1px solid #dee2e6; padding: 8px; }
+                    .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }
+                    .bg-primary { background-color: #3498db; color: white; }
+                    .bg-secondary { background-color: #95a5a6; color: white; }
+                    .bg-success { background-color: #27ae60; color: white; }
+                    .bg-danger { background-color: #e74c3c; color: white; }
+                    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 0.9em; }
+                </style>
+            </head>
+            <body>
+                <h1>Student Promotion Summary</h1>
+                <p><strong>Date:</strong> {% now "F j, Y" %}</p>
+                <p><strong>Total Students:</strong> {{ students_to_promote|length }}</p>
+                <p><strong>Promoted By:</strong> {{ user.get_full_name }}</p>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th>Student ID</th>
+                            <th>Current Class</th>
+                            <th>New Class</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student_data in students_to_promote %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ student_data.student.get_full_name }}</td>
+                            <td>{{ student_data.student.student_id }}</td>
+                            <td>{{ student_data.student.get_class_level_display }}</td>
+                            <td>
+                                {% if student_data.will_graduate %}
+                                GRADUATE
+                                {% else %}
+                                {{ student_data.get_new_class_level_display }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if student_data.will_graduate %}
+                                Graduating
+                                {% else %}
+                                Promoting
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                
+                <div class="footer">
+                    <p><strong>School:</strong> {{ school_config.school_name }}</p>
+                    <p><strong>Academic Year:</strong> {{ current_year }}/{{ current_year|add:1 }}</p>
+                    <p><strong>Generated:</strong> {% now "F j, Y H:i:s" %}</p>
+                </div>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+    
+    // Confirm on submit
+    document.addEventListener('DOMContentLoaded', function() {
+        const confirmForm = document.querySelector('form[action="{% url 'promote_students' %}"]');
+        if (confirmForm) {
+            confirmForm.addEventListener('submit', function(e) {
+                if (!confirm('Are you absolutely sure you want to proceed with these promotions? This is your final confirmation.')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

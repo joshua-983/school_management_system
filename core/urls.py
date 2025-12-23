@@ -11,6 +11,7 @@ from .views.fee_views import ClearImportResultsView
 
 from . import views_group_management
 from core.models import Teacher
+from .views.grade_views import student_subject_grades
 
 from django.views.generic import RedirectView, TemplateView
 from .api_views import (
@@ -99,19 +100,26 @@ from .views.assignment_views import (
 )
 
 # ==============================
-# GRADE VIEWS IMPORTS
+# GRADE VIEWS IMPORTS - CORRECTED
 # ==============================
 from .views.grade_views import (
     # Main Grade Views
     GradeListView, GradeDetailView, GradeCreateView, GradeUpdateView, GradeDeleteView,
-    GradeEntryView, GradeReportView, BestStudentsView, GradingQueueView,
+    GradeEntryView, GradeReportView, BestStudentsView,
+    
+    # Promotion Views
+    PromotionListView, PromotionCheckView, PromoteStudentsView, PromotionConfigurationView,
     
     # Bulk Operations
     BulkGradeUploadView, GradeUploadTemplateView, BulkUploadProgressAPI,
+    GradeConfigurationView,
     
     # API & Utility Views
     CalculateGradeAPI, calculate_total_score, check_existing_grade,
-    get_students_by_class, get_subjects_by_class, student_grade_summary,
+    get_students_by_class, get_subjects_by_class,
+    
+    # Student Grade Summary API
+    StudentGradeSummaryAPI,
     
     # Grade Management Actions
     lock_grade, unlock_grade, mark_grade_for_review, clear_grade_review,
@@ -119,12 +127,17 @@ from .views.grade_views import (
     # Export View
     GradeExportView,
     
-    # Legacy/Compatibility
-    grade_delete,
+    # Advanced Views
+    GradingQueueView, GradeCalculatorView,
     
-    # Missing API views - Add these
-    GradeValidationAPI, GradeStatisticsAPI, ClearGradeCacheView
+    # API Views
+    GradeValidationAPI, GradeStatisticsAPI, ClearGradeCacheView,
+    
+    # Function-based views (Add these)
+    grade_delete,
+    student_subject_grades,
 )
+
 
 # REPORT CARD VIEWS IMPORTS
 # ==============================
@@ -476,48 +489,76 @@ urlpatterns = [
         path('<int:pk>/export/', AssignmentExportView.as_view(), name='assignment_export'),
         path('<int:pk>/bulk-grade/', BulkGradeAssignmentView.as_view(), name='bulk_grade_assignment'),
     ])),
-    
+
+
     # ==============================
-    # GRADE MANAGEMENT URLS
+    # GRADE MANAGEMENT URLS - COMPLETE & CORRECTED
     # ==============================
     path('grades/', include([
+        # Main grade management paths
         path('', GradeListView.as_view(), name='grade_list'),
         path('add/', GradeEntryView.as_view(), name='grade_add'),
         path('<int:pk>/', GradeDetailView.as_view(), name='grade_detail'),
         path('<int:pk>/edit/', GradeUpdateView.as_view(), name='grade_edit'),
         path('<int:pk>/delete/', GradeDeleteView.as_view(), name='grade_delete'),
-        path('delete/<int:pk>/', grade_delete, name='grade_delete_legacy'),
+        path('delete/<int:pk>/', GradeDeleteView.as_view(), name='grade_delete_legacy'),
         path('report/', GradeReportView.as_view(), name='grade_report'),
         path('best-students/', BestStudentsView.as_view(), name='best_students'),
+
+        # Bulk operations
         path('bulk-upload/', BulkGradeUploadView.as_view(), name='grade_bulk_upload'),
         path('upload-template/', GradeUploadTemplateView.as_view(), name='grade_upload_template'),
         path('export/', GradeExportView.as_view(), name='export_grades'),
+
+        # Grade management actions
         path('<int:pk>/lock/', lock_grade, name='lock_grade'),
         path('<int:pk>/unlock/', unlock_grade, name='unlock_grade'),
         path('<int:pk>/mark-review/', mark_grade_for_review, name='mark_grade_review'),
         path('<int:pk>/clear-review/', clear_grade_review, name='clear_grade_review'),
+        # Utility endpoints
         path('calculate-total/', calculate_total_score, name='calculate_total_score'),
         path('check-existing/', check_existing_grade, name='check_existing_grade'),
         path('students-by-class/', get_students_by_class, name='get_students_by_class'),
         path('subjects-by-class/', get_subjects_by_class, name='get_subjects_by_class'),
-        path('validate/', GradeValidationAPI.as_view(), name='grade_validate'),
-        path('statistics/', GradeStatisticsAPI.as_view(), name='grade_statistics'),
-        path('clear-cache/', ClearGradeCacheView.as_view(), name='clear_grade_cache'),
+        # ==============================
+        # GRADE API ENDPOINTS - CORRECTED
+        # ==============================
+        path('api/', include([
+            path('calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
+            path('students-by-class/', get_students_by_class, name='api_students_by_class'),
+            path('subjects-by-class/', get_subjects_by_class, name='api_subjects_by_class'),
+            path('validate/', GradeValidationAPI.as_view(), name='grade_validate'),
+            path('statistics/', GradeStatisticsAPI.as_view(), name='grade_statistics'),
+            path('student-subject-grades/<int:student_id>/', student_subject_grades, name='student_subject_grades'),
+        
+            # MAIN STUDENT GRADE SUMMARY API (for best_students.html modal)
+            path('student-grade-summary/<int:student_id>/', StudentGradeSummaryAPI.as_view(), name='student_grade_summary_api'),
+
+            # Bulk upload progress API
+            path('bulk-upload/progress/', BulkUploadProgressAPI.as_view(), name='bulk_upload_progress'),
+        ])),
+        # Advanced grade management
         path('queue/', GradingQueueView.as_view(), name='grading_queue'),
+        path('configuration/', GradeConfigurationView.as_view(), name='grade_configuration'),
+        path('calculator/', GradeCalculatorView.as_view(), name='grade_calculator'),
+
+        # Cache management
+        path('clear-cache/', ClearGradeCacheView.as_view(), name='clear_grade_cache'),
     ])),
-    
-    # Grade API endpoints
-    path('api/grades/', include([
-        path('calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
-        path('student-grade-summary/<int:student_id>/', student_grade_summary, name='student_grade_summary'),
-        path('students-by-class/', get_students_by_class, name='api_students_by_class'),
-    ])),
-    
-    # Bulk upload progress API
-    path('grades/bulk-upload/progress/', BulkUploadProgressAPI.as_view(), name='bulk_upload_progress'),
-    
+
     # ==============================
-    # REPORT CARD URLS
+    # PROMOTION MANAGEMENT URLS (SEPARATE SECTION)
+    # ==============================
+    path('promotion/', include([
+        path('', PromotionListView.as_view(), name='promotion_list'),
+        path('check/', PromotionCheckView.as_view(), name='promotion_check'),
+        path('promote/', PromoteStudentsView.as_view(), name='promote_students'),
+        path('configuration/', PromotionConfigurationView.as_view(), name='promotion_config'),
+    ])),
+
+
+    # ==============================
+    # REPORT CARD URLS - COMPLETE
     # ==============================
     path('report-cards/', include([
         path('', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
@@ -530,6 +571,8 @@ urlpatterns = [
         # Quick View
         path('quick-view/', QuickViewReportCardView.as_view(), name='quick_view_report_card'),
         path('quick-view/pdf/', QuickViewReportCardPDFView.as_view(), name='quick_view_report_card_pdf'),
+        # Grade Management
+        path('<int:report_card_id>/edit-grades/', GradeEntryView.as_view(), name='grade_edit_report_card'),
     ])),
     
     # ==============================

@@ -1,0 +1,464 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Promotion Check - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-user-graduate me-2"></i>Promotion Eligibility Check
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'promotion_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>View All Students
+                    </a>
+                    <a href="{% url 'promotion_config' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-cog me-1"></i>Configuration
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">
+                Check individual student promotion eligibility based on current academic performance.
+            </p>
+        </div>
+    </div>
+
+    <!-- Search Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-search me-2"></i>Select Student
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Class Level</label>
+                            <select name="class_level" id="classSelect" class="form-select" required
+                                    onchange="loadStudents(this.value)">
+                                <option value="">Select Class Level</option>
+                                {% for code, name in class_levels %}
+                                <option value="{{ code }}" 
+                                        {% if code == selected_class %}selected{% endif %}>
+                                    {{ name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">Student</label>
+                            <select name="student" id="studentSelect" class="form-select" required
+                                    {% if not selected_class %}disabled{% endif %}>
+                                <option value="">Select Student</option>
+                                {% for student in students %}
+                                <option value="{{ student.id }}" 
+                                        {% if student.id == selected_student.id %}selected{% endif %}>
+                                    {{ student.get_full_name }} ({{ student.student_id }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-check-circle me-1"></i>Check Eligibility
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    {% if selected_class and not students %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No active students found in {{ selected_class|upper }}. Please select another class level.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    {% if selected_student %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0 d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Promotion Analysis for {{ selected_student.get_full_name }}
+                        </span>
+                        <span class="badge {% if can_promote %}bg-success{% else %}bg-danger{% endif %} fs-6">
+                            {% if can_promote %}
+                            <i class="fas fa-check me-1"></i>ELIGIBLE FOR PROMOTION
+                            {% else %}
+                            <i class="fas fa-times me-1"></i>NOT ELIGIBLE
+                            {% endif %}
+                        </span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Student Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="avatar avatar-xl bg-primary rounded-circle mb-2 mx-auto">
+                                    <span class="text-white">{{ selected_student.get_initials }}</span>
+                                </div>
+                                <h5>{{ selected_student.get_full_name }}</h5>
+                                <p class="text-muted mb-0">{{ selected_student.student_id }}</p>
+                                <span class="badge bg-info">{{ selected_student.get_class_level_display }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-9">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Average Score</h6>
+                                            <h3 class="mb-0 {% if average_score >= 50 %}text-success{% elif average_score >= 40 %}text-warning{% else %}text-danger{% endif %}">
+                                                {{ average_score|floatformat:2 }}%
+                                            </h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Subjects Taken</h6>
+                                            <h3 class="mb-0 text-primary">{{ total_subjects }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <div class="card {% if failed_subjects == 0 %}bg-success text-white{% else %}bg-light{% endif %}">
+                                        <div class="card-body text-center">
+                                            <h6 class="{% if failed_subjects == 0 %}text-white-50{% else %}text-muted{% endif %}">
+                                                Failed Subjects
+                                            </h6>
+                                            <h3 class="mb-0 {% if failed_subjects == 0 %}text-white{% else %}text-danger{% endif %}">
+                                                {{ failed_subjects }}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {% if attendance_percentage > 0 %}
+                                <div class="col-md-4 mt-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Attendance</h6>
+                                            <h3 class="mb-0 
+                                                {% if attendance_percentage >= 80 %}text-success
+                                                {% elif attendance_percentage >= 70 %}text-warning
+                                                {% else %}text-danger{% endif %}">
+                                                {{ attendance_percentage|floatformat:1 }}%
+                                            </h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Promotion Decision -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="alert {% if can_promote %}alert-success{% else %}alert-danger{% endif %}">
+                                <div class="d-flex">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas {% if can_promote %}fa-check-circle{% else %}fa-exclamation-triangle{% endif %} fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <h5 class="alert-heading">
+                                            {% if can_promote %}Eligible for Promotion{% else %}Not Eligible for Promotion{% endif %}
+                                        </h5>
+                                        <p class="mb-0">{{ promotion_reason }}</p>
+                                        
+                                        {% if not can_promote and promotion_config.offer_remedial_classes %}
+                                        <hr>
+                                        <p class="mb-0">
+                                            <strong>Remedial Option:</strong> 
+                                            This student may be eligible for remedial classes to improve performance.
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subject Grades -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-book me-2"></i>Subject Performance
+                            </h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Subject</th>
+                                            <th>Score</th>
+                                            <th>Grade</th>
+                                            <th>Status</th>
+                                            <th>Required</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for grade in student_grades %}
+                                        {% with class_level=selected_student.class_level subject_lower=grade.subject.name|lower %}
+                                            {# Calculate pass mark based on class level #}
+                                            {% if class_level|in_list:"P1,P2,P3,P4,P5,P6" %}
+                                                {% with pass_mark=promotion_config.primary_pass_mark %}
+                                                <tr class="{% if grade.total_score < pass_mark %}table-danger{% elif grade.total_score >= 60 %}table-success{% endif %}">
+                                                    <td>{{ grade.subject.name }}</td>
+                                                    <td>
+                                                        <strong>{{ grade.total_score|floatformat:2 }}%</strong>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= 80 %}bg-success
+                                                            {% elif grade.total_score >= 60 %}bg-info
+                                                            {% elif grade.total_score >= 40 %}bg-warning
+                                                            {% else %}bg-danger{% endif %}">
+                                                            {{ grade.get_display_grade }}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                bg-success
+                                                            {% else %}
+                                                                bg-danger
+                                                            {% endif %}">
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                PASS
+                                                            {% else %}
+                                                                FAIL
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        {% if subject_lower == 'english' and promotion_config.primary_must_pass_english %}
+                                                            <span class="badge bg-danger">Must Pass</span>
+                                                        {% elif subject_lower|in_list:"mathematics,maths,math" and promotion_config.primary_must_pass_maths %}
+                                                            <span class="badge bg-danger">Must Pass</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">Elective</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endwith %}
+                                            {% elif class_level|in_list:"J1,J2,J3" %}
+                                                {% with pass_mark=promotion_config.jhs_pass_mark %}
+                                                <tr class="{% if grade.total_score < pass_mark %}table-danger{% elif grade.total_score >= 60 %}table-success{% endif %}">
+                                                    <td>{{ grade.subject.name }}</td>
+                                                    <td>
+                                                        <strong>{{ grade.total_score|floatformat:2 }}%</strong>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= 80 %}bg-success
+                                                            {% elif grade.total_score >= 60 %}bg-info
+                                                            {% elif grade.total_score >= 40 %}bg-warning
+                                                            {% else %}bg-danger{% endif %}">
+                                                            {{ grade.get_display_grade }}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                bg-success
+                                                            {% else %}
+                                                                bg-danger
+                                                            {% endif %}">
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                PASS
+                                                            {% else %}
+                                                                FAIL
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        {% if subject_lower|in_list:"english,mathematics,maths,math,science,social studies" and promotion_config.jhs_must_pass_core %}
+                                                            <span class="badge bg-danger">Core Subject</span>
+                                                        {% else %}
+                                                            <span class="badge bg-secondary">Elective</span>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endwith %}
+                                            {% else %}
+                                                {% with pass_mark=40 %}
+                                                <tr class="{% if grade.total_score < pass_mark %}table-danger{% elif grade.total_score >= 60 %}table-success{% endif %}">
+                                                    <td>{{ grade.subject.name }}</td>
+                                                    <td>
+                                                        <strong>{{ grade.total_score|floatformat:2 }}%</strong>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= 80 %}bg-success
+                                                            {% elif grade.total_score >= 60 %}bg-info
+                                                            {% elif grade.total_score >= 40 %}bg-warning
+                                                            {% else %}bg-danger{% endif %}">
+                                                            {{ grade.get_display_grade }}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge 
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                bg-success
+                                                            {% else %}
+                                                                bg-danger
+                                                            {% endif %}">
+                                                            {% if grade.total_score >= pass_mark %}
+                                                                PASS
+                                                            {% else %}
+                                                                FAIL
+                                                            {% endif %}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-secondary">Elective</span>
+                                                    </td>
+                                                </tr>
+                                                {% endwith %}
+                                            {% endif %}
+                                        {% endwith %}
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-4">
+                                                <i class="fas fa-book fa-2x mb-2"></i>
+                                                <p>No grades recorded for this student.</p>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'grade_list' %}?student={{ selected_student.id }}" 
+                                   class="btn btn-outline-primary">
+                                    <i class="fas fa-eye me-1"></i>View All Grades
+                                </a>
+                                
+                                <div class="btn-group">
+                                    {% if can_promote %}
+                                    <form method="post" action="{% url 'promote_students' %}" 
+                                          onsubmit="return confirm('Promote {{ selected_student.get_full_name }} to next class level?')">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="student_ids" value="{{ selected_student.id }}">
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-user-graduate me-1"></i>Promote Student
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    
+                                    <a href="{% url 'promotion_list' %}?class_level={{ selected_student.class_level }}" 
+                                       class="btn btn-outline-secondary">
+                                        <i class="fas fa-list me-1"></i>View Class List
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif request.GET.class_level %}
+    <!-- No student selected but class selected -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-user-graduate fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">Select a Student to Check</h5>
+                    <p class="text-muted">Choose a student from the dropdown above to analyze their promotion eligibility.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+    .avatar-xl {
+        width: 80px;
+        height: 80px;
+        font-size: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function loadStudents(classLevel) {
+        if (classLevel) {
+            // Enable student select
+            $('#studentSelect').prop('disabled', false);
+            
+            // Load students for this class via AJAX
+            $.ajax({
+                url: '{% url "get_students_by_class" %}',
+                data: { class_level: classLevel },
+                success: function(data) {
+                    const studentSelect = $('#studentSelect');
+                    studentSelect.empty();
+                    studentSelect.append('<option value="">Select Student</option>');
+                    
+                    data.forEach(function(student) {
+                        studentSelect.append(new Option(
+                            `${student.first_name} ${student.last_name} (${student.student_id})`,
+                            student.id
+                        ));
+                    });
+                }
+            });
+        } else {
+            $('#studentSelect').prop('disabled', true).empty();
+            $('#studentSelect').append('<option value="">Select Student</option>');
+        }
+    }
+    
+    // Initialize if class already selected
+    $(document).ready(function() {
+        const classLevel = $('#classSelect').val();
+        if (classLevel) {
+            loadStudents(classLevel);
+        }
+    });
+</script>
+{% endblock %}

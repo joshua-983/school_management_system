@@ -2,6 +2,8 @@
 Models package initialization.
 Exports all models for backward compatibility.
 """
+from .grades import Grade
+from .report_card import ReportCard 
 
 # Import base classes and constants
 from .base import (
@@ -43,11 +45,7 @@ from .attendance import (
     AttendanceSummary,
 )
 
-# Import grade models
-from .grades import (
-    Grade,
-    ReportCard,
-)
+
 
 # Import assignment models
 from .assignments import (
@@ -103,13 +101,14 @@ from .analytics import (
 
 )
 
-# Import configuration models
+# Correct - singular
 from .configuration import (
     SchoolConfiguration,
     MaintenanceMode,
     ScheduledMaintenance,
+    ReportCardConfiguration,
+    PromotionConfiguration,
 )
-
 # Import budget models (ADD THIS - these are the correct Budget and Expense models)
 from .budget_models import (
     Budget,

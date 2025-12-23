@@ -1,5 +1,11 @@
-from django.db.models import Avg, Count, Q  # ADDED Q import
-from django.views.generic import TemplateView, CreateView, View
+"""
+Report Card Views - Complete implementation with all fixes
+"""
+import re
+import logging
+from datetime import datetime
+from django.db.models import Avg, Count, Q
+from django.views.generic import TemplateView, CreateView, View, FormView
 from django.urls import reverse_lazy, reverse
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.shortcuts import render, redirect, get_object_or_404
@@ -8,30 +14,54 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.utils import timezone
 from django.http import HttpResponse, Http404, JsonResponse
-import re
-import logging
+
+# ReportLab for PDF generation
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
-from datetime import datetime
 
-from ..models import (
-    ReportCard, Student, Subject, Grade, StudentAttendance, AcademicTerm, 
+# Import utils from core.utils
+from core.utils import (
+    is_admin, is_teacher, is_student, is_parent,
+    calculate_letter_grade, get_current_academic_year,
+    get_grade_color, get_performance_level, format_date,
+    calculate_total_score, validate_academic_year,
+    check_report_card_permission, can_edit_grades,
+    get_student_position_in_class, get_attendance_summary,
+    get_class_level_display
+)
+
+# Import models
+from core.models.report_card import ReportCard
+from core.models.grades import Grade
+from core.models import (
+    Student, Subject, StudentAttendance, AcademicTerm,
     ClassAssignment, SchoolConfiguration
 )
-from .base_views import is_student, is_teacher, is_admin
-from ..forms import ReportCardGenerationForm, ReportCardFilterForm
+
+# Import forms
+from core.forms import ReportCardGenerationForm, ReportCardFilterForm
 
 logger = logging.getLogger(__name__)
 
+
 class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
+    """
+    Dashboard view for managing report cards
+    """
     template_name = 'core/academics/report_cards/report_card_dashboard.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Debug logging
+        logger.debug(f"Dashboard - User: {self.request.user}")
+        logger.debug(f"Dashboard - Is teacher: {is_teacher(self.request.user)}")
+        logger.debug(f"Dashboard - Is admin: {is_admin(self.request.user)}")
+        logger.debug(f"Dashboard - Is student: {is_student(self.request.user)}")
         
         # Get report cards based on user role
         if is_student(self.request.user):
@@ -39,32 +69,47 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
             report_cards = ReportCard.objects.filter(
                 student=student
             ).select_related('student').order_by('-academic_year', '-term')
+            
+            # Student can only see published report cards
+            report_cards = report_cards.filter(is_published=True)
         
         elif is_teacher(self.request.user):
-            # Get classes this teacher teaches
-            teacher_classes = ClassAssignment.objects.filter(
-                teacher=self.request.user.teacher
-            ).values_list('class_level', flat=True)
-            
-            # Get report cards for students in those classes
-            report_cards = ReportCard.objects.filter(
-                student__class_level__in=teacher_classes
-            ).select_related('student').order_by('-academic_year', '-term')
-            
-            # FIXED: Add teacher's students for quick view modal - PROPER QUERYSET
-            context['teacher_students'] = Student.objects.filter(
-                class_level__in=teacher_classes,
-                is_active=True
-            ).order_by('class_level', 'last_name', 'first_name')
+            try:
+                # Get classes this teacher teaches
+                teacher_classes = ClassAssignment.objects.filter(
+                    teacher=self.request.user.teacher
+                ).values_list('class_level', flat=True).distinct()
+                
+                logger.debug(f"Teacher classes: {list(teacher_classes)}")
+                
+                # Get report cards for students in those classes
+                report_cards = ReportCard.objects.filter(
+                    student__class_level__in=teacher_classes
+                ).select_related('student').order_by('-academic_year', '-term')
+                
+                # Add teacher's students for quick view modal
+                context['teacher_students'] = Student.objects.filter(
+                    class_level__in=teacher_classes,
+                    is_active=True
+                ).order_by('class_level', 'last_name', 'first_name')
+                
+                logger.debug(f"Teacher students count: {context['teacher_students'].count()}")
+                
+            except Exception as e:
+                logger.error(f"Error getting teacher data: {e}")
+                report_cards = ReportCard.objects.none()
+                context['teacher_students'] = Student.objects.none()
         
         else:
             # Admin or other users see all report cards
             report_cards = ReportCard.objects.all().select_related('student').order_by('-academic_year', '-term')
             
-            # FIXED: Add all students for quick view modal - PROPER QUERYSET
+            # Add all students for quick view modal
             context['all_students'] = Student.objects.filter(
                 is_active=True
             ).order_by('class_level', 'last_name', 'first_name')
+            
+            logger.debug(f"All students count: {context['all_students'].count()}")
         
         # Apply filters from GET parameters
         academic_year = self.request.GET.get('academic_year')
@@ -74,6 +119,8 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
         search = self.request.GET.get('search')
         grade_range = self.request.GET.get('grade_range')
         sort_by = self.request.GET.get('sort_by')
+        
+        logger.debug(f"Filters - Year: {academic_year}, Term: {term}, Class: {class_level}, Status: {status}")
         
         if academic_year:
             report_cards = report_cards.filter(academic_year=academic_year)
@@ -136,10 +183,13 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
         current_academic_year = f"{current_year}/{current_year + 1}"
         current_term_count = report_cards.filter(
             academic_year=current_academic_year,
-            term=2  # You can make this dynamic based on current date
+            term=2  # Default to term 2
         ).count()
         
-        # FIXED: Ensure student lists are always available for the modal
+        logger.debug(f"Report cards count: {total_count}")
+        logger.debug(f"Avg score: {avg_score}")
+        
+        # Ensure student lists are always available for the modal
         if 'teacher_students' not in context and 'all_students' not in context:
             # Fallback: provide at least some students
             if is_teacher(self.request.user):
@@ -157,6 +207,7 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
         except EmptyPage:
             report_cards_page = paginator.page(paginator.num_pages)
         
+        # Add context data
         context.update({
             'report_cards': report_cards_page,
             'total_count': total_count,
@@ -168,12 +219,17 @@ class ReportCardDashboardView(LoginRequiredMixin, TemplateView):
             'is_teacher': is_teacher(self.request.user),
             'is_admin': is_admin(self.request.user),
             'is_student': is_student(self.request.user),
+            'is_parent': is_parent(self.request.user),
+            'current_academic_year': get_current_academic_year(),
         })
         
         return context
 
+
 class QuickViewReportCardView(LoginRequiredMixin, View):
-    """Quick view report card - redirects to the EDITABLE detailed view"""
+    """
+    Quick view report card - redirects to the detailed view
+    """
     
     def get(self, request):
         student_id = request.GET.get('student_id')
@@ -181,7 +237,7 @@ class QuickViewReportCardView(LoginRequiredMixin, View):
         term = request.GET.get('term')
         view_type = request.GET.get('view_type', 'web')
         
-        print(f"DEBUG QuickView: student_id={student_id}, academic_year={academic_year}, term={term}, view_type={view_type}")
+        logger.debug(f"QuickView: student_id={student_id}, academic_year={academic_year}, term={term}, view_type={view_type}")
         
         if not all([student_id, academic_year, term]):
             messages.error(request, 'Please select student, academic year, and term')
@@ -190,15 +246,9 @@ class QuickViewReportCardView(LoginRequiredMixin, View):
         try:
             student = Student.objects.get(pk=student_id)
             
-            # Check permissions
-            if is_student(request.user) and request.user.student != student:
-                raise PermissionDenied("You can only view your own report cards")
-            elif is_teacher(request.user):
-                if not ClassAssignment.objects.filter(
-                    class_level=student.class_level,
-                    teacher=request.user.teacher
-                ).exists():
-                    raise PermissionDenied("You can only view report cards for your assigned classes")
+            # Check permissions using utils
+            if not check_report_card_permission(request.user, student):
+                raise PermissionDenied("You don't have permission to view this report card")
             
             # Try to find existing report card
             report_card = ReportCard.objects.filter(
@@ -207,7 +257,7 @@ class QuickViewReportCardView(LoginRequiredMixin, View):
                 term=term
             ).first()
             
-            print(f"DEBUG QuickView: Found report_card = {report_card}")
+            logger.debug(f"QuickView: Found report_card = {report_card}")
             
             if view_type == 'pdf':
                 # Handle PDF view
@@ -222,11 +272,11 @@ class QuickViewReportCardView(LoginRequiredMixin, View):
                     # Existing report card - go to detail view
                     return redirect('report_card_detail', student_id=student_id, report_card_id=report_card.id)
                 else:
-                    # No existing report card - go to preview mode using the report_card URL
+                    # No existing report card - go to preview mode
                     base_url = reverse('report_card', kwargs={'student_id': student_id})
-                    params = f'academic_year={academic_year}&term={term}&preview=true&create_new=true'
+                    params = f'academic_year={academic_year}&term={term}&preview=true'
                     redirect_url = f'{base_url}?{params}'
-                    print(f"DEBUG QuickView: No existing report card, redirecting to preview: {redirect_url}")
+                    logger.debug(f"QuickView: No existing report card, redirecting to preview: {redirect_url}")
                     return redirect(redirect_url)
                 
         except Student.DoesNotExist:
@@ -236,61 +286,15 @@ class QuickViewReportCardView(LoginRequiredMixin, View):
             messages.error(request, str(e))
             return redirect('report_card_dashboard')
         except Exception as e:
-            logger.error(f"Quick view error: {str(e)}")
+            logger.error(f"Quick view error: {str(e)}", exc_info=True)
             messages.error(request, f'Error viewing report card: {str(e)}')
             return redirect('report_card_dashboard')
 
 
-class QuickViewReportCardPDFView(LoginRequiredMixin, View):
-    """Quick view report card as PDF download"""
-    
-    def get(self, request):
-        student_id = request.GET.get('student_id')
-        academic_year = request.GET.get('academic_year')
-        term = request.GET.get('term')
-        
-        if not all([student_id, academic_year, term]):
-            messages.error(request, 'Please select student, academic year, and term')
-            return redirect('report_card_dashboard')
-        
-        try:
-            student = Student.objects.get(pk=student_id)
-            
-            # Check permissions
-            if is_student(request.user) and request.user.student != student:
-                raise PermissionDenied("You can only view your own report cards")
-            elif is_teacher(request.user):
-                if not ClassAssignment.objects.filter(
-                    class_level=student.class_level,
-                    teacher=request.user.teacher
-                ).exists():
-                    raise PermissionDenied("You can only view report cards for your assigned classes")
-            
-            # Try to find existing report card
-            report_card = ReportCard.objects.filter(
-                student=student,
-                academic_year=academic_year,
-                term=term
-            ).first()
-            
-            if report_card:
-                # Generate PDF for existing report card
-                return redirect('report_card_pdf_detail', student_id=student_id, report_card_id=report_card.id)
-            else:
-                # Generate PDF directly from grades
-                return redirect(f'{reverse("report_card_pdf", kwargs={"student_id": student_id})}?academic_year={academic_year}&term={term}')
-                
-        except Student.DoesNotExist:
-            messages.error(request, 'Student not found')
-            return redirect('report_card_dashboard')
-        except Exception as e:
-            logger.error(f"Quick view PDF error: {str(e)}")
-            messages.error(request, f'Error generating PDF: {str(e)}')
-            return redirect('report_card_dashboard')
-
-
-class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
-    model = ReportCard
+class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, FormView):
+    """
+    View for creating new report cards
+    """
     form_class = ReportCardGenerationForm
     template_name = 'core/academics/report_cards/create_report_card.html'
     success_url = reverse_lazy('report_card_dashboard')
@@ -306,23 +310,62 @@ class CreateReportCardView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
+        kwargs['request'] = self.request
         return kwargs
     
     def form_valid(self, form):
-        # Set the created_by field
-        form.instance.created_by = self.request.user
-        
-        # Calculate initial grades
-        form.instance.calculate_grades()
-        
-        response = super().form_valid(form)
-        messages.success(self.request, f'Report card for {form.instance.student.get_full_name()} created successfully!')
-        return response
+        try:
+            student = form.cleaned_data['student']
+            academic_year = form.cleaned_data['academic_year']
+            term = form.cleaned_data['term']
+            is_published = form.cleaned_data.get('is_published', False)
+            
+            # Check if report card already exists
+            existing = ReportCard.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term
+            ).first()
+            
+            if existing:
+                messages.warning(self.request, 
+                    f'A report card already exists for {student.get_full_name()} '
+                    f'for {academic_year} Term {term}')
+                return redirect('report_card_detail', 
+                    student_id=student.id, 
+                    report_card_id=existing.id)
+            
+            # Create new report card
+            report_card = ReportCard.objects.create(
+                student=student,
+                academic_year=academic_year,
+                term=term,
+                is_published=is_published,
+                created_by=self.request.user
+            )
+            
+            # Calculate grades from existing grades
+            report_card.calculate_grades()
+            report_card.save()
+            
+            messages.success(self.request, 
+                f'Report card for {student.get_full_name()} created successfully!')
+            
+            # Redirect to the new report card
+            return redirect('report_card_detail', 
+                student_id=student.id, 
+                report_card_id=report_card.id)
+            
+        except Exception as e:
+            logger.error(f"Error creating report card: {str(e)}", exc_info=True)
+            messages.error(self.request, f'Error creating report card: {str(e)}')
+            return self.form_invalid(form)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = 'Create New Report Card'
+        context['is_teacher'] = is_teacher(self.request.user)
+        context['is_admin'] = is_admin(self.request.user)
         return context
 
 
@@ -344,58 +387,79 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
         except Student.DoesNotExist:
             return False
         
-        if is_admin(self.request.user):
-            return True
-        
-        if is_student(self.request.user):
-            return self.request.user.student == student
-        
-        if is_teacher(self.request.user):
-            return ClassAssignment.objects.filter(
-                class_level=student.class_level,
-                teacher=self.request.user.teacher
-            ).exists()
-        
-        return False
+        # Use the utility function from core.utils
+        return check_report_card_permission(self.request.user, student)
     
     def get(self, request, student_id, report_card_id=None):
+        """Handle GET request for report card view"""
         try:
             student_id = int(student_id)
         except (ValueError, TypeError):
             raise Http404("Invalid student ID format")
-    
+
         student = get_object_or_404(Student, pk=student_id)
-    
-        # Check if we're in preview mode (no report card exists yet)
-        preview_mode = request.GET.get('preview') == 'true'
-        create_new = request.GET.get('create_new') == 'true'
-    
+
         # Get report_card_id from URL or GET parameters
         report_card_id = report_card_id or request.GET.get('report_card_id')
-        report_card = self._get_report_card(report_card_id, student)
-    
-        # If in preview mode and no report card, show preview from grades
-        if preview_mode and not report_card:
-        # Get academic year and term from GET parameters
-            academic_year = request.GET.get('academic_year')
-            term = request.GET.get('term')
         
+        # Handle preview mode (when no report card exists yet)
+        preview_mode = request.GET.get('preview') == 'true'
+        create_new = request.GET.get('create_new') == 'true'
+        
+        # Get academic year and term from GET parameters or report card
+        academic_year = request.GET.get('academic_year')
+        term = request.GET.get('term')
+        
+        report_card = None
+        if report_card_id:
+            report_card = self._get_report_card(report_card_id, student)
+            # If we have a report card, use its academic year and term
+            if report_card:
+                academic_year = report_card.academic_year
+                term = report_card.term
+        
+        # If preview mode and no report card, show preview from grades
+        if preview_mode and not report_card:
             if not all([academic_year, term]):
                 messages.error(request, 'Academic year and term are required for preview')
                 return redirect('report_card_dashboard')
-        
-            # Use the provided academic year and term for preview
+            
+            # Get grades for preview
             grades, aggregates = self._get_grade_data_preview(student, academic_year, term)
         else:
-            # Get filtered grades and aggregate data normally
-            grades, aggregates = self._get_grade_data(request, student, report_card)
-    
-        # Get attendance data
-        attendance_data = self._get_attendance_data(student, aggregates)
-    
+            # Get grades normally
+            if report_card:
+                grades, aggregates = self._get_grade_data(request, student, report_card)
+            elif academic_year and term:
+                # If we have academic year/term but no report card, show preview
+                grades, aggregates = self._get_grade_data_preview(student, academic_year, term)
+            else:
+                # No report card and no academic year/term - show latest
+                latest_grades = Grade.objects.filter(student=student).order_by('-academic_year', '-term').first()
+                if latest_grades:
+                    academic_year = latest_grades.academic_year
+                    term = latest_grades.term
+                    grades, aggregates = self._get_grade_data_preview(student, academic_year, term)
+                else:
+                    messages.error(request, 'No grades found for this student')
+                    return redirect('report_card_dashboard')
+
+        # Get attendance data using utils
+        attendance_data = get_attendance_summary(student, aggregates['academic_year'], aggregates['term'])
+        
         # Get additional information
         additional_info = self._get_additional_info(student, aggregates)
-    
+
+        # Check if we're in edit mode
+        editable_mode = request.GET.get('editable') == 'true'
+        
+        # Get available subjects for adding new grades
+        available_subjects = []
+        if (is_teacher(request.user) or is_admin(request.user)) and editable_mode:
+            available_subjects = Subject.objects.filter(
+                class_level=student.class_level
+            ).order_by('name')
+        
         context = {
             'student': student,
             'grades': grades,
@@ -412,15 +476,166 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
             'is_teacher': is_teacher(request.user),
             'is_admin': is_admin(request.user),
             'is_student': is_student(request.user),
-            # Add preview mode context
-            'preview_mode': preview_mode,
-            'create_new_mode': create_new,
+            'is_parent': is_parent(request.user),
+            # Edit mode context
+            'editable_mode': editable_mode,
             'can_edit': is_teacher(request.user) or is_admin(request.user),
+            'available_subjects': available_subjects,
         }
 
         return render(request, 'core/academics/report_cards/report_card.html', context)
 
-
+    def post(self, request, student_id, report_card_id=None):
+        """Handle POST requests for grade updates"""
+        try:
+            student = get_object_or_404(Student, pk=student_id)
+            
+            # Check if user can edit
+            if not can_edit_grades(request.user, student):
+                return JsonResponse({'success': False, 'error': 'Permission denied'})
+            
+            action = request.POST.get('action')
+            
+            if action == 'update_grade':
+                return self._handle_grade_update(request, student)
+            elif action == 'add_grade':
+                return self._handle_add_grade(request, student)
+            elif action == 'delete_grade':
+                return self._handle_delete_grade(request, student)
+            elif action == 'publish_report_card':
+                return self._handle_publish_report_card(request, student, report_card_id)
+            elif action == 'unpublish_report_card':
+                return self._handle_unpublish_report_card(request, student, report_card_id)
+            else:
+                return JsonResponse({'success': False, 'error': 'Invalid action'})
+                
+        except Exception as e:
+            logger.error(f"Error in report card POST: {str(e)}", exc_info=True)
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    def _handle_grade_update(self, request, student):
+        """Handle grade update"""
+        grade_id = request.POST.get('grade_id')
+        grade = get_object_or_404(Grade, pk=grade_id, student=student)
+        
+        # Update grade fields
+        grade.homework_score = request.POST.get('homework', grade.homework_score)
+        grade.classwork_score = request.POST.get('classwork', grade.classwork_score)
+        grade.test_score = request.POST.get('test', grade.test_score)
+        grade.exam_score = request.POST.get('exam', grade.exam_score)
+        grade.remarks = request.POST.get('remarks', grade.remarks)
+        
+        # Calculate total using utils
+        grade.total_score = calculate_total_score(
+            grade.homework_score, grade.classwork_score,
+            grade.test_score, grade.exam_score
+        )
+        
+        # Update letter grade using utils
+        grade.letter_grade = calculate_letter_grade(grade.total_score)
+        
+        grade.save()
+        
+        # Update report card if exists
+        self._update_report_card_average(student, grade.academic_year, grade.term)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Grade updated successfully',
+            'total_score': float(grade.total_score),
+            'letter_grade': grade.letter_grade,
+            'grade_color': get_grade_color(grade.letter_grade)
+        })
+    
+    def _handle_add_grade(self, request, student):
+        """Handle adding new grade"""
+        subject_id = request.POST.get('subject_id')
+        subject = get_object_or_404(Subject, pk=subject_id)
+        
+        academic_year = request.POST.get('academic_year', get_current_academic_year())
+        term = request.POST.get('term', 1)
+        
+        grade = Grade.objects.create(
+            student=student,
+            subject=subject,
+            academic_year=academic_year,
+            term=term,
+            homework_score=request.POST.get('homework', 0),
+            classwork_score=request.POST.get('classwork', 0),
+            test_score=request.POST.get('test', 0),
+            exam_score=request.POST.get('exam', 0),
+            remarks=request.POST.get('remarks', ''),
+            teacher=request.user.teacher if is_teacher(request.user) else None
+        )
+        
+        # Calculate total and letter grade
+        grade.total_score = calculate_total_score(
+            grade.homework_score, grade.classwork_score,
+            grade.test_score, grade.exam_score
+        )
+        grade.letter_grade = calculate_letter_grade(grade.total_score)
+        grade.save()
+        
+        # Update report card
+        self._update_report_card_average(student, academic_year, term)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Grade added successfully',
+            'grade_id': grade.id
+        })
+    
+    def _handle_delete_grade(self, request, student):
+        """Handle grade deletion"""
+        grade_id = request.POST.get('grade_id')
+        grade = get_object_or_404(Grade, pk=grade_id, student=student)
+        
+        academic_year = grade.academic_year
+        term = grade.term
+        grade.delete()
+        
+        # Update report card
+        self._update_report_card_average(student, academic_year, term)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Grade deleted successfully'
+        })
+    
+    def _handle_publish_report_card(self, request, student, report_card_id):
+        """Handle publishing report card"""
+        report_card = get_object_or_404(ReportCard, pk=report_card_id, student=student)
+        report_card.is_published = True
+        report_card.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Report card published successfully'
+        })
+    
+    def _handle_unpublish_report_card(self, request, student, report_card_id):
+        """Handle unpublishing report card"""
+        report_card = get_object_or_404(ReportCard, pk=report_card_id, student=student)
+        report_card.is_published = False
+        report_card.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Report card unpublished successfully'
+        })
+    
+    def _update_report_card_average(self, student, academic_year, term):
+        """Update report card average after grade changes"""
+        report_card = ReportCard.objects.filter(
+            student=student,
+            academic_year=academic_year,
+            term=term
+        ).first()
+        
+        if report_card:
+            report_card.calculate_grades()
+            report_card.save()
+    
     def _get_report_card(self, report_card_id, student):
         """Get specific report card or return None"""
         if report_card_id:
@@ -430,22 +645,21 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
                 raise Http404("Invalid report card ID")
         return None
     
-    
     def _get_grade_data_preview(self, student, academic_year, term):
         """Get grade data for preview mode (when no report card exists yet)"""
         grades = Grade.objects.filter(
             student=student,
             academic_year=academic_year,
             term=term
-        ).order_by('subject__name')
-    
+        ).select_related('subject').order_by('subject__name')
+        
         # Calculate aggregates
         aggregates = grades.aggregate(avg_score=Avg('total_score'))
         average_score = aggregates['avg_score'] or 0.0
-    
-        # Calculate overall grade
-        overall_grade = self._calculate_letter_grade(average_score)
-    
+        
+        # Calculate overall grade using utils
+        overall_grade = calculate_letter_grade(average_score)
+        
         return grades, {
             'average_score': round(float(average_score), 2),
             'overall_grade': overall_grade,
@@ -484,22 +698,17 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
                 academic_year = f"{current_year}/{current_year + 1}"
                 term = 1
         
-        grades = grades.order_by('subject__name')
+        grades = grades.select_related('subject').order_by('subject__name')
         
         # Calculate aggregates
-        aggregates = grades.aggregate(
-            avg_score=Avg('total_score')
-        )
+        aggregates = grades.aggregate(avg_score=Avg('total_score'))
         
         average_score = aggregates['avg_score']
         if average_score is None:
             average_score = 0.0
         
-        # Calculate overall grade
-        try:
-            overall_grade = self._calculate_letter_grade(average_score)
-        except (AttributeError, ValueError):
-            overall_grade = self._calculate_fallback_grade(average_score)
+        # Calculate overall grade using utils
+        overall_grade = calculate_letter_grade(average_score)
         
         return grades, {
             'average_score': round(float(average_score), 2),
@@ -507,59 +716,6 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
             'academic_year': academic_year,
             'term': term,
         }
-    
-    def _get_attendance_data(self, student, aggregates):
-        """Get attendance data for the student"""
-        try:
-            # Use the term object instead of academic_year and term fields
-            academic_term = AcademicTerm.objects.filter(
-                academic_year=aggregates['academic_year'],
-                term=aggregates['term']
-            ).first()
-            
-            if not academic_term:
-                return {
-                    'total_days': 0,
-                    'present_days': 0,
-                    'absence_count': 0,
-                    'attendance_rate': 0,
-                }
-            
-            attendance_records = StudentAttendance.objects.filter(
-                student=student,
-                term=academic_term  # Use the term object
-            )
-            
-            total_days = attendance_records.count()
-            if total_days == 0:
-                return {
-                    'total_days': 0,
-                    'present_days': 0,
-                    'absence_count': 0,
-                    'attendance_rate': 0,
-                }
-            
-            present_days = attendance_records.filter(
-                Q(status='present') | Q(status='late') | Q(status='excused')
-            ).count()
-            
-            absence_count = attendance_records.filter(status='absent').count()
-            attendance_rate = round((present_days / total_days) * 100, 1)
-            
-            return {
-                'total_days': total_days,
-                'present_days': present_days,
-                'absence_count': absence_count,
-                'attendance_rate': attendance_rate,
-            }
-        except Exception as e:
-            logger.error(f"Error getting attendance data for student {student.id}: {str(e)}")
-            return {
-                'total_days': 0,
-                'present_days': 0,
-                'absence_count': 0,
-                'attendance_rate': 0,
-            }
     
     def _get_additional_info(self, student, aggregates):
         """Get additional information like vacation dates and class position"""
@@ -573,12 +729,14 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
             vacation_date = academic_term.end_date if academic_term else None
             reopening_date = self._calculate_reopening_date(academic_term) if academic_term else None
             
-            # Calculate position in class
-            position_in_class = self._calculate_class_position(student, aggregates)
+            # Calculate position in class using utils
+            position_in_class = get_student_position_in_class(
+                student, aggregates['academic_year'], aggregates['term']
+            )
             
             return {
-                'vacation_date': vacation_date.strftime('%B %d, %Y') if vacation_date else "To be announced",
-                'reopening_date': reopening_date.strftime('%B %d, %Y') if reopening_date else "To be announced",
+                'vacation_date': format_date(vacation_date) if vacation_date else "To be announced",
+                'reopening_date': format_date(reopening_date) if reopening_date else "To be announced",
                 'position_in_class': position_in_class,
             }
         except Exception as e:
@@ -630,127 +788,6 @@ class ReportCardView(LoginRequiredMixin, UserPassesTestMixin, View):
         # Fallback: calculate from current date
         current_year = timezone.now().year
         return f"{current_year + 1}/{current_year + 2}"
-    
-    def _calculate_class_position(self, student, aggregates):
-        """Calculate student's position in class based on average scores"""
-        try:
-            # Get all active students in the same class
-            classmates = Student.objects.filter(
-                class_level=student.class_level,
-                is_active=True
-            ).exclude(pk=student.pk)  # Exclude current student initially
-            
-            # Calculate average scores for all classmates including current student
-            student_scores = []
-            
-            # Add current student first
-            current_student_avg = aggregates['average_score']
-            student_scores.append({
-                'student': student,
-                'average_score': current_student_avg
-            })
-            
-            # Add classmates
-            for classmate in classmates:
-                grades = Grade.objects.filter(
-                    student=classmate,
-                    academic_year=aggregates['academic_year'],
-                    term=aggregates['term']
-                )
-                
-                if grades.exists():
-                    avg_score = grades.aggregate(avg=Avg('total_score'))['avg'] or 0
-                    student_scores.append({
-                        'student': classmate,
-                        'average_score': float(avg_score)
-                    })
-            
-            # Sort by average score descending
-            student_scores.sort(key=lambda x: x['average_score'], reverse=True)
-            
-            # Find current student's position
-            for index, score_data in enumerate(student_scores, 1):
-                if score_data['student'] == student:
-                    total_students = len(student_scores)
-                    
-                    # Return position with ordinal suffix
-                    if index == 1:
-                        return "1st"
-                    elif index == 2:
-                        return "2nd" 
-                    elif index == 3:
-                        return "3rd"
-                    else:
-                        return f"{index}th"
-            
-            return "Not ranked"
-            
-        except Exception as e:
-            logger.error(f"Error calculating class position for student {student.id}: {str(e)}")
-            return "Not ranked"
-    
-    def _calculate_letter_grade(self, score):
-        """Calculate letter grade based on score"""
-        try:
-            score = float(score)
-            if score >= 90: return 'A+'
-            elif score >= 80: return 'A'
-            elif score >= 70: return 'B+'
-            elif score >= 60: return 'B'
-            elif score >= 50: return 'C+'
-            elif score >= 40: return 'C'
-            elif score >= 30: return 'D+'
-            elif score >= 20: return 'D'
-            else: return 'E'
-        except (ValueError, TypeError):
-            return 'N/A'
-    
-    def _calculate_fallback_grade(self, score):
-        """Fallback grade calculation if main method fails"""
-        return self._calculate_letter_grade(score)
-    
-    def post(self, request, student_id):
-        """Handle report card form submission"""
-        try:
-            student = get_object_or_404(Student, pk=student_id)
-            
-            if not (is_teacher(request.user) or is_admin(request.user)):
-                raise PermissionDenied("Only teachers and admins can create report cards")
-            
-            academic_year = request.POST.get('academic_year')
-            term = request.POST.get('term')
-            view_as = request.POST.get('view_as', 'web')
-            
-            # Validate required fields
-            if not all([academic_year, term]):
-                messages.error(request, 'Please select academic year and term')
-                return redirect('report_card_dashboard')
-            
-            # Check if report card exists
-            report_card = ReportCard.objects.filter(
-                student=student,
-                academic_year=academic_year,
-                term=term
-            ).first()
-            
-            if view_as == 'pdf':
-                if report_card:
-                    return redirect('report_card_pdf_detail', student_id=student_id, report_card_id=report_card.id)
-                else:
-                    # Generate PDF from available grades
-                    return redirect(f'{reverse("report_card_pdf", kwargs={"student_id": student_id})}?academic_year={academic_year}&term={term}')
-            else:
-                # Web view - redirect to the report card view
-                if report_card:
-                    return redirect('report_card_detail', student_id=student_id, report_card_id=report_card.id)
-                else:
-                    # Show preview from grades
-                    return redirect(f'{reverse("report_card", kwargs={"student_id": student_id})}?academic_year={academic_year}&term={term}')
-                    
-        except Exception as e:
-            logger.error(f"Error processing report card request: {str(e)}")
-            messages.error(request, f'Error: {str(e)}')
-            return redirect('report_card_dashboard')
 
 
 class ReportCardPDFView(LoginRequiredMixin, View):
@@ -761,15 +798,9 @@ class ReportCardPDFView(LoginRequiredMixin, View):
     def get(self, request, student_id, report_card_id=None):
         student = get_object_or_404(Student, pk=student_id)
         
-        # Check permissions
-        if is_student(request.user) and request.user.student != student:
-            raise PermissionDenied("You can only view your own report cards")
-        elif is_teacher(request.user):
-            if not ClassAssignment.objects.filter(
-                class_level=student.class_level,
-                teacher=request.user.teacher
-            ).exists():
-                raise PermissionDenied("You can only view report cards for your assigned classes")
+        # Check permissions using utils
+        if not check_report_card_permission(request.user, student):
+            raise PermissionDenied("You don't have permission to view this report card")
         
         # Get grades and determine academic year/term
         if report_card_id:
@@ -801,15 +832,15 @@ class ReportCardPDFView(LoginRequiredMixin, View):
                 academic_year = f"{current_year}/{current_year + 1}"
                 term = 1
         
-        grades = grades.order_by('subject__name')
+        grades = grades.select_related('subject').order_by('subject__name')
         
         # Calculate aggregates
         aggregates = grades.aggregate(avg_score=Avg('total_score'))
         average_score = aggregates['avg_score'] or 0.0
-        overall_grade = self._calculate_letter_grade(average_score)
+        overall_grade = calculate_letter_grade(average_score)
         
-        # Get attendance data
-        attendance_data = self._get_attendance_data(student, academic_year, term)
+        # Get attendance data using utils
+        attendance_data = get_attendance_summary(student, academic_year, term)
         
         # Get additional information
         additional_info = self._get_additional_info(student, academic_year, term)
@@ -848,59 +879,6 @@ class ReportCardPDFView(LoginRequiredMixin, View):
         doc.build(elements)
         return response
     
-    def _get_attendance_data(self, student, academic_year, term):
-        """Get attendance data for PDF"""
-        try:
-            # Use the term object
-            academic_term = AcademicTerm.objects.filter(
-                academic_year=academic_year,
-                term=term
-            ).first()
-            
-            if not academic_term:
-                return {
-                    'total_days': 0,
-                    'present_days': 0,
-                    'absence_count': 0,
-                    'attendance_rate': 0,
-                }
-            
-            attendance_records = StudentAttendance.objects.filter(
-                student=student,
-                term=academic_term  # Use the term object
-            )
-            
-            total_days = attendance_records.count()
-            if total_days == 0:
-                return {
-                    'total_days': 0,
-                    'present_days': 0,
-                    'absence_count': 0,
-                    'attendance_rate': 0,
-                }
-            
-            present_days = attendance_records.filter(
-                Q(status='present') | Q(status='late') | Q(status='excused')
-            ).count()
-            
-            absence_count = attendance_records.filter(status='absent').count()
-            attendance_rate = round((present_days / total_days) * 100, 1)
-            
-            return {
-                'total_days': total_days,
-                'present_days': present_days,
-                'absence_count': absence_count,
-                'attendance_rate': attendance_rate,
-            }
-        except Exception as e:
-            logger.error(f"Error getting attendance data for PDF: {str(e)}")
-            return {
-                'total_days': 0,
-                'present_days': 0,
-                'absence_count': 0,
-                'attendance_rate': 0,
-            }
-    
     def _get_additional_info(self, student, academic_year, term):
         """Get additional information for PDF"""
         try:
@@ -912,12 +890,12 @@ class ReportCardPDFView(LoginRequiredMixin, View):
             vacation_date = academic_term.end_date if academic_term else None
             reopening_date = self._calculate_reopening_date(academic_term) if academic_term else None
             
-            # Simplified class position calculation for PDF
-            position_in_class = "Calculated"  # You can implement the full logic here if needed
+            # Get class position using utils
+            position_in_class = get_student_position_in_class(student, academic_year, term)
             
             return {
-                'vacation_date': vacation_date.strftime('%B %d, %Y') if vacation_date else "To be announced",
-                'reopening_date': reopening_date.strftime('%B %d, %Y') if reopening_date else "To be announced",
+                'vacation_date': format_date(vacation_date) if vacation_date else "To be announced",
+                'reopening_date': format_date(reopening_date) if reopening_date else "To be announced",
                 'position_in_class': position_in_class,
             }
         except Exception as e:
@@ -965,22 +943,6 @@ class ReportCardPDFView(LoginRequiredMixin, View):
         
         current_year = timezone.now().year
         return f"{current_year + 1}/{current_year + 2}"
-    
-    def _calculate_letter_grade(self, score):
-        """Calculate letter grade"""
-        try:
-            score = float(score)
-            if score >= 90: return 'A+'
-            elif score >= 80: return 'A'
-            elif score >= 70: return 'B+'
-            elif score >= 60: return 'B'
-            elif score >= 50: return 'C+'
-            elif score >= 40: return 'C'
-            elif score >= 30: return 'D+'
-            elif score >= 20: return 'D'
-            else: return 'E'
-        except (ValueError, TypeError):
-            return 'N/A'
     
     def _create_pdf_header(self, elements, student, academic_year, term, school_config):
         """Create PDF header section"""
@@ -1109,7 +1071,7 @@ class ReportCardPDFView(LoginRequiredMixin, View):
         student_info = [
             ['Student Name:', student.get_full_name()],
             ['Student ID:', student.student_id],
-            ['Class Level:', student.get_class_level_display()],
+            ['Class Level:', get_class_level_display(student.class_level)],
             ['Gender:', student.get_gender_display()],
         ]
         
@@ -1195,9 +1157,10 @@ class ReportCardPDFView(LoginRequiredMixin, View):
         summary_data = [
             ['Overall Average:', f"{average_score:.1f}%"],
             ['Final Grade:', overall_grade],
+            ['Performance Level:', get_performance_level(average_score)],
         ]
         
-        summary_table = Table(summary_data, colWidths=[100, 80])
+        summary_table = Table(summary_data, colWidths=[100, 80, 120])
         summary_table.setStyle(TableStyle([
             ('FONT', (0, 0), (-1, -1), 'Helvetica-Bold', 10),
             ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#34495e')),
@@ -1227,13 +1190,16 @@ class ReportCardPDFView(LoginRequiredMixin, View):
             ('FONT', (0, 1), (-1, -1), 'Helvetica', 8),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('SPAN', (0, 1), (0, 1)),  # Make signature lines span cells if needed
         ]))
         
         elements.append(signature_table)
 
 
 class SaveReportCardView(LoginRequiredMixin, View):
+    """
+    View for saving report cards from preview mode
+    """
+    
     def post(self, request, student_id):
         student = get_object_or_404(Student, pk=student_id)
         
@@ -1243,9 +1209,10 @@ class SaveReportCardView(LoginRequiredMixin, View):
         academic_year = request.POST.get('academic_year')
         term = request.POST.get('term')
         
-        # Validate academic year format (YYYY/YYYY)
-        if not re.match(r'^\d{4}/\d{4}$', academic_year):
-            messages.error(request, 'Invalid academic year format. Use YYYY/YYYY format.')
+        # Validate academic year format using utils
+        is_valid, error_message = validate_academic_year(academic_year)
+        if not is_valid:
+            messages.error(request, error_message)
             return redirect('report_card', student_id=student_id)
         
         # Validate term
@@ -1268,9 +1235,43 @@ class SaveReportCardView(LoginRequiredMixin, View):
             }
         )
         
+        # Calculate grades
+        report_card.calculate_grades()
+        report_card.save()
+        
         if created:
             messages.success(request, 'Report card created successfully!')
         else:
-            messages.info(request, 'Report card already exists.')
+            messages.info(request, 'Report card already exists and has been updated.')
         
         return redirect('report_card_detail', student_id=student_id, report_card_id=report_card.id)
+
+
+class QuickViewReportCardPDFView(LoginRequiredMixin, View):
+    """
+    PDF view for quick view report cards
+    """
+    
+    def get(self, request):
+        student_id = request.GET.get('student_id')
+        academic_year = request.GET.get('academic_year')
+        term = request.GET.get('term')
+        
+        if not all([student_id, academic_year, term]):
+            messages.error(request, 'Student, academic year, and term are required')
+            return redirect('report_card_dashboard')
+        
+        try:
+            student = get_object_or_404(Student, pk=student_id)
+            
+            # Check permissions
+            if not check_report_card_permission(request.user, student):
+                raise PermissionDenied("You don't have permission to view this report card")
+            
+            # Redirect to the existing PDF view
+            return redirect(reverse('report_card_pdf', kwargs={'student_id': student_id}) + 
+                           f'?academic_year={academic_year}&term={term}')
+            
+        except Exception as e:
+            messages.error(request, f'Error: {str(e)}')
+            return redirect('report_card_dashboard')

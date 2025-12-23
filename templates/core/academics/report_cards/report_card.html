@@ -1,3 +1,4 @@
+<!-- core/academics/report_cards/report_card.html -->
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
@@ -7,9 +8,15 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 <style>
+/* CRITICAL FIX: Add CSS reset at the beginning */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 :root {
     --primary: #2c3e50;
     --primary-dark: #1a252f;
@@ -44,6 +51,7 @@ body {
     border: 1px solid #e9ecef;
 }
 
+/* HEADER FIXES */
 .report-header {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: white;
@@ -57,6 +65,15 @@ body {
     border-radius: 6px;
     padding: 8px;
     background: rgba(255,255,255,0.1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.school-logo img {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
 }
 
 .school-name {
@@ -64,25 +81,25 @@ body {
     font-weight: 700;
     font-size: 1.4rem;
     margin-bottom: 0.5rem;
+    text-transform: uppercase;
 }
 
-.school-motto {
-    font-style: italic;
-    opacity: 0.9;
-    font-size: 0.9rem;
-}
-
-/* Edit Mode Styles */
+/* EDIT MODE CRITICAL FIXES */
 .edit-mode-indicator {
     background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
     border-left: 4px solid #ffc107;
     color: #000;
+    padding: 1rem;
+    margin: 0;
 }
 
 .editable-field {
     border: 2px solid #007bff !important;
     background-color: #f8f9fa !important;
     font-weight: 500;
+    padding: 0.3rem 0.5rem !important;
+    border-radius: 4px;
+    text-align: center;
 }
 
 .editable-field:focus {
@@ -91,96 +108,33 @@ body {
     background-color: #fff !important;
 }
 
-.grade-input {
+.percentage-input {
     width: 80px;
     text-align: center;
     padding: 0.3rem 0.5rem;
     border-radius: 4px;
     border: 1px solid #ddd;
     font-weight: 600;
+    transition: var(--transition);
+}
+
+.percentage-input-group .input-group-text {
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 .remarks-input {
     width: 100%;
-    padding: 0.3rem 0.5rem;
+    padding: 0.5rem;
     border-radius: 4px;
     border: 1px solid #ddd;
-    font-size: 0.8rem;
-}
-
-/* Info Sections */
-.additional-info-section {
-    background: #e8f4fd;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    border-left: 4px solid var(--info);
-}
-
-.additional-info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.8rem;
-}
-
-.additional-info-item {
-    background: white;
-    padding: 0.8rem;
-    border-radius: 6px;
-    border-left: 3px solid var(--info);
-}
-
-.additional-info-label {
-    font-weight: 600;
-    color: var(--primary);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.additional-info-value {
-    color: var(--dark);
-    font-weight: 500;
     font-size: 0.85rem;
+    transition: var(--transition);
 }
 
-/* Attendance Section */
-.attendance-section {
-    background: #fff8e6;
-    border-radius: 8px;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    border-left: 4px solid var(--warning);
-}
-
-.attendance-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 0.8rem;
-    text-align: center;
-}
-
-.attendance-item {
-    background: white;
-    padding: 0.8rem;
-    border-radius: 6px;
-    border: 1px solid #e9ecef;
-}
-
-.attendance-value {
-    font-size: 1.1rem;
-    font-weight: 700;
-    margin-bottom: 0.3rem;
-    color: var(--primary);
-}
-
-.attendance-label {
-    font-size: 0.7rem;
-    opacity: 0.8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
+/* INFO SECTIONS FIXES */
+.additional-info-section,
+.attendance-section,
 .student-info-section {
     background: #f8f9fa;
     border-radius: 8px;
@@ -189,41 +143,44 @@ body {
     border: 1px solid #e9ecef;
 }
 
-.info-grid {
+.additional-info-grid,
+.info-grid,
+.attendance-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
 }
 
-.info-item {
+.additional-info-item,
+.info-item,
+.attendance-item {
     background: white;
     padding: 0.8rem;
     border-radius: 6px;
     border: 1px solid #e9ecef;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-.info-label {
-    font-weight: 600;
+/* ATTENDANCE FIXES */
+.attendance-section {
+    background: #fff8e6;
+    border-left: 4px solid var(--warning);
+}
+
+.attendance-value {
+    font-size: 1.2rem;
+    font-weight: 700;
     color: var(--primary);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
-.info-value {
-    color: var(--dark);
-    font-weight: 500;
-    font-size: 0.85rem;
-}
-
-/* Performance Table */
+/* PERFORMANCE TABLE FIXES - UPDATED FOR PERCENTAGE SYSTEM */
 .performance-table {
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: var(--shadow);
-    margin: 1rem 0;
+    margin: 1.5rem 0;
     border: 1px solid #e9ecef;
-    font-size: 0.8rem;
+    background: white;
 }
 
 .performance-table thead th {
@@ -231,126 +188,98 @@ body {
     color: white;
     border: none;
     font-weight: 600;
-    padding: 0.8rem;
+    padding: 0.8rem 0.5rem;
     text-align: center;
     vertical-align: middle;
     font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    white-space: nowrap;
+    line-height: 1.2;
 }
 
 .performance-table tbody td {
-    padding: 0.7rem;
+    padding: 0.75rem 0.5rem;
     vertical-align: middle;
     border-color: #f1f3f4;
     text-align: center;
     font-weight: 500;
 }
 
-.performance-table tbody tr {
-    transition: var(--transition);
+/* WEIGHTED CONTRIBUTION STYLE */
+.weighted-contribution {
+    font-size: 0.7rem;
+    color: #666;
+    margin-top: 2px;
+    display: block;
 }
 
-.performance-table tbody tr:hover {
-    background: #f8f9fa;
-}
-
+/* GRADE BADGE FIXES */
 .grade-badge {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     padding: 0.4rem 0.8rem;
-    min-width: 40px;
+    min-width: 35px;
     text-align: center;
-    border-radius: 4px;
-    font-weight: 600;
-    border: 1px solid transparent;
+    border-radius: 20px;
+    font-weight: 700;
+    display: inline-block;
 }
 
-.grade-Aplus, .grade-A { 
+.grade-1, .grade-2 { 
     background: #27ae60;
     color: white; 
 }
-.grade-Bplus, .grade-B { 
+.grade-3, .grade-4 { 
     background: #3498db;
     color: white; 
 }
-.grade-Cplus, .grade-C { 
+.grade-5, .grade-6 { 
     background: #f1c40f;
     color: #000; 
 }
-.grade-Dplus, .grade-D { 
+.grade-7, .grade-8 { 
     background: #e67e22;
     color: white; 
 }
-.grade-E { 
+.grade-9, .grade-F { 
     background: #e74c3c;
     color: white; 
 }
 
-/* Summary Cards */
-.summary-card {
-    background: white;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    border: 1px solid #e9ecef;
-    margin-bottom: 1rem;
-}
-
-.summary-card .card-header {
-    background: var(--info);
-    color: white;
-    border: none;
-    padding: 0.8rem;
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-
-.summary-card .card-body {
-    padding: 1rem;
-    font-size: 0.8rem;
-}
-
-/* Overall Performance */
+/* OVERALL PERFORMANCE FIX */
 .overall-performance {
     background: var(--primary);
     color: white;
     border-radius: 8px;
-    padding: 1rem;
-    margin: 1rem 0;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
 }
 
 .performance-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 0.8rem;
+    gap: 1rem;
     text-align: center;
 }
 
 .stat-item {
     background: rgba(255,255,255,0.1);
-    padding: 0.8rem;
-    border-radius: 6px;
+    padding: 1rem;
+    border-radius: 8px;
 }
 
 .stat-value {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 700;
     margin-bottom: 0.3rem;
 }
 
-.stat-label {
-    font-size: 0.7rem;
-    opacity: 0.8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* Signature Section */
+/* SIGNATURE SECTION FIX */
 .signature-section {
     background: #f8f9fa;
     border-radius: 8px;
     padding: 1.5rem;
-    margin-top: 1.5rem;
-    border-top: 2px solid var(--primary);
+    margin-top: 2rem;
+    border-top: 3px solid var(--primary);
 }
 
 .signature-line {
@@ -361,73 +290,98 @@ body {
 .signature-name {
     font-weight: 600;
     color: var(--primary);
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
 }
 
 .signature-space {
     border-top: 1px solid #bdc3c7;
-    padding-top: 1.5rem;
+    padding-top: 2rem;
     margin-top: 0.5rem;
     color: #7f8c8d;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+    height: 50px;
 }
 
-/* Action Buttons */
+/* ACTION BUTTONS FIX */
 .action-buttons {
     background: white;
     border-radius: 8px;
-    padding: 1rem;
-    margin-top: 1.5rem;
+    padding: 1.5rem;
+    margin-top: 2rem;
     border: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .btn {
     border-radius: 6px;
-    padding: 0.6rem 1.2rem;
+    padding: 0.6rem 1.5rem;
     font-weight: 500;
-    font-size: 0.8rem;
-    border: 1px solid transparent;
+    font-size: 0.85rem;
+    border: none;
     transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.btn-primary {
-    background: var(--primary);
-    border-color: var(--primary);
+/* ADD NEW GRADE FORM FIX - UPDATED FOR PERCENTAGE SYSTEM */
+#addGradeForm {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
 }
 
-.btn-success {
-    background: var(--success);
-    border-color: var(--success);
+#addGradeForm .form-select,
+#addGradeForm .form-control {
+    height: 40px;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #ddd;
 }
 
-.btn-info {
-    background: var(--info);
-    border-color: var(--info);
+/* PERCENTAGE INPUT GROUP */
+.input-group.percentage-group {
+    width: 120px;
 }
 
-.btn-warning {
-    background: var(--warning);
-    border-color: var(--warning);
-    color: #000;
+/* LOADING OVERLAY FIX */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    backdrop-filter: blur(5px);
 }
 
-.btn-danger {
-    background: var(--danger);
-    border-color: var(--danger);
+.loading-overlay .text-white {
+    text-align: center;
+    padding: 2rem;
+    background: rgba(0,0,0,0.7);
+    border-radius: 12px;
 }
 
-/* Print Styles */
+/* PRINT FIXES */
 @media print {
     body {
         background: white !important;
         color: black !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
     }
     
     .report-card-container {
@@ -435,29 +389,18 @@ body {
         margin: 0 !important;
         border-radius: 0 !important;
         border: 1px solid #000 !important;
+        width: 100%;
     }
     
-    .no-print {
+    .no-print, .btn, .action-buttons, .input-group-text, .percentage-input-group {
         display: none !important;
     }
     
-    .btn {
-        display: none !important;
-    }
-    
-    .performance-table {
-        box-shadow: none !important;
-        border: 1px solid #000 !important;
-    }
-    
-    .performance-table thead th {
+    .report-header {
         background: #f8f9fa !important;
         color: #000 !important;
-        border: 1px solid #000 !important;
-    }
-    
-    .performance-table tbody td {
-        border: 1px solid #ddd !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
     
     .grade-badge {
@@ -466,27 +409,13 @@ body {
         border: 1px solid #000 !important;
     }
     
-    .report-header {
-        background: #f8f9fa !important;
-        color: #000 !important;
-        border-bottom: 2px solid #000 !important;
-    }
-    
-    .additional-info-section,
-    .attendance-section,
-    .student-info-section {
-        background: white !important;
-        border: 1px solid #ddd !important;
-    }
-    
-    .overall-performance {
-        background: #f8f9fa !important;
-        color: #000 !important;
-        border: 1px solid #ddd !important;
+    /* Force page break after signature */
+    .signature-section {
+        page-break-inside: avoid;
     }
 }
 
-/* Mobile Responsive */
+/* MOBILE RESPONSIVE FIXES */
 @media (max-width: 768px) {
     .report-header {
         padding: 1rem;
@@ -494,23 +423,26 @@ body {
     }
     
     .school-name {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
     }
     
-    .info-grid {
-        grid-template-columns: 1fr;
+    .performance-table {
+        font-size: 0.7rem;
     }
     
-    .additional-info-grid {
-        grid-template-columns: 1fr;
+    .performance-table thead th {
+        padding: 0.5rem;
+        font-size: 0.65rem;
     }
     
-    .attendance-stats {
-        grid-template-columns: repeat(2, 1fr);
+    .performance-table tbody td {
+        padding: 0.5rem;
     }
     
-    .performance-stats {
-        grid-template-columns: repeat(2, 1fr);
+    .action-buttons {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
     }
     
     .action-buttons .btn {
@@ -518,47 +450,109 @@ body {
         margin-bottom: 0.5rem;
     }
     
-    .performance-table {
-        font-size: 0.7rem;
-    }
-    
+    /* Mobile table view */
     .performance-table thead {
         display: none;
     }
     
     .performance-table tbody tr {
         display: block;
-        margin-bottom: 0.8rem;
+        margin-bottom: 1rem;
         border: 1px solid #ddd;
-        border-radius: 6px;
+        border-radius: 8px;
+        padding: 0.5rem;
     }
     
     .performance-table tbody td {
         display: block;
         text-align: right;
+        padding-left: 50%;
         position: relative;
-        padding-left: 45%;
         border: none;
         border-bottom: 1px solid #eee;
     }
     
-    .performance-table tbody td:before {
+    .performance-table tbody td:last-child {
+        border-bottom: none;
+    }
+    
+    .performance-table tbody td::before {
         content: attr(data-label);
         position: absolute;
-        left: 0.8rem;
+        left: 1rem;
         font-weight: 600;
         color: var(--primary);
         text-align: left;
     }
+    
+    /* Adjust for percentage inputs on mobile */
+    .percentage-input-group {
+        width: 100% !important;
+    }
 }
 
-/* Compact layout for better printing */
-.compact-section {
-    margin-bottom: 0.8rem;
+/* FIX FOR DATA LABELS ON MOBILE */
+@media (max-width: 768px) {
+    td[data-label]::before {
+        font-weight: 600 !important;
+        color: var(--primary) !important;
+        background: #f8f9fa;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+    }
 }
 
-.small-text {
+/* ERROR STATE FIXES */
+.is-invalid {
+    border-color: #dc3545 !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+}
+
+.error-message {
+    color: #dc3545;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+/* SCROLLBAR FIX */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* TOOLTIP FIX */
+[data-bs-toggle="tooltip"] {
+    cursor: help;
+}
+
+/* FOCUS STATES FIX */
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* CONFIG WEIGHT DISPLAY */
+.weight-display {
     font-size: 0.75rem;
+    opacity: 0.8;
+    font-weight: 500;
 }
 </style>
 {% endblock %}
@@ -570,18 +564,18 @@ body {
         <div class="report-header">
             <div class="row align-items-center">
                 <div class="col-md-2 text-center">
-                    <div class="school-logo d-inline-block">
-                        <img src="{% static 'img/school-logo.png' %}" alt="School Logo" height="60" 
-                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iOCIgZmlsbD0iIzJjM2U1MCIvPgo8c3ZnIHg9IjE1IiB5PSIxNSIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiI+CjxwYXRoIGQ9Ik0xMiAxNC4yNUwzLjI3IDcuMTlBNy45NSA3Ljk1IDAgMCAxIDEyIDRjNC40MiAwIDggMy41OCA4IDggMCAxLjk2LS44IDMuNzctMi4xIDUuMDhhNS45NiA1Ljk2IDAgMCAxLS43Mi42NU01MS41IDcuNWE0IDQgMCAxIDAgLTggNCA0IDAgMCAwIDAgOHoiLz4KPC9zdmc+Cjwvc3ZnPgo='">
+                    <div class="school-logo">
+                        <img src="{% static 'img/school-logo.png' %}" alt="School Logo" 
+                             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI4IiBmaWxsPSIjMmMzZTUwIi8+PHBhdGggZD0iTTIwIDI1aDIwdjEwSDBWMjVoMTVtMjAgMTBIMjB2MTBoMjB2LTEwTTIwIDQwSDQwdjEwSDBWNDBoMTVtMjAgMTBIMjB2MTBoMjB2LTEwIiBmaWxsPSIjZmZmIi8+PC9zdmc+';">
                     </div>
                 </div>
                 <div class="col-md-8 text-center">
-                    <h1 class="school-name mb-1">JUDITH INTERNATIONAL SCHOOL</h1>
-                    <p class="school-motto mb-2">"Excellence in Education and Character Development"</p>
-                    <h2 class="mb-0" style="font-size: 1.1rem;">ACADEMIC REPORT CARD</h2>
+                    <h1 class="school-name mb-2">JUDITH INTERNATIONAL SCHOOL</h1>
+                    <p class="school-motto mb-2"><i>"Excellence in Education and Character Development"</i></p>
+                    <h2 class="mb-0" style="font-size: 1.1rem; font-weight: 600;">ACADEMIC REPORT CARD</h2>
                 </div>
                 <div class="col-md-2 text-center">
-                    <div class="report-id bg-white text-dark p-2 rounded small-text">
+                    <div class="report-id bg-white text-dark p-2 rounded" style="font-size: 0.8rem;">
                         <strong>ID: {{ report_card.id|default:"DRAFT" }}</strong>
                         <br>
                         <small>{{ academic_year }} - Term {{ term }}</small>
@@ -592,23 +586,25 @@ body {
 
         <!-- Edit Mode Indicator -->
         {% if editable_mode %}
-        <div class="edit-mode-indicator p-3 no-print">
+        <div class="edit-mode-indicator no-print">
             <div class="d-flex align-items-center">
                 <i class="fas fa-edit fa-lg me-3"></i>
                 <div class="flex-grow-1">
                     <h5 class="mb-1 fw-bold">Edit Mode Active</h5>
-                    <p class="mb-0">You can now edit grades and remarks. Changes will be saved automatically.</p>
+                    <p class="mb-0">You can now edit grades and remarks. Changes are saved when you click the save buttons.</p>
                 </div>
                 <div class="badge bg-dark fs-6">EDITING</div>
             </div>
         </div>
         {% endif %}
 
-        <!-- Student Information -->
+        <!-- Main Content Container -->
         <div class="container-fluid p-3">
             <!-- Additional Information Section -->
-            <div class="additional-info-section compact-section">
-                <h5 class="mb-2" style="font-size: 0.9rem;">Academic Information</h5>
+            <div class="additional-info-section">
+                <h5 class="mb-2" style="font-size: 0.9rem; color: var(--primary);">
+                    <i class="fas fa-calendar-alt me-2"></i>Academic Calendar Information
+                </h5>
                 <div class="additional-info-grid">
                     <div class="additional-info-item">
                         <div class="additional-info-label">Vacation Date</div>
@@ -625,13 +621,17 @@ body {
                 </div>
             </div>
 
-            <div class="student-info-section compact-section">
+            <!-- Student Information Section -->
+            <div class="student-info-section">
                 <div class="row align-items-center">
                     <div class="col-md-8">
+                        <h5 class="mb-2" style="font-size: 0.9rem; color: var(--primary);">
+                            <i class="fas fa-user-graduate me-2"></i>Student Information
+                        </h5>
                         <div class="info-grid">
                             <div class="info-item">
                                 <div class="info-label">Student Name</div>
-                                <div class="info-value">{{ student.get_full_name }}</div>
+                                <div class="info-value fw-bold">{{ student.get_full_name }}</div>
                             </div>
                             <div class="info-item">
                                 <div class="info-label">Student ID</div>
@@ -656,17 +656,19 @@ body {
                         </div>
                     </div>
                     <div class="col-md-4 text-center">
-                        <div class="student-photo-placeholder bg-light rounded p-3 small-text">
-                            <i class="fas fa-user-graduate fa-2x text-muted mb-2"></i>
-                            <p class="text-muted mb-0">Student Photo</p>
+                        <div class="student-photo-placeholder bg-light rounded p-3" style="font-size: 0.8rem;">
+                            <i class="fas fa-user-graduate fa-3x text-muted mb-2"></i>
+                            <p class="text-muted mb-0 fw-bold">Student Photo</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Attendance Section -->
-            <div class="attendance-section compact-section">
-                <h5 class="mb-2" style="font-size: 0.9rem;">Attendance Summary</h5>
+            <div class="attendance-section">
+                <h5 class="mb-2" style="font-size: 0.9rem; color: var(--primary);">
+                    <i class="fas fa-calendar-check me-2"></i>Attendance Summary
+                </h5>
                 <div class="attendance-stats">
                     <div class="attendance-item">
                         <div class="attendance-value">{{ attendance.present_days|default:"0" }}</div>
@@ -689,7 +691,7 @@ body {
 
             <!-- Overall Performance Summary -->
             {% if grades %}
-            <div class="overall-performance compact-section">
+            <div class="overall-performance">
                 <div class="performance-stats">
                     <div class="stat-item">
                         <div class="stat-value">{{ average_score|floatformat:1 }}%</div>
@@ -705,8 +707,8 @@ body {
                     </div>
                     <div class="stat-item">
                         <div class="stat-value">
-                            {% with passed=grades|length %}
-                            {{ passed }}/{{ passed }}
+                            {% with total=grades|length passed=grades|length %}
+                            {{ passed }}/{{ total }}
                             {% endwith %}
                         </div>
                         <div class="stat-label">Subjects Passed</div>
@@ -715,18 +717,30 @@ body {
             </div>
             {% endif %}
 
-            <!-- Academic Performance Table -->
-            <div class="compact-section">
+            <!-- ============================================= -->
+            <!-- ACADEMIC PERFORMANCE TABLE - UPDATED FOR PERCENTAGE SYSTEM -->
+            <!-- ============================================= -->
+            <div class="performance-table-container">
                 <div class="performance-table">
                     <table class="table table-bordered table-hover mb-0">
                         <thead>
                             <tr>
                                 <th>Subject</th>
-                                <th class="text-center">Homework<br><small class="text-light">(20%)</small></th>
-                                <th class="text-center">Classwork<br><small class="text-light">(30%)</small></th>
-                                <th class="text-center">Test<br><small class="text-light">(10%)</small></th>
-                                <th class="text-center">Exam<br><small class="text-light">(40%)</small></th>
-                                <th class="text-center">Total<br><small class="text-light">(100%)</small></th>
+                                <th class="text-center">Homework<br>
+                                    <small class="weight-display">{{ config.homework_weight|default:20 }}% weight</small>
+                                </th>
+                                <th class="text-center">Classwork<br>
+                                    <small class="weight-display">{{ config.classwork_weight|default:30 }}% weight</small>
+                                </th>
+                                <th class="text-center">Test<br>
+                                    <small class="weight-display">{{ config.test_weight|default:10 }}% weight</small>
+                                </th>
+                                <th class="text-center">Exam<br>
+                                    <small class="weight-display">{{ config.exam_weight|default:40 }}% weight</small>
+                                </th>
+                                <th class="text-center">Total<br>
+                                    <small class="weight-display">100%</small>
+                                </th>
                                 <th class="text-center">Grade</th>
                                 <th class="text-center">Remarks</th>
                                 {% if editable_mode %}
@@ -736,89 +750,158 @@ body {
                         </thead>
                         <tbody>
                             {% for grade in grades %}
-                            <tr>
+                            {% with contributions=grade.get_weighted_contributions %}
+                            <tr id="grade-row-{{ grade.id }}">
                                 <td data-label="Subject" class="fw-bold">{{ grade.subject.name }}</td>
+                                
+                                <!-- Homework Score - PERCENTAGE BASED -->
                                 <td data-label="Homework" class="text-center">
                                     {% if editable_mode %}
-                                    <input type="number" class="grade-input editable-field" 
-                                           name="homework_{{ grade.id }}" 
-                                           value="{{ grade.homework_score|floatformat:1 }}" 
-                                           min="0" max="20" step="0.1">
+                                    <div class="input-group input-group-sm percentage-input-group">
+                                        <input type="number" class="form-control percentage-input editable-field" 
+                                               name="homework_percentage_{{ grade.id }}" 
+                                               value="{{ grade.homework_percentage|floatformat:1|default:'0.0' }}" 
+                                               min="0" max="100" step="0.1"
+                                               data-grade-id="{{ grade.id }}"
+                                               data-field="homework_percentage">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="weighted-contribution">
+                                        = {{ contributions.homework.contribution|floatformat:1 }} of {{ config.homework_weight|default:20 }}%
+                                    </small>
                                     {% else %}
-                                    {{ grade.homework_score|floatformat:1 }}
+                                    <strong>{{ grade.homework_percentage|floatformat:1|default:'0.0' }}%</strong>
+                                    <br>
+                                    <small class="weighted-contribution">
+                                        ({{ contributions.homework.contribution|floatformat:1 }}/{{ config.homework_weight|default:20 }}%)
+                                    </small>
                                     {% endif %}
                                 </td>
+                                
+                                <!-- Classwork Score - PERCENTAGE BASED -->
                                 <td data-label="Classwork" class="text-center">
                                     {% if editable_mode %}
-                                    <input type="number" class="grade-input editable-field" 
-                                           name="classwork_{{ grade.id }}" 
-                                           value="{{ grade.classwork_score|floatformat:1 }}" 
-                                           min="0" max="30" step="0.1">
+                                    <div class="input-group input-group-sm percentage-input-group">
+                                        <input type="number" class="form-control percentage-input editable-field" 
+                                               name="classwork_percentage_{{ grade.id }}" 
+                                               value="{{ grade.classwork_percentage|floatformat:1|default:'0.0' }}" 
+                                               min="0" max="100" step="0.1"
+                                               data-grade-id="{{ grade.id }}"
+                                               data-field="classwork_percentage">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="weighted-contribution">
+                                        = {{ contributions.classwork.contribution|floatformat:1 }} of {{ config.classwork_weight|default:30 }}%
+                                    </small>
                                     {% else %}
-                                    {{ grade.classwork_score|floatformat:1 }}
+                                    <strong>{{ grade.classwork_percentage|floatformat:1|default:'0.0' }}%</strong>
+                                    <br>
+                                    <small class="weighted-contribution">
+                                        ({{ contributions.classwork.contribution|floatformat:1 }}/{{ config.classwork_weight|default:30 }}%)
+                                    </small>
                                     {% endif %}
                                 </td>
+                                
+                                <!-- Test Score - PERCENTAGE BASED -->
                                 <td data-label="Test" class="text-center">
                                     {% if editable_mode %}
-                                    <input type="number" class="grade-input editable-field" 
-                                           name="test_{{ grade.id }}" 
-                                           value="{{ grade.test_score|floatformat:1 }}" 
-                                           min="0" max="10" step="0.1">
+                                    <div class="input-group input-group-sm percentage-input-group">
+                                        <input type="number" class="form-control percentage-input editable-field" 
+                                               name="test_percentage_{{ grade.id }}" 
+                                               value="{{ grade.test_percentage|floatformat:1|default:'0.0' }}" 
+                                               min="0" max="100" step="0.1"
+                                               data-grade-id="{{ grade.id }}"
+                                               data-field="test_percentage">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="weighted-contribution">
+                                        = {{ contributions.test.contribution|floatformat:1 }} of {{ config.test_weight|default:10 }}%
+                                    </small>
                                     {% else %}
-                                    {{ grade.test_score|floatformat:1 }}
+                                    <strong>{{ grade.test_percentage|floatformat:1|default:'0.0' }}%</strong>
+                                    <br>
+                                    <small class="weighted-contribution">
+                                        ({{ contributions.test.contribution|floatformat:1 }}/{{ config.test_weight|default:10 }}%)
+                                    </small>
                                     {% endif %}
                                 </td>
+                                
+                                <!-- Exam Score - PERCENTAGE BASED -->
                                 <td data-label="Exam" class="text-center">
                                     {% if editable_mode %}
-                                    <input type="number" class="grade-input editable-field" 
-                                           name="exam_{{ grade.id }}" 
-                                           value="{{ grade.exam_score|floatformat:1 }}" 
-                                           min="0" max="40" step="0.1">
+                                    <div class="input-group input-group-sm percentage-input-group">
+                                        <input type="number" class="form-control percentage-input editable-field" 
+                                               name="exam_percentage_{{ grade.id }}" 
+                                               value="{{ grade.exam_percentage|floatformat:1|default:'0.0' }}" 
+                                               min="0" max="100" step="0.1"
+                                               data-grade-id="{{ grade.id }}"
+                                               data-field="exam_percentage">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                    <small class="weighted-contribution">
+                                        = {{ contributions.exam.contribution|floatformat:1 }} of {{ config.exam_weight|default:40 }}%
+                                    </small>
                                     {% else %}
-                                    {{ grade.exam_score|floatformat:1 }}
+                                    <strong>{{ grade.exam_percentage|floatformat:1|default:'0.0' }}%</strong>
+                                    <br>
+                                    <small class="weighted-contribution">
+                                        ({{ contributions.exam.contribution|floatformat:1 }}/{{ config.exam_weight|default:40 }}%)
+                                    </small>
                                     {% endif %}
                                 </td>
+                                
+                                <!-- Total Score -->
                                 <td data-label="Total" class="text-center fw-bold">
-                                    {% if editable_mode %}
-                                    <span id="total_{{ grade.id }}">{{ grade.total_score|floatformat:1 }}</span>
-                                    {% else %}
-                                    {{ grade.total_score|floatformat:1 }}
-                                    {% endif %}
-                                </td>
-                                <td data-label="Grade" class="text-center">
-                                    <span class="badge grade-badge grade-{{ grade.grade|cut:'+'|cut:' ' }}">
-                                        {{ grade.grade }}
+                                    <span id="total_{{ grade.id }}" class="grade-total">
+                                        {{ grade.total_score|floatformat:1|default:'0.0' }}%
                                     </span>
                                 </td>
+                                
+                                <!-- Grade Badge -->
+                                <td data-label="Grade" class="text-center">
+                                    <span class="badge grade-badge grade-{{ grade.ges_grade|default:'9' }}"
+                                          id="grade-badge-{{ grade.id }}">
+                                        {{ grade.ges_grade|default:'9' }}
+                                    </span>
+                                </td>
+                                
+                                <!-- Remarks -->
                                 <td data-label="Remarks" class="text-center">
                                     {% if editable_mode %}
                                     <input type="text" class="remarks-input editable-field" 
                                            name="remarks_{{ grade.id }}" 
                                            value="{{ grade.remarks|default:'' }}" 
-                                           placeholder="Enter remarks...">
+                                           placeholder="Enter remarks..."
+                                           data-grade-id="{{ grade.id }}"
+                                           data-field="remarks">
                                     {% else %}
                                     {{ grade.remarks|default:"-" }}
                                     {% endif %}
                                 </td>
+                                
+                                <!-- Actions (Edit Mode Only) -->
                                 {% if editable_mode %}
                                 <td data-label="Actions" class="text-center no-print">
                                     <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-success btn-sm update-grade-btn" 
-                                                data-grade-id="{{ grade.id }}">
+                                        <button type="button" class="btn btn-success update-grade-btn" 
+                                                data-grade-id="{{ grade.id }}"
+                                                title="Save Changes">
                                             <i class="fas fa-save"></i>
                                         </button>
-                                        <button type="button" class="btn btn-danger btn-sm delete-grade-btn" 
-                                                data-grade-id="{{ grade.id }}">
+                                        <button type="button" class="btn btn-danger delete-grade-btn" 
+                                                data-grade-id="{{ grade.id }}"
+                                                title="Delete Grade">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </div>
                                 </td>
                                 {% endif %}
                             </tr>
+                            {% endwith %}
                             {% empty %}
                             <tr>
-                                <td colspan="{% if editable_mode %}9{% else %}8{% endif %}" class="text-center text-muted py-4 small-text">
-                                    <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                <td colspan="{% if editable_mode %}9{% else %}8{% endif %}" class="text-center py-4" style="font-size: 0.8rem;">
+                                    <i class="fas fa-inbox fa-2x mb-2 d-block text-muted"></i>
                                     No grades available for this academic period
                                 </td>
                             </tr>
@@ -828,14 +911,14 @@ body {
                 </div>
             </div>
 
-            <!-- Add New Grade Form (Edit Mode Only) -->
+            <!-- Add New Grade Form (Edit Mode Only) - UPDATED FOR PERCENTAGE SYSTEM -->
             {% if editable_mode and can_edit %}
             <div class="card mt-3 no-print">
                 <div class="card-header bg-success text-white">
-                    <h6 class="mb-0"><i class="fas fa-plus me-2"></i>Add New Grade</h6>
+                    <h6 class="mb-0"><i class="fas fa-plus me-2"></i>Add New Subject Grade</h6>
                 </div>
                 <div class="card-body">
-                    <form id="addGradeForm" class="row g-3">
+                    <form id="addGradeForm" class="row g-2">
                         {% csrf_token %}
                         <div class="col-md-3">
                             <label class="form-label">Subject</label>
@@ -847,25 +930,40 @@ body {
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Homework</label>
-                            <input type="number" name="homework" class="form-control" min="0" max="20" step="0.1" value="0">
+                            <label class="form-label">Homework (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="homework_percentage" class="form-control" min="0" max="100" step="0.1" value="0" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <small class="text-muted">{{ config.homework_weight|default:20 }}% weight</small>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Classwork</label>
-                            <input type="number" name="classwork" class="form-control" min="0" max="30" step="0.1" value="0">
+                            <label class="form-label">Classwork (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="classwork_percentage" class="form-control" min="0" max="100" step="0.1" value="0" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <small class="text-muted">{{ config.classwork_weight|default:30 }}% weight</small>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Test</label>
-                            <input type="number" name="test" class="form-control" min="0" max="10" step="0.1" value="0">
+                            <label class="form-label">Test (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="test_percentage" class="form-control" min="0" max="100" step="0.1" value="0" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <small class="text-muted">{{ config.test_weight|default:10 }}% weight</small>
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Exam</label>
-                            <input type="number" name="exam" class="form-control" min="0" max="40" step="0.1" value="0">
+                            <label class="form-label">Exam (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="exam_percentage" class="form-control" min="0" max="100" step="0.1" value="0" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <small class="text-muted">{{ config.exam_weight|default:40 }}% weight</small>
                         </div>
-                        <div class="col-md-1">
-                            <label class="form-label">&nbsp;</label>
+                        <div class="col-md-1 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-plus"></i>
+                                <i class="fas fa-plus"></i> Add
                             </button>
                         </div>
                     </form>
@@ -873,16 +971,16 @@ body {
             </div>
             {% endif %}
 
-            <!-- Summary Sections -->
+            <!-- Grading System and Performance Analysis -->
             <div class="row mt-3">
                 <!-- Grading Scale -->
                 <div class="col-md-6 mb-3">
-                    <div class="summary-card">
+                    <div class="card summary-card">
                         <div class="card-header">
-                            <h6 class="mb-0">Grading System</h6>
+                            <h6 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>Grading System</h6>
                         </div>
                         <div class="card-body p-0">
-                            <table class="table table-sm mb-0 small-text">
+                            <table class="table table-sm mb-0" style="font-size: 0.8rem;">
                                 <thead>
                                     <tr>
                                         <th>Grade</th>
@@ -891,15 +989,15 @@ body {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr><td>A+</td><td>90 - 100</td><td>Outstanding</td></tr>
-                                    <tr><td>A</td><td>80 - 89</td><td>Excellent</td></tr>
-                                    <tr><td>B+</td><td>70 - 79</td><td>Very Good</td></tr>
-                                    <tr><td>B</td><td>60 - 69</td><td>Good</td></tr>
-                                    <tr><td>C+</td><td>50 - 59</td><td>Above Average</td></tr>
-                                    <tr><td>C</td><td>40 - 49</td><td>Average</td></tr>
-                                    <tr><td>D+</td><td>30 - 39</td><td>Below Average</td></tr>
-                                    <tr><td>D</td><td>20 - 29</td><td>Poor</td></tr>
-                                    <tr><td>E</td><td>0 - 19</td><td>Fail</td></tr>
+                                    <tr><td>1</td><td>90 - 100%</td><td>Outstanding</td></tr>
+                                    <tr><td>2</td><td>80 - 89%</td><td>Excellent</td></tr>
+                                    <tr><td>3</td><td>70 - 79%</td><td>Very Good</td></tr>
+                                    <tr><td>4</td><td>60 - 69%</td><td>Good</td></tr>
+                                    <tr><td>5</td><td>50 - 59%</td><td>Satisfactory</td></tr>
+                                    <tr><td>6</td><td>40 - 49%</td><td>Fair</td></tr>
+                                    <tr><td>7</td><td>30 - 39%</td><td>Weak</td></tr>
+                                    <tr><td>8</td><td>20 - 29%</td><td>Very Weak</td></tr>
+                                    <tr><td>9</td><td>0 - 19%</td><td>Fail</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -908,18 +1006,18 @@ body {
 
                 <!-- Performance Chart -->
                 <div class="col-md-6 mb-3">
-                    <div class="summary-card h-100">
+                    <div class="card summary-card h-100">
                         <div class="card-header">
-                            <h6 class="mb-0">Performance Analysis</h6>
+                            <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Performance Analysis</h6>
                         </div>
                         <div class="card-body">
                             {% if grades %}
-                            <div class="chart-container" style="height: 200px;">
+                            <div class="chart-container" style="height: 200px; position: relative;">
                                 <canvas id="performanceChart"></canvas>
                             </div>
                             {% else %}
-                            <div class="text-center text-muted py-3 small-text">
-                                <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                            <div class="text-center text-muted py-3" style="font-size: 0.8rem;">
+                                <i class="fas fa-chart-bar fa-2x mb-2 d-block"></i>
                                 <p>Performance data not available</p>
                             </div>
                             {% endif %}
@@ -931,21 +1029,21 @@ body {
             <!-- Signature Section -->
             <div class="signature-section">
                 <div class="row">
-                    <div class="col-md-4 text-center">
+                    <div class="col-md-4">
                         <div class="signature-line">
                             <div class="signature-name">Class Teacher</div>
                             <div class="signature-space"></div>
                             <small>Signature & Date</small>
                         </div>
                     </div>
-                    <div class="col-md-4 text-center">
+                    <div class="col-md-4">
                         <div class="signature-line">
                             <div class="signature-name">Head of Department</div>
                             <div class="signature-space"></div>
                             <small>Signature & Date</small>
                         </div>
                     </div>
-                    <div class="col-md-4 text-center">
+                    <div class="col-md-4">
                         <div class="signature-line">
                             <div class="signature-name">School Principal</div>
                             <div class="signature-space"></div>
@@ -957,59 +1055,58 @@ body {
 
             <!-- Action Buttons -->
             <div class="action-buttons no-print">
-                <div class="row align-items-center">
-                    <div class="col-md-6">
-                        {% if not report_card and is_teacher and not editable_mode %}
-                        <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
-                            {% csrf_token %}
-                            <input type="hidden" name="academic_year" value="{{ academic_year }}">
-                            <input type="hidden" name="term" value="{{ term }}">
-                            <button type="submit" class="btn btn-success me-2">
-                                <i class="fas fa-save me-1"></i> Save Report
-                            </button>
-                        </form>
-                        {% elif editable_mode and can_edit %}
-                        <!-- Edit mode buttons -->
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-success me-2" id="saveAllChangesBtn">
-                                <i class="fas fa-save me-1"></i> Save All Changes
-                            </button>
-                            <button type="button" class="btn btn-primary me-2" id="recalculateTotalsBtn">
-                                <i class="fas fa-calculator me-1"></i> Recalculate
-                            </button>
-                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
-                                <i class="fas fa-times me-1"></i> Cancel
-                            </a>
-                        </div>
-                        {% endif %}
+                <div>
+                    {% if not report_card and is_teacher and not editable_mode %}
+                    <form method="post" action="{% url 'save_report_card' student.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="academic_year" value="{{ academic_year }}">
+                        <input type="hidden" name="term" value="{{ term }}">
+                        <button type="submit" class="btn btn-success me-2">
+                            <i class="fas fa-save me-1"></i> Save Report
+                        </button>
+                    </form>
+                    {% elif editable_mode and can_edit %}
+                    <!-- Edit mode buttons -->
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-success me-2" id="saveAllChangesBtn">
+                            <i class="fas fa-save me-1"></i> Save All Changes
+                        </button>
+                        <button type="button" class="btn btn-primary me-2" id="recalculateTotalsBtn">
+                            <i class="fas fa-calculator me-1"></i> Recalculate
+                        </button>
+                        <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i> Cancel
+                        </a>
                     </div>
-                    <div class="col-md-6 text-end">
-                        <div class="btn-group">
-                            {% if not editable_mode and can_edit %}
-                            <!-- Edit button when not in edit mode -->
-                            <a href="?editable=true{% if report_card %}&report_card_id={{ report_card.id }}{% endif %}" 
-                               class="btn btn-warning me-2">
-                                <i class="fas fa-edit me-1"></i> Edit Report Card
-                            </a>
-                            {% endif %}
-                            
-                            <button onclick="window.print()" class="btn btn-info me-2">
-                                <i class="fas fa-print me-1"></i> Print
-                            </button>
-                            <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
-                               class="btn btn-warning me-2" id="pdfDownloadBtn">
-                                <i class="fas fa-file-pdf me-1"></i> Export PDF
-                            </a>
-                            <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left me-1"></i> Dashboard
-                            </a>
-                        </div>
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="btn-group">
+                        {% if not editable_mode and can_edit %}
+                        <!-- Edit button when not in edit mode -->
+                        <a href="?editable=true{% if report_card %}&report_card_id={{ report_card.id }}{% endif %}" 
+                           class="btn btn-warning me-2">
+                            <i class="fas fa-edit me-1"></i> Edit Report Card
+                        </a>
+                        {% endif %}
+                        
+                        <button onclick="window.print()" class="btn btn-info me-2">
+                            <i class="fas fa-print me-1"></i> Print
+                        </button>
+                        <a href="{% if report_card %}{% url 'report_card_pdf_detail' student.pk report_card.pk %}{% else %}{% url 'report_card_pdf' student.pk %}?academic_year={{ academic_year }}&term={{ term }}{% endif %}" 
+                           class="btn btn-danger me-2" id="pdfDownloadBtn">
+                            <i class="fas fa-file-pdf me-1"></i> Export PDF
+                        </a>
+                        <a href="{% url 'report_card_dashboard' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Dashboard
+                        </a>
                     </div>
                 </div>
             </div>
 
+            <!-- Warning Alert for Draft Report Cards -->
             {% if not report_card and not editable_mode %}
-            <div class="alert alert-warning mt-2 no-print small-text">
+            <div class="alert alert-warning mt-2 no-print" style="font-size: 0.8rem;">
                 <div class="d-flex align-items-center">
                     <i class="fas fa-exclamation-circle me-2"></i>
                     <div>
@@ -1035,92 +1132,196 @@ body {
 </div>
 {% endblock %}
 
-{% block footer %}
-{% endblock %}
-
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize performance chart
+    console.log('🚀 Report Card Page Initialized - Percentage System');
+    
+    // =============================================
+    // PERFORMANCE CHART
+    // =============================================
     {% if grades %}
-    const ctx = document.getElementById('performanceChart').getContext('2d');
-    
-    const subjects = [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}];
-    const scores = [{% for grade in grades %}{{ grade.total_score }},{% endfor %}];
-    
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: subjects,
-            datasets: [{
-                label: 'Performance Score',
-                data: scores,
-                backgroundColor: '#3498db',
-                borderColor: '#2980b9',
-                borderWidth: 1,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
+    try {
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        const subjects = [{% for grade in grades %}'{{ grade.subject.name|escapejs }}',{% endfor %}];
+        const scores = [{% for grade in grades %}{{ grade.total_score|default:0 }},{% endfor %}];
+        
+        const performanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: subjects,
+                datasets: [{
+                    label: 'Performance Score (%)',
+                    data: scores,
+                    backgroundColor: scores.map(score => {
+                        if (score >= 90) return '#27ae60';  // Grade 1-2
+                        if (score >= 70) return '#3498db';  // Grade 3-4
+                        if (score >= 50) return '#f1c40f';  // Grade 5-6
+                        if (score >= 30) return '#e67e22';  // Grade 7-8
+                        return '#e74c3c';                   // Grade 9
+                    }),
+                    borderColor: '#2c3e50',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        callback: function(value) {
-                            return value + '%';
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Score: ${context.raw}%`;
+                            }
                         }
                     }
                 },
-                x: {
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 45
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            },
+                            stepSize: 20
+                        },
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            font: {
+                                size: 9
+                            }
+                        },
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Chart error:', error);
+    }
     {% endif %}
 
-    // Print functionality
-    const printBtn = document.querySelector('[onclick="window.print()"]');
-    if (printBtn) {
-        printBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.print();
-        });
-    }
-
     // =============================================
-    // EDIT MODE FUNCTIONALITY
+    // PERCENTAGE-BASED EDIT MODE FUNCTIONALITY
     // =============================================
     {% if editable_mode %}
     
-    // Auto-calculate totals when grade inputs change
-    document.querySelectorAll('.grade-input').forEach(input => {
+    // Get configuration weights from template
+    const homeworkWeight = {{ config.homework_weight|default:20 }};
+    const classworkWeight = {{ config.classwork_weight|default:30 }};
+    const testWeight = {{ config.test_weight|default:10 }};
+    const examWeight = {{ config.exam_weight|default:40 }};
+    
+    // Auto-calculate totals when percentage inputs change
+    document.querySelectorAll('.percentage-input').forEach(input => {
         input.addEventListener('input', function() {
-            const gradeId = this.name.split('_')[1];
+            const gradeId = this.getAttribute('data-grade-id');
             calculateTotal(gradeId);
         });
     });
 
-    // Calculate total for a specific grade
+    // Calculate total for a specific grade using percentage system
     function calculateTotal(gradeId) {
-        const homework = parseFloat(document.querySelector(`input[name="homework_${gradeId}"]`).value) || 0;
-        const classwork = parseFloat(document.querySelector(`input[name="classwork_${gradeId}"]`).value) || 0;
-        const test = parseFloat(document.querySelector(`input[name="test_${gradeId}"]`).value) || 0;
-        const exam = parseFloat(document.querySelector(`input[name="exam_${gradeId}"]`).value) || 0;
+        const homeworkPercent = parseFloat(document.querySelector(`input[name="homework_percentage_${gradeId}"]`)?.value) || 0;
+        const classworkPercent = parseFloat(document.querySelector(`input[name="classwork_percentage_${gradeId}"]`)?.value) || 0;
+        const testPercent = parseFloat(document.querySelector(`input[name="test_percentage_${gradeId}"]`)?.value) || 0;
+        const examPercent = parseFloat(document.querySelector(`input[name="exam_percentage_${gradeId}"]`)?.value) || 0;
         
-        const total = homework + classwork + test + exam;
-        document.getElementById(`total_${gradeId}`).textContent = total.toFixed(1);
+        // Calculate weighted contributions
+        const homeworkContribution = (homeworkPercent / 100) * homeworkWeight;
+        const classworkContribution = (classworkPercent / 100) * classworkWeight;
+        const testContribution = (testPercent / 100) * testWeight;
+        const examContribution = (examPercent / 100) * examWeight;
+        
+        const total = homeworkContribution + classworkContribution + testContribution + examContribution;
+        
+        // Update display
+        const totalElement = document.getElementById(`total_${gradeId}`);
+        if (totalElement) {
+            totalElement.textContent = total.toFixed(1) + '%';
+            updateGradeBadge(gradeId, total);
+        }
+        
+        // Update weighted contribution display
+        updateWeightedDisplay(gradeId, {
+            homework: homeworkContribution,
+            classwork: classworkContribution,
+            test: testContribution,
+            exam: examContribution
+        });
+    }
+
+    // Update weighted contribution display
+    function updateWeightedDisplay(gradeId, contributions) {
+        const homeworkElement = document.querySelector(`input[name="homework_percentage_${gradeId}"]`);
+        const classworkElement = document.querySelector(`input[name="classwork_percentage_${gradeId}"]`);
+        const testElement = document.querySelector(`input[name="test_percentage_${gradeId}"]`);
+        const examElement = document.querySelector(`input[name="exam_percentage_${gradeId}"]`);
+        
+        if (homeworkElement) {
+            const parentTd = homeworkElement.closest('td');
+            const smallElement = parentTd.querySelector('.weighted-contribution');
+            if (smallElement) {
+                smallElement.textContent = `= ${contributions.homework.toFixed(1)} of ${homeworkWeight}%`;
+            }
+        }
+        
+        if (classworkElement) {
+            const parentTd = classworkElement.closest('td');
+            const smallElement = parentTd.querySelector('.weighted-contribution');
+            if (smallElement) {
+                smallElement.textContent = `= ${contributions.classwork.toFixed(1)} of ${classworkWeight}%`;
+            }
+        }
+        
+        if (testElement) {
+            const parentTd = testElement.closest('td');
+            const smallElement = parentTd.querySelector('.weighted-contribution');
+            if (smallElement) {
+                smallElement.textContent = `= ${contributions.test.toFixed(1)} of ${testWeight}%`;
+            }
+        }
+        
+        if (examElement) {
+            const parentTd = examElement.closest('td');
+            const smallElement = parentTd.querySelector('.weighted-contribution');
+            if (smallElement) {
+                smallElement.textContent = `= ${contributions.exam.toFixed(1)} of ${examWeight}%`;
+            }
+        }
+    }
+
+    // Update grade badge based on score (GES System: 1-9)
+    function updateGradeBadge(gradeId, score) {
+        const badge = document.getElementById(`grade-badge-${gradeId}`);
+        if (!badge) return;
+        
+        let grade = '9'; // Default to fail
+        if (score >= 90) grade = '1';
+        else if (score >= 80) grade = '2';
+        else if (score >= 70) grade = '3';
+        else if (score >= 60) grade = '4';
+        else if (score >= 50) grade = '5';
+        else if (score >= 40) grade = '6';
+        else if (score >= 30) grade = '7';
+        else if (score >= 20) grade = '8';
+        
+        badge.textContent = grade;
+        badge.className = `badge grade-badge grade-${grade}`;
     }
 
     // Update individual grade
@@ -1131,24 +1332,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Update grade via AJAX
+    // Update grade via AJAX - UPDATED FOR PERCENTAGE SYSTEM
     function updateGrade(gradeId) {
-        const homework = document.querySelector(`input[name="homework_${gradeId}"]`).value;
-        const classwork = document.querySelector(`input[name="classwork_${gradeId}"]`).value;
-        const test = document.querySelector(`input[name="test_${gradeId}"]`).value;
-        const exam = document.querySelector(`input[name="exam_${gradeId}"]`).value;
-        const remarks = document.querySelector(`input[name="remarks_${gradeId}"]`).value;
+        const homework = document.querySelector(`input[name="homework_percentage_${gradeId}"]`)?.value || '0';
+        const classwork = document.querySelector(`input[name="classwork_percentage_${gradeId}"]`)?.value || '0';
+        const test = document.querySelector(`input[name="test_percentage_${gradeId}"]`)?.value || '0';
+        const exam = document.querySelector(`input[name="exam_percentage_${gradeId}"]`)?.value || '0';
+        const remarks = document.querySelector(`input[name="remarks_${gradeId}"]`)?.value || '';
 
         const formData = new FormData();
         formData.append('grade_id', gradeId);
-        formData.append('homework', homework);
-        formData.append('classwork', classwork);
-        formData.append('test', test);
-        formData.append('exam', exam);
+        formData.append('homework_percentage', homework);
+        formData.append('classwork_percentage', classwork);
+        formData.append('test_percentage', test);
+        formData.append('exam_percentage', exam);
         formData.append('remarks', remarks);
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
-        showLoading();
+        showLoading('Saving grade...');
 
         fetch('{% url "grade_edit" 0 %}'.replace('0', gradeId), {
             method: 'POST',
@@ -1158,38 +1359,60 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             hideLoading();
             if (data.success) {
-                showAlert('success', 'Grade updated successfully!');
+                showAlert('success', '✅ Grade updated successfully!');
+                // Update total and badge from response
+                if (data.total_score !== undefined) {
+                    document.getElementById(`total_${gradeId}`).textContent = parseFloat(data.total_score).toFixed(1) + '%';
+                    updateGradeBadge(gradeId, parseFloat(data.total_score));
+                }
+                if (data.ges_grade !== undefined) {
+                    const badge = document.getElementById(`grade-badge-${gradeId}`);
+                    if (badge) {
+                        badge.textContent = data.ges_grade;
+                        badge.className = `badge grade-badge grade-${data.ges_grade}`;
+                    }
+                }
             } else {
-                showAlert('error', 'Error updating grade: ' + data.error);
+                showAlert('error', '❌ Error updating grade: ' + data.error);
             }
         })
         .catch(error => {
             hideLoading();
-            showAlert('error', 'Error updating grade: ' + error);
+            showAlert('error', '❌ Error updating grade: ' + error);
         });
     }
 
     // Save all changes
     document.getElementById('saveAllChangesBtn')?.addEventListener('click', function() {
         const gradeIds = [{% for grade in grades %}{{ grade.id }},{% endfor %}];
-        let successCount = 0;
-        let errorCount = 0;
-
-        showLoading();
-        this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
-        this.disabled = true;
-
-        gradeIds.forEach(gradeId => {
-            updateGrade(gradeId);
-        });
-
-        // Simulate completion (in real implementation, you'd track all promises)
-        setTimeout(() => {
-            hideLoading();
-            this.innerHTML = '<i class="fas fa-save me-1"></i> Save All Changes';
-            this.disabled = false;
-            showAlert('success', 'All changes saved successfully!');
-        }, 2000);
+        
+        if (gradeIds.length === 0) {
+            showAlert('info', 'ℹ️ No grades to save.');
+            return;
+        }
+        
+        if (confirm(`Are you sure you want to save all changes for ${gradeIds.length} grades?`)) {
+            showLoading('Saving all changes...');
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
+            
+            let savedCount = 0;
+            let errorCount = 0;
+            
+            // Update each grade one by one
+            gradeIds.forEach(gradeId => {
+                updateGrade(gradeId);
+                savedCount++;
+            });
+            
+            // Show final result after a delay
+            setTimeout(() => {
+                hideLoading();
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-save me-1"></i> Save All Changes';
+                showAlert('success', `✅ ${savedCount} grades saved successfully!`);
+            }, 2000);
+        }
     });
 
     // Recalculate all totals
@@ -1198,10 +1421,10 @@ document.addEventListener('DOMContentLoaded', function() {
         gradeIds.forEach(gradeId => {
             calculateTotal(gradeId);
         });
-        showAlert('info', 'All totals recalculated!');
+        showAlert('info', `ℹ️ Recalculated totals for ${gradeIds.length} subjects`);
     });
 
-    // Add new grade
+    // Add new grade - UPDATED FOR PERCENTAGE SYSTEM
     document.getElementById('addGradeForm')?.addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -1211,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('term', '{{ term }}');
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
-        showLoading();
+        showLoading('Adding new grade...');
 
         fetch('{% url "grade_add" %}', {
             method: 'POST',
@@ -1221,19 +1444,19 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             hideLoading();
             if (data.success) {
-                showAlert('success', 'Grade added successfully!');
+                showAlert('success', '✅ Grade added successfully!');
                 this.reset();
                 // Reload page to show new grade
                 setTimeout(() => {
                     window.location.reload();
-                }, 1000);
+                }, 1500);
             } else {
-                showAlert('error', 'Error adding grade: ' + data.error);
+                showAlert('error', '❌ Error adding grade: ' + data.error);
             }
         })
         .catch(error => {
             hideLoading();
-            showAlert('error', 'Error adding grade: ' + error);
+            showAlert('error', '❌ Error adding grade: ' + error);
         });
     });
 
@@ -1242,29 +1465,32 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const gradeId = this.getAttribute('data-grade-id');
             
-            if (confirm('Are you sure you want to delete this grade?')) {
-                showLoading();
+            if (confirm('⚠️ Are you sure you want to delete this grade? This action cannot be undone.')) {
+                showLoading('Deleting grade...');
                 
                 fetch('{% url "grade_delete" 0 %}'.replace('0', gradeId), {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token }}',
-                    }
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ confirm: true })
                 })
                 .then(response => response.json())
                 .then(data => {
                     hideLoading();
                     if (data.success) {
-                        showAlert('success', 'Grade deleted successfully!');
+                        showAlert('success', '✅ Grade deleted successfully!');
                         // Remove the row
-                        this.closest('tr').remove();
+                        const row = document.getElementById(`grade-row-${gradeId}`);
+                        if (row) row.remove();
                     } else {
-                        showAlert('error', 'Error deleting grade: ' + data.error);
+                        showAlert('error', '❌ Error deleting grade: ' + data.error);
                     }
                 })
                 .catch(error => {
                     hideLoading();
-                    showAlert('error', 'Error deleting grade: ' + error);
+                    showAlert('error', '❌ Error deleting grade: ' + error);
                 });
             }
         });
@@ -1272,41 +1498,188 @@ document.addEventListener('DOMContentLoaded', function() {
 
     {% endif %}
 
-    // Utility functions
-    function showLoading() {
-        document.getElementById('loadingOverlay').style.display = 'flex';
+    // =============================================
+    // UTILITY FUNCTIONS
+    // =============================================
+    
+    function showLoading(message = 'Processing...') {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.querySelector('h5').textContent = message;
+            overlay.style.display = 'flex';
+        }
     }
 
     function hideLoading() {
-        document.getElementById('loadingOverlay').style.display = 'none';
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.style.display = 'none';
     }
 
     function showAlert(type, message) {
+        // Remove existing alerts
+        const existingAlerts = document.querySelectorAll('.custom-alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
         const alert = document.createElement('div');
-        alert.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+        alert.className = `custom-alert alert alert-${type} alert-dismissible fade show position-fixed`;
+        alert.style.cssText = `
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
         alert.innerHTML = `
             <i class="fas fa-${type === 'success' ? 'check' : 'exclamation'}-circle me-2"></i>
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        document.querySelector('.container-fluid').insertBefore(alert, document.querySelector('.report-card-container'));
+        document.body.appendChild(alert);
         
+        // Auto-remove after 5 seconds
         setTimeout(() => {
-            alert.remove();
+            if (alert.parentNode) alert.remove();
         }, 5000);
     }
 
-    // Auto-save when leaving edit mode
+    // =============================================
+    // PRINT FUNCTIONALITY
+    // =============================================
+    document.querySelector('[onclick="window.print()"]')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        showLoading('Preparing for print...');
+        setTimeout(() => {
+            hideLoading();
+            window.print();
+        }, 1000);
+    });
+
+    // =============================================
+    // PDF DOWNLOAD
+    // =============================================
+    document.getElementById('pdfDownloadBtn')?.addEventListener('click', function(e) {
+        showLoading('Generating PDF...');
+    });
+
+    // =============================================
+    // FORM VALIDATION - UPDATED FOR PERCENTAGE SYSTEM
+    // =============================================
+    const percentageInputs = document.querySelectorAll('.percentage-input');
+    percentageInputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            const value = parseFloat(this.value);
+            if (value > 100) {
+                this.value = 100;
+                showAlert('warning', 'Percentage cannot exceed 100%');
+            }
+            if (value < 0) {
+                this.value = 0;
+                showAlert('warning', 'Percentage cannot be negative');
+            }
+            if (isNaN(value)) {
+                this.value = 0;
+            }
+        });
+    });
+
+    // =============================================
+    // AUTO-SAVE WARNING
+    // =============================================
+    {% if editable_mode %}
+    let hasUnsavedChanges = false;
+    
+    document.querySelectorAll('.editable-field').forEach(field => {
+        field.addEventListener('input', () => hasUnsavedChanges = true);
+    });
+    
     window.addEventListener('beforeunload', function(e) {
-        {% if editable_mode %}
-        // Check if there are unsaved changes
-        const hasChanges = document.querySelectorAll('.editable-field').length > 0;
-        if (hasChanges) {
+        if (hasUnsavedChanges) {
             e.preventDefault();
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
-        {% endif %}
     });
+    
+    // Save on navigation
+    document.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (hasUnsavedChanges && !this.classList.contains('save-btn')) {
+                if (!confirm('You have unsaved changes. Continue without saving?')) {
+                    e.preventDefault();
+                }
+            }
+        });
+    });
+    {% endif %}
+
+    // =============================================
+    // KEYBOARD SHORTCUTS
+    // =============================================
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + S to save
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            {% if editable_mode %}
+            const saveBtn = document.getElementById('saveAllChangesBtn');
+            if (saveBtn) saveBtn.click();
+            {% endif %}
+        }
+        
+        // Ctrl/Cmd + P to print
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            window.print();
+        }
+        
+        // Esc to cancel edit mode
+        if (e.key === 'Escape') {
+            {% if editable_mode %}
+            const cancelBtn = document.querySelector('a.btn-secondary[href*="dashboard"]');
+            if (cancelBtn) cancelBtn.click();
+            {% endif %}
+        }
+        
+        // Ctrl/Cmd + R to recalculate
+        if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+            e.preventDefault();
+            {% if editable_mode %}
+            const recalcBtn = document.getElementById('recalculateTotalsBtn');
+            if (recalcBtn) recalcBtn.click();
+            {% endif %}
+        }
+    });
+
+    // =============================================
+    // RESPONSIVE TABLE FIXES
+    // =============================================
+    function updateTableLabels() {
+        if (window.innerWidth <= 768) {
+            const headers = ['Subject', 'Homework', 'Classwork', 'Test', 'Exam', 'Total', 'Grade', 'Remarks'];
+            if ({% if editable_mode %}true{% else %}false{% endif %}) headers.push('Actions');
+            
+            document.querySelectorAll('tbody td').forEach((td, index) => {
+                const headerIndex = index % headers.length;
+                td.setAttribute('data-label', headers[headerIndex]);
+            });
+        }
+    }
+    
+    updateTableLabels();
+    window.addEventListener('resize', updateTableLabels);
+
+    // =============================================
+    // INITIAL CALCULATION FOR EXISTING GRADES
+    // =============================================
+    {% if editable_mode %}
+    // Calculate totals for all grades on page load
+    setTimeout(() => {
+        const gradeIds = [{% for grade in grades %}{{ grade.id }},{% endfor %}];
+        gradeIds.forEach(gradeId => {
+            calculateTotal(gradeId);
+        });
+    }, 500);
+    {% endif %}
+
+    console.log('✅ Report Card (Percentage System) functionality fully loaded');
 });
 </script>
 {% endblock %}

@@ -10,6 +10,7 @@ from django.core.cache import cache
 
 from .models import Grade, Student, Subject, AcademicTerm, SchoolConfiguration
 from .exceptions import GradingSystemException, DataValidationError
+from core.models.configuration import SchoolConfiguration
 
 logger = logging.getLogger(__name__)
 

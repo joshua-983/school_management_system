@@ -28,7 +28,7 @@ from .views.grade_views import *
 from .views.network_views import *
 from .views.notifications_views import *
 from .views.parents_views import *
-from .views.reportcard_views import *
+from .views.report_card_views import *
 from .views.SecurityEvent_views import *
 from .views.security_views import *
 from .views.student_views import *

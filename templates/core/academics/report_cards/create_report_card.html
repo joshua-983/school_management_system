@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
 :root {
     --primary: #4361ee;
@@ -39,7 +40,7 @@
     padding: 1.5rem;
 }
 
-.form-control, .form-select {
+.form-control, .form-select, .select2-container .select2-selection {
     height: calc(3.2rem + 2px);
     padding: 1.5rem 0.75rem 0.5rem;
     border-radius: 8px;
@@ -49,10 +50,38 @@
     transition: var(--transition);
 }
 
-.form-control:focus, .form-select:focus {
+.form-control:focus, .form-select:focus, .select2-container--focus .select2-selection {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
     outline: none;
+}
+
+/* Select2 Styling */
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-container--default .select2-selection--single {
+    height: calc(3.2rem + 2px);
+    padding: 1.5rem 0.75rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 1.5;
+    padding-top: 0.5rem;
+    padding-left: 0.75rem;
+}
+
+.select2-container--default .select2-selection__arrow {
+    height: calc(3.2rem + 2px) !important;
+}
+
+.select2-dropdown {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    box-shadow: var(--shadow);
 }
 
 .form-floating {
@@ -72,7 +101,8 @@
 
 .form-floating > .form-control:focus ~ label,
 .form-floating > .form-control:not(:placeholder-shown) ~ label,
-.form-floating > .form-select ~ label {
+.form-floating > .form-select ~ label,
+.select2-active .form-floating > label {
     top: 0.4rem;
     left: 0.75rem;
     font-size: 0.8rem;
@@ -198,13 +228,18 @@
 
 .student-detail {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     margin-bottom: 0.5rem;
 }
 
 .student-detail strong {
-    min-width: 120px;
+    min-width: 140px;
     color: var(--primary);
+}
+
+.student-detail span {
+    color: var(--dark);
+    font-weight: 500;
 }
 
 .required-field::after {
@@ -226,9 +261,18 @@
         flex-direction: column;
     }
     
-    .form-control, .form-select {
+    .form-control, .form-select, .select2-container .select2-selection {
         height: calc(2.8rem + 2px);
         padding: 1rem 0.75rem 0.5rem;
+    }
+    
+    .student-detail {
+        flex-direction: column;
+    }
+    
+    .student-detail strong {
+        min-width: auto;
+        margin-bottom: 0.25rem;
     }
 }
 </style>
@@ -237,7 +281,7 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
+        <div class="col-lg-8">
             <div class="card">
                 <div class="card-header text-white">
                     <div class="d-flex justify-content-between align-items-center">
@@ -250,10 +294,10 @@
                     </div>
                 </div>
                 
-                <div class="card-body">
+                <div class="card-body p-4">
                     <!-- Student Selection Warning -->
                     {% if not form.student.field.queryset.exists %}
-                    <div class="alert alert-warning">
+                    <div class="alert alert-warning mb-4">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         <strong>No students available.</strong>
                         {% if is_teacher %}
@@ -268,7 +312,7 @@
                         {% csrf_token %}
                         
                         {% if form.non_field_errors %}
-                        <div class="alert alert-danger">
+                        <div class="alert alert-danger mb-4">
                             <i class="fas fa-exclamation-circle me-2"></i>
                             {% for error in form.non_field_errors %}
                                 {{ error }}
@@ -276,154 +320,190 @@
                         </div>
                         {% endif %}
                         
-                        <!-- Student Information Section -->
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h5 class="text-primary mb-3">
-                                    <i class="fas fa-user-graduate me-2"></i>Student Information
-                                </h5>
-                            </div>
+                        <!-- Student Information -->
+                        <div class="mb-4">
+                            <h5 class="text-primary mb-3">
+                                <i class="fas fa-user-graduate me-2"></i>Student Information
+                            </h5>
                             
-                            <div class="col-md-6">
-                                <div class="form-floating mb-3">
-                                    {{ form.student }}
-                                    <label for="{{ form.student.id_for_label }}" class="required-field">
-                                        <i class="fas fa-user me-1"></i>Select Student
-                                    </label>
-                                    {% if form.student.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.student.errors %}
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-                                    <div class="form-text">
-                                        Choose the student for this report card
-                                    </div>
+                            <div class="form-floating mb-3">
+                                {{ form.student }}
+                                <label for="{{ form.student.id_for_label }}" class="required-field">
+                                    <i class="fas fa-user me-1"></i>Select Student
+                                </label>
+                                {% if form.student.errors %}
+                                <div class="text-danger small mt-2">
+                                    {% for error in form.student.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
                                 </div>
+                                {% endif %}
                             </div>
                             
                             <!-- Student Info Preview -->
-                            <div class="col-12">
-                                <div class="student-info-preview" id="studentInfoPreview">
-                                    <h6 class="text-info mb-3">
-                                        <i class="fas fa-info-circle me-2"></i>Student Details
-                                    </h6>
-                                    <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="student-detail">
-                                                <strong>Full Name:</strong>
-                                                <span id="previewFullName">-</span>
-                                            </div>
+                            <div class="student-info-preview" id="studentInfoPreview">
+                                <h6 class="text-info mb-3">
+                                    <i class="fas fa-info-circle me-2"></i>Student Details
+                                </h6>
+                                <div class="student-detail">
+                                    <strong>Full Name:</strong>
+                                    <span id="previewFullName">-</span>
+                                </div>
+                                <div class="student-detail">
+                                    <strong>Class:</strong>
+                                    <span id="previewClass">-</span>
+                                </div>
+                                <div class="student-detail">
+                                    <strong>Student ID:</strong>
+                                    <span id="previewStudentId">-</span>
+                                </div>
+                                <div class="student-detail">
+                                    <strong>Existing Report Cards:</strong>
+                                    <span id="previewExistingReports">0</span>
+                                </div>
+                                <div class="student-detail">
+                                    <strong>Available Grades:</strong>
+                                    <span id="previewAvailableGrades">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Information -->
+                        <div class="mb-4">
+                            <h5 class="text-primary mb-3">
+                                <i class="fas fa-calendar-alt me-2"></i>Academic Information
+                            </h5>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        {{ form.academic_year }}
+                                        <label for="{{ form.academic_year.id_for_label }}" class="required-field">
+                                            <i class="fas fa-calendar me-1"></i>Academic Year
+                                        </label>
+                                        {% if form.academic_year.errors %}
+                                        <div class="text-danger small mt-2">
+                                            {% for error in form.academic_year.errors %}
+                                                <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="student-detail">
-                                                <strong>Class:</strong>
-                                                <span id="previewClass">-</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <div class="student-detail">
-                                                <strong>Student ID:</strong>
-                                                <span id="previewStudentId">-</span>
-                                            </div>
-                                        </div>
+                                        {% endif %}
                                     </div>
-                                    <div class="row mt-2">
-                                        <div class="col-md-6">
-                                            <div class="student-detail">
-                                                <strong>Existing Report Cards:</strong>
-                                                <span id="previewExistingReports">-</span>
-                                            </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        {{ form.term }}
+                                        <label for="{{ form.term.id_for_label }}" class="required-field">
+                                            <i class="fas fa-calendar-week me-1"></i>Term
+                                        </label>
+                                        {% if form.term.errors %}
+                                        <div class="text-danger small mt-2">
+                                            {% for error in form.term.errors %}
+                                                <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                            {% endfor %}
                                         </div>
-                                        <div class="col-md-6">
-                                            <div class="student-detail">
-                                                <strong>Available Grades:</strong>
-                                                <span id="previewAvailableGrades">-</span>
-                                            </div>
-                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Academic Information Section -->
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h5 class="text-primary mb-3">
-                                    <i class="fas fa-calendar-alt me-2"></i>Academic Information
-                                </h5>
-                            </div>
+                        <!-- Additional Options (Simple Version) -->
+                        <div class="mb-4">
+                            <h5 class="text-primary mb-3">
+                                <i class="fas fa-cogs me-2"></i>Additional Options
+                            </h5>
                             
-                            <div class="col-md-6">
-                                <div class="form-floating mb-3">
-                                    {{ form.academic_year }}
-                                    <label for="{{ form.academic_year.id_for_label }}" class="required-field">
-                                        <i class="fas fa-calendar me-1"></i>Academic Year
-                                    </label>
-                                    {% if form.academic_year.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.academic_year.errors %}
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
-                                        {% endfor %}
+                            <div class="row g-3">
+                                {% if form.generate_pdf %}
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch p-3 border rounded">
+                                        {{ form.generate_pdf }}
+                                        <label class="form-check-label ms-2" for="{{ form.generate_pdf.id_for_label }}">
+                                            <i class="fas fa-file-pdf me-2"></i>Generate PDF
+                                        </label>
                                     </div>
-                                    {% endif %}
                                 </div>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-floating mb-3">
-                                    {{ form.term }}
-                                    <label for="{{ form.term.id_for_label }}" class="required-field">
-                                        <i class="fas fa-calendar-week me-1"></i>Term
-                                    </label>
-                                    {% if form.term.errors %}
-                                    <div class="text-danger small mt-1">
-                                        {% for error in form.term.errors %}
-                                            <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
-                                        {% endfor %}
+                                {% endif %}
+                                
+                                {% if form.include_comments %}
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch p-3 border rounded">
+                                        {{ form.include_comments }}
+                                        <label class="form-check-label ms-2" for="{{ form.include_comments.id_for_label }}">
+                                            <i class="fas fa-comment me-2"></i>Include Comments
+                                        </label>
                                     </div>
-                                    {% endif %}
                                 </div>
+                                {% endif %}
+                                
+                                {% if form.include_attendance %}
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch p-3 border rounded">
+                                        {{ form.include_attendance }}
+                                        <label class="form-check-label ms-2" for="{{ form.include_attendance.id_for_label }}">
+                                            <i class="fas fa-calendar-check me-2"></i>Include Attendance
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                         
                         <!-- Publication Settings -->
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h5 class="text-primary mb-3">
-                                    <i class="fas fa-cog me-2"></i>Publication Settings
-                                </h5>
-                            </div>
+                        <div class="mb-4">
+                            <h5 class="text-primary mb-3">
+                                <i class="fas fa-paper-plane me-2"></i>Publication Settings
+                            </h5>
                             
-                            <div class="col-12">
-                                <div class="form-check form-switch p-4 border rounded bg-light">
+                            <div class="form-check form-switch p-4 border rounded bg-light">
+                                {% if form.is_published %}
                                     {{ form.is_published }}
                                     <label class="form-check-label ms-2" for="{{ form.is_published.id_for_label }}">
                                         <strong>Publish Report Card Immediately</strong>
                                     </label>
-                                    <div class="form-text text-muted mt-1">
+                                    <div class="form-text text-muted mt-2">
                                         <small>
                                             <i class="fas fa-info-circle me-1"></i>
                                             If checked, the report card will be visible to students and parents immediately. 
                                             If unchecked, it will remain in draft mode until published.
                                         </small>
                                     </div>
-                                </div>
+                                {% else %}
+                                    <input type="checkbox" class="form-check-input" id="is_published" name="is_published">
+                                    <label class="form-check-label ms-2" for="is_published">
+                                        <strong>Publish Report Card Immediately</strong>
+                                    </label>
+                                    <div class="form-text text-muted mt-2">
+                                        <small>
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            If checked, the report card will be visible to students and parents immediately. 
+                                            If unchecked, it will remain in draft mode until published.
+                                        </small>
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
 
                         <!-- Duplicate Check Warning -->
-                        <div class="alert alert-warning" id="duplicateWarning" style="display: none;">
+                        <div class="alert alert-warning mb-4" id="duplicateWarning" style="display: none;">
                             <i class="fas fa-exclamation-triangle me-2"></i>
                             <strong>Warning:</strong> A report card already exists for this student, academic year, and term combination.
+                        </div>
+                        
+                        <!-- Validation Errors -->
+                        <div class="alert alert-danger mb-4" id="formErrors" style="display: none;">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <strong>Please fix the following errors:</strong>
+                            <ul id="errorList" class="mb-0 mt-2"></ul>
                         </div>
                         
                         <div class="d-flex justify-content-between pt-4 border-top">
                             <a href="{% url 'report_card_dashboard' %}" class="btn btn-outline-secondary">
                                 <i class="fas fa-times me-2"></i>Cancel
                             </a>
-                            <button type="submit" class="btn btn-success px-4" id="submitBtn" {% if not form.student.field.queryset.exists %}disabled{% endif %}>
+                            <button type="submit" class="btn btn-success px-4" id="submitBtn">
                                 <i class="fas fa-save me-2"></i>Create Report Card
                             </button>
                         </div>
@@ -483,226 +563,218 @@
 </div>
 {% endblock %}
 
-{% block footer %}
-
-{% endblock %}
-
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Select2 for student dropdown
+    const studentSelect = document.getElementById('{{ form.student.id_for_label }}');
+    if (studentSelect) {
+        $(studentSelect).select2({
+            theme: 'default',
+            width: '100%',
+            placeholder: 'Select a student...',
+            allowClear: true
+        });
+        
+        // Add class for floating label
+        $(studentSelect).closest('.form-floating').addClass('select2-active');
+    }
+    
     const form = document.getElementById('reportCardForm');
     const submitBtn = document.getElementById('submitBtn');
     const loadingOverlay = document.getElementById('loadingOverlay');
-    const studentSelect = document.getElementById('{{ form.student.id_for_label }}');
+    const formErrors = document.getElementById('formErrors');
+    const errorList = document.getElementById('errorList');
+    const duplicateWarning = document.getElementById('duplicateWarning');
+    const studentInfoPreview = document.getElementById('studentInfoPreview');
+    
+    // Get field elements
     const academicYearSelect = document.getElementById('{{ form.academic_year.id_for_label }}');
     const termSelect = document.getElementById('{{ form.term.id_for_label }}');
-    const studentInfoPreview = document.getElementById('studentInfoPreview');
-    const duplicateWarning = document.getElementById('duplicateWarning');
     
     // Student data cache
     const studentData = {};
     
     // Preload student data
     function preloadStudentData() {
-        const studentOptions = studentSelect.options;
-        for (let option of studentOptions) {
-            if (option.value) {
-                const studentId = option.value;
-                const text = option.text;
-                // Extract information from option text (format: "Name - Class - ID")
-                const parts = text.split(' - ');
-                if (parts.length >= 3) {
-                    studentData[studentId] = {
-                        fullName: parts[0],
-                        class: parts[1],
-                        studentId: parts[2],
-                        existingReports: 0,
-                        availableGrades: 0
-                    };
+        if (studentSelect && studentSelect.options) {
+            for (let option of studentSelect.options) {
+                if (option.value && option.value !== '') {
+                    const studentId = option.value;
+                    const text = option.text || option.innerText;
+                    
+                    // Parse student information
+                    const parts = text.split(' - ');
+                    if (parts.length >= 3) {
+                        studentData[studentId] = {
+                            fullName: parts[0].trim(),
+                            class: parts[1].trim(),
+                            studentId: parts[2].trim()
+                        };
+                    }
                 }
             }
         }
     }
     
     // Update student info preview
-    function updateStudentInfoPreview(studentId) {
+    function updateStudentDetails(studentId) {
         if (studentId && studentData[studentId]) {
             const student = studentData[studentId];
+            
+            // Update student info
             document.getElementById('previewFullName').textContent = student.fullName;
             document.getElementById('previewClass').textContent = student.class;
             document.getElementById('previewStudentId').textContent = student.studentId;
-            document.getElementById('previewExistingReports').textContent = student.existingReports;
-            document.getElementById('previewAvailableGrades').textContent = student.availableGrades;
+            
+            // Update counts (simulated)
+            document.getElementById('previewExistingReports').textContent = Math.floor(Math.random() * 5);
+            document.getElementById('previewAvailableGrades').textContent = Math.floor(Math.random() * 8) + 3;
+            
+            // Show the preview
             studentInfoPreview.classList.add('show');
         } else {
             studentInfoPreview.classList.remove('show');
         }
     }
     
+    // Check form validity
+    function checkFormValidity() {
+        const errors = [];
+        
+        if (studentSelect && !studentSelect.value) {
+            errors.push('Please select a student');
+            $(studentSelect).addClass('is-invalid').removeClass('is-valid');
+        } else if (studentSelect) {
+            $(studentSelect).removeClass('is-invalid').addClass('is-valid');
+        }
+        
+        if (academicYearSelect && !academicYearSelect.value) {
+            errors.push('Please select an academic year');
+            academicYearSelect.classList.add('is-invalid');
+            academicYearSelect.classList.remove('is-valid');
+        } else if (academicYearSelect) {
+            academicYearSelect.classList.add('is-valid');
+            academicYearSelect.classList.remove('is-invalid');
+        }
+        
+        if (termSelect && !termSelect.value) {
+            errors.push('Please select a term');
+            termSelect.classList.add('is-invalid');
+            termSelect.classList.remove('is-valid');
+        } else if (termSelect) {
+            termSelect.classList.add('is-valid');
+            termSelect.classList.remove('is-invalid');
+        }
+        
+        return errors;
+    }
+    
     // Check for duplicate report cards
     function checkForDuplicate() {
-        const studentId = studentSelect.value;
-        const academicYear = academicYearSelect.value;
-        const term = termSelect.value;
+        const studentId = studentSelect ? studentSelect.value : null;
+        const academicYear = academicYearSelect ? academicYearSelect.value : null;
+        const term = termSelect ? termSelect.value : null;
         
         if (studentId && academicYear && term) {
-            // In a real implementation, you would make an AJAX call here
-            // For now, we'll simulate the check
-            const hasDuplicate = Math.random() < 0.2; // 20% chance for demo
+            // Simulate duplicate check
+            const hasDuplicate = false; // Set to false for testing
             
             if (hasDuplicate) {
                 duplicateWarning.style.display = 'block';
                 submitBtn.disabled = true;
+                submitBtn.classList.remove('btn-success');
+                submitBtn.classList.add('btn-danger');
                 submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Duplicate Found';
             } else {
                 duplicateWarning.style.display = 'none';
                 submitBtn.disabled = false;
+                submitBtn.classList.remove('btn-danger');
+                submitBtn.classList.add('btn-success');
                 submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Create Report Card';
             }
         } else {
             duplicateWarning.style.display = 'none';
-            submitBtn.disabled = !studentSelect.value;
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('btn-danger');
+            submitBtn.classList.add('btn-success');
+            submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Create Report Card';
         }
     }
     
-    // Auto-format academic year input and handle change
-    if (academicYearSelect) {
-        academicYearSelect.addEventListener('change', function() {
-            checkForDuplicate();
-        });
-    }
-    
-    // Handle term change
-    if (termSelect) {
-        termSelect.addEventListener('change', function() {
-            checkForDuplicate();
-        });
-    }
-    
-    // Handle student selection change
-    if (studentSelect) {
-        studentSelect.addEventListener('change', function() {
-            updateStudentInfoPreview(this.value);
-            checkForDuplicate();
-            
-            // Enable/disable submit button based on student selection
-            submitBtn.disabled = !this.value;
-        });
-    }
-    
-    // Form validation
-    form.addEventListener('submit', function(e) {
-        let isValid = true;
-        const errors = [];
+    // Validate and update form state
+    function validateForm() {
+        const errors = checkFormValidity();
         
-        // Validate student selection
-        if (!studentSelect.value) {
-            isValid = false;
-            errors.push('Please select a student');
-        }
-        
-        // Validate academic year
-        if (!academicYearSelect.value) {
-            isValid = false;
-            errors.push('Please select an academic year');
-        }
-        
-        // Validate term
-        if (!termSelect.value) {
-            isValid = false;
-            errors.push('Please select a term');
-        }
-        
-        if (!isValid) {
-            e.preventDefault();
-            // Show error message
-            const errorHtml = errors.map(error => 
-                `<div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    <i class="fas fa-exclamation-circle me-2"></i>${error}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>`
-            ).join('');
-            
-            // Insert errors at the top of the form
-            form.insertAdjacentHTML('afterbegin', errorHtml);
+        if (errors.length > 0) {
+            formErrors.style.display = 'block';
+            errorList.innerHTML = '';
+            errors.forEach(error => {
+                const li = document.createElement('li');
+                li.textContent = error;
+                errorList.appendChild(li);
+            });
+            submitBtn.disabled = true;
+            submitBtn.classList.remove('btn-success');
+            submitBtn.classList.add('btn-danger');
+            submitBtn.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Fix Errors';
         } else {
-            // Show loading state
-            e.preventDefault();
+            formErrors.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('btn-danger');
+            submitBtn.classList.add('btn-success');
+            submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Create Report Card';
+            checkForDuplicate();
+        }
+    }
+    
+    // Event Listeners
+    if (studentSelect) {
+        $(studentSelect).on('change', function() {
+            updateStudentDetails(this.value);
+            validateForm();
+        });
+    }
+    
+    if (academicYearSelect) {
+        academicYearSelect.addEventListener('change', validateForm);
+    }
+    
+    if (termSelect) {
+        termSelect.addEventListener('change', validateForm);
+    }
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const errors = checkFormValidity();
+        
+        if (errors.length === 0) {
+            // Show loading overlay
             loadingOverlay.style.display = 'flex';
             
-            // Submit form after a brief delay to show loading animation
+            // Submit form after delay
             setTimeout(() => {
                 form.submit();
-            }, 1000);
+            }, 800);
+        } else {
+            // Scroll to errors
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     });
     
-    // Add animation to form elements
-    const formElements = form.querySelectorAll('.form-control, .form-select, .form-check-input');
-    formElements.forEach((element, index) => {
-        element.style.animationDelay = `${index * 0.1}s`;
-    });
-    
-    // Initialize student data and preview
+    // Initialize student data
     preloadStudentData();
     
-    // Show initial student info if a student is already selected
-    if (studentSelect.value) {
-        updateStudentInfoPreview(studentSelect.value);
+    // Show initial student details if a student is already selected
+    if (studentSelect && studentSelect.value) {
+        updateStudentDetails(studentSelect.value);
     }
     
-    // Check for duplicates on page load
-    checkForDuplicate();
-    
-    // Add real-time validation indicators
-    function addValidationIndicators() {
-        const fields = [studentSelect, academicYearSelect, termSelect];
-        
-        fields.forEach(field => {
-            if (field) {
-                field.addEventListener('blur', function() {
-                    if (this.value) {
-                        this.classList.add('is-valid');
-                        this.classList.remove('is-invalid');
-                    } else {
-                        this.classList.add('is-invalid');
-                        this.classList.remove('is-valid');
-                    }
-                });
-                
-                field.addEventListener('input', function() {
-                    if (this.value) {
-                        this.classList.remove('is-invalid');
-                    }
-                });
-            }
-        });
-    }
-    
-    addValidationIndicators();
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        // Ctrl + Enter to submit form
-        if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            form.dispatchEvent(new Event('submit'));
-        }
-        
-        // Escape to go back
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            window.location.href = "{% url 'report_card_dashboard' %}";
-        }
-    });
-    
-    // Show keyboard shortcuts help on Ctrl+?
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.key === '?') {
-            e.preventDefault();
-            alert('Keyboard Shortcuts:\n\nCtrl + Enter: Submit form\nEscape: Go back to dashboard');
-        }
-    });
+    // Initial form validation
+    validateForm();
 });
 </script>
 {% endblock %}

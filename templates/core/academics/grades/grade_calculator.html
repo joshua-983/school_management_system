@@ -1,0 +1,591 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Grade Calculator - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <h1 class="h2 mb-0">
+                    <i class="fas fa-calculator me-2"></i>Interactive Grade Calculator (Percentage-Based)
+                </h1>
+                <div class="btn-group">
+                    <a href="{% url 'grade_configuration' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-cog me-1"></i>Configuration
+                    </a>
+                    <a href="{% url 'grade_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>View Grades
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">
+                Calculate grades based on current school configuration using percentage-based system.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Calculator Form -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-calculator me-2"></i>Percentage-Based Grade Calculator
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="gradeCalculatorForm">
+                        <!-- Score Inputs -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="border-bottom pb-2 mb-3">Enter Percentage Scores (0-100%)</h6>
+                                <p class="text-muted mb-3">
+                                    Enter percentage scores for each assessment type. Weights are based on current configuration.
+                                </p>
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control score-input" id="classwork_percentage" 
+                                           min="0" max="100" step="0.01"
+                                           value="0">
+                                    <label for="classwork_percentage">
+                                        Classwork (%)
+                                    </label>
+                                </div>
+                                <small class="text-muted">Weight: {{ assessment_weights.classwork }}%</small>
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control score-input" id="homework_percentage" 
+                                           min="0" max="100" step="0.01"
+                                           value="0">
+                                    <label for="homework_percentage">
+                                        Homework (%)
+                                    </label>
+                                </div>
+                                <small class="text-muted">Weight: {{ assessment_weights.homework }}%</small>
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control score-input" id="test_percentage" 
+                                           min="0" max="100" step="0.01"
+                                           value="0">
+                                    <label for="test_percentage">
+                                        Test (%)
+                                    </label>
+                                </div>
+                                <small class="text-muted">Weight: {{ assessment_weights.test }}%</small>
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control score-input" id="exam_percentage" 
+                                           min="0" max="100" step="0.01"
+                                           value="0">
+                                    <label for="exam_percentage">
+                                        Exam (%)
+                                    </label>
+                                </div>
+                                <small class="text-muted">Weight: {{ assessment_weights.exam }}%</small>
+                            </div>
+                            
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Total Weight:</strong> 
+                                            <span id="weightTotal">{{ assessment_weights.classwork|add:assessment_weights.homework|add:assessment_weights.test|add:assessment_weights.exam }}</span>%
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Passing Mark:</strong> {{ passing_mark }}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Weighted Calculation Info -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="alert alert-warning">
+                                    <h6><i class="fas fa-info-circle me-2"></i>How Calculation Works:</h6>
+                                    <p class="mb-0">
+                                        <strong>Weighted Total =</strong> (Classwork% × {{ assessment_weights.classwork }}%) + 
+                                        (Homework% × {{ assessment_weights.homework }}%) + 
+                                        (Test% × {{ assessment_weights.test }}%) + 
+                                        (Exam% × {{ assessment_weights.exam }}%)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Calculate Button -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-primary w-100" onclick="calculateGrade()">
+                                    <i class="fas fa-calculator me-1"></i>Calculate Weighted Grade
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Grade Boundary Reference -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Grade Boundaries Reference
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>GES Grade</th>
+                                    <th>Letter Grade</th>
+                                    <th>Score Range</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ges_boundary in ges_boundaries %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-{% if ges_boundary.grade == '1' or ges_boundary.grade == '2' %}success{% elif ges_boundary.grade == '3' or ges_boundary.grade == '4' %}info{% elif ges_boundary.grade == '5' or ges_boundary.grade == '6' %}warning{% else %}danger{% endif %}">
+                                            {{ ges_boundary.grade }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if forloop.counter0 < letter_boundaries|length %}
+                                        <span class="badge bg-{% if forloop.counter0 < 2 %}success{% elif forloop.counter0 < 4 %}info{% elif forloop.counter0 < 6 %}warning{% else %}danger{% endif %}">
+                                            {{ letter_boundaries.forloop.counter0.grade }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if ges_boundary.grade == '9' %}
+                                        0 - {{ ges_boundary.max|default:"19.99" }}%
+                                        {% else %}
+                                        {{ ges_boundary.min }} - 
+                                        {% if forloop.last %}
+                                        100%
+                                        {% else %}
+                                        {{ ges_boundaries.forloop.counter.min|default:"100" }}%
+                                        {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ ges_boundary.description }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="col-lg-4">
+            <div class="sticky-top" style="top: 20px;">
+                <!-- Result Display -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-chart-line me-2"></i>Calculated Result
+                        </h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="resultContainer" class="d-none">
+                            <!-- Weighted Score Display -->
+                            <div class="mb-4">
+                                <h3 id="totalScore" class="display-4 fw-bold">0.00</h3>
+                                <p class="text-muted">Weighted Score</p>
+                            </div>
+                            
+                            <!-- Grade Display -->
+                            <div class="mb-4">
+                                <h4 id="gradeDisplay" class="fw-bold mb-2">N/A</h4>
+                                <p id="gradeDescription" class="text-muted">Not calculated</p>
+                            </div>
+                            
+                            <!-- Status Badge -->
+                            <div class="mb-4">
+                                <span id="statusBadge" class="badge bg-secondary fs-6 p-3">Not Calculated</span>
+                            </div>
+                            
+                            <!-- Weight Breakdown -->
+                            <div class="alert alert-light mb-3">
+                                <h6 class="mb-2">Weighted Breakdown:</h6>
+                                <div class="row small">
+                                    <div class="col-6">
+                                        <span id="classworkContribution">0.00</span><br>
+                                        <small class="text-muted">Classwork ({{ assessment_weights.classwork }}%)</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <span id="homeworkContribution">0.00</span><br>
+                                        <small class="text-muted">Homework ({{ assessment_weights.homework }}%)</small>
+                                    </div>
+                                    <div class="col-6 mt-2">
+                                        <span id="testContribution">0.00</span><br>
+                                        <small class="text-muted">Test ({{ assessment_weights.test }}%)</small>
+                                    </div>
+                                    <div class="col-6 mt-2">
+                                        <span id="examContribution">0.00</span><br>
+                                        <small class="text-muted">Exam ({{ assessment_weights.exam }}%)</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Details -->
+                            <div class="alert alert-secondary">
+                                <small>
+                                    <strong>Grading System:</strong> <span id="gradingSystem">{{ grading_system }}</span><br>
+                                    <strong>Passing:</strong> <span id="passingStatus">N/A</span> (≥{{ passing_mark }}%)<br>
+                                    <strong>Performance:</strong> <span id="performanceLevel">N/A</span>
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div id="noResultMessage">
+                            <div class="text-center py-5">
+                                <i class="fas fa-calculator fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Enter percentage scores and click "Calculate Weighted Grade" to see results</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Examples -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-bolt me-2"></i>Quick Examples
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-outline-primary" onclick="loadExample('excellent')">
+                                <i class="fas fa-star me-1"></i>Excellent Student (90%+)
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="loadExample('average')">
+                                <i class="fas fa-chart-line me-1"></i>Average Student (70-80%)
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="loadExample('passing')">
+                                <i class="fas fa-check me-1"></i>Barely Passing (40-50%)
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" onclick="loadExample('failing')">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Failing Student (<40%)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .score-input:focus {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+    }
+    
+    #resultContainer {
+        animation: fadeIn 0.5s;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    .contribution-value {
+        font-weight: bold;
+        color: var(--bs-primary);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Example data for percentage-based system
+    const examples = {
+        'excellent': {
+            classwork_percentage: 95,  // 95% in classwork
+            homework_percentage: 90,   // 90% in homework
+            test_percentage: 92,       // 92% in test
+            exam_percentage: 96        // 96% in exam
+        },
+        'average': {
+            classwork_percentage: 75,
+            homework_percentage: 70,
+            test_percentage: 72,
+            exam_percentage: 68
+        },
+        'passing': {
+            classwork_percentage: 50,
+            homework_percentage: 45,
+            test_percentage: 48,
+            exam_percentage: 42
+        },
+        'failing': {
+            classwork_percentage: 35,
+            homework_percentage: 30,
+            test_percentage: 32,
+            exam_percentage: 25
+        }
+    };
+
+    // Assessment weights from Django template
+    const ASSESSMENT_WEIGHTS = {
+        classwork: {{ assessment_weights.classwork }},
+        homework: {{ assessment_weights.homework }},
+        test: {{ assessment_weights.test }},
+        exam: {{ assessment_weights.exam }}
+    };
+
+    function loadExample(type) {
+        const example = examples[type];
+        $('#classwork_percentage').val(example.classwork_percentage);
+        $('#homework_percentage').val(example.homework_percentage);
+        $('#test_percentage').val(example.test_percentage);
+        $('#exam_percentage').val(example.exam_percentage);
+        calculateGrade();
+    }
+
+    function calculateGrade() {
+        // Get percentage values
+        const classwork = parseFloat($('#classwork_percentage').val()) || 0;
+        const homework = parseFloat($('#homework_percentage').val()) || 0;
+        const test = parseFloat($('#test_percentage').val()) || 0;
+        const exam = parseFloat($('#exam_percentage').val()) || 0;
+        
+        // Validate percentage range (0-100%)
+        $('.score-input').removeClass('is-invalid');
+        let hasError = false;
+        
+        if (classwork < 0 || classwork > 100 || isNaN(classwork)) {
+            $('#classwork_percentage').addClass('is-invalid');
+            hasError = true;
+        }
+        if (homework < 0 || homework > 100 || isNaN(homework)) {
+            $('#homework_percentage').addClass('is-invalid');
+            hasError = true;
+        }
+        if (test < 0 || test > 100 || isNaN(test)) {
+            $('#test_percentage').addClass('is-invalid');
+            hasError = true;
+        }
+        if (exam < 0 || exam > 100 || isNaN(exam)) {
+            $('#exam_percentage').addClass('is-invalid');
+            hasError = true;
+        }
+        
+        if (hasError) {
+            Swal.fire({
+                title: 'Invalid Input',
+                text: 'Percentages must be between 0 and 100. Please check your inputs.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        // Calculate weighted contributions
+        const classworkContribution = (classwork * ASSESSMENT_WEIGHTS.classwork) / 100;
+        const homeworkContribution = (homework * ASSESSMENT_WEIGHTS.homework) / 100;
+        const testContribution = (test * ASSESSMENT_WEIGHTS.test) / 100;
+        const examContribution = (exam * ASSESSMENT_WEIGHTS.exam) / 100;
+        
+        // Calculate total weighted score
+        const totalScore = classworkContribution + homeworkContribution + testContribution + examContribution;
+        
+        // Send to server for grade calculation
+        $.ajax({
+            url: '{% url "calculate_grade_api" %}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                classwork_percentage: classwork,
+                homework_percentage: homework,
+                test_percentage: test,
+                exam_percentage: exam
+            }),
+            success: function(data) {
+                displayResult(data, totalScore, {
+                    classwork: classworkContribution,
+                    homework: homeworkContribution,
+                    test: testContribution,
+                    exam: examContribution
+                });
+            },
+            error: function(xhr, status, error) {
+                // Fallback to client-side calculation if API fails
+                const fallbackResult = calculateGradeLocally(totalScore);
+                displayResult(fallbackResult, totalScore, {
+                    classwork: classworkContribution,
+                    homework: homeworkContribution,
+                    test: testContribution,
+                    exam: examContribution
+                });
+            }
+        });
+    }
+
+    function calculateGradeLocally(totalScore) {
+        // Client-side grade calculation based on GES standards
+        let gradeLetter, description, isPassing, performanceLevel, gradeColor;
+        
+        if (totalScore >= 90) {
+            gradeLetter = "1";
+            description = "Excellent - Outstanding performance";
+            isPassing = true;
+            performanceLevel = "Excellent";
+            gradeColor = "success";
+        } else if (totalScore >= 80) {
+            gradeLetter = "2";
+            description = "Very Good - Strong performance";
+            isPassing = true;
+            performanceLevel = "Very Good";
+            gradeColor = "info";
+        } else if (totalScore >= 70) {
+            gradeLetter = "3";
+            description = "Good - Above average performance";
+            isPassing = true;
+            performanceLevel = "Good";
+            gradeColor = "info";
+        } else if (totalScore >= 60) {
+            gradeLetter = "4";
+            description = "Satisfactory - Meets expectations";
+            isPassing = true;
+            performanceLevel = "Satisfactory";
+            gradeColor = "primary";
+        } else if (totalScore >= 50) {
+            gradeLetter = "5";
+            description = "Fair - Needs improvement";
+            isPassing = true;
+            performanceLevel = "Fair";
+            gradeColor = "warning";
+        } else if (totalScore >= 40) {
+            gradeLetter = "6";
+            description = "Marginal - Below expectations";
+            isPassing = true;
+            performanceLevel = "Marginal";
+            gradeColor = "warning";
+        } else if (totalScore >= 30) {
+            gradeLetter = "7";
+            description = "Poor - Significant improvement needed";
+            isPassing = false;
+            performanceLevel = "Poor";
+            gradeColor = "danger";
+        } else if (totalScore >= 20) {
+            gradeLetter = "8";
+            description = "Very Poor - Concerning performance";
+            isPassing = false;
+            performanceLevel = "Very Poor";
+            gradeColor = "danger";
+        } else {
+            gradeLetter = "9";
+            description = "Fail - Immediate intervention required";
+            isPassing = false;
+            performanceLevel = "Fail";
+            gradeColor = "danger";
+        }
+        
+        return {
+            total_score: totalScore,
+            display_grade: gradeLetter,
+            grade_description: description,
+            is_passing: isPassing,
+            performance_level: performanceLevel,
+            grade_color: gradeColor,
+            grading_system: "GES"
+        };
+    }
+
+    function displayResult(data, totalScore, contributions) {
+        // Show result container
+        $('#noResultMessage').addClass('d-none');
+        $('#resultContainer').removeClass('d-none');
+        
+        // Update display
+        $('#totalScore').text(totalScore.toFixed(2));
+        $('#gradeDisplay').text(data.display_grade);
+        $('#gradeDescription').text(data.grade_description);
+        
+        // Update status badge
+        const statusBadge = $('#statusBadge');
+        statusBadge.removeClass('bg-success bg-danger bg-warning bg-info bg-secondary');
+        
+        if (data.is_passing) {
+            statusBadge.text('PASSING').addClass('bg-success');
+        } else {
+            statusBadge.text('FAILING').addClass('bg-danger');
+        }
+        
+        // Update details
+        $('#gradingSystem').text(data.grading_system);
+        $('#passingStatus').text(data.is_passing ? 'Yes' : 'No');
+        $('#performanceLevel').text(data.performance_level);
+        
+        // Add grade color
+        const gradeColor = data.grade_color || 'secondary';
+        $('#gradeDisplay').removeClass('text-success text-info text-warning text-danger text-secondary');
+        $('#gradeDisplay').addClass('text-' + gradeColor);
+        
+        // Show contribution breakdown
+        if (contributions) {
+            $('#classworkContribution').text(contributions.classwork.toFixed(2));
+            $('#homeworkContribution').text(contributions.homework.toFixed(2));
+            $('#testContribution').text(contributions.test.toFixed(2));
+            $('#examContribution').text(contributions.exam.toFixed(2));
+        }
+    }
+
+    // Initialize
+    $(document).ready(function() {
+        // Real-time validation
+        $('.score-input').on('input', function() {
+            // Validate as user types
+            const value = parseFloat($(this).val()) || 0;
+            if (value < 0 || value > 100 || isNaN(value)) {
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+        
+        // Enter key to calculate
+        $('.score-input').keypress(function(e) {
+            if (e.which === 13) {
+                calculateGrade();
+                return false;
+            }
+        });
+        
+        // Auto-calculate on example selection
+        $('.score-input').on('change', function() {
+            // Auto-calculate after 1 second if all fields have values
+            setTimeout(function() {
+                const allFilled = $('.score-input').filter(function() {
+                    return $(this).val() && $(this).val() !== '0';
+                }).length === 4;
+                
+                if (allFilled) {
+                    calculateGrade();
+                }
+            }, 1000);
+        });
+    });
+</script>
+{% endblock %}
