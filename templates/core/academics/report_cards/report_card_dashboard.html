@@ -356,20 +356,19 @@ body {
 }
 
 /* ===== FORM STYLES ===== */
-.form-control, .form-select {
+.form-control, .form-select, .select2-container .select2-selection {
+    height: calc(3.2rem + 2px);
+    padding: 1.5rem 0.75rem 0.5rem;
     border-radius: 8px;
     border: 1px solid #dee2e6;
-    padding: 0.75rem;
+    background-color: #fff;
+    font-size: 1rem;
     transition: var(--transition);
-    font-size: 0.9rem;
-    background-color: white !important;
-    color: var(--dark) !important;
 }
 
-.form-control:focus, .form-select:focus {
+.form-control:focus, .form-select:focus, .select2-container--focus .select2-selection {
     border-color: var(--primary);
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
-    transform: translateY(-1px);
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
     outline: none;
 }
 
@@ -475,6 +474,14 @@ body {
 }
 
 /* ===== MODAL STYLES ===== */
+.modal {
+    z-index: 1060 !important; /* FIX: Higher z-index for modal */
+}
+
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+
 .modal-content {
     border-radius: var(--border-radius);
     border: none;
@@ -502,7 +509,7 @@ body {
     border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
 
-/* CRITICAL FIX: Modal Form Elements */
+/* FIX: Modal dropdown z-index issues */
 .modal .form-select,
 .modal .form-control,
 .modal .form-check-input {
@@ -518,9 +525,11 @@ body {
     -moz-appearance: menulist !important;
     appearance: menulist !important;
     color: var(--dark) !important;
+    z-index: 1070 !important; /* FIX: Higher z-index for dropdowns */
+    position: relative;
 }
 
-/* Ensure select dropdown arrows are visible and clickable */
+/* FIX: Ensure select dropdown arrows are visible and clickable */
 .modal .form-select {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e") !important;
     background-position: right 0.75rem center !important;
@@ -573,28 +582,39 @@ body {
     opacity: 0.7;
 }
 
-/* Force enable all options in select elements */
+/* FIX: Force enable all options in select elements */
 .modal select.form-select option {
     background-color: white;
     color: #000;
     cursor: pointer;
     padding: 0.5rem;
+    z-index: 99999 !important; /* FIX: Very high z-index for dropdown options */
 }
 
-/* Remove any disabled styling */
+/* FIX: Remove any disabled styling */
 .modal .form-select:not(:disabled),
 .modal .form-control:not(:disabled) {
     background-color: white;
     cursor: pointer;
 }
 
-/* Quick View Modal Specific Fixes */
+/* FIX: Quick View Modal Specific Fixes */
+#viewReportCardModal {
+    z-index: 1061 !important;
+}
+
+#viewReportCardModal .modal-dialog {
+    z-index: 1062 !important;
+}
+
 #viewReportCardModal .form-select {
     background-color: white !important;
     cursor: pointer !important;
     border: 2px solid #e9ecef !important;
     font-size: 14px;
     padding: 10px;
+    z-index: 1070 !important;
+    position: relative;
 }
 
 #viewReportCardModal .form-select:focus {
@@ -607,6 +627,7 @@ body {
     color: var(--dark);
     padding: 12px;
     font-size: 14px;
+    z-index: 99999 !important;
 }
 
 #viewReportCardModal .form-check-input {
@@ -1269,6 +1290,7 @@ select.form-select {
 }
 </style>
 {% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <!-- Page Header -->
@@ -1303,7 +1325,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-white-50 mb-1">Total Report Cards</h6>
-                            <h2 class="card-text mb-0">{{ total_count }}</h2>
+                            <h2 class="card-text mb-0">{{ total_count|default:0 }}</h2>
                         </div>
                         <i class="fas fa-file-alt fa-2x opacity-50"></i>
                     </div>
@@ -1317,7 +1339,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-white-50 mb-1">Published</h6>
-                            <h2 class="card-text mb-0">{{ published_count }}</h2>
+                            <h2 class="card-text mb-0">{{ published_count|default:0 }}</h2>
                         </div>
                         <i class="fas fa-check-circle fa-2x opacity-50"></i>
                     </div>
@@ -1331,7 +1353,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-dark mb-1">Drafts</h6>
-                            <h2 class="card-text mb-0 text-dark">{{ draft_count }}</h2>
+                            <h2 class="card-text mb-0 text-dark">{{ draft_count|default:0 }}</h2>
                         </div>
                         <i class="fas fa-edit fa-2x opacity-50 text-dark"></i>
                     </div>
@@ -1345,7 +1367,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-white-50 mb-1">Average Score</h6>
-                            <h2 class="card-text mb-0">{{ avg_score }}</h2>
+                            <h2 class="card-text mb-0">{{ avg_score|default:"0.0" }}</h2>
                         </div>
                         <i class="fas fa-chart-line fa-2x opacity-50"></i>
                     </div>
@@ -1359,7 +1381,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-white-50 mb-1">Needs Attention</h6>
-                            <h2 class="card-text mb-0">{{ needs_attention_count }}</h2>
+                            <h2 class="card-text mb-0">{{ needs_attention_count|default:0 }}</h2>
                         </div>
                         <i class="fas fa-exclamation-triangle fa-2x opacity-50"></i>
                     </div>
@@ -1373,7 +1395,7 @@ select.form-select {
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-white-50 mb-1">This Term</h6>
-                            <h2 class="card-text mb-0">{{ current_term_count }}</h2>
+                            <h2 class="card-text mb-0">{{ current_term_count|default:0 }}</h2>
                         </div>
                         <i class="fas fa-calendar-alt fa-2x opacity-50"></i>
                     </div>
@@ -1383,210 +1405,242 @@ select.form-select {
         </div>
     </div>
 
+    <!-- Debug Statistics Section (Hidden by default - change style to display: block to debug) -->
+    <div class="row mb-3" style="display: none;"> <!-- Change to display: block to debug -->
+        <div class="col-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-bug me-2"></i>Statistics Debug Info
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Current Month:</strong> {{ current_month }}<br>
+                            <strong>Calculated Term:</strong> {{ current_term }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Academic Year:</strong> {{ current_academic_year }}<br>
+                            <strong>Term Count Query:</strong> ReportCards for {{ current_academic_year }} Term {{ current_term }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Needs Attention:</strong> Grades C+, C, D+, D, E<br>
+                            <strong>Count:</strong> {{ needs_attention_count }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Total Cards:</strong> {{ total_count }}<br>
+                            <strong>Current Term Cards:</strong> {{ current_term_count }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Quick Actions -->
-{% if is_teacher or is_admin %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="quick-actions">
-            <h6 class="mb-3 text-primary">
-                <i class="fas fa-bolt me-2"></i>Quick Actions
-            </h6>
-            <div class="row g-3">
-                <div class="col-xl-2 col-md-4 col-6">
-                    <a href="{% url 'create_report_card' %}" class="quick-action-btn">
-                        <i class="fas fa-plus-circle text-primary"></i>
-                        <span class="btn-text">Create New</span>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <a href="{% url 'grade_add' %}" class="quick-action-btn">
-                        <i class="fas fa-edit text-success"></i>
-                        <span class="btn-text">Add Grades</span>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <a href="{% url 'grade_bulk_upload' %}" class="quick-action-btn">
-                        <i class="fas fa-upload text-info"></i>
-                        <span class="btn-text">Bulk Upload</span>
-                    </a>
-                </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <button class="quick-action-btn" id="viewReportCardBtn" data-bs-toggle="modal" data-bs-target="#viewReportCardModal">
-                        <i class="fas fa-eye text-warning"></i>
-                        <span class="btn-text">Quick View</span>
-                    </button>
-                </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <button class="quick-action-btn" id="exportBtn">
-                        <i class="fas fa-download text-danger"></i>
-                        <span class="btn-text">Export Data</span>
-                    </button>
-                </div>
-                <div class="col-xl-2 col-md-4 col-6">
-                    <a href="{% url 'analytics_dashboard' %}" class="quick-action-btn">
-                        <i class="fas fa-chart-bar text-secondary"></i>
-                        <span class="btn-text">Analytics</span>
-                    </a>
+    {% if is_teacher or is_admin %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="quick-actions">
+                <h6 class="mb-3 text-primary">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h6>
+                <div class="row g-3">
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <a href="{% url 'create_report_card' %}" class="quick-action-btn">
+                            <i class="fas fa-plus-circle text-primary"></i>
+                            <span class="btn-text">Create New</span>
+                        </a>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <a href="{% url 'grade_add' %}" class="quick-action-btn">
+                            <i class="fas fa-edit text-success"></i>
+                            <span class="btn-text">Add Grades</span>
+                        </a>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <a href="{% url 'grade_bulk_upload' %}" class="quick-action-btn">
+                            <i class="fas fa-upload text-info"></i>
+                            <span class="btn-text">Bulk Upload</span>
+                        </a>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <button class="quick-action-btn" id="viewReportCardBtn" data-bs-toggle="modal" data-bs-target="#viewReportCardModal">
+                            <i class="fas fa-eye text-warning"></i>
+                            <span class="btn-text">Quick View</span>
+                        </button>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <button class="quick-action-btn" id="exportBtn">
+                            <i class="fas fa-download text-danger"></i>
+                            <span class="btn-text">Export Data</span>
+                        </button>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <a href="{% url 'analytics_dashboard' %}" class="quick-action-btn">
+                            <i class="fas fa-chart-bar text-secondary"></i>
+                            <span class="btn-text">Analytics</span>
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endif %}
+    {% endif %}
 
-<!-- View Report Card Modal - SIMPLIFIED WORKING VERSION -->
-<div class="modal fade" id="viewReportCardModal" tabindex="-1" aria-labelledby="viewReportCardModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="viewReportCardModalLabel">
-                    <i class="fas fa-eye me-2"></i>Quick View Report Card
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info mb-3">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Quickly view any student's report card by selecting the criteria below.
+    <!-- View Report Card Modal - FIXED VERSION -->
+    <div class="modal fade" id="viewReportCardModal" tabindex="-1" aria-labelledby="viewReportCardModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewReportCardModalLabel">
+                        <i class="fas fa-eye me-2"></i>Quick View Report Card
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Quickly view any student's report card by selecting the criteria below.
+                    </div>
+                    
+                    <form id="viewReportCardForm">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <!-- Student Selection -->
+                            <div class="col-md-6">
+                                <label for="student_select" class="form-label fw-bold text-primary">Select Student *</label>
+                                <select name="student_id" id="student_select" class="form-select" required>
+                                    <option value="">-- Choose Student --</option>
+                                    {% if is_teacher %}
+                                        {% for student in teacher_students %}
+                                        <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
+                                        {% empty %}
+                                        <option value="">No students found</option>
+                                        {% endfor %}
+                                    {% elif is_admin %}
+                                        {% for student in all_students %}
+                                        <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
+                                        {% empty %}
+                                        <option value="">No students found</option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="">No access to students</option>
+                                    {% endif %}
+                                </select>
+                                <div class="form-text">Select a student from the list</div>
+                            </div>
+
+                            <!-- Academic Year Selection -->
+                            <div class="col-md-6">
+                                <label for="academic_year_select" class="form-label fw-bold text-primary">Academic Year *</label>
+                                <select name="academic_year" id="academic_year_select" class="form-select" required>
+                                    <option value="">-- Select Year --</option>
+                                    {% now "Y" as current_year %}
+                                    {% with next_year=current_year|add:1 %}
+                                    <option value="{{ current_year }}/{{ next_year }}">{{ current_year }}/{{ next_year }}</option>
+                                    {% endwith %}
+                                    <option value="{{ current_year|add:-1 }}/{{ current_year }}">{{ current_year|add:-1 }}/{{ current_year }}</option>
+                                    <option value="{{ current_year|add:-2 }}/{{ current_year|add:-1 }}">{{ current_year|add:-2 }}/{{ current_year|add:-1 }}</option>
+                                </select>
+                                <div class="form-text">Select the academic year</div>
+                            </div>
+
+                            <!-- Term Selection -->
+                            <div class="col-md-6">
+                                <label for="term_select" class="form-label fw-bold text-primary">Term *</label>
+                                <select name="term" id="term_select" class="form-select" required>
+                                    <option value="">-- Select Term --</option>
+                                    <option value="1">Term 1</option>
+                                    <option value="2">Term 2</option>
+                                    <option value="3">Term 3</option>
+                                </select>
+                                <div class="form-text">Select the academic term</div>
+                            </div>
+
+                            <!-- View Type -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-primary">View As *</label>
+                                <div class="border rounded p-3 bg-light">
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="radio" name="view_type" id="view_web" value="web" checked>
+                                        <label class="form-check-label fw-medium" for="view_web">
+                                            <i class="fas fa-globe me-2 text-info"></i>Web View (Editable)
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="view_type" id="view_pdf" value="pdf">
+                                        <label class="form-check-label fw-medium" for="view_pdf">
+                                            <i class="fas fa-file-pdf me-2 text-danger"></i>PDF Download
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Status -->
+                        <div class="mt-4 p-3 bg-light rounded border">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <small class="text-muted" id="formStatus">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Please select student, academic year, and term to continue
+                                    </small>
+                                </div>
+                                <div class="badge bg-secondary" id="selectedCount">0/3</div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" id="submitViewForm" disabled>
+                        <i class="fas fa-eye me-2"></i>View Report Card
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Information (Remove in production) -->
+    <div class="container-fluid mt-3" style="display: none;"> <!-- Set to display: block to see debug info -->
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-bug me-2"></i>Debug Information
+            </div>
+            <div class="card-body">
+                <h6>User Information:</h6>
+                <ul>
+                    <li>Is Teacher: {{ is_teacher }}</li>
+                    <li>Is Admin: {{ is_admin }}</li>
+                    <li>Is Student: {{ is_student }}</li>
+                </ul>
                 
-                <form id="viewReportCardForm">
-                    {% csrf_token %}
-                    <div class="row g-3">
-                        <!-- Student Selection -->
-                        <div class="col-md-6">
-                            <label for="student_select" class="form-label fw-bold text-primary">Select Student *</label>
-                            <select name="student_id" id="student_select" class="form-select" required>
-                                <option value="">-- Choose Student --</option>
-                                {% if is_teacher %}
-                                    {% for student in teacher_students %}
-                                    <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
-                                    {% empty %}
-                                    <option value="">No students found</option>
-                                    {% endfor %}
-                                {% elif is_admin %}
-                                    {% for student in all_students %}
-                                    <option value="{{ student.id }}">{{ student.get_full_name }} - {{ student.get_class_level_display }}</option>
-                                    {% empty %}
-                                    <option value="">No students found</option>
-                                    {% endfor %}
-                                {% else %}
-                                    <option value="">No access to students</option>
-                                {% endif %}
-                            </select>
-                            <div class="form-text">Select a student from the list</div>
-                        </div>
-
-                        <!-- Academic Year Selection -->
-                        <div class="col-md-6">
-                            <label for="academic_year_select" class="form-label fw-bold text-primary">Academic Year *</label>
-                            <select name="academic_year" id="academic_year_select" class="form-select" required>
-                                <option value="">-- Select Year --</option>
-                                {% now "Y" as current_year %}
-                                {% with next_year=current_year|add:1 %}
-                                <option value="{{ current_year }}/{{ next_year }}">{{ current_year }}/{{ next_year }}</option>
-                                {% endwith %}
-                                <option value="{{ current_year|add:-1 }}/{{ current_year }}">{{ current_year|add:-1 }}/{{ current_year }}</option>
-                                <option value="{{ current_year|add:-2 }}/{{ current_year|add:-1 }}">{{ current_year|add:-2 }}/{{ current_year|add:-1 }}</option>
-                            </select>
-                            <div class="form-text">Select the academic year</div>
-                        </div>
-
-                        <!-- Term Selection -->
-                        <div class="col-md-6">
-                            <label for="term_select" class="form-label fw-bold text-primary">Term *</label>
-                            <select name="term" id="term_select" class="form-select" required>
-                                <option value="">-- Select Term --</option>
-                                <option value="1">Term 1</option>
-                                <option value="2">Term 2</option>
-                                <option value="3">Term 3</option>
-                            </select>
-                            <div class="form-text">Select the academic term</div>
-                        </div>
-
-                        <!-- View Type -->
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold text-primary">View As *</label>
-                            <div class="border rounded p-3 bg-light">
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="radio" name="view_type" id="view_web" value="web" checked>
-                                    <label class="form-check-label fw-medium" for="view_web">
-                                        <i class="fas fa-globe me-2 text-info"></i>Web View (Editable)
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="view_type" id="view_pdf" value="pdf">
-                                    <label class="form-check-label fw-medium" for="view_pdf">
-                                        <i class="fas fa-file-pdf me-2 text-danger"></i>PDF Download
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Form Status -->
-                    <div class="mt-4 p-3 bg-light rounded border">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <small class="text-muted" id="formStatus">
-                                    <i class="fas fa-clock me-1"></i>
-                                    Please select student, academic year, and term to continue
-                                </small>
-                            </div>
-                            <div class="badge bg-secondary" id="selectedCount">0/3</div>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-2"></i>Cancel
-                </button>
-                <button type="button" class="btn btn-primary" id="submitViewForm" disabled>
-                    <i class="fas fa-eye me-2"></i>View Report Card
-                </button>
+                <h6>Student Data:</h6>
+                <ul>
+                    <li>Teacher Students Count: {% if teacher_students %}{{ teacher_students.count }}{% else %}Not available{% endif %}</li>
+                    <li>All Students Count: {% if all_students %}{{ all_students.count }}{% else %}Not available{% endif %}</li>
+                </ul>
+                
+                <h6>Sample Students (first 3):</h6>
+                <ul>
+                    {% if teacher_students %}
+                        {% for student in teacher_students|slice:":3" %}
+                        <li>{{ student.id }}: {{ student.get_full_name }} - {{ student.get_class_level_display }}</li>
+                        {% endfor %}
+                    {% elif all_students %}
+                        {% for student in all_students|slice:":3" %}
+                        <li>{{ student.id }}: {{ student.get_full_name }} - {{ student.get_class_level_display }}</li>
+                        {% endfor %}
+                    {% else %}
+                        <li>No students available</li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Debug Information (Remove in production) -->
-<div class="container-fluid mt-3" style="display: none;"> <!-- Set to display: block to see debug info -->
-    <div class="card border-warning">
-        <div class="card-header bg-warning text-dark">
-            <i class="fas fa-bug me-2"></i>Debug Information
-        </div>
-        <div class="card-body">
-            <h6>User Information:</h6>
-            <ul>
-                <li>Is Teacher: {{ is_teacher }}</li>
-                <li>Is Admin: {{ is_admin }}</li>
-                <li>Is Student: {{ is_student }}</li>
-            </ul>
-            
-            <h6>Student Data:</h6>
-            <ul>
-                <li>Teacher Students Count: {% if teacher_students %}{{ teacher_students.count }}{% else %}Not available{% endif %}</li>
-                <li>All Students Count: {% if all_students %}{{ all_students.count }}{% else %}Not available{% endif %}</li>
-            </ul>
-            
-            <h6>Sample Students (first 3):</h6>
-            <ul>
-                {% if teacher_students %}
-                    {% for student in teacher_students|slice:":3" %}
-                    <li>{{ student.id }}: {{ student.get_full_name }} - {{ student.get_class_level_display }}</li>
-                    {% endfor %}
-                {% elif all_students %}
-                    {% for student in all_students|slice:":3" %}
-                    <li>{{ student.id }}: {{ student.get_full_name }} - {{ student.get_class_level_display }}</li>
-                    {% endfor %}
-                {% else %}
-                    <li>No students available</li>
-                {% endif %}
-            </ul>
-        </div>
-    </div>
-</div>
     <!-- Main Dashboard Card -->
     <div class="card shadow-lg mb-4 animate-card">
         <div class="card-header text-white">
@@ -1749,8 +1803,8 @@ select.form-select {
                                     {% if report_card.student.profile_picture %}
                                     <img src="{{ report_card.student.profile_picture.url }}" alt="{{ report_card.student.get_full_name }}" class="student-avatar">
                                     {% else %}
-                                    <div class="student-avatar bg-primary text-white d-flex align-items-center justify-content-center">
-                                        <i class="fas fa-user"></i>
+                                    <div class="avatar-placeholder">
+                                        {{ report_card.student.first_name|first|upper }}{{ report_card.student.last_name|first|upper }}
                                     </div>
                                     {% endif %}
                                     <div>
@@ -1758,28 +1812,28 @@ select.form-select {
                                             {{ report_card.student.get_full_name }}
                                         </a>
                                         <br>
-                                        <small class="text-muted">{{ report_card.student.student_id }}</small>
+                                        <small class="text-muted">{{ report_card.student.student_id|default:"No ID" }}</small>
                                     </div>
                                 </div>
                             </td>
                             <td data-label="Class">
-                                <span class="badge bg-light text-dark">{{ report_card.student.get_class_level_display }}</span>
+                                <span class="badge bg-light text-dark">{{ report_card.student.get_class_level_display|default:"Not assigned" }}</span>
                             </td>
-                            <td data-label="Academic Year">{{ report_card.academic_year }}</td>
+                            <td data-label="Academic Year">{{ report_card.academic_year|default:"-" }}</td>
                             <td data-label="Term">
-                                <span class="badge bg-info text-white">Term {{ report_card.term }}</span>
+                                <span class="badge bg-info text-white">Term {{ report_card.term|default:"-" }}</span>
                             </td>
                             <td data-label="Average Score">
                                 <div class="d-flex align-items-center">
                                     <span class="fw-bold {% if report_card.average_score >= 80 %}text-success{% elif report_card.average_score >= 60 %}text-info{% elif report_card.average_score >= 40 %}text-warning{% else %}text-danger{% endif %}">
-                                        {{ report_card.average_score|floatformat:1 }}
+                                        {{ report_card.average_score|floatformat:1|default:"0.0" }}
                                     </span>
                                     <small class="text-muted ms-1">%</small>
                                 </div>
                             </td>
                             <td data-label="Overall Grade">
-                                <span class="badge grade-badge grade-{{ report_card.overall_grade|cut:'+'|cut:' '|default:'E' }}">
-                                    {{ report_card.overall_grade }}
+                                <span class="badge grade-badge grade-{{ report_card.overall_grade|default:'E'|cut:'+'|cut:' ' }}">
+                                    {{ report_card.overall_grade|default:"E" }}
                                 </span>
                             </td>
                             <td data-label="Status">
@@ -1794,7 +1848,7 @@ select.form-select {
                                 {% endif %}
                             </td>
                             <td data-label="Last Updated">
-                                <small class="text-muted">{{ report_card.updated_at|date:"M d, Y" }}</small>
+                                <small class="text-muted">{{ report_card.updated_at|date:"M d, Y"|default:"-" }}</small>
                             </td>
                             <td data-label="Actions">
                                 <div class="btn-group btn-group-sm">
@@ -1846,7 +1900,7 @@ select.form-select {
             <nav aria-label="Report cards pagination" class="mt-4">
                 <div class="d-flex justify-content-between align-items-center flex-wrap">
                     <div class="text-muted mb-2">
-                        Showing {{ report_cards.start_index }} to {{ report_cards.end_index }} of {{ report_cards.paginator.count }} entries
+                        Showing {{ report_cards.start_index|default:0 }} to {{ report_cards.end_index|default:0 }} of {{ report_cards.paginator.count|default:0 }} entries
                     </div>
                     <ul class="pagination mb-2">
                         {% if report_cards.has_previous %}
@@ -1943,14 +1997,9 @@ select.form-select {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Report Card Dashboard - Initializing...');
 
-// =============================================
-// QUICK VIEW MODAL - SIMPLIFIED & WORKING
-// =============================================
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Initializing Quick View Modal...');
-    
-    // Initialize modal functionality
+    // =============================================
+    // QUICK VIEW MODAL - FIXED VERSION
+    // =============================================
     function initQuickViewModal() {
         const studentSelect = document.getElementById('student_select');
         const academicYearSelect = document.getElementById('academic_year_select');
@@ -1966,14 +2015,16 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn: !!submitBtn
         });
 
-        // Enable all select elements
+        // FIX: Ensure all select elements are properly enabled and visible
         [studentSelect, academicYearSelect, termSelect].forEach(select => {
             if (select) {
-                // Remove any disabled states
+                // Force enable and show
                 select.disabled = false;
                 select.style.pointerEvents = 'auto';
                 select.style.cursor = 'pointer';
                 select.style.opacity = '1';
+                select.style.zIndex = '1070';
+                select.style.position = 'relative';
                 
                 // Add change event listener
                 select.addEventListener('change', function() {
@@ -2068,12 +2119,25 @@ document.addEventListener('DOMContentLoaded', function() {
         updateFormStatus();
     }
 
-    // Initialize when modal is shown
+    // FIX: Initialize modal properly when shown
     const modal = document.getElementById('viewReportCardModal');
     if (modal) {
+        // Force modal z-index
+        modal.style.zIndex = '1061';
+        
         modal.addEventListener('shown.bs.modal', function() {
             console.log('✅ Modal shown - initializing...');
+            // Small delay to ensure DOM is ready
             setTimeout(initQuickViewModal, 100);
+            
+            // Force re-enable all selects
+            const selects = this.querySelectorAll('.form-select');
+            selects.forEach(select => {
+                select.disabled = false;
+                select.style.pointerEvents = 'auto';
+                select.style.opacity = '1';
+                select.style.zIndex = '1070';
+            });
         });
         
         // Reset form when modal is hidden
@@ -2086,15 +2150,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Also initialize when page loads (in case modal is already open)
     initQuickViewModal();
-});
+
     // =============================================
     // FILTER FORM FUNCTIONALITY
     // =============================================
-    
+
     const filterForm = document.querySelector('.filter-form');
     const toggleFiltersBtn = document.getElementById('toggleFilters');
     const advancedFilters = document.getElementById('advancedFilters');
-    
+
     if (toggleFiltersBtn && advancedFilters) {
         toggleFiltersBtn.addEventListener('click', function() {
             if (advancedFilters.style.display === 'none') {
@@ -2108,7 +2172,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Auto-submit filter form on select changes
     const filterInputs = filterForm?.querySelectorAll('select');
     filterInputs?.forEach(input => {
@@ -2117,7 +2181,7 @@ document.addEventListener('DOMContentLoaded', function() {
             filterForm.submit();
         });
     });
-    
+
     // Search input with debounce
     const searchInput = document.getElementById('search');
     if (searchInput) {
@@ -2134,12 +2198,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // =============================================
     // BULK ACTIONS FUNCTIONALITY
     // =============================================
-    
+
     const selectAll = document.getElementById('selectAll');
     const rowCheckboxes = document.querySelectorAll('.row-checkbox');
     const bulkActionSelect = document.getElementById('bulkActionSelect');
     const applyBulkAction = document.getElementById('applyBulkAction');
-    
+
     // Select all functionality
     if (selectAll) {
         selectAll.addEventListener('change', function() {
@@ -2151,7 +2215,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateBulkActionButton();
         });
     }
-    
+
     // Individual checkbox changes
     rowCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
@@ -2159,7 +2223,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateSelectAllState();
         });
     });
-    
+
     function updateSelectAllState() {
         if (selectAll) {
             const allChecked = Array.from(rowCheckboxes).every(cb => cb.checked);
@@ -2169,7 +2233,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectAll.indeterminate = someChecked && !allChecked;
         }
     }
-    
+
     function updateBulkActionButton() {
         const selectedCount = Array.from(rowCheckboxes).filter(cb => cb.checked).length;
         if (applyBulkAction) {
@@ -2178,7 +2242,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `Apply to ${selectedCount} Item(s)` : 'Apply';
         }
     }
-    
+
     // Bulk action application
     if (applyBulkAction) {
         applyBulkAction.addEventListener('click', function() {
@@ -2222,9 +2286,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =============================================
-    // EXPORT FUNCTIONALITY
+    // EXPORT FUNCTIONALITY - UPDATED WITH WORKING FEATURES
     // =============================================
-    
+
     const exportBtns = document.querySelectorAll('.export-btn');
     exportBtns.forEach(btn => {
         btn.addEventListener('click', function() {
@@ -2234,61 +2298,204 @@ document.addEventListener('DOMContentLoaded', function() {
             const loadingOverlay = document.getElementById('loadingOverlay');
             if (loadingOverlay) loadingOverlay.style.display = 'flex';
             
-            // Simulate export process
-            setTimeout(() => {
-                if (loadingOverlay) loadingOverlay.style.display = 'none';
-                
-                showAlert('success', `✅ Report cards exported successfully as ${format.toUpperCase()}!`);
-                
-                // Handle print separately
-                if (format === 'print') {
+            // Get current filter parameters
+            const params = new URLSearchParams(window.location.search);
+            
+            // Handle different export formats
+            switch(format) {
+                case 'pdf':
+                    // For PDF, we'll create a temporary workaround
+                    setTimeout(() => {
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                        showAlert('info', '📊 PDF export feature is coming soon! For now, use the "Download PDF" button on individual report cards.');
+                    }, 1500);
+                    break;
+                    
+                case 'excel':
+                    // Create Excel export
+                    exportToExcel(params);
+                    break;
+                    
+                case 'csv':
+                    // Create CSV export
+                    exportToCSV(params);
+                    break;
+                    
+                case 'print':
+                    // Print functionality
                     window.print();
-                }
-            }, 1500);
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+                    break;
+            }
         });
     });
 
+    // Excel export function
+    function exportToExcel(params) {
+        // Remove page parameter if present
+        params.delete('page');
+        
+        // Create a simple table export
+        const table = document.querySelector('.table');
+        const rows = table.querySelectorAll('tr');
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        rows.forEach(row => {
+            const rowData = [];
+            const cells = row.querySelectorAll('th, td');
+            
+            cells.forEach(cell => {
+                // Skip checkbox columns
+                if (!cell.querySelector('.bulk-checkbox')) {
+                    let text = cell.innerText || cell.textContent;
+                    text = text.replace(/,/g, ';'); // Replace commas to avoid CSV issues
+                    rowData.push(`"${text}"`);
+                }
+            });
+            
+            csvContent += rowData.join(',') + "\r\n";
+        });
+        
+        // Create download link
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `report_cards_export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        
+        link.click();
+        document.body.removeChild(link);
+        
+        // Hide loading
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+        
+        showAlert('success', '✅ Excel/CSV export completed! Check your downloads folder.');
+    }
+
+    // CSV export function
+    function exportToCSV(params) {
+        // Same as Excel for now
+        exportToExcel(params);
+    }
+
     // =============================================
-    // PUBLISH BUTTONS FUNCTIONALITY
+    // PUBLISH BUTTONS FUNCTIONALITY - WORKING VERSION
     // =============================================
-    
+
     const publishBtns = document.querySelectorAll('.publish-btn');
     publishBtns.forEach(btn => {
         btn.addEventListener('click', function() {
             const reportCardId = this.getAttribute('data-id');
             
+            // Get CSRF token
+            function getCSRFToken() {
+                const tokenFromForm = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+                if (tokenFromForm) return tokenFromForm;
+                
+                const tokenFromMeta = document.querySelector('meta[name="csrf-token"]')?.content;
+                if (tokenFromMeta) return tokenFromMeta;
+                
+                // Try to get from cookies
+                const cookieValue = document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('csrftoken='))
+                    ?.split('=')[1];
+                
+                return cookieValue || '';
+            }
+            
+            const csrfToken = getCSRFToken();
+            
             if (confirm('📢 Are you sure you want to publish this report card? It will become visible to students and parents.')) {
                 console.log(`📢 Publishing report card: ${reportCardId}`);
                 
-                const loadingOverlay = document.getElementById('loadingOverlay');
-                if (loadingOverlay) loadingOverlay.style.display = 'flex';
+                // Show loading state on button
+                const originalHtml = this.innerHTML;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Publishing...';
+                this.disabled = true;
                 
-                // Simulate publish process
-                setTimeout(() => {
-                    if (loadingOverlay) loadingOverlay.style.display = 'none';
-                    
-                    // Update UI
-                    const row = this.closest('tr');
-                    const statusBadge = row.querySelector('.status-badge');
-                    if (statusBadge) {
-                        statusBadge.className = 'badge bg-success status-badge';
-                        statusBadge.innerHTML = '<i class="fas fa-check me-1"></i>Published';
+                // Make AJAX call to publish the report card
+                fetch(`/report-cards/${reportCardId}/publish/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        action: 'publish'
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('✅ Publish response:', data);
                     
-                    // Remove publish button
-                    this.remove();
+                    if (data.success) {
+                        // Update UI
+                        const row = this.closest('tr');
+                        if (row) {
+                            // Update status badge
+                            const statusBadge = row.querySelector('.status-badge');
+                            if (statusBadge) {
+                                statusBadge.className = 'badge bg-success status-badge';
+                                statusBadge.innerHTML = '<i class="fas fa-check me-1"></i>Published';
+                            }
+                            
+                            // Remove publish button
+                            this.remove();
+                            
+                            // Update statistics if available
+                            updatePublishedCount(1);
+                        }
+                        
+                        showAlert('success', '✅ Report card published successfully!');
+                    } else {
+                        // Reset button state on error
+                        this.innerHTML = originalHtml;
+                        this.disabled = false;
+                        
+                        showAlert('danger', `❌ Failed to publish: ${data.message || 'Unknown error'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Publish error:', error);
                     
-                    showAlert('success', '✅ Report card published successfully!');
+                    // Reset button state on error
+                    this.innerHTML = originalHtml;
+                    this.disabled = false;
                     
-                }, 1500);
+                    showAlert('danger', '❌ Error publishing report card. Please try again.');
+                });
             }
         });
     });
 
+    // Helper function to update published count
+    function updatePublishedCount(increment) {
+        const publishedCountElement = document.querySelector('.stat-card.bg-success .card-text');
+        if (publishedCountElement) {
+            const currentCount = parseInt(publishedCountElement.textContent) || 0;
+            publishedCountElement.textContent = currentCount + increment;
+        }
+        
+        const draftCountElement = document.querySelector('.stat-card.bg-warning .card-text');
+        if (draftCountElement) {
+            const currentDraftCount = parseInt(draftCountElement.textContent) || 0;
+            draftCountElement.textContent = Math.max(0, currentDraftCount - increment);
+        }
+    }
+
     // =============================================
     // REFRESH BUTTON FUNCTIONALITY
     // =============================================
-    
+
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', function() {
@@ -2305,7 +2512,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // =============================================
     // TABLE ENHANCEMENTS
     // =============================================
-    
+
     // Add animation to table rows
     const tableRows = document.querySelectorAll('tbody tr');
     tableRows.forEach((row, index) => {
@@ -2324,7 +2531,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // =============================================
     // KEYBOARD SHORTCUTS
     // =============================================
-    
+
     document.addEventListener('keydown', function(e) {
         // Ctrl/Cmd + F to focus search
         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -2368,8 +2575,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // =============================================
     // UTILITY FUNCTIONS
     // =============================================
-    
+
     function showAlert(type, message) {
+        // Remove any existing alerts first
+        const existingAlerts = document.querySelectorAll('.alert-dismissible');
+        existingAlerts.forEach(alert => alert.remove());
+        
         const alert = document.createElement('div');
         alert.className = `alert alert-${type} alert-dismissible fade show mt-3`;
         alert.innerHTML = `
@@ -2381,20 +2592,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = document.querySelector('.container-fluid');
         if (container) {
             container.insertBefore(alert, container.firstChild);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
         }
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (alert.parentNode) {
-                alert.remove();
-            }
-        }, 5000);
     }
-    
+
     function getAlertIcon(type) {
         const icons = {
             'success': 'check-circle',
-            'error': 'exclamation-circle',
+            'danger': 'exclamation-circle',
             'warning': 'exclamation-triangle',
             'info': 'info-circle'
         };
@@ -2404,19 +2616,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // =============================================
     // INITIALIZATION
     // =============================================
-    
+
     // Initialize tooltips
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
-    
+
     console.log('✅ Tooltips initialized:', tooltipList.length);
-    
+
     // Initialize bulk actions
     updateBulkActionButton();
     updateSelectAllState();
-    
+
     // Final initialization log
     console.log('🎉 Report Card Dashboard fully initialized!');
     console.log('📊 Ready features:', {
@@ -2426,6 +2638,17 @@ document.addEventListener('DOMContentLoaded', function() {
         exportButtons: exportBtns.length,
         publishButtons: publishBtns.length
     });
+
+    // =============================================
+    // STATISTICS DEBUG VIEW (Optional)
+    // =============================================
+    
+    // You can enable this to see statistics debug info
+    // To enable: change style="display: none;" to style="display: block;" in the debug section
+    console.log('📈 Statistics Debug:');
+    console.log('- Needs Attention Count:', {{ needs_attention_count|default:0 }});
+    console.log('- Current Term Count:', {{ current_term_count|default:0 }});
+    console.log('- Total Count:', {{ total_count|default:0 }});
 });
 </script>
 {% endblock %}

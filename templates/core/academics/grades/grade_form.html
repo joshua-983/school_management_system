@@ -1,16 +1,24 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
-{% block title %}
-    {% if form.instance.pk %}Edit Grade - {{ form.instance.student.get_full_name }}{% else %}Add New Grade{% endif %}
-{% endblock %}
+{% block title %}Enter Student Grade - {{ block.super }}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
+/>
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+/>
 <style>
-:root {
+  :root {
     --primary: #4361ee;
     --primary-dark: #3a56d4;
     --secondary: #6c757d;
@@ -23,9 +31,9 @@
     --border-radius: 12px;
     --shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     --transition: all 0.3s ease;
-}
+  }
 
-.page-header {
+  .page-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: var(--border-radius);
     padding: 2rem;
@@ -33,32 +41,37 @@
     color: white;
     position: relative;
     overflow: hidden;
-}
+  }
 
-.page-header::before {
-    content: '';
+  .page-header::before {
+    content: "";
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-}
+  }
 
-.card {
+  .card {
     border: none;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow);
     background: white;
-}
+  }
 
-.card-header {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  .card-header {
+    background: linear-gradient(
+      135deg,
+      var(--primary) 0%,
+      var(--primary-dark) 100%
+    );
     border-radius: var(--border-radius) var(--border-radius) 0 0 !important;
     padding: 1.5rem;
-}
+  }
 
-.form-control, .form-select {
+  .form-control,
+  .form-select {
     border-radius: 8px;
     border: 2px solid #e9ecef;
     padding: 0.75rem;
@@ -66,183 +79,245 @@
     transition: var(--transition);
     background: #fff !important;
     color: #212529 !important;
-}
+  }
 
-.form-control:focus, .form-select:focus {
+  .form-control:focus,
+  .form-select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
     color: #212529 !important;
     background: #fff !important;
-}
+  }
 
-.form-label {
+  .form-label {
     font-weight: 600;
     color: #495057;
     margin-bottom: 0.5rem;
-}
+  }
 
-.score-input {
-    text-align: center;
+  .score-input {
+    font-size: 1.25rem;
     font-weight: 600;
-    font-size: 1.1rem;
-    color: #212529 !important;
-    background: #fff !important;
+    text-align: center;
     border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: #fff !important;
+    width: 100%;
+    color: #212529 !important;
     height: calc(3.5rem + 2px);
-}
+  }
 
-.score-input:focus {
+  .score-input:focus {
+    outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
     color: #212529 !important;
     background: #fff !important;
-}
+  }
 
-.total-display {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 2px dashed #dee2e6;
-    border-radius: var(--border-radius);
-    padding: 2rem;
-    margin-top: 1rem;
-}
-
-.grade-badge {
-    font-size: 1.1rem;
-    padding: 0.5em 1em;
-    border-radius: 8px;
-    color: white;
-    font-weight: 600;
-}
-
-.grade-1 { background-color: var(--success); }
-.grade-2 { background-color: #20c997; }
-.grade-3 { background-color: var(--info); }
-.grade-4 { background-color: var(--primary); }
-.grade-5 { background-color: var(--warning); color: #000; }
-.grade-6 { background-color: #fd7e14; }
-.grade-7 { background-color: #ff6b6b; }
-.grade-8 { background-color: var(--danger); }
-.grade-9 { background-color: var(--secondary); }
-
-.progress {
-    height: 12px;
-    border-radius: 6px;
-    margin-top: 1rem;
-    background-color: #e9ecef;
-}
-
-.readonly-field {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 1rem;
-    color: #495057;
-    font-weight: 500;
-}
-
-.score-card {
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    transition: var(--transition);
-    height: 100%;
-    background: #fff;
-}
-
-.score-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow);
-}
-
-.score-card .card-body {
-    padding: 1.5rem;
-}
-
-.weight-badge {
+  .weight-badge {
     font-size: 0.75rem;
     border-radius: 20px;
     padding: 0.25rem 0.5rem;
     background: var(--primary);
     color: white;
-}
+  }
 
-.help-text {
+  .total-score-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 2px dashed #dee2e6;
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-top: 1rem;
+  }
+
+  .grade-display {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .grade-letter {
+    font-size: 1.5rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    color: white;
+    margin: 1rem 0;
+  }
+
+  .grade-1 {
+    background-color: var(--success);
+  }
+  .grade-2 {
+    background-color: #20c997;
+  }
+  .grade-3 {
+    background-color: var(--info);
+  }
+  .grade-4 {
+    background-color: var(--primary);
+  }
+  .grade-5 {
+    background-color: var(--warning);
+    color: #000;
+  }
+  .grade-6 {
+    background-color: #fd7e14;
+  }
+  .grade-7 {
+    background-color: #ff6b6b;
+  }
+  .grade-8 {
+    background-color: var(--danger);
+  }
+  .grade-9 {
+    background-color: var(--secondary);
+  }
+
+  .progress {
+    height: 8px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+    margin: 1rem 0;
+  }
+
+  .help-text {
     font-size: 0.875rem;
     color: var(--secondary);
     margin-top: 0.5rem;
-}
+    display: block;
+  }
 
-@keyframes highlightUpdate {
-    0% { background-color: rgba(67, 97, 238, 0.1); }
-    100% { background-color: transparent; }
-}
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
 
-.highlight {
-    animation: highlightUpdate 1s ease;
-}
+  .pulse {
+    animation: pulse 0.5s ease;
+  }
 
-.ghana-standards {
+  .student-info {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border: 1px solid #e9ecef;
+    font-size: 0.875rem;
+  }
+
+  .ghana-standards {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-left: 4px solid var(--primary);
     border-radius: 8px;
-}
+  }
 
-.form-section {
+  .assignment-status {
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    background: #f8f9fa;
+  }
+
+  .assignment-status.ready {
+    background: #d1ecf1;
+    border-color: #bee5eb;
+    color: #0c5460;
+  }
+
+  .assignment-status.complete {
+    background: #d1f2eb;
+    border-color: #b8e0d6;
+    color: #155724;
+  }
+
+  .assignment-status.warning {
+    background: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+  }
+
+  .form-section {
     margin-bottom: 2rem;
-}
+  }
 
-.form-section-title {
+  .form-section-title {
     color: var(--primary);
     border-bottom: 2px solid #e9ecef;
     padding-bottom: 0.5rem;
     margin-bottom: 1.5rem;
     font-size: 1.25rem;
     font-weight: 600;
-}
+  }
 
-.invalid-feedback {
+  .field-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .invalid-feedback {
     display: block;
     width: 100%;
     margin-top: 0.25rem;
     font-size: 0.875rem;
     color: var(--danger);
-}
+  }
 
-.is-invalid {
+  .is-invalid {
     border-color: var(--danger) !important;
-}
+  }
 
-@media (max-width: 768px) {
-    .page-header {
-        padding: 1.5rem;
-        text-align: center;
-    }
-    
-    .total-display {
-        padding: 1rem;
-    }
-    
-    .grade-badge {
-        font-size: 1rem;
-    }
-    
-    .score-card .card-body {
-        padding: 1rem;
-    }
-}
-
-.text-visible {
+  .text-visible {
     color: #212529 !important;
-}
+  }
 
-.card-body {
+  .card-body {
     color: #212529;
-}
+  }
 
-.form-text {
+  .form-text {
     color: #6c757d !important;
-}
+  }
 
-.stats-value {
+  .stats-card {
+    transition: var(--transition);
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    position: relative;
+    background: white;
+  }
+
+  .stats-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--info));
+  }
+
+  .stats-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  }
+
+  .stats-card .card-body {
+    padding: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .stats-value {
     font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 0.5rem;
@@ -250,592 +325,1166 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-}
+  }
+
+  .stats-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+  }
+
+  /* NEW STYLES FOR CLASS LEVEL FIX */
+  .readonly-field {
+    background-color: #e9ecef !important;
+    border-color: #ced4da !important;
+    color: #495057 !important;
+    cursor: not-allowed !important;
+  }
+
+  .bg-light {
+    background-color: #f8f9fa !important;
+  }
+
+  .field-warning {
+    border-color: #ffc107 !important;
+    background-color: #fff3cd !important;
+  }
+
+  .score-input:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.15);
+  }
+
+  .score-input.is-invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.15);
+  }
+
+  .student-info .alert {
+    margin-bottom: 0.5rem;
+  }
+
+  /* API Status Indicators */
+  .api-status {
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+  }
+  
+  .api-status.connected {
+    background-color: #d1f2eb;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+  }
+  
+  .api-status.disconnected {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  .contribution-breakdown {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+  }
+  
+  .contribution-item {
+    display: inline-block;
+    margin-right: 1rem;
+  }
+  
+  .contribution-value {
+    font-weight: bold;
+    color: var(--primary);
+  }
+
+  /* Responsive improvements */
+  @media (max-width: 768px) {
+    .page-header {
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .total-score-card {
+      padding: 1.5rem;
+    }
+
+    .grade-display {
+      font-size: 2rem;
+    }
+
+    .grade-letter {
+      font-size: 1.25rem;
+    }
+
+    .stats-value {
+      font-size: 2rem;
+    }
+
+    .score-card .card-body {
+      padding: 1rem;
+    }
+    
+    .contribution-item {
+      display: block;
+      margin-right: 0;
+      margin-bottom: 0.25rem;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <nav aria-label="breadcrumb" class="text-white-50 mb-2">
-                    <ol class="breadcrumb">
-                        <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-white-50">Home</a></li>
-                        <li class="breadcrumb-item"><a href="{% url 'grade_list' %}" class="text-white-50">Grades</a></li>
-                        <li class="breadcrumb-item active text-white" aria-current="page">
-                            {% if form.instance.pk %}Edit Grade{% else %}Add New Grade{% endif %}
-                        </li>
-                    </ol>
-                </nav>
-                <h1 class="h2 mb-2 text-white">
-                    <i class="bi bi-journal-bookmark me-3"></i>
-                    {% if form.instance.pk %}Edit Grade Record{% else %}Create New Grade{% endif %}
-                </h1>
-                <p class="lead mb-0 text-white-50">
-                    {% if form.instance.pk %}
-                    Update grade for {{ form.instance.student.get_full_name }} in {{ form.instance.subject.name }}
-                    {% else %}
-                    Enter new grade information for a student
-                    {% endif %}
-                </p>
-            </div>
-            <div class="col-md-4 text-md-end">
-                <div class="btn-group">
-                    <a href="{% url 'grade_list' %}" class="btn btn-light btn-lg">
-                        <i class="bi bi-arrow-left me-2"></i>Back to List
-                    </a>
-                </div>
-            </div>
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <nav aria-label="breadcrumb" class="text-white-50 mb-2">
+          <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+              <a href="{% url 'home' %}" class="text-white-50">Home</a>
+            </li>
+            <li class="breadcrumb-item">
+              <a href="{% url 'grade_list' %}" class="text-white-50">Grades</a>
+            </li>
+            <li class="breadcrumb-item active text-white" aria-current="page">
+              New Grade Entry
+            </li>
+          </ol>
+        </nav>
+        <h1 class="h2 mb-2 text-white">
+          <i class="bi bi-journal-plus me-3"></i>Grade Entry Form
+        </h1>
+        <p class="lead mb-0 text-white-50">
+          Enter new grade information for students following Ghana Education
+          Service standards
+        </p>
+      </div>
+      <div class="col-md-4 text-md-end">
+        <div class="btn-group">
+          <a href="{% url 'grade_list' %}" class="btn btn-light btn-lg">
+            <i class="bi bi-arrow-left me-2"></i>Back to List
+          </a>
+          <a
+            href="{% url 'grade_bulk_upload' %}"
+            class="btn btn-outline-light btn-lg"
+          >
+            <i class="bi bi-upload me-2"></i>Bulk Upload
+          </a>
         </div>
+      </div>
     </div>
+  </div>
 
-    {% if messages %}
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4">
-            <div class="d-flex align-items-center">
-                <i class="bi 
-                    {% if message.tags == 'success' %}bi-check-circle-fill
-                    {% elif message.tags == 'danger' %}bi-exclamation-triangle-fill
-                    {% else %}bi-info-circle-fill{% endif %} me-2 fs-5"></i>
-                <div class="flex-grow-1">
-                    {{ message }}
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
+  {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4">
+      <div class="d-flex align-items-center">
+        <i
+          class="bi {% if message.tags == 'success' %}bi-check-circle-fill {% elif message.tags == 'danger' %}bi-exclamation-triangle-fill {% else %}bi-info-circle-fill{% endif %} me-2 fs-5"
+        ></i>
+        <div class="flex-grow-1">{{ message }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row justify-content-center">
+    <div class="col-12">
+      <div class="card shadow">
+        <div class="card-header text-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">
+              <i class="bi bi-journal-plus me-2"></i>Enter Student Grade
+            </h3>
+            <span class="badge bg-light text-dark">
+              {% if request.user|is_admin %}Admin Mode{% else %}Teacher Mode{% endif %}
+            </span>
+          </div>
         </div>
-        {% endfor %}
-    {% endif %}
 
-    <div class="row justify-content-center">
-        <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
-                            <i class="bi bi-journal-bookmark me-2"></i>
-                            {% if form.instance.pk %}Edit Grade Record{% else %}New Grade Entry{% endif %}
-                        </h4>
-                        <span class="badge bg-light text-dark">
-                            {% if form.instance.pk %}Editing{% else %}Creating{% endif %} Grade
-                        </span>
+        <div class="card-body">
+          <!-- Ghana Education Service Standards -->
+          <div class="alert alert-info ghana-standards mb-4">
+            <h6 class="alert-heading mb-3">
+              <i class="bi bi-info-circle me-2"></i>Ghana Education Service
+              Standards (Percentage-Based System)
+            </h6>
+            <div class="row">
+              <div class="col-md-6">
+                <strong class="text-visible">Grading Weights:</strong>
+                <ul class="mb-2 text-visible">
+                  <li>Classwork: 30% weight (0-100% input)</li>
+                  <li>Homework: 10% weight (0-100% input)</li>
+                  <li>Test: 10% weight (0-100% input)</li>
+                  <li>Exam: 50% weight (0-100% input)</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <strong class="text-visible">Grading Scale (1-9):</strong>
+                <ul class="mb-0 text-visible">
+                  <li>1: 90-100% (Excellent)</li>
+                  <li>2: 80-89% (Very Good)</li>
+                  <li>3: 70-79% (Good)</li>
+                  <li>4: 60-69% (Satisfactory)</li>
+                  <li>5: 50-59% (Fair)</li>
+                  <li>6: 40-49% (Marginal)</li>
+                  <li>7: 30-39% (Poor)</li>
+                  <li>8: 20-29% (Very Poor)</li>
+                  <li>9: 0-19% (Fail)</li>
+                </ul>
+              </div>
+            </div>
+            <div class="api-status connected mt-2">
+              <i class="bi bi-check-circle me-1"></i>
+              Grade calculation API: <strong>Connected</strong> - Using server-side configuration
+            </div>
+          </div>
+
+          <form method="post" id="gradeForm" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {% for error in form.non_field_errors %}
+              <i class="bi bi-exclamation-triangle me-2"></i> {{ error }}
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Student and Subject Section -->
+            <div class="form-section">
+              <h5 class="form-section-title text-visible">
+                <i class="bi bi-person-vcard me-2"></i>Student & Subject
+                Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.student.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-person me-1"></i>Student *
+                    </label>
+                    {{ form.student }}
+                    {% if form.student.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.student.errors %} {{ error }}
+                      {% endfor %}
                     </div>
+                    {% endif %}
+                    <small class="help-text"
+                      >Select a student from your class</small
+                    >
+                  </div>
+                  <div id="studentInfo" class="student-info"></div>
+                </div>
+                <div class="col-md-6">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.subject.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-book me-1"></i>Subject *
+                    </label>
+                    {{ form.subject }}
+                    {% if form.subject.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.subject.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    <small class="help-text">Select the subject</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Academic Info Section -->
+            <div class="form-section">
+              <h5 class="form-section-title text-visible">
+                <i class="bi bi-calendar me-2"></i>Academic Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.academic_year.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-calendar me-1"></i>Academic Year *
+                    </label>
+                    {{ form.academic_year }}
+                    {% if form.academic_year.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.academic_year.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    <small class="help-text">Format: YYYY/YYYY</small>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.term.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-calendar-event me-1"></i>Term *
+                    </label>
+                    {{ form.term }}
+                    {% if form.term.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.term.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    <small class="help-text">Select the term</small>
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.class_level.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-mortarboard me-1"></i>Class Level *
+                    </label>
+                    {{ form.class_level }}
+                    {% if form.class_level.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.class_level.errors %}
+                      <div class="alert alert-danger p-2 mt-1">
+                        <i class="bi bi-exclamation-triangle me-1"></i> {{ error }}
+                      </div>
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    <small class="help-text"
+                      >Automatically set based on selected student</small
+                    >
+
+                    <!-- Show current student's class if available -->
+                    {% if selected_student %}
+                    <div class="field-help mt-1">
+                      <small class="text-info">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Student's current class:
+                        <strong>{{ selected_student.get_class_level_display }}</strong>
+                      </small>
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <div class="field-group">
+                    <label class="form-label text-visible">
+                      <i class="bi bi-diagram-3 me-1"></i>Class Assignment
+                      Status
+                    </label>
+                    <div class="assignment-status" id="classAssignmentDisplay">
+                      <small>
+                        <i class="bi bi-info-circle me-1"></i>
+                        Select student and subject to auto-detect
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scores Section -->
+            <div class="form-section">
+              <div class="card border-primary">
+                <div class="card-header bg-light">
+                  <h5 class="mb-0 text-visible">
+                    <i class="bi bi-calculator me-2"></i>Score Components (Percentage-Based)
+                  </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Ghana Education Service Standards -->
-                    <div class="alert alert-info ghana-standards mb-4">
-                        <h6 class="alert-heading mb-3">
-                            <i class="bi bi-info-circle me-2"></i>Ghana Education Service Standards
-                        </h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong class="text-visible">Grading Weights:</strong>
-                                <ul class="mb-2 text-visible">
-                                    <li>Classwork: 30% (Max: 30 points)</li>
-                                    <li>Homework: 10% (Max: 10 points)</li>
-                                    <li>Test: 10% (Max: 10 points)</li>
-                                    <li>Exam: 50% (Max: 50 points)</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <strong class="text-visible">Passing Grade:</strong>
-                                <ul class="mb-0 text-visible">
-                                    <li>40% and above: Passing</li>
-                                    <li>Below 40%: Needs Improvement</li>
-                                    <li>Total Score Range: 0-100 points</li>
-                                </ul>
-                            </div>
+                  <div class="row g-3">
+                    <!-- Classwork -->
+                    <div class="col-md-6 col-lg-3">
+                      <div class="card score-card h-100">
+                        <div class="card-body text-center">
+                          <label
+                            for="{{ form.classwork_percentage.id_for_label }}"
+                            class="form-label fw-bold text-visible"
+                            >Classwork (%)</label
+                          >
+                          {{ form.classwork_percentage }}
+                          <div class="mt-2">
+                            <span class="weight-badge">30% weight</span>
+                          </div>
+                          <small class="help-text">Enter percentage (0-100%)</small>
+                          {% if form.classwork_percentage.errors %}
+                          <div class="invalid-feedback d-block">
+                            {% for error in form.classwork_percentage.errors %}
+                            {{ error }}
+                            {% endfor %}
+                          </div>
+                          {% endif %}
                         </div>
+                      </div>
                     </div>
+                    <!-- Homework -->
+                    <div class="col-md-6 col-lg-3">
+                      <div class="card score-card h-100">
+                        <div class="card-body text-center">
+                          <label
+                            for="{{ form.homework_percentage.id_for_label }}"
+                            class="form-label fw-bold text-visible"
+                            >Homework (%)</label
+                          >
+                          {{ form.homework_percentage }}
+                          <div class="mt-2">
+                            <span class="weight-badge">10% weight</span>
+                          </div>
+                          <small class="help-text">Enter percentage (0-100%)</small>
+                          {% if form.homework_percentage.errors %}
+                          <div class="invalid-feedback d-block">
+                            {% for error in form.homework_percentage.errors %}
+                            {{ error }}
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Test -->
+                    <div class="col-md-6 col-lg-3">
+                      <div class="card score-card h-100">
+                        <div class="card-body text-center">
+                          <label
+                            for="{{ form.test_percentage.id_for_label }}"
+                            class="form-label fw-bold text-visible"
+                            >Test (%)</label
+                          >
+                          {{ form.test_percentage }}
+                          <div class="mt-2">
+                            <span class="weight-badge">10% weight</span>
+                          </div>
+                          <small class="help-text">Enter percentage (0-100%)</small>
+                          {% if form.test_percentage.errors %}
+                          <div class="invalid-feedback d-block">
+                            {% for error in form.test_percentage.errors %}
+                            {{ error }}
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Exam -->
+                    <div class="col-md-6 col-lg-3">
+                      <div class="card score-card h-100">
+                        <div class="card-body text-center">
+                          <label
+                            for="{{ form.exam_percentage.id_for_label }}"
+                            class="form-label fw-bold text-visible"
+                            >Exam (%)</label
+                          >
+                          {{ form.exam_percentage }}
+                          <div class="mt-2">
+                            <span class="weight-badge">50% weight</span>
+                          </div>
+                          <small class="help-text">Enter percentage (0-100%)</small>
+                          {% if form.exam_percentage.errors %}
+                          <div class="invalid-feedback d-block">
+                            {% for error in form.exam_percentage.errors %}
+                            {{ error }}
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-                    <form method="post" id="gradeForm" novalidate>
-                        {% csrf_token %}
-                        
-                        {% if form.non_field_errors %}
-                            <div class="alert alert-danger">
-                                {% for error in form.non_field_errors %}
-                                    <i class="bi bi-exclamation-triangle me-2"></i> {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        
-                        <!-- Student Information Section -->
-                        <div class="form-section">
-                            <h5 class="form-section-title text-visible">
-                                <i class="bi bi-person-vcard me-2"></i>Student Information
-                            </h5>
-                            
-                            <div class="row">
-                                <div class="col-md-3 mb-3">
-                                    <div class="card stats-card h-100">
-                                        <div class="card-body text-center">
-                                            <i class="bi bi-person-circle text-primary display-6 mb-2"></i>
-                                            <div class="stats-value text-visible">{{ form.instance.student.get_full_name }}</div>
-                                            <p class="stats-label">Student</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="col-md-3 mb-3">
-                                    <div class="card stats-card h-100">
-                                        <div class="card-body text-center">
-                                            <i class="bi bi-people-fill text-success display-6 mb-2"></i>
-                                            <div class="stats-value text-visible">{{ form.instance.student.get_class_level_display }}</div>
-                                            <p class="stats-label">Class Level</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="col-md-3 mb-3">
-                                    <div class="card stats-card h-100">
-                                        <div class="card-body text-center">
-                                            <i class="bi bi-book text-warning display-6 mb-2"></i>
-                                            <div class="stats-value text-visible">{{ form.instance.subject.name }}</div>
-                                            <p class="stats-label">Subject</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="col-md-3 mb-3">
-                                    <div class="card stats-card h-100">
-                                        <div class="card-body text-center">
-                                            <i class="bi bi-calendar text-info display-6 mb-2"></i>
-                                            <div class="stats-value text-visible">{{ form.instance.academic_year }}</div>
-                                            <p class="stats-label">Academic Year</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Current Grade Display -->
-                            <div class="card border-primary mt-3">
-                                <div class="card-header bg-light">
-                                    <h6 class="mb-0 text-visible">
-                                        <i class="bi bi-graph-up me-2"></i>Current Grade Status
-                                    </h6>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-6 text-center">
-                                            <h4 class="text-muted mb-2">Current Total Score</h4>
-                                            <div class="display-4 fw-bold text-primary mb-3 text-visible">
-                                                {{ form.instance.total_score|default:"0" }}/100
-                                            </div>
-                                            <div class="progress mb-3">
-                                                <div class="progress-bar" 
-                                                     role="progressbar" 
-                                                     style="width: {{ form.instance.total_score|default:0 }}%;"
-                                                     aria-valuenow="{{ form.instance.total_score|default:0 }}" 
-                                                     aria-valuemin="0" 
-                                                     aria-valuemax="100">
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6 text-center">
-                                            <h4 class="text-muted mb-2">Current Grade</h4>
-                                            {% if form.instance.ges_grade and form.instance.ges_grade != 'N/A' %}
-                                            <div class="grade-badge grade-{{ form.instance.ges_grade }} display-6 mb-3">
-                                                {{ form.instance.get_ges_grade_display }}
-                                            </div>
-                                            <p class="text-muted">
-                                                {{ form.instance.get_performance_level_display|default:"Performance level not available" }}
-                                            </p>
-                                            {% else %}
-                                            <div class="badge bg-secondary display-6 mb-3">No Grade</div>
-                                            <p class="text-muted">No grade recorded yet</p>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                  <!-- Calculated Total -->
+                  <div class="row mt-4">
+                    <div class="col-12">
+                      <div class="total-score-card text-center">
+                        <h5 class="mb-3 text-visible">Projected Total Score</h5>
+                        <div class="grade-display pulse" id="totalScoreDisplay">
+                          0.0
                         </div>
-
-                        <!-- Scores Section -->
-                        <div class="form-section">
-                            <div class="card border-primary">
-                                <div class="card-header bg-light">
-                                    <h5 class="mb-0 text-visible">
-                                        <i class="bi bi-calculator me-2"></i>Update Scores
-                                    </h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <!-- Classwork -->
-                                        <div class="col-md-6 col-lg-3">
-                                            <div class="card score-card h-100">
-                                                <div class="card-body text-center">
-                                                    <label for="{{ form.classwork_score.id_for_label }}" class="form-label fw-bold text-visible">Classwork</label>
-                                                    {{ form.classwork_score }}
-                                                    <div class="mt-2">
-                                                        <span class="weight-badge">30% weight</span>
-                                                    </div>
-                                                    <div class="help-text">Max: 30 points</div>
-                                                    {% if form.classwork_score.errors %}
-                                                        <div class="invalid-feedback">
-                                                            {{ form.classwork_score.errors }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Homework -->
-                                        <div class="col-md-6 col-lg-3">
-                                            <div class="card score-card h-100">
-                                                <div class="card-body text-center">
-                                                    <label for="{{ form.homework_score.id_for_label }}" class="form-label fw-bold text-visible">Homework</label>
-                                                    {{ form.homework_score }}
-                                                    <div class="mt-2">
-                                                        <span class="weight-badge">10% weight</span>
-                                                    </div>
-                                                    <div class="help-text">Max: 10 points</div>
-                                                    {% if form.homework_score.errors %}
-                                                        <div class="invalid-feedback">
-                                                            {{ form.homework_score.errors }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Test -->
-                                        <div class="col-md-6 col-lg-3">
-                                            <div class="card score-card h-100">
-                                                <div class="card-body text-center">
-                                                    <label for="{{ form.test_score.id_for_label }}" class="form-label fw-bold text-visible">Test</label>
-                                                    {{ form.test_score }}
-                                                    <div class="mt-2">
-                                                        <span class="weight-badge">10% weight</span>
-                                                    </div>
-                                                    <div class="help-text">Max: 10 points</div>
-                                                    {% if form.test_score.errors %}
-                                                        <div class="invalid-feedback">
-                                                            {{ form.test_score.errors }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Exam -->
-                                        <div class="col-md-6 col-lg-3">
-                                            <div class="card score-card h-100">
-                                                <div class="card-body text-center">
-                                                    <label for="{{ form.exam_score.id_for_label }}" class="form-label fw-bold text-visible">Exam</label>
-                                                    {{ form.exam_score }}
-                                                    <div class="mt-2">
-                                                        <span class="weight-badge">50% weight</span>
-                                                    </div>
-                                                    <div class="help-text">Max: 50 points</div>
-                                                    {% if form.exam_score.errors %}
-                                                        <div class="invalid-feedback">
-                                                            {{ form.exam_score.errors }}
-                                                        </div>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Updated Total Score Display -->
-                                    <div class="row mt-4">
-                                        <div class="col-12">
-                                            <div class="total-display text-center highlight" id="totalDisplay">
-                                                <h5 class="mb-3 text-visible">Updated Total Score</h5>
-                                                <div class="display-4 fw-bold text-primary mb-2 text-visible" id="totalScore">
-                                                    {{ form.instance.total_score|default:"0" }}
-                                                </div>
-                                                <div class="grade-badge d-inline-block mb-3" id="gradeBadge">
-                                                    {{ form.instance.ges_grade|default:"--" }}
-                                                </div>
-                                                <div class="progress mb-3">
-                                                    <div class="progress-bar" id="totalProgress" role="progressbar" 
-                                                         style="width: {{ form.instance.total_score|default:0 }}%;" 
-                                                         aria-valuenow="{{ form.instance.total_score|default:0 }}" 
-                                                         aria-valuemin="0" 
-                                                         aria-valuemax="100"></div>
-                                                </div>
-                                                <small class="text-muted d-block" id="gradeDescription">
-                                                    {% if form.instance.ges_grade and form.instance.ges_grade != 'N/A' %}
-                                                        {{ form.instance.get_ges_grade_display }}
-                                                    {% else %}
-                                                        Enter scores to calculate grade
-                                                    {% endif %}
-                                                </small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="grade-letter" id="gradeLetterDisplay">
+                          -
+                        </div>
+                        <div class="progress">
+                          <div
+                            class="progress-bar"
+                            id="totalProgressBar"
+                            role="progressbar"
+                            style="width: 0%"
+                            aria-valuenow="0"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                          ></div>
                         </div>
                         
-                        <!-- Remarks Section -->
-                        <div class="form-section">
-                            <div class="card">
-                                <div class="card-header bg-light">
-                                    <h5 class="mb-0 text-visible">
-                                        <i class="bi bi-chat-text me-2"></i>Teacher's Remarks
-                                    </h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="mb-3">
-                                        <label for="{{ form.remarks.id_for_label }}" class="form-label fw-bold text-visible">Additional Comments</label>
-                                        {{ form.remarks }}
-                                        {% if form.remarks.errors %}
-                                            <div class="invalid-feedback">
-                                                {{ form.remarks.errors.0 }}
-                                            </div>
-                                        {% endif %}
-                                        <div class="help-text">Optional comments about the student's performance, behavior, or areas for improvement</div>
-                                    </div>
-                                </div>
-                            </div>
+                        <!-- Contribution Breakdown -->
+                        <div class="contribution-breakdown mt-3">
+                          <div class="contribution-item">
+                            <span class="contribution-value" id="cwContrib">0.0</span> Classwork
+                          </div>
+                          <div class="contribution-item">
+                            <span class="contribution-value" id="hwContrib">0.0</span> Homework
+                          </div>
+                          <div class="contribution-item">
+                            <span class="contribution-value" id="testContrib">0.0</span> Test
+                          </div>
+                          <div class="contribution-item">
+                            <span class="contribution-value" id="examContrib">0.0</span> Exam
+                          </div>
                         </div>
                         
-                        <!-- Form Actions -->
-                        <div class="d-flex justify-content-between pt-4 border-top">
-                            <a href="{% url 'grade_list' %}" class="btn btn-outline-secondary btn-lg">
-                                <i class="bi bi-arrow-left me-2"></i> Back to Grade List
-                            </a>
-                            <div>
-                                <button type="submit" class="btn btn-primary btn-lg px-4" id="submitBtn">
-                                    <i class="bi bi-save me-2"></i> 
-                                    {% if form.instance.pk %}Update Grade{% else %}Save Grade{% endif %}
-                                </button>
-                            </div>
+                        <div class="help-text mt-3" id="gradeDescription">
+                          Enter percentage scores to calculate weighted total
                         </div>
-                    </form>
+                        
+                        <!-- API Status -->
+                        <div class="api-status connected mt-2" id="apiStatus">
+                          <i class="bi bi-check-circle me-1"></i>
+                          Grade calculation: <strong>Ready</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </div>
             </div>
+
+            <!-- Remarks Section -->
+            <div class="form-section">
+              <h5 class="form-section-title text-visible">
+                <i class="bi bi-chat-text me-2"></i>Additional Information
+              </h5>
+              <div class="card">
+                <div class="card-body">
+                  <div class="field-group">
+                    <label
+                      for="{{ form.remarks.id_for_label }}"
+                      class="form-label text-visible"
+                    >
+                      <i class="bi bi-chat-text me-1"></i>Teacher's Remarks
+                    </label>
+                    {{ form.remarks }}
+                    {% if form.remarks.errors %}
+                    <div class="invalid-feedback d-block">
+                      {% for error in form.remarks.errors %} {{ error }}
+                      {% endfor %}
+                    </div>
+                    {% endif %}
+                    <small class="help-text"
+                      >Optional comments about the student's performance</small
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="d-flex justify-content-between pt-4 border-top">
+              <a
+                href="{% url 'grade_list' %}"
+                class="btn btn-outline-secondary btn-lg"
+              >
+                <i class="bi bi-arrow-left me-2"></i>Cancel
+              </a>
+              <button
+                type="submit"
+                class="btn btn-primary btn-lg px-4"
+                id="submitBtn"
+              >
+                <i class="bi bi-save me-2"></i>Save Grade
+              </button>
+            </div>
+          </form>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block footer %}
-
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('gradeForm');
-    const submitBtn = document.getElementById('submitBtn');
-    const scoreFields = [
-        'classwork_score', 
-        'homework_score', 
-        'test_score', 
-        'exam_score'
-    ];
-    
-    // Ghanaian weight standards
-    const WEIGHTS = {
-        classwork_score: 30,
-        homework_score: 10,
-        test_score: 10,
-        exam_score: 50
+  document.addEventListener("DOMContentLoaded", function () {
+    // Percentage-based system - all inputs are 0-100%
+    const MAX_PERCENTAGE = 100;
+
+    // Class level display mapping
+    const CLASS_LEVEL_DISPLAY = {
+      P1: "Primary 1",
+      P2: "Primary 2",
+      P3: "Primary 3",
+      P4: "Primary 4",
+      P5: "Primary 5",
+      P6: "Primary 6",
+      J1: "JHS 1",
+      J2: "JHS 2",
+      J3: "JHS 3",
     };
-    
-    // Initialize all score inputs with proper styling
-    function initializeScoreInputs() {
-        scoreFields.forEach(field => {
-            const input = document.getElementById(`id_${field}`);
-            if (input) {
-                // Ensure proper styling
-                input.classList.add('score-input', 'form-control', 'text-visible');
-                input.style.color = '#212529';
-                input.style.backgroundColor = '#fff';
-            }
-        });
+
+    // Load weights from Django template - FIXED WITH DEFAULTS
+    const ASSESSMENT_WEIGHTS = {
+      classwork: parseFloat({{ assessment_weights.classwork|default:30 }}),
+      homework: parseFloat({{ assessment_weights.homework|default:10 }}),
+      test: parseFloat({{ assessment_weights.test|default:10 }}),
+      exam: parseFloat({{ assessment_weights.exam|default:50 }})
+    };
+
+    console.log("✅ Assessment weights loaded:", ASSESSMENT_WEIGHTS);
+    console.log("✅ Total weight:", ASSESSMENT_WEIGHTS.classwork + ASSESSMENT_WEIGHTS.homework + ASSESSMENT_WEIGHTS.test + ASSESSMENT_WEIGHTS.exam);
+
+    // Initialize form elements
+    const form = document.getElementById("gradeForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const studentSelect = document.getElementById("id_student");
+    const subjectSelect = document.getElementById("id_subject");
+    const classLevelSelect = document.getElementById("id_class_level");
+    const academicYearInput = document.getElementById("id_academic_year");
+    const studentInfo = document.getElementById("studentInfo");
+    const classAssignmentDisplay = document.getElementById("classAssignmentDisplay");
+    const apiStatus = document.getElementById("apiStatus");
+
+    // Initialize Select2
+    function initializeSelect2() {
+      if (studentSelect) {
+        $(studentSelect)
+          .select2({
+            theme: "bootstrap-5",
+            placeholder: "Select a student",
+            allowClear: true,
+            width: "100%",
+          })
+          .on("change", function (e) {
+            handleStudentChange();
+            validateForm();
+          });
+      }
+      if (subjectSelect) {
+        $(subjectSelect)
+          .select2({
+            theme: "bootstrap-5",
+            placeholder: "Select a subject",
+            allowClear: true,
+            width: "100%",
+          })
+          .on("change", function (e) {
+            updateClassAssignmentInfo();
+            validateForm();
+          });
+      }
     }
-    
-    // Calculate and display total score
-    function calculateTotal() {
-        let total = 0;
-        let hasScores = false;
-        
-        scoreFields.forEach(field => {
-            const input = document.getElementById(`id_${field}`);
-            if (input && input.value !== '') {
-                total += parseFloat(input.value) || 0;
-                hasScores = true;
-            }
-        });
-        
-        const roundedTotal = Math.round(total * 10) / 10;
-        
-        // Update display
-        const totalElement = document.getElementById('totalScore');
-        const badgeElement = document.getElementById('gradeBadge');
-        const progressElement = document.getElementById('totalProgress');
-        const descriptionElement = document.getElementById('gradeDescription');
-        const totalDisplay = document.getElementById('totalDisplay');
-        
-        if (totalElement && hasScores) {
-            totalElement.textContent = roundedTotal.toFixed(1);
-            totalDisplay.classList.add('highlight');
-            setTimeout(() => totalDisplay.classList.remove('highlight'), 1000);
-            
-            // Update progress bar
-            const progressWidth = Math.min(roundedTotal, 100);
-            progressElement.style.width = progressWidth + '%';
-            progressElement.setAttribute('aria-valuenow', progressWidth);
-            
-            // Determine grade and description
-            let grade = '';
-            let description = '';
-            let gradeClass = '';
-            let isPassing = false;
-            
-            // Ghana Education Service Grading System
-            if (roundedTotal >= 90) {
-                grade = '1';
-                description = 'Excellent - Outstanding performance';
-                gradeClass = 'grade-1';
-                isPassing = true;
-            } else if (roundedTotal >= 80) {
-                grade = '2';
-                description = 'Very Good - Strong performance';
-                gradeClass = 'grade-2';
-                isPassing = true;
-            } else if (roundedTotal >= 70) {
-                grade = '3';
-                description = 'Good - Above average performance';
-                gradeClass = 'grade-3';
-                isPassing = true;
-            } else if (roundedTotal >= 60) {
-                grade = '4';
-                description = 'Satisfactory - Meets expectations';
-                gradeClass = 'grade-4';
-                isPassing = true;
-            } else if (roundedTotal >= 50) {
-                grade = '5';
-                description = 'Fair - Needs improvement';
-                gradeClass = 'grade-5';
-                isPassing = true;
-            } else if (roundedTotal >= 40) {
-                grade = '6';
-                description = 'Marginal - Below expectations';
-                gradeClass = 'grade-6';
-                isPassing = true;
-            } else if (roundedTotal >= 30) {
-                grade = '7';
-                description = 'Poor - Significant improvement needed';
-                gradeClass = 'grade-7';
-                isPassing = false;
-            } else if (roundedTotal >= 20) {
-                grade = '8';
-                description = 'Very Poor - Concerning performance';
-                gradeClass = 'grade-8';
-                isPassing = false;
-            } else {
-                grade = '9';
-                description = 'Fail - Immediate intervention required';
-                gradeClass = 'grade-9';
-                isPassing = false;
-            }
-            
-            badgeElement.textContent = grade;
-            badgeElement.className = 'grade-badge grade-' + grade;
-            
-            let descriptionHTML = description;
-            if (isPassing) {
-                descriptionHTML += ' <span class="badge bg-success ms-2">Passing</span>';
-            } else {
-                descriptionHTML += ' <span class="badge bg-danger ms-2">Needs Improvement</span>';
-            }
-            descriptionElement.innerHTML = descriptionHTML;
-            progressElement.className = 'progress-bar ' + gradeClass;
+
+    // Handle student selection change
+    function handleStudentChange() {
+      const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+      const studentClassLevel = selectedOption
+        ? selectedOption.getAttribute("data-class-level")
+        : null;
+      const studentId = selectedOption
+        ? selectedOption.getAttribute("data-student-id")
+        : null;
+
+      console.log("Student changed:", { studentClassLevel, studentId });
+
+      if (studentClassLevel && classLevelSelect) {
+        // Auto-set and lock the class level to match student's class
+        classLevelSelect.value = studentClassLevel;
+        classLevelSelect.disabled = true;
+        classLevelSelect.classList.add("bg-light", "readonly-field");
+
+        // Update display to show this is auto-set
+        const classDisplay = CLASS_LEVEL_DISPLAY[studentClassLevel] || studentClassLevel;
+        if (studentInfo) {
+          studentInfo.innerHTML = `
+                    <div class="alert alert-info p-2 mb-2">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <div>
+                                <strong>Auto-set to ${classDisplay}</strong>
+                                <br>
+                                <small>Class level locked to match student's current class</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between text-muted small">
+                        <span><strong>Student ID:</strong> ${studentId || "N/A"}</span>
+                        <span><strong>Current Class:</strong> ${classDisplay}</span>
+                    </div>
+                `;
         }
+      } else {
+        // Reset if no student selected
+        if (classLevelSelect) {
+          classLevelSelect.disabled = false;
+          classLevelSelect.classList.remove("bg-light", "readonly-field");
+        }
+        if (studentInfo) {
+          studentInfo.innerHTML = "";
+        }
+      }
+
+      updateClassAssignmentInfo();
+      calculateWeightedTotal();
     }
-    
-    // Add event listeners to all score fields
-    function setupScoreListeners() {
-        scoreFields.forEach(field => {
-            const input = document.getElementById(`id_${field}`);
-            if (input) {
-                input.addEventListener('input', calculateTotal);
-                input.addEventListener('change', function() {
-                    const max = WEIGHTS[field] || 100;
-                    let value = parseFloat(this.value) || 0;
-                    
-                    // Validate range
-                    if (value < 0) {
-                        value = 0;
-                        this.value = 0;
-                    } else if (value > max) {
-                        value = max;
-                        this.value = max;
-                    }
-                    
-                    calculateTotal();
-                });
-                
-                // Trigger calculation if there's already a value
-                if (input.value) {
-                    calculateTotal();
-                }
-            }
+
+    // Class Level and Assignment Management
+    function updateClassAssignmentInfo() {
+      const student = studentSelect ? studentSelect.value : null;
+      const classLevel = classLevelSelect ? classLevelSelect.value : null;
+      const subject = subjectSelect ? subjectSelect.value : null;
+      const academicYear = academicYearInput ? academicYearInput.value : null;
+
+      console.log("Assignment info:", {
+        student,
+        classLevel,
+        subject,
+        academicYear,
+      });
+
+      if (classAssignmentDisplay) {
+        if (student && classLevel && subject && academicYear) {
+          const classDisplay = CLASS_LEVEL_DISPLAY[classLevel] || classLevel;
+          const subjectName = subjectSelect.options[subjectSelect.selectedIndex]?.text || "Subject";
+
+          classAssignmentDisplay.className = "assignment-status complete";
+          classAssignmentDisplay.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        <div>
+                            <strong>${classDisplay} - ${subjectName}</strong>
+                            <br>
+                            <small>Academic Year: ${academicYear} | Student class matched ✓</small>
+                        </div>
+                    </div>
+                `;
+        } else if (student && classLevel) {
+          const classDisplay = CLASS_LEVEL_DISPLAY[classLevel] || classLevel;
+          classAssignmentDisplay.className = "assignment-status ready";
+          classAssignmentDisplay.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-hourglass-split text-info me-2"></i>
+                        <div>
+                            <strong>Ready for ${classDisplay}</strong>
+                            <br>
+                            <small>Select a subject to complete assignment</small>
+                        </div>
+                    </div>
+                `;
+        } else {
+          classAssignmentDisplay.className = "assignment-status";
+          classAssignmentDisplay.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-info-circle text-muted me-2"></i>
+                        <div>
+                            <small>Select student and subject to auto-detect class assignment</small>
+                        </div>
+                    </div>
+                `;
+        }
+      }
+    }
+
+    // FIXED: Calculate weighted total score function with API integration
+    window.calculateWeightedTotal = function () {
+      // Get percentage values
+      let classwork = parseFloat($('#id_classwork_percentage').val()) || 0;
+      let homework = parseFloat($('#id_homework_percentage').val()) || 0;
+      let test = parseFloat($('#id_test_percentage').val()) || 0;
+      let exam = parseFloat($('#id_exam_percentage').val()) || 0;
+
+      // Validate percentage range (0-100%)
+      $('.score-input').removeClass('is-invalid');
+      let hasError = false;
+
+      // Check each score individually
+      const scores = [
+        { value: classwork, field: $('#id_classwork_percentage'), name: 'Classwork' },
+        { value: homework, field: $('#id_homework_percentage'), name: 'Homework' },
+        { value: test, field: $('#id_test_percentage'), name: 'Test' },
+        { value: exam, field: $('#id_exam_percentage'), name: 'Exam' }
+      ];
+
+      scores.forEach(score => {
+        if (score.value < 0 || score.value > 100 || isNaN(score.value)) {
+          score.field.addClass('is-invalid');
+          hasError = true;
+          console.error(`Invalid ${score.name} score: ${score.value}`);
+        }
+      });
+
+      if (hasError) {
+        updateAPIStatus('error', 'Invalid scores detected');
+        Swal.fire({
+          title: 'Invalid Input',
+          text: 'Percentages must be between 0 and 100. Please check your inputs.',
+          icon: 'error',
+          confirmButtonText: 'OK'
         });
+        return;
+      }
+
+      // Calculate weighted contributions - FIXED CALCULATION
+      const classworkContribution = (classwork * ASSESSMENT_WEIGHTS.classwork) / 100;
+      const homeworkContribution = (homework * ASSESSMENT_WEIGHTS.homework) / 100;
+      const testContribution = (test * ASSESSMENT_WEIGHTS.test) / 100;
+      const examContribution = (exam * ASSESSMENT_WEIGHTS.exam) / 100;
+
+      // Sum weighted contributions (weights should total 100%)
+      const weightedTotal = classworkContribution + homeworkContribution + testContribution + examContribution;
+
+      console.log('✅ Weighted calculation:', {
+        inputs: { classwork, homework, test, exam },
+        weights: ASSESSMENT_WEIGHTS,
+        contributions: { 
+          classworkContribution, 
+          homeworkContribution, 
+          testContribution, 
+          examContribution 
+        },
+        weightedTotal: weightedTotal
+      });
+
+      // Update contribution breakdown display
+      updateContributionBreakdown({
+        classwork: classworkContribution,
+        homework: homeworkContribution,
+        test: testContribution,
+        exam: examContribution
+      });
+
+      // Call API for accurate grade calculation
+      calculateGradeWithAPI(classwork, homework, test, exam, weightedTotal);
+      
+      validateForm();
+    };
+
+    // NEW FUNCTION: Calculate grade using API
+    function calculateGradeWithAPI(classwork, homework, test, exam, weightedTotal) {
+      updateAPIStatus('loading', 'Calculating grade...');
+      
+      $.ajax({
+        url: '{% url "calculate_grade_api" %}',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        data: JSON.stringify({
+          classwork_percentage: classwork,
+          homework_percentage: homework,
+          test_percentage: test,
+          exam_percentage: exam
+        }),
+        success: function(data) {
+          console.log("✅ API Response:", data);
+          
+          if (data.success) {
+            displayGradeResult(data, weightedTotal);
+            updateAPIStatus('success', 'Grade calculated successfully');
+          } else {
+            console.warn("API returned error, using fallback");
+            const fallbackResult = calculateGradeLocally(weightedTotal);
+            displayGradeResult(fallbackResult, weightedTotal);
+            updateAPIStatus('warning', 'Using fallback calculation');
+          }
+        },
+        error: function(xhr, status, error) {
+          console.error("❌ API call failed:", error);
+          // Fallback to client-side calculation
+          const fallbackResult = calculateGradeLocally(weightedTotal);
+          displayGradeResult(fallbackResult, weightedTotal);
+          updateAPIStatus('error', 'API unavailable, using fallback');
+        }
+      });
     }
-    
+
+    // NEW FUNCTION: Display grade result
+    function displayGradeResult(data, weightedTotal) {
+      const totalDisplay = document.getElementById('totalScoreDisplay');
+      const gradeDisplay = document.getElementById('gradeLetterDisplay');
+      const progressBar = document.getElementById('totalProgressBar');
+      const gradeDescription = document.getElementById('gradeDescription');
+      
+      if (totalDisplay) {
+        totalDisplay.textContent = weightedTotal.toFixed(1);
+        totalDisplay.classList.add('pulse');
+        setTimeout(() => totalDisplay.classList.remove('pulse'), 500);
+        
+        // Use API result or fallback
+        const gradeLetter = data.display_grade || data.ges_grade || calculateGradeLocally(weightedTotal).display_grade;
+        gradeDisplay.textContent = gradeLetter;
+        
+        // Set grade color class
+        const gradeNum = gradeLetter.charAt(0);
+        gradeDisplay.className = `grade-letter grade-${gradeNum}`;
+        
+        // Update progress bar
+        const progressWidth = Math.min(weightedTotal, 100);
+        progressBar.style.width = progressWidth + '%';
+        progressBar.setAttribute('aria-valuenow', progressWidth);
+        progressBar.className = `progress-bar grade-${gradeNum}`;
+        
+        // Update description
+        let description = data.grade_description || data.ges_description || '';
+        if (description) {
+          if (data.is_passing) {
+            description += ' <span class="badge bg-success ms-2">Passing</span>';
+          } else {
+            description += ' <span class="badge bg-danger ms-2">Needs Improvement</span>';
+          }
+          gradeDescription.innerHTML = description;
+        }
+      }
+    }
+
+    // NEW FUNCTION: Update contribution breakdown display
+    function updateContributionBreakdown(contributions) {
+      document.getElementById('cwContrib').textContent = contributions.classwork.toFixed(1);
+      document.getElementById('hwContrib').textContent = contributions.homework.toFixed(1);
+      document.getElementById('testContrib').textContent = contributions.test.toFixed(1);
+      document.getElementById('examContrib').textContent = contributions.exam.toFixed(1);
+    }
+
+    // NEW FUNCTION: Update API status display
+    function updateAPIStatus(status, message) {
+      if (!apiStatus) return;
+      
+      apiStatus.className = 'api-status';
+      
+      switch(status) {
+        case 'loading':
+          apiStatus.classList.add('connected');
+          apiStatus.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> ${message}`;
+          break;
+        case 'success':
+          apiStatus.classList.add('connected');
+          apiStatus.innerHTML = `<i class="bi bi-check-circle me-1"></i> ${message}`;
+          break;
+        case 'warning':
+          apiStatus.classList.add('disconnected');
+          apiStatus.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${message}`;
+          break;
+        case 'error':
+          apiStatus.classList.add('disconnected');
+          apiStatus.innerHTML = `<i class="bi bi-x-circle me-1"></i> ${message}`;
+          break;
+        default:
+          apiStatus.classList.add('connected');
+          apiStatus.innerHTML = `<i class="bi bi-check-circle me-1"></i> Grade calculation: <strong>Ready</strong>`;
+      }
+    }
+
+    // Client-side fallback grade calculation (matches GES system)
+    function calculateGradeLocally(totalScore) {
+      let gradeLetter = "9";
+      let description = "Not calculated";
+      let isPassing = false;
+      
+      // Ghana Education Service Grading System (1-9)
+      if (totalScore >= 90) {
+        gradeLetter = "1";
+        description = "Excellent - Outstanding performance";
+        isPassing = true;
+      } else if (totalScore >= 80) {
+        gradeLetter = "2";
+        description = "Very Good - Strong performance";
+        isPassing = true;
+      } else if (totalScore >= 70) {
+        gradeLetter = "3";
+        description = "Good - Above average performance";
+        isPassing = true;
+      } else if (totalScore >= 60) {
+        gradeLetter = "4";
+        description = "Satisfactory - Meets expectations";
+        isPassing = true;
+      } else if (totalScore >= 50) {
+        gradeLetter = "5";
+        description = "Fair - Needs improvement";
+        isPassing = true;
+      } else if (totalScore >= 40) {
+        gradeLetter = "6";
+        description = "Marginal - Below expectations";
+        isPassing = true;
+      } else if (totalScore >= 30) {
+        gradeLetter = "7";
+        description = "Poor - Significant improvement needed";
+        isPassing = false;
+      } else if (totalScore >= 20) {
+        gradeLetter = "8";
+        description = "Very Poor - Concerning performance";
+        isPassing = false;
+      } else {
+        gradeLetter = "9";
+        description = "Fail - Immediate intervention required";
+        isPassing = false;
+      }
+      
+      return {
+        total_score: totalScore,
+        display_grade: gradeLetter,
+        ges_grade: gradeLetter,
+        grade_description: description,
+        is_passing: isPassing,
+        ges_description: description
+      };
+    }
+
+    function showFieldWarning(field, message) {
+      // Remove existing warning
+      clearFieldWarning(field);
+
+      // Add warning style
+      field.classList.add("is-invalid");
+
+      // Create warning message
+      const warning = document.createElement("div");
+      warning.className = "invalid-feedback d-block";
+      warning.textContent = message;
+      warning.id = field.id + "_warning";
+
+      field.parentNode.appendChild(warning);
+    }
+
+    function clearFieldWarning(field) {
+      field.classList.remove("is-invalid");
+      const existingWarning = document.getElementById(field.id + "_warning");
+      if (existingWarning) {
+        existingWarning.remove();
+      }
+    }
+
+    // Form validation
+    function validateForm() {
+      const errors = [];
+
+      // Basic validation
+      if (studentSelect && !studentSelect.value) {
+        errors.push("Please select a student");
+      }
+      if (subjectSelect && !subjectSelect.value) {
+        errors.push("Please select a subject");
+      }
+      if (classLevelSelect && !classLevelSelect.value) {
+        errors.push("Class level is required");
+      }
+      if (academicYearInput && !academicYearInput.value) {
+        errors.push("Please enter an academic year");
+      }
+
+      // Class level validation
+      if (studentSelect && studentSelect.value && classLevelSelect && classLevelSelect.value) {
+        const selectedOption = studentSelect.options[studentSelect.selectedIndex];
+        const studentClassLevel = selectedOption ? selectedOption.getAttribute("data-class-level") : null;
+
+        if (studentClassLevel && classLevelSelect.value !== studentClassLevel) {
+          errors.push(`Class level must match student's current class (${CLASS_LEVEL_DISPLAY[studentClassLevel] || studentClassLevel})`);
+        }
+      }
+
+      return errors;
+    }
+
     // Form submission handler
-    form.addEventListener('submit', function(e) {
-        const totalElement = document.getElementById('totalScore');
-        const total = totalElement ? parseFloat(totalElement.textContent) : 0;
-        
-        if (total > 100) {
-            e.preventDefault();
-            alert('Total score cannot exceed 100%');
-            return false;
-        }
-        
-        // Validate individual scores
-        let isValid = true;
-        const errorMessages = [];
-        
-        scoreFields.forEach(field => {
-            const input = document.getElementById(`id_${field}`);
-            const max = WEIGHTS[field];
-            const value = parseFloat(input.value) || 0;
-            
-            if (value > max) {
-                isValid = false;
-                input.classList.add('is-invalid');
-                errorMessages.push(`${field.replace('_score', '').charAt(0).toUpperCase() + field.replace('_score', '').slice(1)} score cannot exceed ${max}`);
-            } else {
-                input.classList.remove('is-invalid');
-            }
-        });
-        
-        if (!isValid) {
-            e.preventDefault();
-            const errorHtml = errorMessages.map(msg => `<li>${msg}</li>`).join('');
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-            alertDiv.innerHTML = `
-                <h6 class="alert-heading">Please correct the following errors:</h6>
+    form.addEventListener("submit", function (event) {
+      const errors = validateForm();
+
+      if (errors.length > 0) {
+        event.preventDefault();
+        const errorHtml = errors.map((msg) => `<li>${msg}</li>`).join("");
+        const alertDiv = document.createElement("div");
+        alertDiv.className = "alert alert-danger alert-dismissible fade show";
+        alertDiv.innerHTML = `
+                <h6 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>Please correct the following errors:</h6>
                 <ul class="mb-0">${errorHtml}</ul>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
-            form.insertBefore(alertDiv, form.firstChild);
-            return false;
-        }
-        
+        form.insertBefore(alertDiv, form.firstChild);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
         // Show loading state
         submitBtn.disabled = true;
-        submitBtn.innerHTML = `
-            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            {% if form.instance.pk %}Updating...{% else %}Saving...{% endif %}
-        `;
-        return true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving Grade...';
+      }
     });
-    
+
+    // Update other field listeners
+    if (classLevelSelect) {
+      classLevelSelect.addEventListener("change", updateClassAssignmentInfo);
+    }
+    if (academicYearInput) {
+      academicYearInput.addEventListener("input", updateClassAssignmentInfo);
+      academicYearInput.addEventListener("change", updateClassAssignmentInfo);
+    }
+
     // Initialize everything
-    initializeScoreInputs();
+    initializeSelect2();
+    
+    // Setup score listeners
+    function setupScoreListeners() {
+      const scoreInputs = [
+        "id_classwork_percentage",
+        "id_homework_percentage",
+        "id_test_percentage",
+        "id_exam_percentage"
+      ];
+
+      scoreInputs.forEach((inputId) => {
+        const input = document.getElementById(inputId);
+        if (input) {
+          // Add score-input class for styling
+          input.classList.add("score-input");
+
+          input.addEventListener("input", function () {
+            let value = parseFloat(this.value) || 0;
+
+            // Validate range (0-100%)
+            if (value < 0 || value > 100 || isNaN(value)) {
+              $(this).addClass('is-invalid');
+            } else {
+              $(this).removeClass('is-invalid');
+            }
+
+            calculateWeightedTotal();
+          });
+
+          input.addEventListener("blur", function () {
+            const value = parseFloat(this.value) || 0;
+            if (value < 0) this.value = 0;
+            if (value > 100) this.value = 100;
+            calculateWeightedTotal();
+          });
+
+          if (input.value) calculateWeightedTotal();
+        }
+      });
+    }
+    
     setupScoreListeners();
-    calculateTotal(); // Initial calculation
-});
+    calculateWeightedTotal();
+
+    // Trigger initial setup if student is pre-selected
+    if (studentSelect && studentSelect.value) {
+      setTimeout(() => {
+        handleStudentChange();
+      }, 100);
+    }
+
+    console.log("✅ Grade entry form initialized successfully");
+  });
 </script>
 {% endblock %}

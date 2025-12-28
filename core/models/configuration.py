@@ -609,6 +609,42 @@ class SchoolConfiguration(models.Model):
         
         # Ensure weights total 100%
         self._validate_weights()
+    
+    
+    def get_display_grade_for_score(self, score):
+        """Get display grade based on score and grading system"""
+        try:
+            score = float(score)
+            if self.grading_system == 'GES':
+                return self.get_ges_grade_for_score(score)
+            elif self.grading_system == 'LETTER':
+                return self.get_letter_grade_for_score(score)
+            elif self.grading_system == 'BOTH':
+                ges_grade = self.get_ges_grade_for_score(score)
+                letter_grade = self.get_letter_grade_for_score(score)
+                return f"{ges_grade} ({letter_grade})"
+            else:  # CUSTOM or any other
+                ges_grade = self.get_ges_grade_for_score(score)
+                letter_grade = self.get_letter_grade_for_score(score)
+                return f"{ges_grade} / {letter_grade}"
+        except (ValueError, TypeError):
+            return "N/A"
+
+        # Also add this method for better color handling
+    def get_grade_color_for_display(self, grade):
+        """Get Bootstrap color class for grade display"""
+        if grade in ['1', '2', 'A+', 'A']:
+            return 'success'
+        elif grade in ['3', '4', 'B+', 'B']:
+            return 'info'
+        elif grade in ['5', '6', 'C+', 'C']:
+            return 'warning'
+        elif grade in ['7', '8', 'D+', 'D']:
+            return 'warning'
+        elif grade in ['9', 'F', 'E']:
+            return 'danger'
+        else:
+            return 'secondary'
 
 
 class ReportCardConfiguration(models.Model):
@@ -1141,3 +1177,5 @@ class ScheduledMaintenance(models.Model):
             return 'UNKNOWN'
 
 
+    
+    

@@ -99,9 +99,18 @@ def format_date(date_obj):
     """Format date object to string"""
     if not date_obj:
         return "Not set"
+    
     from django.utils import timezone
-    if timezone.is_aware(date_obj):
-        return date_obj.strftime("%B %d, %Y")
+    
+    try:
+        # Check if it's a timezone-aware datetime
+        if timezone.is_aware(date_obj):
+            return timezone.localtime(date_obj).strftime("%B %d, %Y")
+    except (AttributeError, ValueError):
+        # This happens for date objects or naive datetime objects
+        pass
+    
+    # Format all other cases (date objects, naive datetime)
     return date_obj.strftime("%B %d, %Y")
 
 def calculate_total_score(homework, classwork, test, exam):

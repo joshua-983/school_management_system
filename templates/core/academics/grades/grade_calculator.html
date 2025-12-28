@@ -165,9 +165,11 @@
                                     </td>
                                     <td>
                                         {% if forloop.counter0 < letter_boundaries|length %}
+                                        {% with letter_grade=letter_boundaries.forloop.counter0.grade %}
                                         <span class="badge bg-{% if forloop.counter0 < 2 %}success{% elif forloop.counter0 < 4 %}info{% elif forloop.counter0 < 6 %}warning{% else %}danger{% endif %}">
-                                            {{ letter_boundaries.forloop.counter0.grade }}
+                                            {{ letter_grade }}
                                         </span>
+                                        {% endwith %}
                                         {% endif %}
                                     </td>
                                     <td>
@@ -318,7 +320,7 @@
 
 {% block extra_js %}
 <script>
-    // Example data for percentage-based system
+    // Example data for percentage-based system - FIXED WEIGHTS
     const examples = {
         'excellent': {
             classwork_percentage: 95,  // 95% in classwork
@@ -346,13 +348,16 @@
         }
     };
 
-    // Assessment weights from Django template
+    // Assessment weights from Django template - USE CORRECT WEIGHTS
     const ASSESSMENT_WEIGHTS = {
-        classwork: {{ assessment_weights.classwork }},
-        homework: {{ assessment_weights.homework }},
-        test: {{ assessment_weights.test }},
-        exam: {{ assessment_weights.exam }}
+        classwork: parseFloat({{ assessment_weights.classwork|default:30 }}),  // Default 30%
+        homework: parseFloat({{ assessment_weights.homework|default:10 }}),    // Default 10%
+        test: parseFloat({{ assessment_weights.test|default:10 }}),            // Default 10%
+        exam: parseFloat({{ assessment_weights.exam|default:50 }})             // Default 50%
     };
+
+    // Debug the weights
+    console.log("DEBUG: Loaded weights from template:", ASSESSMENT_WEIGHTS);
 
     function loadExample(type) {
         const example = examples[type];
@@ -401,7 +406,7 @@
             return;
         }
         
-        // Calculate weighted contributions
+        // Calculate weighted contributions using CORRECT WEIGHTS
         const classworkContribution = (classwork * ASSESSMENT_WEIGHTS.classwork) / 100;
         const homeworkContribution = (homework * ASSESSMENT_WEIGHTS.homework) / 100;
         const testContribution = (test * ASSESSMENT_WEIGHTS.test) / 100;
@@ -409,6 +414,14 @@
         
         // Calculate total weighted score
         const totalScore = classworkContribution + homeworkContribution + testContribution + examContribution;
+        
+        console.log("DEBUG: Calculated contributions:", {
+            classwork: classworkContribution,
+            homework: homeworkContribution,
+            test: testContribution,
+            exam: examContribution,
+            total: totalScore
+        });
         
         // Send to server for grade calculation
         $.ajax({
@@ -418,18 +431,32 @@
             data: JSON.stringify({
                 classwork_percentage: classwork,
                 homework_percentage: homework,
-                test_percentage: test,
-                exam_percentage: exam
+                test_percentage: test,      // FIXED: Using test_percentage not test_score
+                exam_percentage: exam       // FIXED: Using exam_percentage not exam_score
             }),
             success: function(data) {
-                displayResult(data, totalScore, {
-                    classwork: classworkContribution,
-                    homework: homeworkContribution,
-                    test: testContribution,
-                    exam: examContribution
-                });
+                console.log("DEBUG: API Response:", data);
+                if (data.success) {
+                    displayResult(data, totalScore, {
+                        classwork: classworkContribution,
+                        homework: homeworkContribution,
+                        test: testContribution,
+                        exam: examContribution
+                    });
+                } else {
+                    // API returned error, use client-side fallback
+                    console.log("API returned error, using client-side fallback");
+                    const fallbackResult = calculateGradeLocally(totalScore);
+                    displayResult(fallbackResult, totalScore, {
+                        classwork: classworkContribution,
+                        homework: homeworkContribution,
+                        test: testContribution,
+                        exam: examContribution
+                    });
+                }
             },
             error: function(xhr, status, error) {
+                console.log("DEBUG: API call failed, using client-side fallback");
                 // Fallback to client-side calculation if API fails
                 const fallbackResult = calculateGradeLocally(totalScore);
                 displayResult(fallbackResult, totalScore, {
@@ -442,10 +469,12 @@
         });
     }
 
+    // FIXED: Client-side grade calculation that matches the GES system
     function calculateGradeLocally(totalScore) {
         // Client-side grade calculation based on GES standards
         let gradeLetter, description, isPassing, performanceLevel, gradeColor;
         
+        // CORRECTED LOGIC - matches your GES grading system
         if (totalScore >= 90) {
             gradeLetter = "1";
             description = "Excellent - Outstanding performance";
@@ -457,7 +486,7 @@
             description = "Very Good - Strong performance";
             isPassing = true;
             performanceLevel = "Very Good";
-            gradeColor = "info";
+            gradeColor = "success";
         } else if (totalScore >= 70) {
             gradeLetter = "3";
             description = "Good - Above average performance";
@@ -469,7 +498,7 @@
             description = "Satisfactory - Meets expectations";
             isPassing = true;
             performanceLevel = "Satisfactory";
-            gradeColor = "primary";
+            gradeColor = "info";
         } else if (totalScore >= 50) {
             gradeLetter = "5";
             description = "Fair - Needs improvement";
@@ -521,7 +550,7 @@
         // Update display
         $('#totalScore').text(totalScore.toFixed(2));
         $('#gradeDisplay').text(data.display_grade);
-        $('#gradeDescription').text(data.grade_description);
+        $('#gradeDescription').text(data.grade_description || data.description || 'Not calculated');
         
         // Update status badge
         const statusBadge = $('#statusBadge');
@@ -534,12 +563,12 @@
         }
         
         // Update details
-        $('#gradingSystem').text(data.grading_system);
+        $('#gradingSystem').text(data.grading_system || 'GES');
         $('#passingStatus').text(data.is_passing ? 'Yes' : 'No');
-        $('#performanceLevel').text(data.performance_level);
+        $('#performanceLevel').text(data.performance_level || 'N/A');
         
         // Add grade color
-        const gradeColor = data.grade_color || 'secondary';
+        const gradeColor = data.grade_color || data.color || 'secondary';
         $('#gradeDisplay').removeClass('text-success text-info text-warning text-danger text-secondary');
         $('#gradeDisplay').addClass('text-' + gradeColor);
         
@@ -550,6 +579,10 @@
             $('#testContribution').text(contributions.test.toFixed(2));
             $('#examContribution').text(contributions.exam.toFixed(2));
         }
+        
+        // Add visual feedback
+        $('#totalScore').addClass('pulse');
+        setTimeout(() => $('#totalScore').removeClass('pulse'), 500);
     }
 
     // Initialize
@@ -586,6 +619,10 @@
                 }
             }, 1000);
         });
+        
+        // Log initial state
+        console.log("Grade calculator initialized with weights:", ASSESSMENT_WEIGHTS);
+        console.log("Passing mark:", {{ passing_mark|default:40 }});
     });
 </script>
 {% endblock %}

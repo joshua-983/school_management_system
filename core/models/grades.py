@@ -256,28 +256,45 @@ class Grade(models.Model):
             raise ValidationError(errors)
     
     def save(self, *args, **kwargs):
-        """Save with automatic calculations"""
+        """Save with automatic calculations - SIMPLIFIED"""
         try:
-            # Set class_level from student if not set
+            # Set class_level from student
             if self.student and not self.class_level:
                 self.class_level = self.student.class_level
-            
-            # Auto-create class_assignment if needed
-            if not self.class_assignment_id and self.student and self.subject and self.academic_year:
+        
+            # Try to set class_assignment if not set
+            if not self.class_assignment_id and self.student and self.subject:
                 try:
-                    self.class_assignment = self.get_or_create_class_assignment()
+                    # Get existing assignment if available
+                    existing_assignment = ClassAssignment.objects.filter(
+                        class_level=self.class_level,
+                        subject=self.subject,
+                        academic_year=self.academic_year,
+                        is_active=True
+                    ).first()
+                
+                    if existing_assignment:
+                        self.class_assignment = existing_assignment
+                        logger.debug(f"Assigned existing class assignment: {existing_assignment}")
+                    else:
+                        # Don't auto-create, just log warning
+                        logger.warning(
+                            f"No class assignment found for {self.class_level} - {self.subject} "
+                            f"in {self.academic_year}. Grade will be saved without assignment."
+                        )
+                    
                 except Exception as e:
-                    logger.warning(f"Could not auto-create class assignment: {e}")
-            
+                    logger.warning(f"Could not assign class assignment: {e}")
+        
             # Validate
             self.full_clean()
-            
+        
             # Calculate total score and grades
             self.calculate_total_score()
             self.determine_grades()
-            
+        
             super().save(*args, **kwargs)
-            
+        
         except Exception as e:
             logger.error(f"Error saving grade: {str(e)}", exc_info=True)
             raise
@@ -446,49 +463,67 @@ class Grade(models.Model):
             return False
     
     def get_or_create_class_assignment(self):
-        """Get or create class assignment for this grade"""
+        """Get or create class assignment for this grade - PROPERLY FIXED"""
         try:
+            # Check required fields
             if not all([self.student, self.subject, self.academic_year]):
-                raise ValueError("Missing required fields for class assignment")
-            
-            target_class_level = self.class_level or getattr(self.student, 'class_level', None)
-            if not target_class_level:
-                raise ValueError("No class level specified")
-            
-            formatted_academic_year = self.academic_year.replace('/', '-')
-            
-            # Look for existing active class assignment
+                logger.warning(f"Missing required fields for class assignment creation")
+                return None
+        
+            # Get student's class level
+            student_class_level = getattr(self.student, 'class_level', None)
+            if not student_class_level:
+                logger.warning(f"No class level found for student {self.student}")
+                return None
+       
+            # ClassAssignment expects format like "2024/2025" (same as Grade)
+            formatted_academic_year = self.academic_year
+        
+            # Look for existing class assignment
             class_assignment = ClassAssignment.objects.filter(
-                class_level=target_class_level,
+                class_level=student_class_level,
                 subject=self.subject,
                 academic_year=formatted_academic_year,
                 is_active=True
-            ).select_related('teacher', 'teacher__user').first()
-            
+            ).first()
+        
             if class_assignment:
+                logger.debug(f"Found existing class assignment: {class_assignment}")
                 return class_assignment
-            
-            # Create a new class assignment
-            teacher = self._find_appropriate_teacher(target_class_level)
-            
+        
+            # No existing assignment, try to create one
+            return self._create_new_class_assignment(student_class_level, formatted_academic_year)
+        
+        except Exception as e:
+            logger.error(f"Failed to get/create class assignment: {str(e)}", exc_info=True)
+            return None
+
+
+    def _create_new_class_assignment(self, student_class_level, formatted_academic_year):
+        """Create new class assignment"""
+        try:
+            teacher = self._find_appropriate_teacher(student_class_level)
+        
             if not teacher:
                 teacher = self._create_temporary_teacher()
-            
+        
+            # Create the class assignment
             with transaction.atomic():
                 class_assignment = ClassAssignment.objects.create(
-                    class_level=target_class_level,
+                    class_level=student_class_level,
                     subject=self.subject,
                     teacher=teacher,
                     academic_year=formatted_academic_year,
                     is_active=True
                 )
-                
+            
                 logger.info(f"Created new class assignment: {class_assignment}")
                 return class_assignment
-                
+            
         except Exception as e:
-            logger.error(f"Failed to get/create class assignment: {str(e)}")
-            raise
+            logger.error(f"Failed to create new class assignment: {str(e)}", exc_info=True)
+            return None
+
     
     def _find_appropriate_teacher(self, class_level):
         """Find appropriate teacher for the class assignment"""

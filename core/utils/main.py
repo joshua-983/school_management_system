@@ -17,6 +17,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from core.models.academic import Subject
+from core.models.attendance import StudentAttendance
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -412,128 +415,239 @@ def generate_avatar_url(name, size=100, background='007bff', color='ffffff'):
 # ============================================
 
 def calculate_report_card_average(grades):
-    """Calculate average score from grades"""
+    """Calculate average score from grades - ENHANCED VERSION"""
     if not grades:
-        return 0.0
-    
-    total_scores = [grade.total_score for grade in grades if grade.total_score is not None]
-    if not total_scores:
-        return 0.0
-    
-    return sum(total_scores) / len(total_scores)
-
-def get_attendance_summary(student, academic_year, term):
-    """Get attendance summary for student"""
-    from core.models import StudentAttendance, AcademicTerm
+        return Decimal('0.00')
     
     try:
-        academic_term = AcademicTerm.objects.filter(
-            academic_year=academic_year,
-            term=term
-        ).first()
+        # Filter out None values and convert to Decimal
+        total_scores = []
+        for grade in grades:
+            if grade.total_score is not None:
+                try:
+                    total_scores.append(Decimal(str(grade.total_score)))
+                except:
+                    continue
+        
+        if not total_scores:
+            return Decimal('0.00')
+        
+        # Calculate average
+        average = sum(total_scores) / len(total_scores)
+        return average.quantize(Decimal('0.01'))
+        
+    except Exception as e:
+        logger.error(f"Error calculating report card average: {str(e)}")
+        return Decimal('0.00')
+
+def get_attendance_summary(student, academic_year, term):
+    """Get comprehensive attendance summary for student - COMPLETELY FIXED"""
+    try:
+        from core.models.academic import AcademicTerm
+        from core.models.attendance import StudentAttendance  # FIXED IMPORT
+        from django.db.models import Q
+        
+        logger.info(f"Getting attendance for {student.get_full_name()}, {academic_year}, Term {term}")
+        
+        # Try different academic year formats
+        academic_year_formats = [
+            academic_year,  # "2024/2025"
+            academic_year.replace('/', '-'),  # "2024-2025"
+            academic_year.replace('/', '_'),  # "2024_2025"
+        ]
+        
+        # Find the academic term
+        academic_term = None
+        for year_format in academic_year_formats:
+            academic_term = AcademicTerm.objects.filter(
+                academic_year=year_format,
+                term=term
+            ).first()
+            if academic_term:
+                logger.info(f"Found term using format: {year_format}")
+                break
         
         if not academic_term:
-            return {
-                'total_days': 0,
-                'present_days': 0,
-                'absence_count': 0,
-                'attendance_rate': 0,
-            }
+            logger.warning(f"No academic term found for {academic_year} Term {term}")
+            # Try to find ANY term that overlaps
+            expected_start_year = int(academic_year.split('/')[0])
+            
+            # Search for any term in the same year
+            academic_term = AcademicTerm.objects.filter(
+                academic_year__contains=str(expected_start_year),
+                term=term
+            ).first()
+            
+            if not academic_term:
+                # Return estimated data
+                return {
+                    'present_days': 0,
+                    'total_days': 0,
+                    'attendance_rate': 0.0,
+                    'absence_count': 0,
+                    'late_count': 0,
+                    'excused_count': 0,
+                    'attendance_status': 'No Term Found',
+                    'is_ges_compliant': False
+                }
         
+        # Get attendance records
         attendance_records = StudentAttendance.objects.filter(
             student=student,
             term=academic_term
         )
         
-        total_days = attendance_records.count()
-        if total_days == 0:
+        # If no records found by term, try date range
+        if not attendance_records.exists():
+            attendance_records = StudentAttendance.objects.filter(
+                student=student,
+                date__range=[academic_term.start_date, academic_term.end_date]
+            )
+            logger.info(f"Found {attendance_records.count()} records by date range")
+        
+        # Calculate actual statistics
+        if attendance_records.exists():
+            total_days = attendance_records.count()
+            present_days = attendance_records.filter(
+                Q(status='present') | Q(status='late') | Q(status='excused')
+            ).count()
+            
+            absence_count = attendance_records.filter(status='absent').count()
+            late_count = attendance_records.filter(status='late').count()
+            excused_count = attendance_records.filter(status='excused').count()
+            
+            attendance_rate = round((present_days / total_days) * 100, 1) if total_days > 0 else 0.0
+            is_ges_compliant = attendance_rate >= 75.0
+            
+            # Determine status message
+            if attendance_rate >= 90:
+                attendance_status = "Excellent (GES Compliant)"
+            elif attendance_rate >= 80:
+                attendance_status = "Good (GES Compliant)"
+            elif attendance_rate >= 70:
+                attendance_status = "Satisfactory (GES Compliant)"
+            elif attendance_rate >= 60:
+                attendance_status = "Needs Improvement (Below GES Standard)"
+            else:
+                attendance_status = "Unsatisfactory (Below GES Standard)"
+            
+            logger.info(f"Attendance calculated: {present_days}/{total_days} ({attendance_rate}%)")
+            
             return {
-                'total_days': 0,
-                'present_days': 0,
-                'absence_count': 0,
-                'attendance_rate': 0,
+                'present_days': present_days,
+                'total_days': total_days,
+                'attendance_rate': attendance_rate,
+                'absence_count': absence_count,
+                'late_count': late_count,
+                'excused_count': excused_count,
+                'attendance_status': attendance_status,
+                'is_ges_compliant': is_ges_compliant
             }
-        
-        present_days = attendance_records.filter(
-            Q(status='present') | Q(status='late') | Q(status='excused')
-        ).count()
-        
-        absence_count = attendance_records.filter(status='absent').count()
-        attendance_rate = round((present_days / total_days) * 100, 1)
-        
-        return {
-            'total_days': total_days,
-            'present_days': present_days,
-            'absence_count': absence_count,
-            'attendance_rate': attendance_rate,
-        }
+        else:
+            logger.warning(f"No attendance records found for {student.get_full_name()}")
+            return {
+                'present_days': 0,
+                'total_days': 0,
+                'attendance_rate': 0.0,
+                'absence_count': 0,
+                'late_count': 0,
+                'excused_count': 0,
+                'attendance_status': 'No Records Found',
+                'is_ges_compliant': False
+            }
+            
     except Exception as e:
-        logger.error(f"Error getting attendance summary: {str(e)}")
+        logger.error(f"Error in get_attendance_summary: {str(e)}", exc_info=True)
         return {
-            'total_days': 0,
             'present_days': 0,
+            'total_days': 0,
+            'attendance_rate': 0.0,
             'absence_count': 0,
-            'attendance_rate': 0,
+            'late_count': 0,
+            'excused_count': 0,
+            'attendance_status': f'Error: {str(e)[:50]}...',
+            'is_ges_compliant': False
         }
 
 def get_student_position_in_class(student, academic_year, term):
-    """Calculate student's position in class"""
+    """Calculate student's position in class - FIXED VERSION"""
     try:
-        from core.models import Student, Grade
+        from core.models.grades import Grade
         
-        classmates = Student.objects.filter(
+        logger.info(f"Calculating position for {student.get_full_name()}")
+        
+        # Get all active students in the same class
+        classmates = student.__class__.objects.filter(
             class_level=student.class_level,
             is_active=True
-        ).exclude(pk=student.pk)
+        )
         
+        logger.info(f"Found {classmates.count()} classmates in {student.get_class_level_display()}")
+        
+        if classmates.count() <= 1:
+            return "1st (Only student in class)"
+        
+        # Calculate average scores for all students
         student_scores = []
         
-        # Get current student's average
-        current_grades = Grade.objects.filter(
-            student=student,
-            academic_year=academic_year,
-            term=term
-        )
-        current_avg = current_grades.aggregate(avg=Avg('total_score'))['avg'] or 0
-        student_scores.append({
-            'student': student,
-            'average_score': float(current_avg)
-        })
-        
-        # Get classmates' averages
         for classmate in classmates:
+            # Get grades for the specific period
             grades = Grade.objects.filter(
                 student=classmate,
                 academic_year=academic_year,
                 term=term
             )
+            
             if grades.exists():
-                avg_score = grades.aggregate(avg=Avg('total_score'))['avg'] or 0
-                student_scores.append({
-                    'student': classmate,
-                    'average_score': float(avg_score)
-                })
-        
-        # Sort by average score descending
-        student_scores.sort(key=lambda x: x['average_score'], reverse=True)
-        
-        # Find current student's position
-        for index, score_data in enumerate(student_scores, 1):
-            if score_data['student'] == student:
-                if index == 1:
-                    return "1st"
-                elif index == 2:
-                    return "2nd" 
-                elif index == 3:
-                    return "3rd"
+                # Calculate average of total scores
+                total_scores = [float(g.total_score or 0) for g in grades if g.total_score is not None]
+                if total_scores:
+                    avg_score = sum(total_scores) / len(total_scores)
                 else:
-                    return f"{index}th"
+                    avg_score = 0
+            else:
+                avg_score = 0
+            
+            student_scores.append({
+                'student_id': classmate.id,
+                'name': classmate.get_full_name(),
+                'average': avg_score
+            })
         
+        # Debug: Show top 5
+        sorted_scores = sorted(student_scores, key=lambda x: x['average'], reverse=True)
+        logger.info("Top 5 students:")
+        for i, score in enumerate(sorted_scores[:5], 1):
+            logger.info(f"  {i}. {score['name']}: {score['average']:.1f}%")
+        
+        # Sort by average score (descending)
+        student_scores.sort(key=lambda x: x['average'], reverse=True)
+        
+        # Find this student's position
+        for index, score_data in enumerate(student_scores, 1):
+            if score_data['student_id'] == student.id:
+                total_students = len(student_scores)
+                
+                # Format with ordinal
+                if index == 1:
+                    ordinal = "1st"
+                elif index == 2:
+                    ordinal = "2nd"
+                elif index == 3:
+                    ordinal = "3rd"
+                else:
+                    ordinal = f"{index}th"
+                
+                position = f"{ordinal} of {total_students}"
+                logger.info(f"Position calculated: {position}")
+                return position
+        
+        logger.warning("Student not found in rankings")
         return "Not ranked"
         
     except Exception as e:
-        logger.error(f"Error calculating class position: {str(e)}")
-        return "Not ranked"
+        logger.error(f"Error calculating position: {str(e)}", exc_info=True)
+        return "Error calculating position"
 
 # ============================================
 # EMAIL UTILITIES

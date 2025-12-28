@@ -144,7 +144,10 @@ from .views.grade_views import (
 from .views.reportcard_views import (
     ReportCardDashboardView, CreateReportCardView, ReportCardView, 
     ReportCardPDFView, SaveReportCardView,
-    QuickViewReportCardView, QuickViewReportCardPDFView
+    QuickViewReportCardView, QuickViewReportCardPDFView, AddGradeView,
+    publish_report_card,
+    force_recalculate_reportcards,
+    report_card_statistics_debug
 )
 
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
@@ -558,21 +561,31 @@ urlpatterns = [
 
 
     # ==============================
-    # REPORT CARD URLS - COMPLETE
+    # REPORT CARD URLS - COMPLETE (FIXED)
     # ==============================
     path('report-cards/', include([
+        # Dashboard
         path('', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
+        # Create new report card
         path('create/', CreateReportCardView.as_view(), name='create_report_card'),
+        # View report cards (with or without specific report card ID)
         path('<int:student_id>/', ReportCardView.as_view(), name='report_card'),
         path('<int:student_id>/<int:report_card_id>/', ReportCardView.as_view(), name='report_card_detail'),
+        # PDF exports
         path('pdf/<int:student_id>/', ReportCardPDFView.as_view(), name='report_card_pdf'),
         path('pdf/<int:student_id>/<int:report_card_id>/', ReportCardPDFView.as_view(), name='report_card_pdf_detail'),
+        # Save draft report card
         path('save/<int:student_id>/', SaveReportCardView.as_view(), name='save_report_card'),
-        # Quick View
+        # Quick view functionality
         path('quick-view/', QuickViewReportCardView.as_view(), name='quick_view_report_card'),
         path('quick-view/pdf/', QuickViewReportCardPDFView.as_view(), name='quick_view_report_card_pdf'),
-        # Grade Management
+        # Grade editing within report card
         path('<int:report_card_id>/edit-grades/', GradeEntryView.as_view(), name='grade_edit_report_card'),
+        # Add new grade via AJAX - FIXED: Using AddGradeView directly
+        path('grades/add/<int:student_id>/', AddGradeView.as_view(), name='add_grade'),
+        path('<int:report_card_id>/publish/', publish_report_card, name='publish_report_card'),
+        path('report-cards/force-recalculate/', force_recalculate_reportcards, name='force_recalculate_reportcards'),
+        path('report-cards/statistics-debug/', report_card_statistics_debug, name='report_card_statistics_debug'),
     ])),
     
     # ==============================

@@ -42,7 +42,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <form method="get" class="row g-3">
+                    <form method="get" class="row g-3" id="filterForm">
                         <div class="col-md-3">
                             <label class="form-label">Academic Year</label>
                             <select name="academic_year" class="form-select">
@@ -54,7 +54,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label">Term</label>
                             <select name="term" class="form-select">
                                 <option value="">All Terms</option>
@@ -74,11 +74,14 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">&nbsp;</label>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary flex-grow-1">
                                     <i class="fas fa-filter me-1"></i>Apply Filters
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="resetFilters()">
+                                    <i class="fas fa-redo me-1"></i>Reset
                                 </button>
                             </div>
                         </div>
@@ -405,6 +408,20 @@
     let performanceChart = null;
     let classChart = null;
     let currentStudentId = null;
+    
+    // Reset filters function
+    function resetFilters() {
+        // Reset all select elements to their default values
+        const form = document.getElementById('filterForm');
+        const selects = form.querySelectorAll('select');
+        
+        selects.forEach(select => {
+            select.selectedIndex = 0; // Select the first option (empty value)
+        });
+        
+        // Submit the form to reload the page with default values
+        form.submit();
+    }
     
     // Function to show student details - FIXED VERSION
     function showStudentDetails(studentId) {
@@ -805,6 +822,7 @@
         console.log("Available functions:");
         console.log("- showStudentDetails(studentId)");
         console.log("- testStudentDetails(studentId) - for testing");
+        console.log("- resetFilters() - to clear all filters");
         
         // Initialize charts
         {% if top_students %}
@@ -813,6 +831,7 @@
         
         // Make test function available globally
         window.testStudentDetails = testStudentDetails;
+        window.resetFilters = resetFilters;
     });
     
     // Resize charts

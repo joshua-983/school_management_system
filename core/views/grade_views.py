@@ -1,10 +1,11 @@
+from django.http import Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django.core.cache import cache
 from django.http import HttpResponseForbidden, JsonResponse, HttpResponse
-
+from django.http import HttpResponseBadRequest
 # Existing imports
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -15,7 +16,6 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.contrib.auth.models import User
 from django.db.models import F, ExpressionWrapper, FloatField
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView, DetailView, View
 from django.views import View
@@ -29,9 +29,9 @@ from decimal import Decimal, InvalidOperation
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import re
-from core.models.configuration import SchoolConfiguration, ReportCardConfiguration, PromotionConfiguration
 
-# Import your mixins and models
+from core.models.configuration import SchoolConfiguration, ReportCardConfiguration, PromotionConfiguration
+from django.contrib.auth import get_user_model
 from ..mixins import TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogMixin
 from .base_views import *
 from ..models import (
@@ -46,10 +46,14 @@ from ..forms import (
     ReportCardFilterForm,
     BulkGradeUploadForm,
     GradeConfigurationForm,
+    GradeUpdateForm,
 )
 
 from ..utils import is_admin, is_teacher, is_student, is_parent
 from ..utils.validation import validate_grade_data, validate_bulk_grade_data
+
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
@@ -551,6 +555,7 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             
         return kwargs
 
+
     def get_context_data(self, **kwargs):
         """Enhanced context with configuration data"""
         context = super().get_context_data(**kwargs)
@@ -576,6 +581,7 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             from core.models.configuration import SchoolConfiguration
             config = SchoolConfiguration.get_config()
             
+            # FIXED: Convert Decimal to float for JavaScript compatibility
             context.update({
                 'school_config': config,
                 'assessment_weights': {
@@ -590,6 +596,7 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
             })
         except Exception as e:
             logger.error(f"Error loading school configuration: {str(e)}")
+            # FIXED: Use float instead of Decimal
             context.update({
                 'assessment_weights': {
                     'homework': 20.00,
@@ -619,6 +626,7 @@ class GradeCreateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, CreateVi
         })
         
         return context
+
 
     @transaction.atomic
     def form_valid(self, form):
@@ -924,9 +932,10 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
     """
     Enhanced Grade Update View with comprehensive error handling,
     transaction safety, professional notification system, and enhanced audit logging.
+    UPDATED FOR PERCENTAGE SYSTEM WITH FIXED FORM VALIDATION
     """
     model = Grade
-    form_class = GradeEntryForm
+    form_class = GradeUpdateForm  # Use the updated form with hidden required fields
     template_name = 'core/academics/grades/grade_form.html'
     success_url = reverse_lazy('grade_list')
 
@@ -1100,47 +1109,172 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             logger.error(f"Teacher permission check failed: {str(e)}")
             return False
 
+    def get_form_kwargs(self):
+        """Add user to form kwargs"""
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        
+        # Add school configuration for form validation
+        try:
+            from core.models.configuration import SchoolConfiguration
+            kwargs['config'] = SchoolConfiguration.get_config()
+        except Exception as e:
+            logger.warning(f"Could not load school configuration: {e}")
+            
+        return kwargs
+
+
+    def get_initial(self):
+        """
+        Set initial form data from the grade object - UPDATED FOR PERCENTAGE SYSTEM
+        """
+        initial = super().get_initial()
+        grade = self.object
+        
+        # Set ONLY the fields that are in the form
+        initial.update({
+            'homework_percentage': grade.homework_percentage,
+            'classwork_percentage': grade.classwork_percentage,
+            'test_percentage': grade.test_percentage,
+            'exam_percentage': grade.exam_percentage,
+            'remarks': grade.remarks,
+        })
+        
+        logger.debug(f"Initial data set for grade update - Student: {grade.student.id}, Subject: {grade.subject.id}")
+        return initial
+
+
     @transaction.atomic
     def form_valid(self, form):
         """
-        Handle form validation with enhanced audit logging
+        Handle form validation with enhanced audit logging - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
-            # Store original state for comprehensive audit
-            original_grade = Grade.objects.get(pk=self.object.pk)
-            original_scores = self._get_original_scores(original_grade)
-            original_state = self._capture_original_state(original_grade)
+            # Get the grade object before form validation
+            grade = self.get_object()
             
-            # Pre-save validation with enhanced validation
+            # Store original state for comprehensive audit
+            original_grade = Grade.objects.get(pk=grade.pk)
+            original_state = self._capture_original_state(original_grade)
+        
+            # Set the required fields from the existing grade BEFORE validation
+            form.instance.student = grade.student
+            form.instance.subject = grade.subject
+            form.instance.academic_year = grade.academic_year
+            form.instance.term = grade.term
+            form.instance.class_level = grade.class_level
+        
+            # Now proceed with validation
             validation_errors = self._validate_grade_update(form.cleaned_data, original_grade)
             if validation_errors:
                 for field, error in validation_errors.items():
                     form.add_error(field, error)
                 return self.form_invalid(form)
-            
+        
             # Calculate changes before save
             predicted_changes = self._predict_changes(form.cleaned_data, original_grade)
-            
-            # Check if changes require approval
-            if self._requires_approval(form.cleaned_data, original_grade):
-                form.add_error('__all__', "This grade change requires administrative approval.")
-                return self.form_invalid(form)
-            
+        
+            # Check if changes require approval - Professional logic
+            requires_approval = self._requires_approval(form.cleaned_data, original_grade)
+        
+            # Handle approval logic
+            if requires_approval:
+                # ADMIN: Can override approval with justification
+                if is_admin(self.request.user):
+                    # Log admin override
+                    logger.info(
+                        f"Admin {self.request.user.username} overriding approval for grade {self.object.id}. "
+                        f"Changes: {predicted_changes}"
+                    )
+                    # Still save, but mark as admin-reviewed
+                    form.instance.requires_review = False
+                    form.instance.review_notes = f"Approval overridden by admin: {self.request.user.get_full_name()}"
+                else:
+                    # TEACHER: Needs approval for significant changes
+                    form.instance.requires_review = True
+                    form.instance.review_notes = f"Significant changes detected. Awaiting admin review."
+                    # Don't prevent save, just flag it
+                    messages.warning(self.request, 
+                        "⚠️ Grade saved but flagged for administrative review due to significant changes.")
+            else:
+                # No approval needed
+                form.instance.requires_review = False
+        
+            # Set recorded_by user if creating
+            if not self.object.recorded_by:
+                form.instance.recorded_by = self.request.user
+        
+            # Log the form data for debugging
+            logger.debug(f"Form data before save - Student: {grade.student.id}, "
+                        f"Subject: {grade.subject.id}, "
+                        f"Academic Year: {grade.academic_year}")
+        
             # Save the grade
-            response = super().form_valid(form)
-            
+            self.object = form.save()
+        
             # Refresh object to get calculated fields
             self.object.refresh_from_db()
-            
+        
             # Perform comprehensive post-save operations
             self._handle_post_save_operations(
                 original_state, 
                 predicted_changes, 
                 form.cleaned_data
             )
-            
-            return response
-            
+        
+            # =============================================
+            # CRITICAL FIX: Check if it's an AJAX request
+            # =============================================
+            if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+               self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                
+                # Return JSON response for AJAX
+                response_data = {
+                    'success': True,
+                    'message': 'Grade updated successfully',
+                    'grade_id': self.object.id,
+                    'student_id': self.object.student.id,
+                    'student_name': self.object.student.get_full_name(),
+                    'subject': self.object.subject.name,
+                    'total_score': float(self.object.total_score),
+                    'homework_percentage': float(self.object.homework_percentage),
+                    'classwork_percentage': float(self.object.classwork_percentage),
+                    'test_percentage': float(self.object.test_percentage),
+                    'exam_percentage': float(self.object.exam_percentage),
+                    'ges_grade': self.object.ges_grade,
+                    'letter_grade': self.object.letter_grade,
+                    'is_passing': self.object.is_passing(),
+                    'performance_level': self._get_performance_level(float(self.object.total_score)),
+                    'grade_color': self.object.grade_color if hasattr(self.object, 'grade_color') else 'info'
+                }
+                
+                return JsonResponse(response_data)
+        
+            # =============================================
+            # Regular form submission (non-AJAX)
+            # =============================================
+            # Show appropriate success message
+            if requires_approval and is_admin(self.request.user):
+                messages.success(
+                    self.request, 
+                    f'✅ Grade updated successfully with admin override for {self.object.student.get_full_name()}! '
+                    f'Total: {self.object.total_score}%'
+                )
+            elif requires_approval:
+                messages.warning(
+                    self.request, 
+                    f'⚠️ Grade saved but requires administrative review for {self.object.student.get_full_name()}. '
+                    f'An administrator will review your changes.'
+                )
+            else:
+                messages.success(
+                    self.request, 
+                    f'✅ Grade updated successfully for {self.object.student.get_full_name()}! '
+                    f'Total: {self.object.total_score}%'
+                )
+        
+            return redirect(self.get_success_url())
+        
         except ValidationError as e:
             logger.warning(f"Grade validation failed: {str(e)}")
             messages.error(self.request, f"Validation error: {str(e)}")
@@ -1150,22 +1284,10 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             messages.error(self.request, 'Failed to update grade. Please try again.')
             return self.form_invalid(form)
 
-    def _get_original_scores(self, original_grade):
-        """
-        Capture original scores for change detection and audit
-        """
-        return {
-            'homework': original_grade.homework_score,
-            'classwork': original_grade.classwork_score,
-            'test': original_grade.test_score,
-            'exam': original_grade.exam_score,
-            'total': original_grade.total_score,
-            'ges_grade': original_grade.ges_grade
-        }
 
     def _capture_original_state(self, grade):
         """
-        Capture comprehensive original state for audit
+        Capture comprehensive original state for audit - UPDATED FOR PERCENTAGE SYSTEM
         """
         return {
             'id': grade.id,
@@ -1178,10 +1300,10 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             'term': grade.term,
             'class_level': grade.class_level,
             'scores': {
-                'classwork': float(grade.classwork_score) if grade.classwork_score else 0.0,
-                'homework': float(grade.homework_score) if grade.homework_score else 0.0,
-                'test': float(grade.test_score) if grade.test_score else 0.0,
-                'exam': float(grade.exam_score) if grade.exam_score else 0.0,
+                'classwork_percentage': float(grade.classwork_percentage) if grade.classwork_percentage else 0.0,
+                'homework_percentage': float(grade.homework_percentage) if grade.homework_percentage else 0.0,
+                'test_percentage': float(grade.test_percentage) if grade.test_percentage else 0.0,
+                'exam_percentage': float(grade.exam_percentage) if grade.exam_percentage else 0.0,
                 'total': float(grade.total_score) if grade.total_score else 0.0,
             },
             'grades': {
@@ -1195,21 +1317,38 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             'recorded_by': grade.recorded_by.username if grade.recorded_by else None,
             'recorded_by_name': grade.recorded_by.get_full_name() if grade.recorded_by else None,
             'created_at': grade.created_at.isoformat() if grade.created_at else None,
-            'updated_at': grade.updated_at.isoformat() if grade.updated_at else None,
+            'last_updated': grade.last_updated.isoformat() if grade.last_updated else None,
             'is_locked': grade.is_locked,
             'requires_review': grade.requires_review,
             'remarks': grade.remarks or '',
         }
 
+    def _calculate_predicted_total(self, cleaned_data):
+        """Calculate predicted total score from cleaned data"""
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+        
+            # Calculate weighted total
+            classwork_contrib = (cleaned_data.get('classwork_percentage', Decimal('0.00')) * config.classwork_weight / 100)
+            homework_contrib = (cleaned_data.get('homework_percentage', Decimal('0.00')) * config.homework_weight / 100)
+            test_contrib = (cleaned_data.get('test_percentage', Decimal('0.00')) * config.test_weight / 100)
+            exam_contrib = (cleaned_data.get('exam_percentage', Decimal('0.00')) * config.exam_weight / 100)
+        
+            return classwork_contrib + homework_contrib + test_contrib + exam_contrib
+        except:
+            return Decimal('0.00')
+
+
     def _predict_changes(self, cleaned_data, original_grade):
         """
-        Predict changes that will occur
+        Predict changes that will occur - UPDATED FOR PERCENTAGE SYSTEM
         """
         changes = {}
         
-        # Predict score changes
-        score_fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score']
-        for field in score_fields:
+        # Predict score changes - USING PERCENTAGE FIELDS
+        percentage_fields = ['classwork_percentage', 'homework_percentage', 'test_percentage', 'exam_percentage']
+        for field in percentage_fields:
             original = getattr(original_grade, field, Decimal('0.00'))
             new = cleaned_data.get(field, Decimal('0.00'))
             
@@ -1221,9 +1360,20 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                     'percent_change': ((float(new) - float(original)) / float(original) * 100) if float(original) > 0 else 100
                 }
         
+        # Get school config to calculate weighted total
+        from core.models.configuration import SchoolConfiguration
+        config = SchoolConfiguration.get_config()
+        
         # Predict total score change
         original_total = original_grade.total_score or Decimal('0.00')
-        predicted_total = sum(cleaned_data.get(field, Decimal('0.00')) for field in score_fields)
+        
+        # Calculate predicted weighted total
+        predicted_total = (
+            (cleaned_data.get('classwork_percentage', Decimal('0.00')) * config.classwork_weight / 100) +
+            (cleaned_data.get('homework_percentage', Decimal('0.00')) * config.homework_weight / 100) +
+            (cleaned_data.get('test_percentage', Decimal('0.00')) * config.test_weight / 100) +
+            (cleaned_data.get('exam_percentage', Decimal('0.00')) * config.exam_weight / 100)
+        )
         
         if original_total != predicted_total:
             changes['total_score'] = {
@@ -1255,66 +1405,112 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _validate_grade_update(self, cleaned_data, original_grade=None):
         """
-        Comprehensive validation for grade updates
+        Comprehensive validation for grade updates - UPDATED FOR PERCENTAGE SYSTEM
         """
         errors = {}
         
-        # Validate score limits
-        max_scores = {
-            'classwork_score': 30,
-            'homework_score': 10,
-            'test_score': 10,
-            'exam_score': 50
+        # Validate percentage scores (0-100%)
+        percentage_fields = {
+            'classwork_percentage': 'Classwork',
+            'homework_percentage': 'Homework',
+            'test_percentage': 'Test',
+            'exam_percentage': 'Exam'
         }
         
-        for field, max_score in max_scores.items():
-            score = cleaned_data.get(field, 0)
+        for field, display_name in percentage_fields.items():
+            score = cleaned_data.get(field, Decimal('0.00'))
             if score < 0:
-                errors[field] = f"{field.replace('_', ' ').title()} cannot be negative"
-            elif score > max_score:
-                errors[field] = f"{field.replace('_', ' ').title()} cannot exceed {max_score}%"
+                errors[field] = f"{display_name} percentage cannot be negative"
+            elif score > 100:
+                errors[field] = f"{display_name} percentage cannot exceed 100%"
         
-        # Validate total score doesn't exceed 100%
-        total_score = sum(cleaned_data.get(field, 0) for field in max_scores.keys())
-        if total_score > 100:
-            errors['__all__'] = f"Total score cannot exceed 100%. Current total: {total_score}%"
-        
-        # Validate decimal precision
-        for field in max_scores.keys():
-            score = cleaned_data.get(field)
-            if score is not None:
-                try:
-                    # Check if score has more than 2 decimal places
-                    score_str = str(score)
-                    if '.' in score_str and len(score_str.split('.')[1]) > 2:
-                        errors[field] = "Score cannot have more than 2 decimal places"
-                except (ValueError, TypeError):
-                    pass
+        # Validate total weighted score doesn't exceed 100%
+        try:
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            
+            # Calculate weighted total
+            classwork_contrib = (cleaned_data.get('classwork_percentage', Decimal('0.00')) * config.classwork_weight / 100)
+            homework_contrib = (cleaned_data.get('homework_percentage', Decimal('0.00')) * config.homework_weight / 100)
+            test_contrib = (cleaned_data.get('test_percentage', Decimal('0.00')) * config.test_weight / 100)
+            exam_contrib = (cleaned_data.get('exam_percentage', Decimal('0.00')) * config.exam_weight / 100)
+            
+            total_weighted = classwork_contrib + homework_contrib + test_contrib + exam_contrib
+            
+            if total_weighted > 100:
+                errors['__all__'] = f"Weighted total cannot exceed 100%. Calculated: {total_weighted:.1f}%"
+                
+        except Exception as e:
+            logger.warning(f"Error calculating weighted total during validation: {str(e)}")
         
         return errors
 
     def _requires_approval(self, cleaned_data, original_grade):
         """
-        Determine if grade change requires administrative approval
+        Determine if grade change requires administrative approval with tiered thresholds
         """
         try:
-            # Check for significant score changes (more than 20 points)
+            user = self.request.user
+        
+            # Define thresholds based on user role
+            if is_admin(user):
+                # Higher threshold for admins
+                significant_change_threshold = 40  # 40% change
+            elif is_teacher(user):
+                # Lower threshold for teachers
+                significant_change_threshold = 20  # 20% change
+            else:
+                # Shouldn't reach here due to permission checks
+                return True
+        
+            # Check for passing status change (always significant)
+            original_total = original_grade.total_score or Decimal('0.00')
+            predicted_total = self._calculate_predicted_total(cleaned_data)
+        
+            original_passing = original_total >= Decimal('40.00')
+            predicted_passing = predicted_total >= Decimal('40.00')
+        
+            if original_passing != predicted_passing:
+                return True
+        
+            # Check for significant percentage changes
             score_changes = []
-            for score_type in ['classwork', 'homework', 'test', 'exam']:
-                original = getattr(original_grade, f"{score_type}_score", 0)
-                new = cleaned_data.get(f"{score_type}_score", 0)
-                if abs(float(new) - float(original)) > 20:
-                    score_changes.append(score_type)
+            for score_type in ['classwork_percentage', 'homework_percentage', 'test_percentage', 'exam_percentage']:
+                original = getattr(original_grade, score_type, Decimal('0.00'))
+                new = cleaned_data.get(score_type, Decimal('0.00'))
+                change_percent = abs(float(new) - float(original))
             
-            return len(score_changes) > 0
-            
+                if change_percent > significant_change_threshold:
+                    score_changes.append({
+                        'type': score_type,
+                        'change': change_percent,
+                        'threshold': significant_change_threshold
+                    })
+        
+            # Multiple significant changes require approval
+            if len(score_changes) >= 2:
+                return True
+        
+            # Grade letter change requires approval for teachers
+            if is_teacher(user):
+                if predicted_total != original_total:
+                    from core.grading_utils import get_all_grades
+                    original_grades = get_all_grades(float(original_total))
+                    predicted_grades = get_all_grades(float(predicted_total))
+                
+                    if original_grades['ges_grade'] != predicted_grades['ges_grade']:
+                        return True
+        
+            return False
+        
         except Exception as e:
             logger.warning(f"Error checking approval requirements: {str(e)}")
-            return False
+            # Default to requiring approval if there's an error
+            return True
 
     def _handle_post_save_operations(self, original_state, predicted_changes, cleaned_data):
         """
-        Comprehensive post-save operations with detailed audit logging
+        Comprehensive post-save operations with detailed audit logging - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
             # Refresh to get calculated fields
@@ -1361,14 +1557,14 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _calculate_actual_changes(self, original_state):
         """
-        Calculate actual changes after save
+        Calculate actual changes after save - UPDATED FOR PERCENTAGE SYSTEM
         """
         changes = {}
         
-        # Score changes
-        score_fields = ['classwork_score', 'homework_score', 'test_score', 'exam_score']
-        for field in score_fields:
-            original = original_state['scores'][field.replace('_score', '')]
+        # Score changes - USING PERCENTAGE FIELDS
+        percentage_fields = ['classwork_percentage', 'homework_percentage', 'test_percentage', 'exam_percentage']
+        for field in percentage_fields:
+            original = original_state['scores'][field]
             new = float(getattr(self.object, field, Decimal('0.00')))
             
             if abs(original - new) > 0.001:  # Small tolerance for floating point
@@ -1434,15 +1630,15 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _detect_significant_changes(self, actual_changes):
         """
-        Detect significant changes that need attention
+        Detect significant changes that need attention - UPDATED FOR PERCENTAGE SYSTEM
         """
         significant = {}
         
         for field, change in actual_changes.items():
             is_significant = False
             
-            # Score changes > 10 points
-            if field.endswith('_score'):
+            # Score changes > 10% (percentage system)
+            if field.endswith('_percentage'):
                 if abs(change.get('delta', 0)) > 10:
                     is_significant = True
             
@@ -1470,7 +1666,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _requires_admin_review(self, actual_changes):
         """
-        Determine if changes require admin review
+        Determine if changes require admin review - UPDATED FOR PERCENTAGE SYSTEM
         """
         # Passing status change always requires review
         if 'passing_status' in actual_changes:
@@ -1483,15 +1679,19 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         
         # Multiple significant changes
         significant_count = sum(1 for field in actual_changes 
-                              if field.endswith('_score') 
+                              if field.endswith('_percentage') 
                               and abs(actual_changes[field].get('delta', 0)) > 15)
         return significant_count >= 2
 
     def _create_comprehensive_audit_log(self, original_state, actual_changes, significant_changes):
         """
-        Create comprehensive audit log entry
+        Create comprehensive audit log entry - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
+            # Get school configuration
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+            
             audit_details = {
                 'original_state': original_state,
                 'actual_changes': actual_changes,
@@ -1524,6 +1724,14 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                     'significant_changes': len(significant_changes),
                     'has_passing_change': 'passing_status' in actual_changes,
                     'has_grade_change': any(field in ['ges_grade', 'letter_grade'] for field in actual_changes),
+                },
+                'configuration_used': {
+                    'classwork_weight': float(config.classwork_weight) if config else 30.0,
+                    'homework_weight': float(config.homework_weight) if config else 10.0,
+                    'test_weight': float(config.test_weight) if config else 10.0,
+                    'exam_weight': float(config.exam_weight) if config else 50.0,
+                    'passing_mark': float(config.passing_mark) if config else 40.0,
+                    'grading_system': config.grading_system if config else 'GES',
                 }
             }
             
@@ -1552,7 +1760,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _send_change_notifications(self, actual_changes, significant_changes, original_state):
         """
-        Send appropriate notifications based on changes
+        Send appropriate notifications based on changes - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
             # Determine notification type
@@ -1576,7 +1784,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _send_student_notification(self, notification_type, actual_changes, original_state):
         """
-        Send notification to student about grade update
+        Send notification to student about grade update - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
             student = self.object.student
@@ -1625,18 +1833,23 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         except Exception as e:
             logger.error(f"Failed to send student notification: {str(e)}")
 
+
     def _notify_administrators(self, notification_type, actual_changes, original_state):
         """
-        Notify administrators about significant grade changes
+        Notify administrators about significant grade changes - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
             if not is_teacher(self.request.user):
                 return  # Only notify when teachers make changes
-            
+        
+            # Use get_user_model() instead of direct User import
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+        
             admins = User.objects.filter(
                 Q(is_superuser=True) | Q(is_staff=True)
             ).distinct()
-            
+        
             # Determine message
             if notification_type == 'GRADE_PASSING_CHANGE':
                 action = 'changed passing status'
@@ -1644,7 +1857,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 action = 'changed grade level'
             else:
                 action = 'updated grade'
-            
+        
             notification_data = {
                 'type': 'send_notification',
                 'notification_type': 'GRADE_MODIFIED_BY_TEACHER',
@@ -1668,27 +1881,32 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                     'significant_changes_count': len(actual_changes),
                 }
             }
-            
+        
             for admin in admins:
                 self._send_websocket_notification(
                     f'notifications_{admin.id}',
                     notification_data
                 )
-            
+        
             logger.info(f"Admin notifications sent for grade update - Grade ID: {self.object.id}")
-            
+        
         except Exception as e:
             logger.error(f"Failed to send admin notifications: {str(e)}")
 
+
     def _notify_administrators_for_review(self, actual_changes, original_state):
         """
-        Notify administrators that a grade requires review
+        Notify administrators that a grade requires review - UPDATED FOR PERCENTAGE SYSTEM
         """
         try:
+            # Use get_user_model() instead of direct User import
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+        
             admins = User.objects.filter(
                 Q(is_superuser=True) | Q(is_staff=True)
             ).distinct()
-            
+        
             notification_data = {
                 'type': 'send_notification',
                 'notification_type': 'GRADE_REQUIRES_REVIEW',
@@ -1707,17 +1925,18 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                     'requires_review_reason': 'Significant changes detected',
                 }
             }
-            
+        
             for admin in admins:
                 self._send_websocket_notification(
                     f'notifications_{admin.id}',
                     notification_data
                 )
-            
+        
             logger.info(f"Admin review notifications sent - Grade ID: {self.object.id}")
-            
+        
         except Exception as e:
             logger.error(f"Failed to send review notifications: {str(e)}")
+
 
     def _send_websocket_notification(self, group_name, notification_data):
         """
@@ -1735,7 +1954,7 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
 
     def _is_significant_change(self, actual_changes):
         """
-        Determine if the change is significant enough for admin notification
+        Determine if the change is significant enough for admin notification - UPDATED FOR PERCENTAGE SYSTEM
         """
         # Check for passing status change
         if 'passing_status' in actual_changes:
@@ -1745,9 +1964,9 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         if any(field in ['ges_grade', 'letter_grade'] for field in actual_changes):
             return True
         
-        # Check for large score changes
+        # Check for large percentage changes
         large_score_changes = sum(1 for field in actual_changes 
-                                 if field.endswith('_score') 
+                                 if field.endswith('_percentage') 
                                  and abs(actual_changes[field].get('delta', 0)) > 15)
         return large_score_changes >= 2
 
@@ -1786,6 +2005,18 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
         else:
             ip = self.request.META.get('REMOTE_ADDR')
         return ip
+    
+    
+    def _get_performance_level(self, score):
+        """Get performance level category"""
+        if score >= 90: return 'Excellent'
+        elif score >= 80: return 'Very Good'
+        elif score >= 70: return 'Good'
+        elif score >= 60: return 'Satisfactory'
+        elif score >= 50: return 'Fair'
+        elif score >= 40: return 'Marginal'
+        else: return 'Poor'
+    
 
     def _get_grade_detail_url(self):
         """
@@ -1795,45 +2026,115 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             return reverse_lazy('grade_detail', kwargs={'pk': self.object.pk})
         except:
             return self.get_success_url()
+        
+    
 
-    def form_invalid(self, form):
-        """
-        Enhanced form invalid handling with better error reporting
-        """
-        logger.warning(
-            f"Grade update form invalid - User: {self.request.user}, "
-            f"Errors: {form.errors}"
-        )
+        def form_invalid(self, form):
+            """
+            Enhanced form invalid handling with better error reporting - UPDATED FOR PERCENTAGE SYSTEM
+            """
+            logger.warning(
+                f"Grade update form invalid - User: {self.request.user}, "
+                f"Errors: {form.errors}"
+            )
         
-        # Add specific error messages for common issues
-        if 'class_level' in form.errors:
-            messages.error(self.request, 
+            # Debug logging for the form data
+            logger.debug(f"Form data: {self.request.POST}")
+        
+            # =============================================
+            # CRITICAL FIX: Check if it's an AJAX request
+            # =============================================
+            if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+               self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            
+                # Return JSON response for AJAX
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid form data',
+                    'errors': form.errors.get_json_data()
+                }, status=400)
+        
+            # =============================================
+            # Regular form submission (non-AJAX)
+            # =============================================
+            # Add specific error messages for common issues
+            if 'student' in form.errors:
+                messages.error(self.request, 
+                    "Student selection error. Please verify the student exists and is active.")
+            elif 'subject' in form.errors:
+                messages.error(self.request, 
+                    "Subject selection error. Please verify the subject is available for this class level.")
+            elif 'academic_year' in form.errors:
+                messages.error(self.request, 
+                    "Academic year error. Please use format YYYY/YYYY (e.g., 2024/2025).")
+            elif 'term' in form.errors:
+                messages.error(self.request, 
+                    "Term selection error. Please select a valid term (1, 2, or 3).")
+            elif 'class_level' in form.errors:
+                messages.error(self.request, 
                 "Class level error. Please ensure the class level matches the student's current class.")
-        elif 'student' in form.errors:
-            messages.error(self.request, 
-                "Student selection error. Please verify the student exists and is active.")
-        elif 'subject' in form.errors:
-            messages.error(self.request, 
-                "Subject selection error. Please verify the subject is available for this class level.")
-        elif any(field in form.errors for field in ['classwork_score', 'homework_score', 'test_score', 'exam_score']):
-            messages.error(self.request, 
-                "Please check the score values. They must be within the allowed ranges (Classwork: 0-30, Homework: 0-10, Test: 0-10, Exam: 0-50).")
-        elif '__all__' in form.errors:
-            # Show non-field errors
-            for error in form.errors['__all__']:
-                messages.error(self.request, error)
-        else:
-            messages.error(self.request, "Please correct the errors below.")
+            elif any(field in form.errors for field in ['classwork_percentage', 'homework_percentage', 'test_percentage', 'exam_percentage']):
+                messages.error(self.request, 
+                    "Please check the percentage values. They must be within 0-100% range.")
+            elif '__all__' in form.errors:
+                # Show non-field errors
+                for error in form.errors['__all__']:
+                    messages.error(self.request, error)
+            else:
+                messages.error(self.request, "Please correct the errors below.")
         
-        return super().form_invalid(form)
+            return super().form_invalid(form)
+
 
     def get_context_data(self, **kwargs):
         """
-        Enhanced context with additional information for the template
+        Enhanced context with additional information for the template - UPDATED FOR PERCENTAGE SYSTEM
+        WITH FIXED WEIGHTS FOR JAVASCRIPT COMPATIBILITY
         """
         context = super().get_context_data(**kwargs)
-        
+    
         try:
+            # Get school configuration
+            from core.models.configuration import SchoolConfiguration
+            config = SchoolConfiguration.get_config()
+        
+            # Get current scores in PERCENTAGE format
+            classwork_percentage = self.object.classwork_percentage or Decimal('0.00')
+            homework_percentage = self.object.homework_percentage or Decimal('0.00')
+            test_percentage = self.object.test_percentage or Decimal('0.00')
+            exam_percentage = self.object.exam_percentage or Decimal('0.00')
+        
+            # Calculate if changes would require approval
+            requires_approval = False
+            if self.request.method == 'POST':
+                try:
+                    # Simple check for significant changes
+                    original_total = self.object.total_score or Decimal('0.00')
+                    predicted_total = Decimal('0.00')
+                
+                    # Get POST data
+                    post_data = self.request.POST
+                    if post_data:
+                        classwork = Decimal(post_data.get('classwork_percentage', '0') or '0')
+                        homework = Decimal(post_data.get('homework_percentage', '0') or '0')
+                        test = Decimal(post_data.get('test_percentage', '0') or '0')
+                        exam = Decimal(post_data.get('exam_percentage', '0') or '0')
+                    
+                        # Calculate predicted total
+                        predicted_total = (
+                            (classwork * config.classwork_weight / 100) +
+                            (homework * config.homework_weight / 100) +
+                            (test * config.test_weight / 100) +
+                            (exam * config.exam_weight / 100)
+                        )
+                    
+                        # Check if significant change (more than 20%)
+                        if abs(float(predicted_total) - float(original_total)) > 20:
+                            requires_approval = True
+                except:
+                    pass
+        
+            # FIXED: Convert all Decimal objects to simple float/string for template compatibility
             context.update({
                 'student': self.object.student,
                 'subject': self.object.subject,
@@ -1841,29 +2142,50 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 'is_admin': is_admin(self.request.user),
                 'academic_year': self.object.academic_year,
                 'term': self.object.term,
+                'class_level': self.object.class_level,
                 'can_edit': self._can_edit_grade(),
                 'grade_history': self._get_grade_history(),
-                'max_scores': {
-                    'classwork': 30,
-                    'homework': 10,
-                    'test': 10,
-                    'exam': 50
+                # UPDATED: Using percentage fields
+                'percentage_scores': {
+                    'classwork': float(classwork_percentage),
+                    'homework': float(homework_percentage),
+                    'test': float(test_percentage),
+                    'exam': float(exam_percentage),
                 },
-                'current_scores': {
-                    'classwork': float(self.object.classwork_score) if self.object.classwork_score else 0,
-                    'homework': float(self.object.homework_score) if self.object.homework_score else 0,
-                    'test': float(self.object.test_score) if self.object.test_score else 0,
-                    'exam': float(self.object.exam_score) if self.object.exam_score else 0,
-                },
+                'total_weighted_score': float(self.object.total_score) if self.object.total_score else 0.0,
                 'grade_display': self.object.get_display_grade(),
-                'performance_level': self.object.get_performance_level_display(),
+                'performance_level': self.object.get_performance_level_display() if hasattr(self.object, 'get_performance_level_display') else 'N/A',
                 'is_passing': self.object.is_passing(),
                 'grade_id': self.object.id,
                 'page_title': f'Update Grade - {self.object.student.get_full_name()} - {self.object.subject.name}',
                 'current_view': 'grade_update',
+                'school_config': config,
+                # CRITICAL FIX: Convert Decimal to simple float for JavaScript compatibility
+                'assessment_weights': {
+                    'classwork': float(config.classwork_weight) if config else 30.0,
+                    'homework': float(config.homework_weight) if config else 10.0,
+                    'test': float(config.test_weight) if config else 10.0,
+                    'exam': float(config.exam_weight) if config else 50.0,
+                },
+                'is_update_form': True,  # Flag to indicate this is an update form
+                'requires_approval': requires_approval,
+                # For compatibility with old templates
+                'max_scores': {
+                    'classwork': 100,  # Percentage system
+                    'homework': 100,
+                    'test': 100,
+                    'exam': 100
+                },
+                # For compatibility - mapping old field names to percentage values
+                'current_scores': {
+                    'classwork': float(classwork_percentage),
+                    'homework': float(homework_percentage),
+                    'test': float(test_percentage),
+                    'exam': float(exam_percentage),
+                },
             })
         except Exception as e:
-            logger.error(f"Error preparing context data: {str(e)}")
+            logger.error(f"Error preparing context data: {str(e)}", exc_info=True)
             # Ensure basic context is still available
             context.update({
                 'student': getattr(self.object, 'student', None),
@@ -1871,8 +2193,23 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
                 'is_teacher': is_teacher(self.request.user),
                 'is_admin': is_admin(self.request.user),
                 'can_edit': True,
+                'percentage_scores': {
+                    'classwork': 0.0,
+                    'homework': 0.0,
+                    'test': 0.0,
+                    'exam': 0.0,
+                },
+                'total_weighted_score': 0.0,
+                'is_update_form': True,
+                'requires_approval': False,
+                'assessment_weights': {
+                    'classwork': 30.0,
+                    'homework': 10.0,
+                    'test': 10.0,
+                    'exam': 50.0,
+                },
             })
-        
+    
         return context
 
     def _can_edit_grade(self):
@@ -1922,12 +2259,6 @@ class GradeUpdateView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, UpdateVi
             pass
         
         return super().get_success_url()
-
-    def get_form_kwargs(self):
-        """Add user to form kwargs"""
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
 
 class GradeDetailView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, DetailView):
     """Grade Detail View for viewing individual grade records with percentage details"""
@@ -3026,7 +3357,7 @@ class GradeDeleteView(TwoFactorLoginRequiredMixin, AdminRequiredMixin, AuditLogM
             'exam_score': float(grade.exam_score) if grade.exam_score else 0,
             'recorded_by': grade.recorded_by.get_full_name() if grade.recorded_by else 'Unknown',
             'created_at': grade.created_at.isoformat() if grade.created_at else 'Unknown',
-            'updated_at': grade.updated_at.isoformat() if grade.updated_at else 'Unknown',
+            'last_updated': grade.last_updated.isoformat() if grade.last_updated else 'Unknown',
             'remarks': grade.remarks or ''
         }
 
@@ -4641,64 +4972,6 @@ class GradeCalculatorView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, Temp
         return context
 
 
-@method_decorator(csrf_exempt, name='dispatch')
-class CalculateGradeAPI(TwoFactorLoginRequiredMixin, View):
-    """
-    API endpoint for calculating grades in real-time using current configuration
-    """
-    def post(self, request):
-        try:
-            data = json.loads(request.body)
-            
-            # Get individual scores
-            classwork = float(data.get('classwork_score', 0))
-            homework = float(data.get('homework_score', 0)) 
-            test = float(data.get('test_score', 0))
-            exam = float(data.get('exam_score', 0))
-            
-            total_score = classwork + homework + test + exam
-            
-            # Get school configuration
-            config = SchoolConfiguration.get_config()
-            
-            # Get grades using configuration
-            ges_grade = config.get_ges_grade_for_score(total_score)
-            letter_grade = config.get_letter_grade_for_score(total_score)
-            is_passing = config.is_score_passing(total_score)
-            
-            # Get grade descriptions
-            grade_descriptions = config.get_grade_descriptions()
-            ges_description = grade_descriptions['GES'].get(ges_grade, 'Not graded')
-            letter_description = grade_descriptions['LETTER'].get(letter_grade, 'Not graded')
-            
-            response_data = {
-                'total_score': round(total_score, 1),
-                'is_passing': is_passing,
-                'grading_system': config.grading_system,
-                'ges_grade': ges_grade,
-                'letter_grade': letter_grade,
-                'display_grade': config.get_display_grade_for_score(total_score),
-                'ges_description': ges_description,
-                'letter_description': letter_description,
-                'grade_color': config.get_grade_color(ges_grade),
-                'performance_level': self.get_performance_level(total_score),
-            }
-            
-            return JsonResponse(response_data)
-            
-        except Exception as e:
-            logger.error(f"Error calculating grade: {str(e)}")
-            return JsonResponse({'error': 'Invalid data provided'}, status=400)
-    
-    def get_performance_level(self, score):
-        """Get performance level category"""
-        if score >= 80: return 'Excellent'
-        elif score >= 70: return 'Very Good'
-        elif score >= 60: return 'Good'
-        elif score >= 50: return 'Satisfactory' 
-        elif score >= 40: return 'Fair'
-        else: return 'Poor'
-
 class PromotionCheckView(TwoFactorLoginRequiredMixin, UserPassesTestMixin, TemplateView):
     """View for checking student promotion eligibility"""
     template_name = 'core/academics/grades/promotion_check.html'
@@ -5007,52 +5280,158 @@ def grade_delete(request, pk):
 
 
 
-# Add API endpoints for grade calculations
-class CalculateWeightedTotalAPI(TwoFactorLoginRequiredMixin, View):
-    """API for calculating weighted totals in real-time"""
-    
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CalculateGradeAPI(TwoFactorLoginRequiredMixin, View):
+    """
+    API endpoint for calculating grades in real-time using current configuration
+    """
     def post(self, request):
         try:
+            import json
+            from django.http import JsonResponse
+            from core.models.configuration import SchoolConfiguration
+            
             data = json.loads(request.body)
             
-            # Get percentage scores
-            homework = Decimal(data.get('homework', 0))
-            classwork = Decimal(data.get('classwork', 0))
-            test = Decimal(data.get('test', 0))
-            exam = Decimal(data.get('exam', 0))
+            # Get scores with safe conversion
+            classwork = self._safe_float(data.get('classwork_percentage', 0) or data.get('classwork', 0))
+            homework = self._safe_float(data.get('homework_percentage', 0) or data.get('homework', 0))
+            test = self._safe_float(data.get('test_percentage', 0) or data.get('test', 0))
+            exam = self._safe_float(data.get('exam_percentage', 0) or data.get('exam', 0))
             
-            # Get configuration
+            print(f"DEBUG: Received scores - CW: {classwork}, HW: {homework}, T: {test}, E: {exam}")
+            
+            # Apply weights if available
             config = SchoolConfiguration.get_config()
+            total_score = self._calculate_weighted_score(
+                classwork, homework, test, exam, config
+            )
             
-            # Calculate weighted total
-            homework_contribution = homework * config.homework_weight / 100
-            classwork_contribution = classwork * config.classwork_weight / 100
-            test_contribution = test * config.test_weight / 100
-            exam_contribution = exam * config.exam_weight / 100
-            
-            total = homework_contribution + classwork_contribution + test_contribution + exam_contribution
+            print(f"DEBUG: Total score: {total_score}")
             
             # Get grades
-            ges_grade = config.get_ges_grade_for_score(total)
-            letter_grade = config.get_letter_grade_for_score(total)
+            ges_grade = config.get_ges_grade_for_score(total_score)
+            letter_grade = config.get_letter_grade_for_score(total_score)
+            is_passing = config.is_score_passing(total_score)
             
-            return JsonResponse({
-                'success': True,
-                'total_score': float(total),
+            # Get display grade - handle missing method
+            try:
+                display_grade = config.get_display_grade_for_score(total_score)
+            except AttributeError:
+                # Fallback
+                if config.grading_system == 'GES':
+                    display_grade = ges_grade
+                elif config.grading_system == 'LETTER':
+                    display_grade = letter_grade
+                elif config.grading_system == 'BOTH':
+                    display_grade = f"{ges_grade} ({letter_grade})"
+                else:
+                    display_grade = ges_grade
+            
+            # Get grade descriptions
+            try:
+                grade_descriptions = config.get_grade_descriptions()
+                ges_description = grade_descriptions.get('GES', {}).get(ges_grade, 'Not graded')
+                letter_description = grade_descriptions.get('LETTER', {}).get(letter_grade, 'Not graded')
+            except:
+                ges_description = 'Not graded'
+                letter_description = 'Not graded'
+            
+            # Get grade color
+            try:
+                grade_color = config.get_grade_color(ges_grade)
+            except AttributeError:
+                # Fallback
+                if ges_grade in ['1', '2']:
+                    grade_color = 'success'
+                elif ges_grade in ['3', '4']:
+                    grade_color = 'info'
+                elif ges_grade in ['5', '6']:
+                    grade_color = 'warning'
+                else:
+                    grade_color = 'danger'
+            
+            response_data = {
+                'total_score': round(total_score, 1),
+                'is_passing': is_passing,
+                'grading_system': config.grading_system,
                 'ges_grade': ges_grade,
                 'letter_grade': letter_grade,
-                'is_passing': total >= config.passing_mark,
-                'contributions': {
-                    'homework': float(homework_contribution),
-                    'classwork': float(classwork_contribution),
-                    'test': float(test_contribution),
-                    'exam': float(exam_contribution)
-                }
-            })
+                'display_grade': display_grade,
+                'ges_description': ges_description,
+                'letter_description': letter_description,
+                'grade_color': grade_color,
+                'performance_level': self._get_performance_level(total_score),
+                'success': True,
+            }
+            
+            print(f"DEBUG: Response data: {response_data}")
+            return JsonResponse(response_data)
             
         except Exception as e:
-            logger.error(f"Error calculating weighted total: {str(e)}")
+            import traceback
+            print(f"ERROR in CalculateGradeAPI: {str(e)}")
+            traceback.print_exc()
             return JsonResponse({
-                'success': False,
-                'error': 'Invalid data provided'
+                'error': 'Invalid data provided', 
+                'details': str(e),
+                'success': False
             }, status=400)
+    
+    def _safe_float(self, value, default=0.0):
+        """Safely convert value to float"""
+        try:
+            if value is None or value == '':
+                return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
+    def _calculate_weighted_score(self, classwork, homework, test, exam, config):
+        """Calculate weighted total score"""
+        try:
+            # Try to use weights from config
+            classwork_weight = float(getattr(config, 'classwork_weight', 30))
+            homework_weight = float(getattr(config, 'homework_weight', 10))
+            test_weight = float(getattr(config, 'test_weight', 10))
+            exam_weight = float(getattr(config, 'exam_weight', 50))
+            
+            # Normalize weights if they don't add to 100
+            total_weight = classwork_weight + homework_weight + test_weight + exam_weight
+            if total_weight == 0:
+                # If no weights configured, use simple average
+                scores = [classwork, homework, test, exam]
+                valid_scores = [s for s in scores if s > 0]
+                return sum(valid_scores) / max(len(valid_scores), 1)
+            
+            # Calculate weighted total
+            weighted_total = (
+                (classwork * classwork_weight / 100) +
+                (homework * homework_weight / 100) +
+                (test * test_weight / 100) +
+                (exam * exam_weight / 100)
+            )
+            
+            # Scale to 100 if weights don't add to 100
+            if total_weight != 100:
+                weighted_total = (weighted_total / total_weight) * 100
+            
+            return weighted_total
+            
+        except Exception as e:
+            print(f"Warning in weighted calculation: {e}")
+            # Fallback to simple average
+            scores = [classwork, homework, test, exam]
+            valid_scores = [s for s in scores if s > 0]
+            return sum(valid_scores) / max(len(valid_scores), 1)
+    
+    def _get_performance_level(self, score):
+        """Get performance level category"""
+        if score >= 90: return 'Excellent'
+        elif score >= 80: return 'Very Good'
+        elif score >= 70: return 'Good'
+        elif score >= 60: return 'Satisfactory'
+        elif score >= 50: return 'Fair'
+        elif score >= 40: return 'Marginal'
+        else: return 'Poor'
