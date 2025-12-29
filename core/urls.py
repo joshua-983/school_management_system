@@ -8,12 +8,17 @@ from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
 from .views.base_views import dashboard, home, admin_dashboard, teacher_dashboard, student_dashboard, parent_dashboard
 from .views.fee_views import ClearImportResultsView
-
 from . import views_group_management
 from core.models import Teacher
 from .views.grade_views import student_subject_grades
 
 from django.views.generic import RedirectView, TemplateView
+
+from .views.backup_views import (
+    backup_dashboard, create_backup, download_backup, 
+    delete_backup, cleanup_old_backups
+)
+
 from .api_views import (
     StudentListAPIView, AcademicTermAPIView, 
     ActiveStudentsAPIView, ParentChildrenAPIView, ParentDashboardAPIView,
@@ -908,4 +913,12 @@ urlpatterns += [
     # Redirect old student portal URLs
     path('student/', RedirectView.as_view(pattern_name='student_portal_dashboard', permanent=True)),
     path('student/dashboard/', RedirectView.as_view(pattern_name='student_portal_dashboard', permanent=True)),
+]
+
+urlpatterns += [
+    path('admin/backups/', backup_dashboard, name='backup_dashboard'),
+    path('admin/backups/create/', create_backup, name='create_backup'),
+    path('admin/backups/download/<str:backup_name>/', download_backup, name='download_backup'),
+    path('admin/backups/delete/<str:backup_name>/', delete_backup, name='delete_backup'),
+    path('admin/backups/cleanup/', cleanup_old_backups, name='cleanup_old_backups'),
 ]

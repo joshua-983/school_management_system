@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Backup & Recovery Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0">📦 Backup & Recovery Management</h1>
+            <p class="text-muted">Manage system backups and restore operations</p>
+        </div>
+    </div>
+
+    <!-- System Information -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5 class="card-title">Database</h5>
+                    <p class="card-text">{{ system_info.database_engine|title }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h5 class="card-title">Media Files</h5>
+                    <p class="card-text">{{ media_size_human }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title">Total Backups</h5>
+                    <p class="card-text">{{ system_info.backup_count }} backups</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Backup Storage</h5>
+                    <p class="card-text">{{ total_size_human }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Backup Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-primary" onclick="createBackup('database')">
+                            <i class="fas fa-database"></i> Backup Database
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="createBackup('media')">
+                            <i class="fas fa-images"></i> Backup Media Files
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="createBackup('full')">
+                            <i class="fas fa-server"></i> Full System Backup
+                        </button>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-danger" onclick="cleanupOldBackups()">
+                            <i class="fas fa-trash"></i> Clean Old Backups (>90 days)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Available Backups</h5>
+                </div>
+                <div class="card-body">
+                    {% if backups %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Backup Name</th>
+                                        <th>Type</th>
+                                        <th>Size</th>
+                                        <th>Files</th>
+                                        <th>Modified</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for backup in backups %}
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-{% if backup.type == 'zip' %}file-archive{% else %}folder{% endif %} me-2"></i>
+                                            {{ backup.name }}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{% if backup.type == 'zip' %}primary{% else %}info{% endif %}">
+                                                {{ backup.type|upper }}
+                                            </span>
+                                        </td>
+                                        <td>{{ backup.size_human }}</td>
+                                        <td>{{ backup.file_count|intcomma }}</td>
+                                        <td>{{ backup.modified|date:"Y-m-d H:i" }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{% url 'download_backup' backup.name %}" 
+                                                   class="btn btn-outline-primary" 
+                                                   title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                                <button type="button" 
+                                                        class="btn btn-outline-danger" 
+                                                        onclick="deleteBackup('{{ backup.name }}')"
+                                                        title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                                {% if backup.type == 'directory' or backup.name|slice:"-4:" == '.zip' %}
+                                                <button type="button" 
+                                                        class="btn btn-outline-warning" 
+                                                        onclick="showRestoreModal('{{ backup.name }}')"
+                                                        title="Restore">
+                                                    <i class="fas fa-undo"></i>
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No backups found</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Modal -->
+<div class="modal fade" id="restoreModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Restore from Backup</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Restore backup: <strong id="restoreBackupName"></strong></p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This will overwrite existing data!
+                </div>
+                <div class="form-group">
+                    <label>Restore Type:</label>
+                    <select class="form-select" id="restoreType">
+                        <option value="full">Full System</option>
+                        <option value="database">Database Only</option>
+                        <option value="media">Media Files Only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmRestore()">Restore</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function createBackup(type) {
+    if (!confirm(`Create ${type} backup?`)) return;
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+    btn.disabled = true;
+    
+    fetch('{% url "create_backup" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: `type=${type}&compress=true`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Request failed: ' + error);
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+function deleteBackup(backupName) {
+    if (!confirm(`Delete backup "${backupName}"?`)) return;
+    
+    fetch(`{% url "delete_backup" "BACKUP_NAME" %}`.replace('BACKUP_NAME', backupName), {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Backup deleted');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Request failed: ' + error);
+    });
+}
+
+function showRestoreModal(backupName) {
+    document.getElementById('restoreBackupName').textContent = backupName;
+    document.getElementById('restoreModal').dataset.backupName = backupName;
+    new bootstrap.Modal(document.getElementById('restoreModal')).show();
+}
+
+function confirmRestore() {
+    const modal = document.getElementById('restoreModal');
+    const backupName = modal.dataset.backupName;
+    const restoreType = document.getElementById('restoreType').value;
+    
+    if (!confirm(`WARNING: This will overwrite existing ${restoreType} data!\n\nType "YES" to confirm:`)) {
+        return;
+    }
+    
+    const confirmation = prompt('Type "YES" to confirm restore:');
+    if (confirmation !== 'YES') {
+        alert('Restore cancelled');
+        return;
+    }
+    
+    alert('Restore functionality requires SSH access. Please use the command:\n' +
+          `python manage.py restore_system backups/${backupName} --type=${restoreType} --yes`);
+    
+    bootstrap.Modal.getInstance(modal).hide();
+}
+
+function cleanupOldBackups() {
+    if (!confirm('Clean up backups older than 90 days?')) return;
+    
+    fetch('{% url "cleanup_old_backups" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Request failed: ' + error);
+    });
+}
+</script>
+{% endblock %}
