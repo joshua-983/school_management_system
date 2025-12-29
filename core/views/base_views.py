@@ -1,3 +1,9 @@
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from core.permissions import is_parent, is_admin, is_teacher
+from core.utils.logger import log_view_exception
+
+
 from django.shortcuts import render, redirect
 from django.http import Http404, JsonResponse
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -708,3 +714,80 @@ def health_check(request):
             'timestamp': timezone.now().isoformat(),
             'error': str(e)
         }, status=500)
+
+
+class ParentBaseMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Base mixin for all parent portal views"""
+    
+    def test_func(self):
+        """Override to check if user is a parent"""
+        return is_parent(self.request.user)
+    
+    def get_parent(self):
+        """Get the parent object for the current user"""
+        return self.request.user.parentguardian
+    
+    def get_children(self):
+        """Get all children for the current parent"""
+        return self.get_parent().students.all()
+    
+    @classmethod
+    def as_view(cls, **initkwargs):
+        """Apply logging decorator to the view"""
+        view = super().as_view(**initkwargs)
+        return log_view_exception(cls.__name__)(view)
+
+class ParentChildAccessMixin(ParentBaseMixin):
+    """Mixin for views that access specific child data"""
+    
+    def test_func(self):
+        """Check parent permission and child ownership"""
+        if not super().test_func():
+            return False
+        
+        # Check if accessing specific child
+        child_id = self.kwargs.get('pk') or self.kwargs.get('student_id')
+        if child_id:
+            parent = self.request.user.parentguardian
+            return parent.students.filter(pk=child_id).exists()
+        
+        return True
+    
+    def get_child(self):
+        """Get the child object with permission check"""
+        child_id = self.kwargs.get('pk') or self.kwargs.get('student_id')
+        if child_id:
+            parent = self.request.user.parentguardian
+            from django.shortcuts import get_object_or_404
+            return get_object_or_404(parent.students, pk=child_id)
+        return None
+
+# Base view classes
+class ParentListView(ParentBaseMixin, ListView):
+    """Base list view for parent portal"""
+    paginate_by = 20
+    template_name_suffix = '_list'
+    
+    def get_queryset(self):
+        """Default to filtering by parent's children"""
+        queryset = super().get_queryset()
+        # Filter by parent's children if model has student field
+        if hasattr(queryset.model, 'student'):
+            return queryset.filter(student__in=self.get_children())
+        return queryset
+
+class ParentDetailView(ParentChildAccessMixin, DetailView):
+    """Base detail view for parent portal"""
+    template_name_suffix = '_detail'
+
+class ParentCreateView(ParentBaseMixin, CreateView):
+    """Base create view for parent portal"""
+    template_name_suffix = '_form'
+
+class ParentUpdateView(ParentChildAccessMixin, UpdateView):
+    """Base update view for parent portal"""
+    template_name_suffix = '_form'
+
+class ParentDeleteView(ParentChildAccessMixin, DeleteView):
+    """Base delete view for parent portal"""
+    template_name_suffix = '_confirm_delete'

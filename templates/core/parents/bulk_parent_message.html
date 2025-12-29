@@ -8,32 +8,75 @@
         <div class="card">
             <div class="card-header">
                 <h4 class="card-title mb-0">Send Bulk Message to Parents</h4>
+                <p class="text-muted mb-0">Send messages to multiple parents at once</p>
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="bulkMessageForm">
                     {% csrf_token %}
                     
                     <!-- Target Selection -->
-                    <div class="mb-3">
-                        <label class="form-label">Send To:</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="target_type" value="ALL" id="target_all" checked>
-                            <label class="form-check-label" for="target_all">
-                                All Parents
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="target_type" value="CLASS" id="target_class">
-                            <label class="form-check-label" for="target_class">
-                                Specific Class
-                            </label>
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Send To:</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="ALL" id="target_all" checked>
+                                    <label class="form-check-label" for="target_all">
+                                        <i class="bi bi-people-fill me-1"></i> All Parents ({{ total_parents }})
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="CLASS" id="target_class">
+                                    <label class="form-check-label" for="target_class">
+                                        <i class="bi bi-mortarboard-fill me-1"></i> Specific Class
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="target_type" value="SELECTED" id="target_selected">
+                                    <label class="form-check-label" for="target_selected">
+                                        <i class="bi bi-check2-circle me-1"></i> Selected Parents
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="OVERDUE_FEES" id="target_overdue">
+                                    <label class="form-check-label" for="target_overdue">
+                                        <i class="bi bi-cash-coin me-1"></i> Parents with Overdue Fees
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="LOW_ATTENDANCE" id="target_attendance">
+                                    <label class="form-check-label" for="target_attendance">
+                                        <i class="bi bi-calendar-x me-1"></i> Parents of Students with Low Attendance
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="POOR_GRADES" id="target_grades">
+                                    <label class="form-check-label" for="target_grades">
+                                        <i class="bi bi-graph-down me-1"></i> Parents of Students with Poor Grades
+                                    </label>
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="target_type" value="INACTIVE" id="target_inactive">
+                                    <label class="form-check-label" for="target_inactive">
+                                        <i class="bi bi-person-x me-1"></i> Inactive Parents (No login in 30 days)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="target_type" value="PENDING" id="target_pending">
+                                    <label class="form-check-label" for="target_pending">
+                                        <i class="bi bi-hourglass-split me-1"></i> Parents with Pending Accounts
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Class Selection (shown when CLASS is selected) -->
+                    <!-- Class Selection -->
                     <div class="mb-3" id="class_selection" style="display: none;">
                         <label class="form-label">Select Class:</label>
-                        <select name="target_class" class="form-select">
+                        <select name="target_class" class="form-select" id="classSelect">
                             <option value="">Select a class...</option>
                             {% for class_level, class_name in CLASS_LEVEL_CHOICES %}
                             <option value="{{ class_level }}">{{ class_name }}</option>
@@ -41,27 +84,195 @@
                         </select>
                     </div>
 
-                    <!-- Message Details -->
-                    <div class="mb-3">
-                        <label for="subject" class="form-label">Subject *</label>
-                        <input type="text" class="form-control" id="subject" name="subject" required 
-                               placeholder="Enter message subject">
+                    <!-- Student/Individual Parent Selection -->
+                    <div class="mb-3" id="student_selection" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label">Select Specific Parents/Students:</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">
+                                <i class="bi bi-check-all"></i> Select All
+                            </button>
+                        </div>
+                        
+                        <!-- Filter Options -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control form-control-sm" id="studentSearch" 
+                                       placeholder="Search by name or ID...">
+                            </div>
+                            <div class="col-md-4">
+                                <select class="form-select form-select-sm" id="classFilter">
+                                    <option value="">Filter by Class</option>
+                                    {% for class_level, class_name in CLASS_LEVEL_CHOICES %}
+                                    <option value="{{ class_level }}">{{ class_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <select class="form-select form-select-sm" id="statusFilter">
+                                    <option value="">Filter by Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="suspended">Suspended</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Parent Selection Table -->
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th width="50">
+                                            <input type="checkbox" id="checkAll">
+                                        </th>
+                                        <th>Parent Name</th>
+                                        <th>Student(s)</th>
+                                        <th>Class</th>
+                                        <th>Email</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="parentTable">
+                                    {% for parent in all_parents %}
+                                    <tr class="parent-row" 
+                                        data-parent-id="{{ parent.id }}"
+                                        data-parent-name="{{ parent.get_user_full_name|default:'No Name' }}"
+                                        data-student-classes="{{ parent.students.all|join:', ' }}"
+                                        data-email="{{ parent.email }}"
+                                        data-status="{{ parent.account_status }}">
+                                        <td>
+                                            <input type="checkbox" name="selected_parents" 
+                                                   value="{{ parent.id }}" class="parent-checkbox">
+                                        </td>
+                                        <td>{{ parent.get_user_full_name|default:"No User Account" }}</td>
+                                        <td>
+                                            {% for student in parent.students.all %}
+                                            <span class="badge bg-info">{{ student.get_full_name }}</span>
+                                            {% empty %}
+                                            <span class="text-muted">No students</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td>
+                                            {% for student in parent.students.all %}
+                                            <span class="badge bg-secondary">{{ student.class_level }}</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td>{{ parent.email|default:"No email" }}</td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if parent.account_status == 'active' %}bg-success
+                                                {% elif parent.account_status == 'pending' %}bg-warning
+                                                {% elif parent.account_status == 'inactive' %}bg-danger
+                                                {% elif parent.account_status == 'suspended' %}bg-dark
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ parent.get_account_status_display }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">No parents found</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <small class="text-muted">Selected: <span id="selectedCount">0</span> parents</small>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="message" class="form-label">Message *</label>
-                        <textarea class="form-control" id="message" name="message" rows="8" required 
+                    <!-- Message Details -->
+                    <div class="mb-4">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <label for="subject" class="form-label fw-bold">Subject *</label>
+                                <input type="text" class="form-control" id="subject" name="subject" required 
+                                       placeholder="Enter message subject (e.g., Important Announcement, Fee Reminder)">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="priority" class="form-label fw-bold">Priority</label>
+                                <select class="form-select" id="priority" name="priority">
+                                    <option value="normal">Normal</option>
+                                    <option value="high">High Priority</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="message" class="form-label fw-bold">Message Content *</label>
+                        <textarea class="form-control" id="message" name="message" rows="10" required 
                                   placeholder="Type your message to parents..."></textarea>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> You can use placeholders: [Parent Name], [Student Name], [Class], [School Name]
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Delivery Methods -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Delivery Methods:</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="include_in_app" name="include_in_app" checked>
+                                    <label class="form-check-label" for="include_in_app">
+                                        <i class="bi bi-bell-fill text-primary"></i> In-App Notification
+                                    </label>
+                                    <small class="d-block text-muted">Appears in parent portal</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="sendEmail" name="send_email">
+                                    <label class="form-check-label" for="sendEmail">
+                                        <i class="bi bi-envelope-fill text-success"></i> Email
+                                    </label>
+                                    <small class="d-block text-muted">Sends to parent's email</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="sendSMS" name="send_sms">
+                                    <label class="form-check-label" for="sendSMS">
+                                        <i class="bi bi-chat-text-fill text-info"></i> SMS
+                                    </label>
+                                    <small class="d-block text-muted">Sends SMS to phone</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recipient Summary -->
+                    <div class="alert alert-info" id="recipientSummary">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Recipient Summary:</strong>
+                                <span id="summaryText">All parents ({{ total_parents }}) will receive this message</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-info" id="updateSummary">
+                                <i class="bi bi-arrow-clockwise"></i> Update
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Preview and Send -->
-                    <div class="d-flex justify-content-between">
-                        <button type="button" class="btn btn-outline-secondary" id="previewBtn">
-                            <i class="bi bi-eye"></i> Preview
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-send"></i> Send Message
-                        </button>
+                    <div class="d-flex justify-content-between mt-4">
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary" id="saveDraftBtn">
+                                <i class="bi bi-save"></i> Save as Draft
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="previewBtn">
+                                <i class="bi bi-eye"></i> Preview Message
+                            </button>
+                        </div>
+                        <div>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-send-fill"></i> Send to <span id="sendCount">{{ total_parents }}</span> Parents
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -71,44 +282,107 @@
     <div class="col-md-4">
         <!-- Quick Stats -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h6 class="card-title mb-0">Parent Statistics</h6>
+            <div class="card-header bg-primary text-white">
+                <h6 class="card-title mb-0"><i class="bi bi-bar-chart"></i> Parent Statistics</h6>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <small class="text-muted">Total Parents</small>
-                    <h5>{{ total_parents }}</h5>
-                </div>
-                <div class="mb-3">
-                    <small class="text-muted">Parents with Email</small>
-                    <h5>{{ parents_with_email }}</h5>
-                </div>
-                <div class="mb-3">
-                    <small class="text-muted">Active This Month</small>
-                    <h5>{{ active_parents }}</h5>
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="stat-box">
+                            <div class="stat-number text-primary">{{ total_parents }}</div>
+                            <div class="stat-label">Total Parents</div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="stat-box">
+                            <div class="stat-number text-success">{{ active_parents }}</div>
+                            <div class="stat-label">Active This Month</div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="stat-box">
+                            <div class="stat-number text-info">{{ parents_with_email }}</div>
+                            <div class="stat-label">With Email</div>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="stat-box">
+                            <div class="stat-number text-warning">{{ parents_with_phone }}</div>
+                            <div class="stat-label">With Phone</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Message Templates -->
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
-                <h6 class="card-title mb-0">Quick Templates</h6>
+                <h6 class="card-title mb-0"><i class="bi bi-file-earmark-text"></i> Quick Templates</h6>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="meeting">
-                        Parent-Teacher Meeting
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="meeting">
+                        <i class="bi bi-people"></i> Parent-Teacher Meeting
                     </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="fee">
-                        Fee Payment Reminder
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="fee">
+                        <i class="bi bi-cash"></i> Fee Payment Reminder
                     </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="event">
-                        School Event Announcement
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="event">
+                        <i class="bi bi-calendar-event"></i> School Event
                     </button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm template-btn" data-template="attendance">
-                        Attendance Concern
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="attendance">
+                        <i class="bi bi-calendar-check"></i> Attendance Concern
                     </button>
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="report">
+                        <i class="bi bi-file-text"></i> Report Card Available
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary template-btn" data-template="holiday">
+                        <i class="bi bi-sun"></i> Holiday Announcement
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Bulk Messages -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0"><i class="bi bi-clock-history"></i> Recent Messages</h6>
+            </div>
+            <div class="card-body">
+                {% if recent_messages %}
+                <div class="list-group list-group-flush">
+                    {% for msg in recent_messages %}
+                    <div class="list-group-item list-group-item-action py-2">
+                        <div class="d-flex w-100 justify-content-between">
+                            <small class="text-muted">{{ msg.timestamp|date:"M d, H:i" }}</small>
+                            <div>
+                                {% if msg.priority == 'high' %}
+                                <span class="badge bg-warning me-1">High</span>
+                                {% elif msg.priority == 'urgent' %}
+                                <span class="badge bg-danger me-1">Urgent</span>
+                                {% endif %}
+                                <span class="badge bg-info">{{ msg.count }} sent</span>
+                            </div>
+                        </div>
+                        <div class="fw-bold small">{{ msg.subject|truncatechars:30 }}</div>
+                        <div class="text-muted extra-small">
+                            {% if msg.emails_sent > 0 %}<i class="bi bi-envelope text-success"></i> {{ msg.emails_sent }}{% endif %}
+                            {% if msg.sms_sent > 0 %}<i class="bi bi-chat-text text-info ms-2"></i> {{ msg.sms_sent }}{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted small">No recent bulk messages</p>
+                {% endif %}
+                <div class="text-center mt-2">
+                    <a href="{% url 'parent_communication_log' %}" class="btn btn-sm btn-outline-primary me-2">
+                        <i class="bi bi-list"></i> View All Messages
+                    </a>
+                    <a href="{% url 'parent_message_analytics' %}" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-graph-up"></i> Analytics
+                    </a>
                 </div>
             </div>
         </div>
@@ -120,61 +394,336 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Message Preview</h5>
+                <h5 class="modal-title"><i class="bi bi-envelope-check"></i> Message Preview</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Subject: <span id="previewSubject"></span></h6>
+                        <small class="text-muted">Priority: <span id="previewPriority"></span></small>
+                    </div>
                     <div class="card-body">
-                        <h6 id="previewSubject" class="card-title"></h6>
-                        <p id="previewMessage" class="card-text"></p>
-                        <small class="text-muted">This message will be sent to approximately <span id="previewCount">0</span> parents.</small>
+                        <div class="mb-3">
+                            <strong>Message Content:</strong>
+                            <div class="border rounded p-3 mt-2 bg-light" id="previewMessage"></div>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <h6><i class="bi bi-info-circle"></i> Recipient Details:</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Target Type:</strong> <span id="previewTargetType"></span><br>
+                                    <strong>Estimated Recipients:</strong> <span id="previewCount">0</span>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>In-App:</strong> <span id="previewInApp">Yes</span><br>
+                                    <strong>Email:</strong> <span id="previewEmail">No</span><br>
+                                    <strong>SMS:</strong> <span id="previewSMS">No</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-danger">
+                            <h6><i class="bi bi-exclamation-triangle"></i> Important:</h6>
+                            <ul class="mb-0">
+                                <li>This message will be sent to all selected parents</li>
+                                <li>Action cannot be undone</li>
+                                <li>Parents will receive notifications based on their contact preferences</li>
+                                <li>High/Urgent priority messages may generate immediate alerts</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="confirmSend">Send Message</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-success" id="confirmSend">
+                    <i class="bi bi-check-circle"></i> Confirm & Send
+                </button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block footer %}
-
-{% endblock %}
-
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Show/hide class selection based on target type
+    // Get parent data from Django context
+    const allParents = JSON.parse('{{ all_parents_json|default:"[]"|escapejs }}');
+    const totalParents = {{ total_parents }};
+    const classChoices = JSON.parse('{{ CLASS_LEVEL_CHOICES_JSON|default:"[]"|escapejs }}');
+    
+    // Show/hide sections based on target type
     const targetRadios = document.querySelectorAll('input[name="target_type"]');
     const classSelection = document.getElementById('class_selection');
+    const studentSelection = document.getElementById('student_selection');
+    const recipientSummary = document.getElementById('recipientSummary');
+    const summaryText = document.getElementById('summaryText');
+    const sendCount = document.getElementById('sendCount');
+    
+    function updateRecipientSummary() {
+        const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        let count = totalParents;
+        let text = '';
+        
+        switch(targetType) {
+            case 'ALL':
+                text = `All parents (${totalParents}) will receive this message`;
+                count = totalParents;
+                break;
+            case 'CLASS':
+                const selectedClass = document.getElementById('classSelect').value;
+                const className = classChoices.find(c => c[0] === selectedClass)?.[1] || 'selected class';
+                // Estimate: assume equal distribution across classes
+                const classCount = Math.floor(totalParents / classChoices.length);
+                text = `Parents of ${className} students (approx. ${classCount})`;
+                count = classCount;
+                break;
+            case 'SELECTED':
+                const selectedCount = document.querySelectorAll('.parent-checkbox:checked').length;
+                text = `${selectedCount} selected parent(s)`;
+                count = selectedCount;
+                break;
+            case 'OVERDUE_FEES':
+                text = `Parents with overdue fees (estimated 20% of parents)`;
+                count = Math.floor(totalParents * 0.2);
+                break;
+            case 'LOW_ATTENDANCE':
+                text = `Parents of students with low attendance (estimated 15% of parents)`;
+                count = Math.floor(totalParents * 0.15);
+                break;
+            case 'POOR_GRADES':
+                text = `Parents of students with poor grades (estimated 10% of parents)`;
+                count = Math.floor(totalParents * 0.1);
+                break;
+            case 'INACTIVE':
+                text = `Inactive parents (no login in 30 days)`;
+                count = Math.floor(totalParents * 0.3); // Estimate
+                break;
+            case 'PENDING':
+                text = `Parents with pending accounts`;
+                count = Math.floor(totalParents * 0.1); // Estimate
+                break;
+        }
+        
+        summaryText.textContent = text;
+        sendCount.textContent = count;
+        
+        // Update recipient summary alert color based on count
+        if (count === 0) {
+            recipientSummary.className = 'alert alert-warning';
+        } else if (count > 50) {
+            recipientSummary.className = 'alert alert-danger';
+        } else if (count > 10) {
+            recipientSummary.className = 'alert alert-warning';
+        } else {
+            recipientSummary.className = 'alert alert-info';
+        }
+    }
     
     targetRadios.forEach(radio => {
         radio.addEventListener('change', function() {
             classSelection.style.display = this.value === 'CLASS' ? 'block' : 'none';
+            studentSelection.style.display = this.value === 'SELECTED' ? 'block' : 'none';
+            updateRecipientSummary();
         });
     });
-
+    
+    // Update summary when class selection changes
+    document.getElementById('classSelect').addEventListener('change', updateRecipientSummary);
+    
+    // Parent selection functionality
+    const checkAll = document.getElementById('checkAll');
+    const parentCheckboxes = document.querySelectorAll('.parent-checkbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    function updateSelectedCount() {
+        const checked = document.querySelectorAll('.parent-checkbox:checked').length;
+        selectedCount.textContent = checked;
+        updateRecipientSummary();
+    }
+    
+    checkAll.addEventListener('change', function() {
+        parentCheckboxes.forEach(cb => {
+            cb.checked = this.checked;
+        });
+        updateSelectedCount();
+    });
+    
+    selectAllBtn.addEventListener('click', function() {
+        const allChecked = Array.from(parentCheckboxes).every(cb => cb.checked);
+        parentCheckboxes.forEach(cb => {
+            cb.checked = !allChecked;
+        });
+        checkAll.checked = !allChecked;
+        updateSelectedCount();
+    });
+    
+    parentCheckboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            // Update "check all" checkbox state
+            const allChecked = Array.from(parentCheckboxes).every(c => c.checked);
+            const anyChecked = Array.from(parentCheckboxes).some(c => c.checked);
+            checkAll.checked = allChecked;
+            checkAll.indeterminate = anyChecked && !allChecked;
+            updateSelectedCount();
+        });
+    });
+    
+    // Search and filter functionality
+    const studentSearch = document.getElementById('studentSearch');
+    const classFilter = document.getElementById('classFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const parentRows = document.querySelectorAll('.parent-row');
+    
+    function filterParents() {
+        const searchTerm = studentSearch.value.toLowerCase();
+        const selectedClass = classFilter.value;
+        const selectedStatus = statusFilter.value;
+        
+        parentRows.forEach(row => {
+            const parentName = row.dataset.parentName.toLowerCase();
+            const studentClasses = row.dataset.studentClasses.toLowerCase();
+            const email = row.dataset.email.toLowerCase();
+            const status = row.dataset.status;
+            
+            const matchesSearch = searchTerm === '' || 
+                parentName.includes(searchTerm) || 
+                studentClasses.includes(searchTerm) ||
+                email.includes(searchTerm);
+            
+            const matchesClass = selectedClass === '' || 
+                studentClasses.includes(selectedClass);
+            
+            const matchesStatus = selectedStatus === '' || 
+                status === selectedStatus;
+            
+            row.style.display = matchesSearch && matchesClass && matchesStatus ? '' : 'none';
+        });
+    }
+    
+    studentSearch.addEventListener('input', filterParents);
+    classFilter.addEventListener('change', filterParents);
+    statusFilter.addEventListener('change', filterParents);
+    
     // Template buttons
     const templates = {
         meeting: {
             subject: 'Parent-Teacher Meeting Scheduled',
-            message: 'Dear Parent,\n\nWe would like to inform you that a parent-teacher meeting has been scheduled. Please check the school calendar for details and make arrangements to attend.\n\nThank you for your cooperation.\n\nBest regards,\nSchool Administration'
+            message: `Dear [Parent Name],
+
+We would like to inform you that a parent-teacher meeting has been scheduled for your child's class. 
+
+Date: [Date]
+Time: [Time]
+Venue: School Conference Hall
+
+Please make arrangements to attend this important meeting to discuss your child's progress.
+
+Thank you for your cooperation.
+
+Best regards,
+School Administration`
         },
         fee: {
-            subject: 'Fee Payment Reminder',
-            message: 'Dear Parent,\n\nThis is a friendly reminder that the fee payment for the current term is due. Please ensure timely payment to avoid any inconvenience.\n\nYou can view the fee details and make payments through the parent portal.\n\nThank you.\n\nBest regards,\nAccounts Department'
+            subject: 'Urgent: Fee Payment Reminder for [Student Name]',
+            message: `Dear [Parent Name],
+
+This is a reminder regarding the outstanding fee payment for your child [Student Name] in [Class].
+
+Total Due: [Amount]
+Due Date: [Date]
+
+Please ensure timely payment to avoid any inconvenience. You can make the payment through:
+1. Parent Portal (Online Payment)
+2. School Accounts Office
+3. Mobile Money: [Number]
+
+For any queries, please contact the accounts department.
+
+Thank you.
+
+Accounts Department
+[School Name]`
         },
         event: {
-            subject: 'Upcoming School Event',
-            message: 'Dear Parent,\n\nWe are excited to announce an upcoming school event. Details will be shared shortly. Please mark your calendar and encourage your child to participate.\n\nMore information will follow.\n\nBest regards,\nEvent Committee'
+            subject: 'Important: Upcoming School Event',
+            message: `Dear [Parent Name],
+
+We are excited to announce our upcoming annual school event!
+
+Event: [Event Name]
+Date: [Date]
+Time: [Time]
+Venue: School Grounds
+
+All parents and guardians are cordially invited to attend. Your child [Student Name] is participating in this event.
+
+Please ensure your child comes prepared and arrives on time.
+
+Looking forward to your participation!
+
+Event Committee
+[School Name]`
         },
         attendance: {
-            subject: 'Attendance Concern',
-            message: 'Dear Parent,\n\nWe have noticed some attendance concerns regarding your child. Regular attendance is crucial for academic success. Please ensure your child attends school regularly.\n\nIf there are any issues, please contact us.\n\nBest regards,\nAttendance Office'
+            subject: 'Attendance Concern: [Student Name]',
+            message: `Dear [Parent Name],
+
+We have noticed concerning attendance patterns for your child [Student Name] in [Class].
+
+Current Attendance: [Percentage]%
+Minimum Required: 85%
+
+Regular attendance is crucial for academic success. Please ensure your child attends school regularly.
+
+If there are any specific issues affecting attendance, please contact the class teacher.
+
+Thank you for your attention to this matter.
+
+Attendance Office
+[School Name]`
+        },
+        report: {
+            subject: 'Report Card Available: [Student Name]',
+            message: `Dear [Parent Name],
+
+The report card for [Student Name] for the current term is now available.
+
+You can access it through:
+1. Parent Portal → Report Cards
+2. Collect physical copy from school office
+
+Please review the report card and discuss your child's progress with them.
+
+Parent-teacher consultation slots are available next week.
+
+Best regards,
+Academic Department`
+        },
+        holiday: {
+            subject: 'Holiday Announcement',
+            message: `Dear [Parent Name],
+
+This is to inform you about the upcoming school holidays.
+
+Holiday Period: [Start Date] to [End Date]
+School Reopens: [Reopen Date]
+
+Please note:
+- No classes during this period
+- School offices will remain closed
+- Ensure holiday homework is completed
+
+Wishing you and your family a pleasant holiday!
+
+Best regards,
+School Administration`
         }
     };
 
@@ -183,6 +732,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const template = templates[this.dataset.template];
             document.getElementById('subject').value = template.subject;
             document.getElementById('message').value = template.message;
+            
+            // Show success message
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-bg-success border-0';
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        Template loaded: ${this.textContent.trim()}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>`;
+            document.body.appendChild(toast);
+            new bootstrap.Toast(toast).show();
+            setTimeout(() => toast.remove(), 3000);
         });
     });
 
@@ -190,30 +753,116 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('previewBtn').addEventListener('click', function() {
         const subject = document.getElementById('subject').value;
         const message = document.getElementById('message').value;
+        const priority = document.getElementById('priority').value;
+        const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        const includeInApp = document.getElementById('include_in_app').checked;
+        const sendEmail = document.getElementById('sendEmail').checked;
+        const sendSMS = document.getElementById('sendSMS').checked;
         
         if (!subject || !message) {
-            alert('Please enter both subject and message before previewing.');
+            showAlert('Please enter both subject and message before previewing.', 'warning');
+            return;
+        }
+        
+        if (!includeInApp && !sendEmail && !sendSMS) {
+            showAlert('Please select at least one delivery method.', 'warning');
             return;
         }
         
         document.getElementById('previewSubject').textContent = subject;
         document.getElementById('previewMessage').textContent = message;
-        
-        // Estimate recipient count (simplified)
-        const targetType = document.querySelector('input[name="target_type"]:checked').value;
-        let count = {{ total_parents }};
-        if (targetType === 'CLASS') {
-            count = Math.floor({{ total_parents }} / {{ CLASS_LEVEL_CHOICES|length }});
-        }
-        document.getElementById('previewCount').textContent = count;
+        document.getElementById('previewPriority').textContent = priority.charAt(0).toUpperCase() + priority.slice(1);
+        document.getElementById('previewTargetType').textContent = document.querySelector(`label[for="target_${targetType.toLowerCase()}"]`).textContent.trim();
+        document.getElementById('previewCount').textContent = sendCount.textContent;
+        document.getElementById('previewInApp').textContent = includeInApp ? 'Yes' : 'No';
+        document.getElementById('previewEmail').textContent = sendEmail ? 'Yes' : 'No';
+        document.getElementById('previewSMS').textContent = sendSMS ? 'Yes' : 'No';
         
         new bootstrap.Modal(document.getElementById('previewModal')).show();
     });
 
+    // Update summary button
+    document.getElementById('updateSummary').addEventListener('click', updateRecipientSummary);
+    
     // Confirm send
     document.getElementById('confirmSend').addEventListener('click', function() {
-        document.querySelector('form').submit();
+        // Show loading state
+        const sendBtn = this;
+        const originalText = sendBtn.innerHTML;
+        sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+        sendBtn.disabled = true;
+        
+        // Submit form after short delay to show loading state
+        setTimeout(() => {
+            document.getElementById('bulkMessageForm').submit();
+        }, 500);
     });
+    
+    // Save draft button
+    document.getElementById('saveDraftBtn').addEventListener('click', function() {
+        // In a real implementation, this would save to database via AJAX
+        showAlert('Draft saved successfully!', 'success');
+    });
+    
+    // Form validation
+    document.getElementById('bulkMessageForm').addEventListener('submit', function(e) {
+        const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        
+        if (targetType === 'CLASS') {
+            const selectedClass = document.getElementById('classSelect').value;
+            if (!selectedClass) {
+                e.preventDefault();
+                showAlert('Please select a class when targeting by class.', 'warning');
+                return false;
+            }
+        }
+        
+        if (targetType === 'SELECTED') {
+            const selectedCount = document.querySelectorAll('.parent-checkbox:checked').length;
+            if (selectedCount === 0) {
+                e.preventDefault();
+                showAlert('Please select at least one parent when using individual selection.', 'warning');
+                return false;
+            }
+        }
+        
+        // Validate delivery methods
+        const includeInApp = document.getElementById('include_in_app').checked;
+        const sendEmail = document.getElementById('sendEmail').checked;
+        const sendSMS = document.getElementById('sendSMS').checked;
+        
+        if (!includeInApp && !sendEmail && !sendSMS) {
+            e.preventDefault();
+            showAlert('Please select at least one delivery method.', 'warning');
+            return false;
+        }
+        
+        // Show confirmation for large sends
+        const sendCount = parseInt(document.getElementById('sendCount').textContent);
+        if (sendCount > 50) {
+            if (!confirm(`You are about to send this message to ${sendCount} parents. Are you sure?`)) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+    
+    // Helper function to show alerts
+    function showAlert(message, type = 'info') {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 5000);
+    }
+    
+    // Initialize
+    updateRecipientSummary();
+    updateSelectedCount();
 });
 </script>
 {% endblock %}

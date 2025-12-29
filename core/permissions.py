@@ -1,4 +1,5 @@
 # core/permissions.py
+import sys
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
@@ -39,6 +40,16 @@ def has_timetable_view_permission(user):
     if is_parent(user):
         return True
     return False
+
+
+def safe_import(model_name):
+    """Safely import models to avoid circular imports"""
+    try:
+        module = __import__('core.models', fromlist=[model_name])
+        return getattr(module, model_name)
+    except (ImportError, AttributeError) as e:
+        print(f"Warning: Could not import {model_name}: {e}")
+        return None
 
 def has_timetable_manage_permission(user):
     """Check if user can manage timetables (create/edit/delete)"""
@@ -82,9 +93,14 @@ def can_view_timetable(user, timetable):
         return False
     if is_admin(user):
         return True
+    
+    # Lazy import to avoid circular imports
+    ClassAssignment = safe_import('ClassAssignment')
+    if not ClassAssignment:
+        return False
+    
     if is_teacher(user):
         # Teachers can view timetables for classes they teach
-        from core.models import ClassAssignment
         return ClassAssignment.objects.filter(
             class_level=timetable.class_level,
             teacher=user.teacher
@@ -97,6 +113,7 @@ def can_view_timetable(user, timetable):
         children_classes = user.parentguardian.students.values_list('class_level', flat=True)
         return timetable.class_level in children_classes
     return False
+
 
 # ===== PERMISSION SETUP FOR DJANGO GROUPS =====
 
@@ -409,9 +426,10 @@ def assign_user_to_group_on_save(sender, instance, created, **kwargs):
     Signal handler to automatically assign users to groups based on their role
     """
     if created:
-        if hasattr(instance, 'teacher'):
+        # Use the function instead of direct attribute checking
+        if is_teacher(instance):
             assign_user_to_group(instance, 'Teachers')
-        elif hasattr(instance, 'student'):
+        elif is_student(instance):
             assign_user_to_group(instance, 'Students')
-        elif hasattr(instance, 'parentguardian'):
+        elif is_parent(instance):
             assign_user_to_group(instance, 'Parents')

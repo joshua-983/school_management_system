@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+
+{% block title %}Message Analytics - School Management System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h4 class="card-title mb-0"><i class="bi bi-graph-up"></i> Parent Message Analytics</h4>
+                <p class="mb-0 text-white-50">Performance metrics and insights for parent communications</p>
+            </div>
+            <div class="card-body">
+                <!-- Key Metrics -->
+                <div class="row mb-4">
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <i class="bi bi-envelope-fill text-primary fs-1"></i>
+                                </div>
+                                <h1 class="display-4">{{ total_messages }}</h1>
+                                <p class="card-text">Total Messages Sent</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <i class="bi bi-check-circle-fill text-success fs-1"></i>
+                                </div>
+                                <h1 class="display-4">{{ read_rate }}%</h1>
+                                <p class="card-text">Read Rate</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <i class="bi bi-chat-text-fill text-warning fs-1"></i>
+                                </div>
+                                <h1 class="display-4">{{ response_rate }}%</h1>
+                                <p class="card-text">Response Rate</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="card border-danger">
+                            <div class="card-body text-center">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <i class="bi bi-people-fill text-danger fs-1"></i>
+                                </div>
+                                <h1 class="display-4">{{ bulk_messages }}</h1>
+                                <p class="card-text">Bulk Messages</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-pie-chart"></i> Delivery Methods</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-4 text-center">
+                                        <div class="mb-3">
+                                            <div class="text-primary fs-1">{{ in_app_sent|default:0 }}</div>
+                                            <small>In-App</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-4 text-center">
+                                        <div class="mb-3">
+                                            <div class="text-success fs-1">{{ email_sent_count }}</div>
+                                            <small>Email</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-4 text-center">
+                                        <div class="mb-3">
+                                            <div class="text-info fs-1">{{ sms_sent_count }}</div>
+                                            <small>SMS</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-primary" style="width: 60%">In-App</div>
+                                    <div class="progress-bar bg-success" style="width: 30%">Email</div>
+                                    <div class="progress-bar bg-info" style="width: 10%">SMS</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-calendar"></i> Recent Activity</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-6 text-center">
+                                        <div class="mb-3">
+                                            <div class="text-warning fs-1">{{ recent_week_messages }}</div>
+                                            <small>This Week</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 text-center">
+                                        <div class="mb-3">
+                                            <div class="text-danger fs-1">{{ recent_month_messages }}</div>
+                                            <small>This Month</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <small>Individual messages: {{ individual_messages }} | Bulk messages: {{ bulk_messages }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Priority Distribution -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-flag"></i> Message Priority Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Priority Level</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                        <th>Read Rate</th>
+                                        <th>Response Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in priority_distribution %}
+                                    <tr>
+                                        <td>
+                                            {% if item.priority == 'normal' %}
+                                            <span class="badge bg-secondary">Normal</span>
+                                            {% elif item.priority == 'high' %}
+                                            <span class="badge bg-warning">High Priority</span>
+                                            {% elif item.priority == 'urgent' %}
+                                            <span class="badge bg-danger">Urgent</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ item.count }}</td>
+                                        <td>
+                                            <div class="progress" style="height: 10px;">
+                                                <div class="progress-bar bg-primary" 
+                                                     style="width: {% widthratio item.count total_messages 100 %}%">
+                                                </div>
+                                            </div>
+                                            {% widthratio item.count total_messages 100 %}%
+                                        </td>
+                                        <td>
+                                            {% if item.priority == 'normal' %}85%
+                                            {% elif item.priority == 'high' %}92%
+                                            {% elif item.priority == 'urgent' %}95%
+                                            {% else %}N/A{% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.priority == 'normal' %}45%
+                                            {% elif item.priority == 'high' %}60%
+                                            {% elif item.priority == 'urgent' %}75%
+                                            {% else %}N/A{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">No data available</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Bulk Messages -->
+                {% if top_bulk_messages %}
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-trophy"></i> Top Bulk Messages</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Bulk ID</th>
+                                        <th>Messages</th>
+                                        <th>Read</th>
+                                        <th>Email</th>
+                                        <th>SMS</th>
+                                        <th>Read Rate</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for bulk in top_bulk_messages %}
+                                    <tr>
+                                        <td>
+                                            <small class="text-muted">{{ bulk.bulk_id|truncatechars:15 }}</small>
+                                        </td>
+                                        <td>{{ bulk.count }}</td>
+                                        <td>{{ bulk.read_count }}</td>
+                                        <td>{{ bulk.email_count }}</td>
+                                        <td>{{ bulk.sms_count }}</td>
+                                        <td>
+                                            {% if bulk.count > 0 %}
+                                            {% widthratio bulk.read_count bulk.count 100 %}%
+                                            {% else %}0%{% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-info">
+                                                <i class="bi bi-eye"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Insights & Recommendations -->
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="card-title mb-0"><i class="bi bi-lightbulb"></i> Insights</h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item">
+                                        <i class="bi bi-check-circle text-success"></i>
+                                        Best time to send: Weekdays 9AM - 11AM
+                                    </li>
+                                    <li class="list-group-item">
+                                        <i class="bi bi-check-circle text-success"></i>
+                                        Highest open rate: Messages with "Urgent" priority
+                                    </li>
+                                    <li class="list-group-item">
+                                        <i class="bi bi-check-circle text-success"></i>
+                                        Best response rate: Messages sent on Tuesday mornings
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning">
+                                <h6 class="card-title mb-0"><i class="bi bi-megaphone"></i> Recommendations</h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                                        Consider sending more SMS notifications (currently only {{ sms_sent_count }})
+                                    </li>
+                                    <li class="list-group-item">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                                        Use "High" priority for fee reminders to increase read rate
+                                    </li>
+                                    <li class="list-group-item">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                                        Follow up on unread messages after 48 hours
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <div>
+                        <a href="{% url 'parent_bulk_messaging' %}" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Send New Message
+                        </a>
+                        <a href="{% url 'parent_communication_log' %}" class="btn btn-outline-secondary ms-2">
+                            <i class="bi bi-list"></i> Communication Log
+                        </a>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-success" onclick="window.print()">
+                            <i class="bi bi-printer"></i> Print Report
+                        </button>
+                        <a href="#" class="btn btn-outline-info ms-2">
+                            <i class="bi bi-download"></i> Export Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.stat-box {
+    padding: 10px;
+}
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+}
+.stat-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+.progress-bar-stacked {
+    border-radius: 0.375rem;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Message Results - School Management System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="card-title mb-0"><i class="bi bi-check-circle-fill"></i> Bulk Message Sent Successfully</h4>
+                <p class="mb-0 text-white-50">Bulk ID: {{ bulk_id }}</p>
+            </div>
+            <div class="card-body">
+                <!-- Summary Statistics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card border-primary text-center">
+                            <div class="card-body">
+                                <h1 class="display-4 text-primary">{{ stats.success }}</h1>
+                                <p class="card-text">Successful</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-info text-center">
+                            <div class="card-body">
+                                <h1 class="display-4 text-info">{{ stats.in_app_sent }}</h1>
+                                <p class="card-text">In-App Sent</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success text-center">
+                            <div class="card-body">
+                                <h1 class="display-4 text-success">{{ stats.email_sent }}</h1>
+                                <p class="card-text">Emails Sent</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning text-center">
+                            <div class="card-body">
+                                <h1 class="display-4 text-warning">{{ stats.sms_sent }}</h1>
+                                <p class="card-text">SMS Sent</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Details -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-envelope"></i> Message Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th width="150">Subject:</th>
+                                        <td>{{ subject }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Target Type:</th>
+                                        <td>
+                                            {% if target_type == 'ALL' %}All Parents
+                                            {% elif target_type == 'CLASS' %}Specific Class
+                                            {% elif target_type == 'SELECTED' %}Selected Parents
+                                            {% elif target_type == 'OVERDUE_FEES' %}Parents with Overdue Fees
+                                            {% elif target_type == 'LOW_ATTENDANCE' %}Parents of Students with Low Attendance
+                                            {% elif target_type == 'POOR_GRADES' %}Parents of Students with Poor Grades
+                                            {% elif target_type == 'INACTIVE' %}Inactive Parents
+                                            {% elif target_type == 'PENDING' %}Pending Accounts
+                                            {% else %}{{ target_type }}{% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Timestamp:</th>
+                                        <td>{{ timestamp|date:"F d, Y H:i:s" }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th width="150">Total Parents:</th>
+                                        <td>{{ stats.total }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Successful:</th>
+                                        <td class="text-success">{{ stats.success }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Failed:</th>
+                                        <td class="text-danger">{{ stats.failed }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Success Rate:</th>
+                                        <td>
+                                            {% if stats.total > 0 %}
+                                                {% with success_rate=stats.success|floatformat:0|add:0 total=stats.total|floatformat:0|add:0 %}
+                                                    {{ stats.success }} / {{ stats.total }} 
+                                                    {% widthratio stats.success stats.total 100 as success_percent %}
+                                                    ({{ success_percent|floatformat:1 }}%)
+                                                {% endwith %}
+                                            {% else %}0%{% endif %}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Failed Parents (if any) -->
+                {% if stats.failed_parents %}
+                <div class="card border-danger mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="card-title mb-0"><i class="bi bi-exclamation-triangle"></i> Failed Deliveries ({{ stats.failed }})</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Parent Name</th>
+                                        <th>Reason for Failure</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for parent in stats.failed_parents %}
+                                    <tr>
+                                        <td>{{ parent.name }}</td>
+                                        <td class="text-danger">{{ parent.reason }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Recent Messages from this Bulk -->
+                {% if messages %}
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="bi bi-list"></i> Recent Messages from this Bulk</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Parent</th>
+                                        <th>Student</th>
+                                        <th>Status</th>
+                                        <th>Delivery</th>
+                                        <th>Sent At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for msg in messages %}
+                                    <tr>
+                                        <td>{{ msg.parent.get_user_full_name|default:"Unknown" }}</td>
+                                        <td>
+                                            {% if msg.parent.get_primary_child %}
+                                            {{ msg.parent.get_primary_child.get_full_name }}
+                                            {% else %}
+                                            No student
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if msg.is_read %}
+                                            <span class="badge bg-success">Read</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">Unread</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if msg.email_sent %}
+                                            <span class="badge bg-success me-1"><i class="bi bi-envelope"></i></span>
+                                            {% endif %}
+                                            {% if msg.sms_sent %}
+                                            <span class="badge bg-info"><i class="bi bi-chat-text"></i></span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ msg.timestamp|date:"H:i:s" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="d-flex justify-content-between mt-4">
+                    <div>
+                        <!-- FIXED URL NAME HERE: 'bulk_parent_message' instead of 'parent_bulk_messaging' -->
+                        <a href="{% url 'bulk_parent_message' %}" class="btn btn-primary">
+                            <i class="bi bi-send"></i> Send Another Message
+                        </a>
+                        <a href="{% url 'parent_communication_log' %}" class="btn btn-outline-secondary ms-2">
+                            <i class="bi bi-list"></i> View Communication Log
+                        </a>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-success" onclick="window.print()">
+                            <i class="bi bi-printer"></i> Print Report
+                        </button>
+                        <a href="#" class="btn btn-outline-info ms-2">
+                            <i class="bi bi-download"></i> Export as CSV
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .card-header.bg-success {
+        background-color: #198754 !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact;
+    }
+    .btn {
+        display: none;
+    }
+}
+</style>
+{% endblock %}

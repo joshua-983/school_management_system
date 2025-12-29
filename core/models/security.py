@@ -148,17 +148,26 @@ class AuditLog(models.Model):
         ('LOGIN', 'Login'),
         ('LOGOUT', 'Logout'),
         ('ACCESS', 'Access'),
+        ('BULK_MESSAGE_SENT', 'Bulk Message Sent'),  # 17 characters!
         ('OTHER', 'Other'),
     ]
-    
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES, db_index=True)
-    model_name = models.CharField(max_length=50, db_index=True)
-    object_id = models.CharField(max_length=50, db_index=True, blank=True, null=True)
-    details = models.JSONField(blank=True, null=True, default=dict)
-    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     
+    # CHANGE THIS: Increase max_length from 10 to at least 20
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, db_index=True)  # Changed from 10 to 20
+    
+    model_name = models.CharField(max_length=50, db_index=True)
+    object_id = models.CharField(max_length=50, db_index=True, blank=True, null=True)      
+    details = models.JSONField(blank=True, null=True, default=dict)
+    ip_address = models.GenericIPAddressField(null=True, blank=True, db_index=True)        
+    
+    # ADD THIS FIELD - user_agent
+    user_agent = models.TextField(blank=True, null=True, db_index=False, 
+                                  help_text="User agent string from the HTTP request")
+    
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
     class Meta:
         ordering = ['-timestamp']
         verbose_name = 'Audit Log'
@@ -170,9 +179,10 @@ class AuditLog(models.Model):
             models.Index(fields=['user']),
             models.Index(fields=['action']),
         ]
-    
+
     def __str__(self):
-        return f"{self.user or 'System'} {self.action}d {self.model_name} at {self.timestamp}"
+        username = self.user.username if self.user else 'System'
+        return f"{username} - {self.action} - {self.model_name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
 
     @classmethod
     def log_action(cls, user, action, model_name=None, object_id=None, details=None, ip_address=None):

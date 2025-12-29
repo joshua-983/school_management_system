@@ -1,4 +1,4 @@
-# core/urls.py - COMPREHENSIVE UPDATED VERSION
+# core/urls.py - COMPLETE CORRECTED VERSION
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from django.http import HttpResponseForbidden
@@ -6,7 +6,7 @@ from datetime import timedelta
 from . import views
 from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
-from .views.base_views import dashboard
+from .views.base_views import dashboard, home, admin_dashboard, teacher_dashboard, student_dashboard, parent_dashboard
 from .views.fee_views import ClearImportResultsView
 
 from . import views_group_management
@@ -21,12 +21,13 @@ from .api_views import (
     ParentStatsAPIView
 )
 
-# Import views from modular files
-from .views.base_views import home, admin_dashboard, teacher_dashboard
+# Import teacher views
 from .views.teacher_views import (
     TeacherListView, TeacherCreateView, TeacherUpdateView, TeacherDeleteView,
     TeacherAssignmentAnalyticsView, TeacherDetailAnalyticsView
 )
+
+# Import student views
 from .views.student_views import (
     StudentListView, StudentDetailView, StudentCreateView, StudentUpdateView, 
     StudentDeleteView, StudentGradeListView, StudentAttendanceView, 
@@ -37,7 +38,7 @@ from .views.student_views import (
 )
 
 # ==============================
-# PARENT MANAGEMENT VIEWS - FIXED
+# PARENT MANAGEMENT VIEWS (Admin/Teacher)
 # ==============================
 from .parent_management_views import (
     parent_management_dashboard, parent_account_management, parent_directory,
@@ -48,16 +49,16 @@ from .parent_management_views import (
 )
 
 # ==============================
-# PARENT PORTAL VIEWS
+# PARENT PORTAL VIEWS (Parent Access)
 # ==============================
 from .views.parents_views import (
     ParentCreateView, ParentUpdateView, ParentDeleteView,
     ParentChildrenListView, ParentChildDetailView, ParentFeeListView, ParentFeeDetailView,
     ParentFeePaymentView, ParentAttendanceListView, ParentReportCardListView, ParentReportCardDetailView,
-    parent_dashboard,
     ParentAnnouncementListView, ParentMessageListView,
     ParentMessageCreateView, ParentMessageDetailView, ParentCalendarView,
-    ParentDirectoryView, BulkParentMessageView, ParentCommunicationLogView, ParentEngagementDashboardView
+    ParentDirectoryView, BulkParentMessageView, ParentCommunicationLogView, ParentEngagementDashboardView,
+    ParentFeeStatementView, BulkMessageResultsView, ParentMessageAnalyticsView
 )
 
 # ==============================
@@ -100,46 +101,27 @@ from .views.assignment_views import (
 )
 
 # ==============================
-# GRADE VIEWS IMPORTS - CORRECTED
+# GRADE VIEWS
 # ==============================
 from .views.grade_views import (
-    # Main Grade Views
     GradeListView, GradeDetailView, GradeCreateView, GradeUpdateView, GradeDeleteView,
     GradeEntryView, GradeReportView, BestStudentsView,
-    
-    # Promotion Views
     PromotionListView, PromotionCheckView, PromoteStudentsView, PromotionConfigurationView,
-    
-    # Bulk Operations
     BulkGradeUploadView, GradeUploadTemplateView, BulkUploadProgressAPI,
     GradeConfigurationView,
-    
-    # API & Utility Views
     CalculateGradeAPI, calculate_total_score, check_existing_grade,
     get_students_by_class, get_subjects_by_class,
-    
-    # Student Grade Summary API
     StudentGradeSummaryAPI,
-    
-    # Grade Management Actions
     lock_grade, unlock_grade, mark_grade_for_review, clear_grade_review,
-    
-    # Export View
     GradeExportView,
-    
-    # Advanced Views
     GradingQueueView, GradeCalculatorView,
-    
-    # API Views
     GradeValidationAPI, GradeStatisticsAPI, ClearGradeCacheView,
-    
-    # Function-based views (Add these)
     grade_delete,
     student_subject_grades,
 )
 
-
-# REPORT CARD VIEWS IMPORTS
+# ==============================
+# REPORT CARD VIEWS
 # ==============================
 from .views.reportcard_views import (
     ReportCardDashboardView, CreateReportCardView, ReportCardView, 
@@ -159,7 +141,7 @@ from .views.audit_views import (
 )
 
 # ==============================
-# AUDIT ENHANCEMENT VIEWS IMPORTS - CORRECTED
+# AUDIT ENHANCEMENT VIEWS
 # ==============================
 from .views.audit_enhancements import (
     SecurityEventListView, SecurityEventDetailView,
@@ -172,20 +154,17 @@ from .views.audit_enhancements import (
 from .views.attendance_views import AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
 
 # ==============================
-# TIMETABLE VIEWS IMPORTS - UPDATED
+# TIMETABLE VIEWS
 # ==============================
 from .views.timetable_views import (
     TimeSlotListView, TimeSlotCreateView, TimeSlotUpdateView, TimeSlotDeleteView,
     TimetableListView, TimetableCreateView, TimetableDetailView, TimetableManageView, TimetableDeleteView,
     StudentTimetableView, TeacherTimetableView, get_timetable_entries, generate_weekly_timetable,
-    # Add new teacher timetable views
     TeacherTimetableListView, TeacherTimetableDetailView, TimetableUpdateView,
-    # ADD MISSING timetable_calendar view import
-    TimetableCalendarView,  print_timetable, get_subjects_for_class, get_available_teachers,
+    TimetableCalendarView, print_timetable, get_subjects_for_class, get_available_teachers,
     calendar_data, day_events, event_details, export_calendar,
     timetable_archive_view, timetable_deactivate_view, timetable_duplicate_view, print_weekly_timetable,
-     get_class_details, get_subject_details, get_assignment_details,
-    # ADD MISSING URL functions
+    get_class_details, get_subject_details, get_assignment_details,
     add_class_resource, get_class_resources, add_class_note, send_class_announcement,
     export_student_list, get_attendance_form
 )
@@ -198,7 +177,7 @@ from .views.notifications_views import (
 )
 
 # ==============================
-# BILL VIEWS IMPORTS
+# BILL VIEWS
 # ==============================
 from .views.bill_views import (
     BillListView, BillDetailView, BillGenerateView, BillPaymentView, BillCancelView,
@@ -207,7 +186,7 @@ from .views.bill_views import (
 )
 
 # ==============================
-# ANNOUNCEMENT VIEWS IMPORTS
+# ANNOUNCEMENT VIEWS
 # ==============================
 from .views.announcement_views import (
     AnnouncementListView, CreateAnnouncementView, UpdateAnnouncementView, 
@@ -218,7 +197,7 @@ from .views.announcement_views import (
 )
 
 # ==============================
-# SECURITY VIEWS IMPORTS - CORRECTED (ALL LOCKOUT FUNCTIONS HERE)
+# SECURITY VIEWS
 # ==============================
 from .views.security_views import (
     security_dashboard, UserManagementView, BlockUserView,
@@ -226,9 +205,7 @@ from .views.security_views import (
     user_blocked_page, security_stats_api, user_details_api, RateLimitExceededView,
     SecuritySettingsView, security_events_api, maintenance_details_api, security_events, alert_rule_list,
     security_status_api, security_notifications_api, emergency_maintenance_bypass, clear_maintenance_bypass,
-    # LOCKOUT MANAGEMENT FUNCTIONS:
     axes_lockout_management, unlock_user_api, locked_users_api, unlock_all_users_api,
-    # ADD system_health_api here since it's referenced in URLs
     system_health_api
 )
 
@@ -249,21 +226,25 @@ urlpatterns = [
     # API endpoints
     path('api/', include(router.urls)),
     
-    # Home and dashboards
+    # ==============================
+    # HOME & DASHBOARDS
+    # ==============================
     path('', home, name='home'),
+    path('dashboard/', dashboard, name='dashboard'),
     path('admin-dashboard/', admin_dashboard, name='admin_dashboard'),
     path('teacher-dashboard/', teacher_dashboard, name='teacher_dashboard'),
-    path('dashboard/', dashboard, name='dashboard'),
+    path('student-dashboard/', student_dashboard, name='student_dashboard'),
+    path('parent-dashboard/', parent_dashboard, name='parent_dashboard'),  # Function-based dashboard
     
     # ==============================
-    # PASSWORD CHANGE URLS - FIXED
+    # PASSWORD CHANGE
     # ==============================
     path('password-change/', accounts_views.password_change, name='password_change'),
     path('password-change/done/', accounts_views.password_change_done, name='password_change_done'),
     path('accounts/password-change/', accounts_views.PasswordChangeView.as_view(), name='accounts_password_change'),
     
     # ==============================
-    # STUDENT MANAGEMENT URLS (Admin/Teacher only)
+    # STUDENT MANAGEMENT (Admin/Teacher)
     # ==============================
     path('students/', include([
         path('', StudentListView.as_view(), name='student_list'),
@@ -272,35 +253,35 @@ urlpatterns = [
         path('<int:pk>/edit/', StudentUpdateView.as_view(), name='student_update'),
         path('<int:pk>/delete/', StudentDeleteView.as_view(), name='student_delete'),
         path('<int:pk>/parents/', StudentParentManagementView.as_view(), name='student_parent_management'),
-        path('<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create'),
+        path('<int:student_id>/parents/add/', ParentCreateView.as_view(), name='parent_create_for_student'),
         path('<int:student_id>/fees/add/', FeeCreateView.as_view(), name='fee_create'),
         path('<int:student_id>/attendance/', AttendanceDashboardView.as_view(), name='student_attendance_summary'),
         path('submit/<int:pk>/', SubmitAssignmentView.as_view(), name='student_submit_assignment'),
     ])),
     
     # ==============================
-    # STUDENT PORTAL URLS (Student access only)
+    # STUDENT PORTAL (Student Access)
     # ==============================
-    path('student/', include([
-        path('dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
-        path('profile/', StudentProfileView.as_view(), name='student_profile'),
-        path('grades/', StudentGradeListView.as_view(), name='student_grades'),
-        path('attendance/', StudentAttendanceView.as_view(), name='student_attendance'),
-        path('fees/', StudentFeeListView.as_view(), name='student_fees'),
+    path('student-portal/', include([
+        path('dashboard/', StudentDashboardView.as_view(), name='student_portal_dashboard'),
+        path('profile/', StudentProfileView.as_view(), name='student_portal_profile'),
+        path('grades/', StudentGradeListView.as_view(), name='student_portal_grades'),
+        path('attendance/', StudentAttendanceView.as_view(), name='student_portal_attendance'),
+        path('fees/', StudentFeeListView.as_view(), name='student_portal_fees'),
         
-        # Student Assignment URLs
+        # Student Assignments
         path('assignments/', include([
-            path('', StudentAssignmentLibraryView.as_view(), name='student_assignment_library'),
-            path('documents/', StudentAssignmentDocumentView.as_view(), name='student_assignment_documents'),
-            path('graded/', StudentGradedAssignmentsView.as_view(), name='student_graded_assignments'),
-            path('submitted/', StudentSubmittedAssignmentsView.as_view(), name='student_submitted_assignments'),
-            path('<int:pk>/', StudentAssignmentDetailView.as_view(), name='student_assignment_detail'),
-            path('<int:pk>/download/', DownloadAssignmentDocumentView.as_view(), name='download_assignment_document'),
+            path('', StudentAssignmentLibraryView.as_view(), name='student_portal_assignments'),
+            path('documents/', StudentAssignmentDocumentView.as_view(), name='student_portal_documents'),
+            path('graded/', StudentGradedAssignmentsView.as_view(), name='student_portal_graded'),
+            path('submitted/', StudentSubmittedAssignmentsView.as_view(), name='student_portal_submitted'),
+            path('<int:pk>/', StudentAssignmentDetailView.as_view(), name='student_portal_assignment_detail'),
+            path('<int:pk>/download/', DownloadAssignmentDocumentView.as_view(), name='student_portal_download'),
         ])),
     ])),
     
     # ==============================
-    # PARENT AUTHENTICATION URLS
+    # PARENT AUTHENTICATION
     # ==============================
     path('parents/auth/', include([
         path('register/', ParentRegistrationView.as_view(), name='parent_register'),
@@ -312,54 +293,76 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # PARENT PORTAL URLS (Protected - Parent Access Only)
+    # PARENT PORTAL (Parent Access Only) - CLEAN STRUCTURE
     # ==============================
-    path('parent/', include([
-        path('dashboard/', parent_dashboard, name='parent_dashboard'),
-        path('children/', ParentChildrenListView.as_view(), name='parent_children_list'),
-        path('child/<int:pk>/', ParentChildDetailView.as_view(), name='parent_child_detail'),
-        path('fees/', ParentFeeListView.as_view(), name='parent_fee_list'),
-        path('fee/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_fee_detail'),
-        path('fee/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_fee_payment'),
-        path('attendance/', ParentAttendanceListView.as_view(), name='parent_attendance_list'),
-        path('report-cards/', ParentReportCardListView.as_view(), name='parent_report_card_list'),
-        path('report-cards/<int:student_id>/', ParentReportCardListView.as_view(), name='parent_report_card_list_view'),
-        path('report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_report_card_detail'),
-        path('announcements/', ParentAnnouncementListView.as_view(), name='parent_announcements'),
-        path('messages/', ParentMessageListView.as_view(), name='parent_messages'),
-        path('messages/create/', ParentMessageCreateView.as_view(), name='parent_message_create'),
-        path('messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_message_detail'),
-        path('calendar/', ParentCalendarView.as_view(), name='parent_calendar'),
+    path('parent-portal/', include([
+        path('dashboard/', ParentChildrenListView.as_view(), name='parent_portal_dashboard'),  # List children as dashboard
+        path('children/', ParentChildrenListView.as_view(), name='parent_portal_children'),
+        path('children/<int:pk>/', ParentChildDetailView.as_view(), name='parent_portal_child_detail'),
+        
+        # Financial
+        path('fees/', ParentFeeListView.as_view(), name='parent_portal_fees'),
+        path('fees/<int:pk>/', ParentFeeDetailView.as_view(), name='parent_portal_fee_detail'),
+        path('fees/<int:pk>/pay/', ParentFeePaymentView.as_view(), name='parent_portal_fee_payment'),
+        path('fees/statement/<int:pk>/', ParentFeeStatementView.as_view(), name='parent_portal_fee_statement'),
+        
+        # Academic
+        path('attendance/', ParentAttendanceListView.as_view(), name='parent_portal_attendance'),
+        path('report-cards/', ParentReportCardListView.as_view(), name='parent_portal_report_cards'),
+        path('report-cards/<int:student_id>/', ParentReportCardDetailView.as_view(), name='parent_portal_report_card'),
+        path('report-cards/<int:student_id>/<int:report_card_id>/', ParentReportCardDetailView.as_view(), name='parent_portal_report_card_detail'),
+        
+        # Communication
+        path('announcements/', ParentAnnouncementListView.as_view(), name='parent_portal_announcements'),
+        path('messages/', ParentMessageListView.as_view(), name='parent_portal_messages'),
+        path('messages/create/', ParentMessageCreateView.as_view(), name='parent_portal_message_create'),
+        path('messages/<int:pk>/', ParentMessageDetailView.as_view(), name='parent_portal_message_detail'),
+        
+        # Calendar
+        path('calendar/', ParentCalendarView.as_view(), name='parent_portal_calendar'),
     ])),
     
     # ==============================
-    # PARENT MANAGEMENT URLS (Admin/Teacher)
+    # PARENT MANAGEMENT (Admin/Teacher Only) - CLEAN STRUCTURE
     # ==============================
-    path('parent-management/', include([
+    path('management/parents/', include([
+        # Dashboard & Overview
         path('', parent_management_dashboard, name='parent_management_dashboard'),
+        path('dashboard/', ParentEngagementDashboardView.as_view(), name='parent_engagement_dashboard'),
+        
+        # Account Management
         path('accounts/', parent_account_management, name='parent_account_management'),
-        path('directory/', parent_directory, name='parent_directory'),
+        path('registration/', parent_registration_management, name='parent_registration_management'),
+        
+        # Directory & Search
+        path('directory/', ParentDirectoryView.as_view(), name='parent_directory'),
+        
+        # Create Parents
         path('create/', admin_parent_create, name='admin_parent_create'),
+        path('create/<int:student_id>/', admin_parent_create, name='admin_parent_create_for_student'),
         path('bulk-create/', bulk_parent_creation, name='bulk_parent_creation'),
         path('bulk-invite/', bulk_parent_invite, name='bulk_parent_invite'),
+        
+        # Individual Parent Actions (Admin)
+        path('<int:pk>/edit/', ParentUpdateView.as_view(), name='parent_update'),
+        path('<int:pk>/delete/', ParentDeleteView.as_view(), name='parent_delete'),
         path('<int:parent_id>/activate/', activate_parent_account, name='activate_parent_account'),
         path('<int:parent_id>/suspend/', suspend_parent_account, name='suspend_parent_account'),
         path('<int:parent_id>/message/', send_parent_message, name='send_parent_message'),
-        path('bulk-message/', bulk_parent_message, name='bulk_parent_message'),
-        path('communication-log/', parent_communication_log, name='parent_communication_log'),
-        path('engagement-dashboard/', parent_engagement_dashboard, name='parent_engagement_dashboard'),
+        
+        # Communication
+        path('bulk-message/', BulkParentMessageView.as_view(), name='bulk_parent_message'),
+        path('communication-log/', ParentCommunicationLogView.as_view(), name='parent_communication_log'),
+        
+        path('bulk-message-results/', BulkMessageResultsView.as_view(), name='parent_bulk_message_results'),
+        path('message-analytics/', ParentMessageAnalyticsView.as_view(), name='parent_message_analytics'),
+        
+        # Export & Reports
         path('export/', export_parent_data, name='export_parent_data'),
-        path('registration/', parent_registration_management, name='parent_registration_management'),
-    ])),
-    
-    # Individual Parent Management (Admin)
-    path('parents/', include([
-        path('<int:pk>/edit/', ParentUpdateView.as_view(), name='parent_update'),
-        path('<int:pk>/delete/', ParentDeleteView.as_view(), name='parent_delete'),
     ])),
     
     # ==============================
-    # FEE MANAGEMENT URLS
+    # FEE MANAGEMENT
     # ==============================
     path('fees/', include([
         path('', FeeListView.as_view(), name='fee_list'),
@@ -385,7 +388,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # BILL MANAGEMENT URLS
+    # BILL MANAGEMENT
     # ==============================
     path('bills/', include([
         path('', BillListView.as_view(), name='bill_list'),
@@ -402,7 +405,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # FINANCE MANAGEMENT URLS
+    # FINANCE MANAGEMENT
     # ==============================
     path('finance/', include([
         path('dashboard/', FinanceDashboardView.as_view(), name='finance_dashboard'),
@@ -410,7 +413,14 @@ urlpatterns = [
         path('financial-health/', FinancialHealthView.as_view(), name='financial_health'),
         path('payment-summary/', PaymentSummaryView.as_view(), name='payment_summary'),
         path('payment-summary/refresh/', RefreshPaymentDataView.as_view(), name='refresh_payment_data'),
-        
+    ])),
+    
+    # Budget Management
+    path('finance/budget/', include([
+        path('', BudgetManagementView.as_view(), name='budget_management'),
+        path('create/', BudgetCreateView.as_view(), name='budget_create'),
+        path('<int:pk>/update/', BudgetUpdateView.as_view(), name='budget_update'),
+        path('<int:pk>/delete/', BudgetDeleteView.as_view(), name='budget_delete'),
     ])),
     
     # Fee Reports & Analytics
@@ -420,16 +430,8 @@ urlpatterns = [
         path('fee-analytics/', FeeAnalyticsView.as_view(), name='fee_analytics'),
     ])),
     
-    # Add to urlpatterns:
-    path('finance/budget/', include([
-        path('', BudgetManagementView.as_view(), name='budget_management'),
-        path('create/', BudgetCreateView.as_view(), name='budget_create'),
-        path('<int:pk>/update/', BudgetUpdateView.as_view(), name='budget_update'),
-        path('<int:pk>/delete/', BudgetDeleteView.as_view(), name='budget_delete'),
-    ])),
-    
     # ==============================
-    # SUBJECT MANAGEMENT URLS
+    # SUBJECT MANAGEMENT
     # ==============================
     path('subjects/', include([
         path('', SubjectListView.as_view(), name='subject_list'),
@@ -440,7 +442,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # TEACHER MANAGEMENT URLS
+    # TEACHER MANAGEMENT
     # ==============================
     path('teachers/', include([
         path('', TeacherListView.as_view(), name='teacher_list'),
@@ -452,7 +454,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # CLASS ASSIGNMENT URLS - UPDATED
+    # CLASS ASSIGNMENTS
     # ==============================
     path('class-assignments/', include([
         path('', ClassAssignmentListView.as_view(), name='class_assignment_list'),
@@ -471,13 +473,11 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # ASSIGNMENT MANAGEMENT URLS - FIXED ORDER
+    # ASSIGNMENT MANAGEMENT
     # ==============================
     path('assignments/', include([
         path('', AssignmentListView.as_view(), name='assignment_list'),
-        # Selection page should come BEFORE direct create
         path('create/selection/', AssignmentCreateSelectionView.as_view(), name='assignment_create_selection'),
-        # This should only be accessed with parameters
         path('create/', AssignmentCreateView.as_view(), name='assignment_create'),
         path('quick-assign/', QuickClassAssignmentView.as_view(), name='quick_class_assignment'),
         path('<int:pk>/', AssignmentDetailView.as_view(), name='assignment_detail'),
@@ -493,9 +493,8 @@ urlpatterns = [
         path('<int:pk>/bulk-grade/', BulkGradeAssignmentView.as_view(), name='bulk_grade_assignment'),
     ])),
 
-
     # ==============================
-    # GRADE MANAGEMENT URLS - COMPLETE & CORRECTED
+    # GRADE MANAGEMENT
     # ==============================
     path('grades/', include([
         # Main grade management paths
@@ -523,9 +522,8 @@ urlpatterns = [
         path('check-existing/', check_existing_grade, name='check_existing_grade'),
         path('students-by-class/', get_students_by_class, name='get_students_by_class'),
         path('subjects-by-class/', get_subjects_by_class, name='get_subjects_by_class'),
-        # ==============================
-        # GRADE API ENDPOINTS - CORRECTED
-        # ==============================
+        
+        # API endpoints
         path('api/', include([
             path('calculate-grade/', CalculateGradeAPI.as_view(), name='calculate_grade_api'),
             path('students-by-class/', get_students_by_class, name='api_students_by_class'),
@@ -533,13 +531,10 @@ urlpatterns = [
             path('validate/', GradeValidationAPI.as_view(), name='grade_validate'),
             path('statistics/', GradeStatisticsAPI.as_view(), name='grade_statistics'),
             path('student-subject-grades/<int:student_id>/', student_subject_grades, name='student_subject_grades'),
-        
-            # MAIN STUDENT GRADE SUMMARY API (for best_students.html modal)
             path('student-grade-summary/<int:student_id>/', StudentGradeSummaryAPI.as_view(), name='student_grade_summary_api'),
-
-            # Bulk upload progress API
             path('bulk-upload/progress/', BulkUploadProgressAPI.as_view(), name='bulk_upload_progress'),
         ])),
+        
         # Advanced grade management
         path('queue/', GradingQueueView.as_view(), name='grading_queue'),
         path('configuration/', GradeConfigurationView.as_view(), name='grade_configuration'),
@@ -550,7 +545,7 @@ urlpatterns = [
     ])),
 
     # ==============================
-    # PROMOTION MANAGEMENT URLS (SEPARATE SECTION)
+    # PROMOTION MANAGEMENT
     # ==============================
     path('promotion/', include([
         path('', PromotionListView.as_view(), name='promotion_list'),
@@ -559,37 +554,28 @@ urlpatterns = [
         path('configuration/', PromotionConfigurationView.as_view(), name='promotion_config'),
     ])),
 
-
     # ==============================
-    # REPORT CARD URLS - COMPLETE (FIXED)
+    # REPORT CARDS
     # ==============================
     path('report-cards/', include([
-        # Dashboard
         path('', ReportCardDashboardView.as_view(), name='report_card_dashboard'),
-        # Create new report card
         path('create/', CreateReportCardView.as_view(), name='create_report_card'),
-        # View report cards (with or without specific report card ID)
         path('<int:student_id>/', ReportCardView.as_view(), name='report_card'),
         path('<int:student_id>/<int:report_card_id>/', ReportCardView.as_view(), name='report_card_detail'),
-        # PDF exports
         path('pdf/<int:student_id>/', ReportCardPDFView.as_view(), name='report_card_pdf'),
         path('pdf/<int:student_id>/<int:report_card_id>/', ReportCardPDFView.as_view(), name='report_card_pdf_detail'),
-        # Save draft report card
         path('save/<int:student_id>/', SaveReportCardView.as_view(), name='save_report_card'),
-        # Quick view functionality
         path('quick-view/', QuickViewReportCardView.as_view(), name='quick_view_report_card'),
         path('quick-view/pdf/', QuickViewReportCardPDFView.as_view(), name='quick_view_report_card_pdf'),
-        # Grade editing within report card
         path('<int:report_card_id>/edit-grades/', GradeEntryView.as_view(), name='grade_edit_report_card'),
-        # Add new grade via AJAX - FIXED: Using AddGradeView directly
         path('grades/add/<int:student_id>/', AddGradeView.as_view(), name='add_grade'),
         path('<int:report_card_id>/publish/', publish_report_card, name='publish_report_card'),
-        path('report-cards/force-recalculate/', force_recalculate_reportcards, name='force_recalculate_reportcards'),
-        path('report-cards/statistics-debug/', report_card_statistics_debug, name='report_card_statistics_debug'),
+        path('force-recalculate/', force_recalculate_reportcards, name='force_recalculate_reportcards'),
+        path('statistics-debug/', report_card_statistics_debug, name='report_card_statistics_debug'),
     ])),
     
     # ==============================
-    # ANALYTICS & PROGRESS URLS
+    # ANALYTICS & PROGRESS
     # ==============================
     path('analytics/', include([
         path('', ComprehensiveAnalyticsDashboardView.as_view(), name='analytics_dashboard'),
@@ -598,7 +584,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # SECURITY MANAGEMENT URLS (From security_views.py)
+    # SECURITY MANAGEMENT
     # ==============================
     path('security/', include([
         # Security Dashboard
@@ -634,7 +620,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # AUDIT LOG URLS (Backward Compatibility)
+    # AUDIT LOG
     # ==============================
     path('audit/', include([
         path('logs/', AuditLogListView.as_view(), name='audit_log_list'),
@@ -644,12 +630,12 @@ urlpatterns = [
         path('logs/statistics/', audit_statistics_api, name='audit_statistics_api'),
         path('user-activity/<int:user_id>/', user_activity_report, name='user_activity_report'),
         path('system-health/', system_health_check, name='system_health_check'),
-        # Enhanced Security (Backward Compatibility) - Using aliases
+        # Enhanced Security (Backward Compatibility)
         path('security-dashboard/', audit_security_dashboard, name='audit_security_dashboard'),
         path('security-events/', SecurityEventListView.as_view(), name='audit_security_events'),
         path('security-events/<int:pk>/', SecurityEventDetailView.as_view(), name='audit_security_event_detail'),
         path('security-events/<int:event_id>/resolve/', resolve_security_event, name='resolve_security_event'),
-        # Alert Rules (Backward Compatibility)
+        # Alert Rules
         path('alert-rules/', AuditAlertRuleListView.as_view(), name='audit_alert_rule_list'),
         path('alert-rules/create/', AuditAlertRuleCreateView.as_view(), name='audit_alert_rule_create'),
         path('alert-rules/<int:pk>/update/', AuditAlertRuleUpdateView.as_view(), name='audit_alert_rule_update'),
@@ -680,7 +666,7 @@ urlpatterns = [
     path('clear-bypass/', clear_maintenance_bypass, name='clear_bypass'),
     
     # ==============================
-    # NOTIFICATION URLS
+    # NOTIFICATIONS
     # ==============================
     path('notifications/', include([
         path('', NotificationListView.as_view(), name='notification_list'),
@@ -691,23 +677,21 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # ATTENDANCE URLS - UPDATED WITH ATTENDANCE REPORT
+    # ATTENDANCE
     # ==============================
     path('attendance/', include([
         path('', AttendanceDashboardView.as_view(), name='attendance_dashboard'),
         path('record/', AttendanceRecordView.as_view(), name='attendance_record'),
         path('load-periods/', load_periods, name='load_periods'),
         path('student-attendance/', StudentAttendanceListView.as_view(), name='student_attendance_list'),
-        # ADDED: Attendance Report
         path('report/', TemplateView.as_view(template_name='core/attendance/report.html'), name='attendance_report'),
     ])),
     
     # ==============================
-    # TIMETABLE URLS - UPDATED STRUCTURE WITH MISSING PATTERNS
+    # TIMETABLE
     # ==============================
-    # Custom Admin Timetable URLs (these will be under /admin/timetable/ in main urls.py)
     path('timetable/', include([
-        # CRITICAL: AJAX endpoints MUST come BEFORE dynamic patterns
+        # AJAX endpoints
         path('ajax/get-subjects-for-class/<str:class_level>/', get_subjects_for_class, name='get_subjects_for_class'),
         path('ajax/get-available-teachers/', get_available_teachers, name='get_available_teachers'),
         path('ajax/entries/', get_timetable_entries, name='admin_timetable_ajax_entries'),
@@ -746,7 +730,7 @@ urlpatterns = [
         path('print/', print_weekly_timetable, name='print_weekly_timetable'),
     ])),
     
-    # Admin Time Slots (under /admin/timeslots/)
+    # Time Slots
     path('timeslots/', include([
         path('', TimeSlotListView.as_view(), name='admin_timeslot_list'),
         path('create/', TimeSlotCreateView.as_view(), name='admin_timeslot_create'),
@@ -755,14 +739,13 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # TEACHER TIMETABLE URLS - UPDATED WITH MISSING PATTERNS
+    # TEACHER TIMETABLE
     # ==============================
     path('teacher/timetable/', include([
         path('', TeacherTimetableListView.as_view(), name='teacher_timetable_list'),
         path('<int:pk>/', TeacherTimetableDetailView.as_view(), name='teacher_timetable_detail'),
         path('my-schedule/', TeacherTimetableView.as_view(), name='teacher_my_schedule'),
         path('ajax/entries/', get_timetable_entries, name='teacher_timetable_ajax_entries'),
-        # Add print and resource URLs for teacher
         path('<int:pk>/print/', print_timetable, name='teacher_print_timetable'),
         path('class/<int:timetable_id>/resources/', get_class_resources, name='teacher_get_class_resources'),
         path('add-resource/', add_class_resource, name='teacher_add_class_resource'),
@@ -770,38 +753,30 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # STUDENT TIMETABLE URLS - UPDATED WITH MISSING PATTERNS
+    # STUDENT TIMETABLE
     # ==============================
     path('student/timetable/', include([
         path('', StudentTimetableView.as_view(), name='student_timetable'),
-        # Add this line to the student timetable URLs section (around line 491):
         path('print/', print_weekly_timetable, name='print_weekly_timetable'),
         path('<int:pk>/print/', print_timetable, name='student_print_timetable'),
     ])),
     
     # ==============================
-    # COMMON TIMETABLE URLS (For backward compatibility - non-admin)
+    # COMMON TIMETABLE VIEWS
     # ==============================
-    # These will be accessible at root level (e.g., /timetable/, not /admin/timetable/)
     path('timetable-view/', include([
-        path('', TimetableListView.as_view(), name='timetable_list'),  # Shows based on user role
+        path('', TimetableListView.as_view(), name='timetable_list'),
         path('student/', StudentTimetableView.as_view(), name='student_timetable_view'),
         path('teacher/', TeacherTimetableView.as_view(), name='teacher_timetable_view'),
         path('calendar/', TimetableCalendarView.as_view(), name='timetable_calendar_view'),
         path('ajax/entries/', get_timetable_entries, name='timetable_ajax_entries'),
         path('generate-weekly/', generate_weekly_timetable, name='generate_weekly_timetable'),
         path('api/entries/', get_timetable_entries, name='timetable_ajax_entries'),
-        
-        # Print functionality
         path('print/', print_weekly_timetable, name='timetable_print'),
         path('<int:pk>/print/', print_timetable, name='timetable_print_single'),
-        
-        # Class details
         path('class-details/<int:period_id>/', get_class_details, name='get_class_details'),
         path('subject-details/<int:subject_id>/', get_subject_details, name='get_subject_details'),
         path('assignment-details/<int:assignment_id>/', get_assignment_details, name='get_assignment_details'),
-        
-        # Class resources and attendance
         path('class/<int:timetable_id>/resources/', get_class_resources, name='timetable_get_class_resources'),
         path('add-resource/', add_class_resource, name='timetable_add_class_resource'),
         path('add-note/', add_class_note, name='timetable_add_class_note'),
@@ -810,7 +785,7 @@ urlpatterns = [
         path('get-attendance-form/', get_attendance_form, name='timetable_get_attendance_form'),
     ])),
     
-    # Common timeslot views (non-admin)
+    # Common timeslot views
     path('timeslots-view/', include([
         path('', TimeSlotListView.as_view(), name='timeslot_list'),
         path('create/', TimeSlotCreateView.as_view(), name='timeslot_create'),
@@ -819,7 +794,7 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # ANNOUNCEMENT URLS
+    # ANNOUNCEMENTS
     # ==============================
     path('announcements/', include([
         path('', AnnouncementListView.as_view(), name='announcement_list'),
@@ -836,28 +811,22 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # API ENDPOINTS - FIXED
+    # API ENDPOINTS
     # ==============================
     path('api/', include([
         path('network/health/', NetworkHealthView.as_view(), name='network_health'),
         path('fee-categories/<int:pk>/', fee_category_detail, name='fee_category_api_detail'),
         
-        # ==============================
-        # DIRECT STUDENT API ENDPOINTS (FIXED)
-        # ==============================
+        # Student API
         path('students/', StudentListAPIView.as_view(), name='api_students'),
         path('students/active/', ActiveStudentsAPIView.as_view(), name='api_students_active'),
         path('academic-terms/', AcademicTermAPIView.as_view(), name='api_academic_terms'),
         
-        # ==============================
-        # STUDENT ASSIGNMENT API ENDPOINTS
-        # ==============================
+        # Student Assignment API
         path('student/assignments/', StudentAssignmentLibraryView.as_view(), name='api_student_assignments'),
         path('student/assignments/active/', StudentAssignmentLibraryView.as_view(), name='api_student_assignments_active'),
         
-        # ==============================
-        # PARENT API ENDPOINTS
-        # ==============================
+        # Parent API
         path('parents/', include([
             path('students/', StudentListAPIView.as_view(), name='api_parent_students'),
             path('students/active/', ActiveStudentsAPIView.as_view(), name='api_parent_active_students'),
@@ -870,13 +839,11 @@ urlpatterns = [
             path('stats/', ParentStatsAPIView.as_view(), name='api_parent_stats'),
         ])),
         
-        # Security API (Backward Compatibility)
+        # Security API
         path('security/notifications/', security_notifications_api, name='security_notifications_api'),
         path('system-health/', system_health_api, name='system_health_api'),
         
-        # ==============================
-        # CLASS ASSIGNMENT API ENDPOINTS
-        # ==============================
+        # Class Assignment API
         path('class-assignments/', include([
             path('', assignment_statistics, name='api_class_assignments'),
             path('statistics/', assignment_statistics, name='api_class_assignments_statistics'),
@@ -884,36 +851,27 @@ urlpatterns = [
             path('<int:assignment_id>/toggle/', toggle_assignment_status, name='api_toggle_assignment_status'),
         ])),
         
-        # ==============================
-        # TEACHER QUALIFICATIONS API
-        # ==============================
+        # Teacher Qualifications API
         path('teachers/<int:teacher_id>/qualifications/', get_teacher_qualifications, name='api_teacher_qualifications'),
         
-        # ==============================
-        # BULK OPERATIONS API
-        # ==============================
+        # Bulk Operations API
         path('bulk/delete-assignments/', bulk_delete_assignments, name='api_bulk_delete_assignments'),
         
-        # ==============================
-        # TIMETABLE API ENDPOINTS
-        # ==============================
-        path('timetable/', include([
-            path('entries/', get_timetable_entries, name='api_timetable_entries'),
-        ])),
+        # Timetable API
+        path('timetable/entries/', get_timetable_entries, name='api_timetable_entries'),
     ])),
     
     # Payment URLs
     path('payments/<int:pk>/delete/', FeePaymentDeleteView.as_view(), name='fee_payment_delete'),
     
     # ==============================
-    # FALLBACK URLS
+    # FALLBACK & UTILITY URLS
     # ==============================
     path('class-assignment/<int:assignment_id>/students/', get_assignment_students, name='fallback_assignment_students'),
     path('teacher/<int:teacher_id>/qualifications/', get_teacher_qualifications, name='fallback_teacher_qualifications'),
-    
     path('api/debug/database-stats/', debug_database_stats, name='debug_database_stats'),
     
-    
+    # Group Management
     path('admin/timetable/groups/', views_group_management.manage_timetable_groups, name='manage_timetable_groups'),
     path('admin/timetable/users/', views_group_management.user_group_management, name='user_group_management'),
     path('admin/timetable/users/<int:user_id>/group/<int:group_id>/assign/', 
@@ -921,9 +879,7 @@ urlpatterns = [
     path('admin/timetable/users/<int:user_id>/group/<int:group_id>/remove/', 
          views_group_management.remove_user_from_group, name='remove_user_from_group'),
     
-    # ==============================
-    # MISSING URLS FROM ADMIN DASHBOARD - ADDED
-    # ==============================
+    # System URLs
     path('admin/group-permissions/', 
          RedirectView.as_view(pattern_name='admin:auth_group_changelist'), 
          name='group_permissions'),
@@ -933,4 +889,23 @@ urlpatterns = [
          name='system_status'),
     
     path('clear-import-results/', ClearImportResultsView.as_view(), name='clear_import_results'),
+]
+
+# ==============================
+# LEGACY REDIRECTS (For backward compatibility)
+# ==============================
+# These redirects ensure old URLs still work
+urlpatterns += [
+    # Redirect old parent URLs to new structure
+    path('parent/', RedirectView.as_view(pattern_name='parent_portal_dashboard', permanent=True)),
+    path('parent/dashboard/', RedirectView.as_view(pattern_name='parent_portal_dashboard', permanent=True)),
+    path('parent/children/', RedirectView.as_view(pattern_name='parent_portal_children', permanent=True)),
+    
+    # Redirect old management URLs
+    path('parent-management/', RedirectView.as_view(pattern_name='parent_management_dashboard', permanent=True)),
+    path('parent-management/dashboard/', RedirectView.as_view(pattern_name='parent_management_dashboard', permanent=True)),
+    
+    # Redirect old student portal URLs
+    path('student/', RedirectView.as_view(pattern_name='student_portal_dashboard', permanent=True)),
+    path('student/dashboard/', RedirectView.as_view(pattern_name='student_portal_dashboard', permanent=True)),
 ]

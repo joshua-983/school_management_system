@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from calendar import monthcalendar
 from urllib.parse import urlencode
 import logging
-# Django core imports
+from core.views.base_views import ParentListView
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -25,8 +25,9 @@ from django.views.generic import (
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
-# Local imports
-from .base_views import is_admin, is_teacher, is_parent, is_student
+from core.permissions import is_admin, is_teacher, is_parent, is_student
+from core.utils.logger import log_parent_action, log_parent_error, log_view_exception, log_database_queries
+
 from ..models import (
     # Core models
     ParentGuardian, Student, Teacher, 
@@ -208,42 +209,37 @@ class ParentChildDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView)
         return context
 
 
-class ParentFeeListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+class ParentFeeListView(ParentListView):
+    """Display list of fees for parent's children"""
     model = Fee
-    template_name = 'core/parents/fee_list.html'
     context_object_name = 'fees'
-    paginate_by = 10
-    
-    def test_func(self):
-        return is_parent(self.request.user)
+    template_name = 'core/parents/fee_list.html'  # Keep existing template
     
     def get_queryset(self):
-        children = self.request.user.parentguardian.students.all()
-        queryset = Fee.objects.filter(student__in=children).select_related('student', 'category')
-        
-        # Apply filters
-        payment_status = self.request.GET.get('payment_status')
-        if payment_status:
-            queryset = queryset.filter(payment_status=payment_status)
-        
-        # Order by due date and payment status
-        return queryset.order_by('due_date', 'payment_status')
+        """Get fees for parent's children with optimization"""
+        queryset = super().get_queryset()
+        return queryset.select_related('student', 'category').order_by('due_date', 'payment_status')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        children = self.request.user.parentguardian.students.all()
         
-        # Summary statistics
-        fees = Fee.objects.filter(student__in=children)
+        # Use aggregated query for stats
+        fees = self.get_queryset()
         context['total_payable'] = fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0
         context['total_paid'] = fees.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
         context['total_balance'] = context['total_payable'] - context['total_paid']
         
-        # Payment status counts
-        context['paid_count'] = fees.filter(payment_status='PAID').count()
-        context['partial_count'] = fees.filter(payment_status='PARTIAL').count()
-        context['unpaid_count'] = fees.filter(payment_status='UNPAID').count()
-        context['overdue_count'] = fees.filter(payment_status='OVERDUE').count()
+        # Get status counts in single query
+        status_counts = fees.values('payment_status').annotate(
+            count=Count('id')
+        )
+        
+        # Convert to dictionary for template
+        status_dict = {item['payment_status']: item['count'] for item in status_counts}
+        context['paid_count'] = status_dict.get('PAID', 0)
+        context['partial_count'] = status_dict.get('PARTIAL', 0)
+        context['unpaid_count'] = status_dict.get('UNPAID', 0)
+        context['overdue_count'] = status_dict.get('OVERDUE', 0)
         
         return context
 
@@ -507,121 +503,55 @@ class ParentReportCardDetailView(LoginRequiredMixin, UserPassesTestMixin, View):
         return response
 
 
+# Update the parent_dashboard function in my_views/parents_views.py
 @login_required
+@log_view_exception("parent_dashboard")
+@log_database_queries
 def parent_dashboard(request):
-    """
-    Optimized Parent Dashboard View with reduced database queries
-    """
+    """Optimized Parent Dashboard"""
     if not is_parent(request.user):
-        raise PermissionDenied("Access denied. Parent privileges required.")
+        raise PermissionDenied("Access denied: Parent privileges required")
     
     try:
         parent = request.user.parentguardian
         
-        # Update login stats if method exists
-        if hasattr(parent, 'update_login_stats'):
-            parent.update_login_stats()
+        # Log dashboard access
+        log_parent_action("Dashboard accessed", user=request.user, status='success')
         
-        # Get all children for this parent with optimized queries
-        children = parent.students.all().select_related('user')
+        # Get optimized children data
+        from core.utils.query_optimizer import ParentQueryOptimizer
         
-        current_date = timezone.now().date()
-        current_month = current_date.month
-        current_year = current_date.year
-        next_week = current_date + timedelta(days=7)
+        children = parent.students.all()
+        optimized_children = ParentQueryOptimizer.optimize_child_queries(children)
         
-        # Process children data efficiently
+        # Prepare children data using optimized queries
         children_data = []
-        total_recent_grades = 0
-        total_unpaid_fees = 0
-        total_attendance_records = 0
-        
-        for child in children:
+        for child in optimized_children:
             try:
-                # Get recent grades (last 3)
-                recent_grades = Grade.objects.filter(student=child).select_related('subject').order_by('-last_updated')[:3]
+                child_summary = ParentQueryOptimizer.get_child_summary_stats(child)
                 
-                # Get monthly attendance
-                monthly_attendance = StudentAttendance.objects.filter(
-                    student=child,
-                    date__month=current_month,
-                    date__year=current_year
-                )
-                
-                # Get unpaid fees
-                unpaid_fees = Fee.objects.filter(student=child, payment_status__in=['unpaid', 'partial'])
-                
-                # Calculate attendance from data
-                present_count = monthly_attendance.filter(status='present').count()
-                total_attendance = monthly_attendance.count()
-                attendance_percentage = round((present_count / total_attendance * 100), 1) if total_attendance > 0 else 0
-                
-                # Calculate fee totals
-                total_due = sum(fee.balance for fee in unpaid_fees)
-                unpaid_count = unpaid_fees.count()
-                
-                # Calculate child's average grade
-                child_grades = Grade.objects.filter(student=child)
-                average_grade = child_grades.aggregate(avg=Avg('total_score'))['avg']
-                average_grade = round(average_grade, 1) if average_grade else 0
-                
-                # Determine performance level
-                performance_level = "No Data"
-                if average_grade > 0:
-                    if average_grade >= 80:
-                        performance_level = "Excellent"
-                    elif average_grade >= 70:
-                        performance_level = "Very Good"
-                    elif average_grade >= 60:
-                        performance_level = "Good"
-                    elif average_grade >= 50:
-                        performance_level = "Satisfactory"
-                    elif average_grade >= 40:
-                        performance_level = "Fair"
-                    else:
-                        performance_level = "Needs Improvement"
-                
-                child_data = {
+                children_data.append({
                     'child': child,
-                    'recent_grades': recent_grades,
-                    'attendance': {
-                        'present': present_count,
-                        'absent': monthly_attendance.filter(status='absent').count(),
-                        'late': monthly_attendance.filter(status='late').count(),
-                        'excused': monthly_attendance.filter(status='excused').count(),
-                        'total': total_attendance,
-                        'percentage': attendance_percentage
-                    },
-                    'fee_status': {
-                        'total_due': total_due,
-                        'unpaid_count': unpaid_count,
-                        'total_payable': sum(fee.amount_payable for fee in unpaid_fees),
-                        'total_paid': sum(fee.amount_paid for fee in unpaid_fees),
-                        'balance': total_due
-                    },
-                    'academic_summary': {
-                        'average_grade': average_grade,
-                        'performance_level': performance_level,
-                        'total_subjects': child_grades.count()
-                    }
-                }
-                
-                children_data.append(child_data)
-                
-                # Update counters
-                total_recent_grades += len(recent_grades)
-                if total_due > 0:
-                    total_unpaid_fees += 1
-                total_attendance_records += total_attendance
-                
+                    **child_summary
+                })
             except Exception as e:
-                print(f"Error processing data for child {child.id}: {str(e)}")
+                log_parent_error(
+                    f"Error processing child data: {str(e)}",
+                    user=request.user,
+                    extra={'child_id': child.id}
+                )
                 continue
         
-        # Get child classes for filtering
+        # Get aggregated stats (efficient)
+        aggregated_stats = ParentQueryOptimizer.get_aggregated_stats(parent)
+        
+        # Get other data (announcements, events, messages)
         child_classes = children.values_list('class_level', flat=True).distinct()
         
-        # Get announcements and events
+        # Optimize these queries too
+        from core.models import ParentAnnouncement, ParentMessage, ParentEvent
+        from django.db.models import Prefetch
+        
         recent_announcements = ParentAnnouncement.objects.filter(
             Q(target_type='ALL') | 
             Q(target_type='CLASS', target_class__in=child_classes) |
@@ -635,50 +565,31 @@ def parent_dashboard(request):
         
         upcoming_events = ParentEvent.objects.filter(
             Q(is_whole_school=True) | Q(class_level__in=child_classes),
-            start_date__gte=current_date,
-            start_date__lte=next_week
+            start_date__gte=timezone.now(),
+            start_date__lte=timezone.now() + timedelta(days=30)
         ).select_related('created_by').order_by('start_date')[:5]
-        
-        # Calculate dashboard statistics
-        total_present = sum(child['attendance']['present'] for child in children_data)
-        total_attendance_days = sum(child['attendance']['total'] for child in children_data)
-        
-        dashboard_stats = {
-            'total_children': len(children_data),
-            'total_recent_grades': total_recent_grades,
-            'total_unpaid_fees': total_unpaid_fees,
-            'total_attendance_records': total_attendance_records,
-            'children_with_issues': sum(1 for child in children_data 
-                                      if child['fee_status']['total_due'] > 0 or 
-                                         child['attendance']['percentage'] < 80),
-            'overall_attendance_rate': round((total_present / total_attendance_days * 100), 1) if total_attendance_days > 0 else 0
-        }
         
         context = {
             'parent': parent,
             'children_data': children_data,
-            'dashboard_stats': dashboard_stats,
+            'total_children': len(children_data),
+            'dashboard_stats': aggregated_stats,  # Use aggregated stats
             'recent_announcements': recent_announcements,
             'unread_messages': unread_messages,
-            'upcoming_events': upcoming_events,  # FIXED: Changed from 'upcoming_vents' to 'upcoming_events'
-            'current_date': current_date,
-            'next_week': next_week,
-            'has_children': len(children_data) > 0,
-            'login_count': getattr(parent, 'login_count', 0),
-            'last_login': getattr(parent, 'last_login_date', None),
+            'upcoming_events': upcoming_events,
+            'current_academic_year': get_current_academic_year(),
         }
         
         return render(request, 'core/parents/parent_dashboard.html', context)
         
     except Exception as e:
-        # FIXED: Use logger instead of print for proper logging
-        logger.error(f"Critical error in parent dashboard: {str(e)}")
-        context = {
-            'error': True,
-            'error_message': 'Unable to load dashboard data. Please try again later.'
-        }
-        return render(request, 'core/parents/parent_dashboard.html', context)
-
+        log_parent_error(
+            "Critical error in parent dashboard",
+            user=request.user,
+            exc_info=True
+        )
+        messages.error(request, "Error loading dashboard data. Please try again.")
+        return render(request, 'core/parents/parent_dashboard.html', {})
 
 class ParentAnnouncementListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     """Announcement list view specifically for parents using the main Announcement model"""
@@ -949,25 +860,84 @@ class BulkParentMessageView(LoginRequiredMixin, UserPassesTestMixin, View):
         return is_admin(self.request.user) or is_teacher(self.request.user)
     
     def get(self, request):
+        # Get all parents for selection table (optimized)
+        all_parents = ParentGuardian.objects.select_related('user').prefetch_related(
+            Prefetch('students', queryset=Student.objects.only('id', 'first_name', 'last_name', 'class_level'))
+        ).order_by('user__last_name', 'user__first_name')
+        
         # Get statistics for the template
-        total_parents = ParentGuardian.objects.count()
-        parents_with_email = ParentGuardian.objects.filter(
+        total_parents = all_parents.count()
+        parents_with_email = all_parents.filter(
             Q(email__isnull=False) & ~Q(email='')
         ).count()
-        active_parents = ParentGuardian.objects.filter(
+        parents_with_phone = all_parents.filter(
+            Q(phone_number__isnull=False) & ~Q(phone_number='')
+        ).count()
+        active_parents = all_parents.filter(
             user__last_login__gte=timezone.now() - timedelta(days=30)
         ).count()
         
+        # Get recent bulk messages for the sidebar
+        recent_messages = ParentMessage.objects.filter(
+            sender=request.user,
+            is_bulk=True
+        ).values('bulk_id', 'subject', 'priority', 'timestamp').annotate(
+            count=Count('id'),
+            emails_sent=Count('id', filter=Q(email_sent=True)),
+            sms_sent=Count('id', filter=Q(sms_sent=True))
+        ).order_by('-timestamp')[:5]
+        
+        # Prepare JSON data for JavaScript
+        import json
+        all_parents_data = []
+        for parent in all_parents:
+            communication_channels = parent.get_communication_channels()
+            email_channel = next((ch for ch in communication_channels if ch['type'] == 'email'), None)
+            sms_channel = next((ch for ch in communication_channels if ch['type'] == 'sms'), None)
+            
+            all_parents_data.append({
+                'id': parent.id,
+                'name': parent.get_user_full_name() or 'No Name',
+                'students': [
+                    {
+                        'name': s.get_full_name(), 
+                        'class': s.class_level,
+                        'class_display': dict(CLASS_LEVEL_CHOICES).get(s.class_level, s.class_level)
+                    } 
+                    for s in parent.students.all()
+                ],
+                'email': email_channel['value'] if email_channel else '',
+                'phone': sms_channel['value'] if sms_channel else '',
+                'email_verified': email_channel['verified'] if email_channel else False,
+                'sms_verified': sms_channel['verified'] if sms_channel else False,
+                'status': parent.account_status,
+                'relationship': parent.get_relationship_display(),
+                'last_login': parent.last_login_date.strftime('%Y-%m-%d %H:%M') if parent.last_login_date else 'Never',
+                'login_count': parent.login_count,
+                'can_login': parent.can_login(),
+            })
+        
         context = {
+            'all_parents': all_parents,
+            'all_parents_json': json.dumps(all_parents_data),
             'classes': CLASS_LEVEL_CHOICES,
+            'CLASS_LEVEL_CHOICES_JSON': json.dumps(list(CLASS_LEVEL_CHOICES)),
             'target_types': [
                 ('ALL', 'All Parents'),
                 ('CLASS', 'Specific Class'),
-                ('SELECTED', 'Selected Parents')
+                ('SELECTED', 'Selected Parents'),
+                ('OVERDUE_FEES', 'Parents with Overdue Fees'),
+                ('LOW_ATTENDANCE', 'Parents of Students with Low Attendance'),
+                ('POOR_GRADES', 'Parents of Students with Poor Grades'),
+                ('INACTIVE', 'Inactive Parents (No login in 30 days)'),
+                ('PENDING', 'Parents with Pending Accounts'),
             ],
+            'priority_choices': ParentMessage.PRIORITY_CHOICES,
             'total_parents': total_parents,
             'parents_with_email': parents_with_email,
+            'parents_with_phone': parents_with_phone,
             'active_parents': active_parents,
+            'recent_messages': recent_messages,
         }
         return render(request, self.template_name, context)
     
@@ -975,40 +945,390 @@ class BulkParentMessageView(LoginRequiredMixin, UserPassesTestMixin, View):
         target_type = request.POST.get('target_type')
         target_class = request.POST.get('target_class')
         selected_parents = request.POST.getlist('selected_parents')
-        subject = request.POST.get('subject')
-        message = request.POST.get('message')
+        subject = request.POST.get('subject', '').strip()
+        message = request.POST.get('message', '').strip()
+        priority = request.POST.get('priority', 'normal')
+        send_email = request.POST.get('send_email') == 'on'
+        send_sms = request.POST.get('send_sms') == 'on'
+        include_in_app = request.POST.get('include_in_app', 'on') == 'on'
         
-        if not subject or not message:
-            messages.error(request, 'Subject and message are required')
+        # Validation
+        errors = []
+        if not subject:
+            errors.append('Subject is required')
+        elif len(subject) > 200:
+            errors.append('Subject must be less than 200 characters')
+        
+        if not message:
+            errors.append('Message is required')
+        
+        if not include_in_app and not send_email and not send_sms:
+            errors.append('At least one delivery method must be selected')
+        
+        if errors:
+            for error in errors:
+                messages.error(request, error)
             return self.get(request)
         
         # Get target parents based on selection
-        if target_type == 'ALL':
-            parents = ParentGuardian.objects.all()
-        elif target_type == 'CLASS' and target_class:
-            parents = ParentGuardian.objects.filter(students__class_level=target_class).distinct()
-        elif target_type == 'SELECTED' and selected_parents:
-            parents = ParentGuardian.objects.filter(id__in=selected_parents)
-        else:
-            messages.error(request, 'Please select valid target parents')
+        parents = self._get_target_parents(target_type, target_class, selected_parents, request.user)
+        
+        if not parents:
+            messages.error(request, 'No parents found matching your criteria')
             return self.get(request)
         
-        # Create messages for each parent
-        messages_created = 0
-        for parent in parents:
-            if parent.user:
-                ParentMessage.objects.create(
-                    sender=request.user,
-                    receiver=parent.user,
-                    parent=parent,
-                    teacher=request.user.teacher if hasattr(request.user, 'teacher') else None,
-                    subject=subject,
-                    message=message
-                )
-                messages_created += 1
+        # Generate bulk ID
+        bulk_id = f"bulk_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
         
-        messages.success(request, f'Message sent to {messages_created} parents')
-        return redirect('parent_communication_log')
+        # Track statistics
+        stats = {
+            'total': len(parents),
+            'success': 0,
+            'failed': 0,
+            'email_sent': 0,
+            'sms_sent': 0,
+            'in_app_sent': 0,
+            'failed_parents': []
+        }
+        
+        # Process each parent
+        for parent in parents:
+            try:
+                with transaction.atomic():
+                    # Check if parent has user account
+                    if not parent.user:
+                        stats['failed'] += 1
+                        stats['failed_parents'].append({
+                            'name': parent.get_user_full_name() or f"Parent ID: {parent.id}",
+                            'reason': 'No user account'
+                        })
+                        continue
+                    
+                    # Create message if in-app notification is enabled
+                    if include_in_app:
+                        parent_message = ParentMessage.create_bulk_message(
+                            sender=request.user,
+                            parent=parent,
+                            subject=subject,
+                            message=message,
+                            bulk_id=bulk_id,
+                            priority=priority
+                        )
+                        stats['in_app_sent'] += 1
+                    else:
+                        parent_message = None
+                    
+                    # Send email if requested and parent has email
+                    if send_email and parent.email and parent.has_valid_phone():
+                        try:
+                            self._send_email_notification(parent, subject, message, request.user, parent_message)
+                            stats['email_sent'] += 1
+                        except Exception as e:
+                            logger.error(f"Failed to send email to {parent.email}: {str(e)}")
+                    
+                    # Send SMS if requested and parent has valid phone
+                    if send_sms and parent.phone_number and parent.has_valid_phone():
+                        try:
+                            self._send_sms_notification(parent, subject, message, request.user, parent_message)
+                            stats['sms_sent'] += 1
+                        except Exception as e:
+                            logger.error(f"Failed to send SMS to {parent.phone_number}: {str(e)}")
+                    
+                    stats['success'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Failed to process parent {parent.id}: {str(e)}")
+                stats['failed'] += 1
+                stats['failed_parents'].append({
+                    'name': parent.get_user_full_name() or f"Parent ID: {parent.id}",
+                    'reason': str(e)[:100]
+                })
+        
+        # Show success/failure messages
+        success_msg = self._format_success_message(stats)
+        
+        if stats['success'] > 0:
+            messages.success(request, success_msg)
+        else:
+            messages.error(request, 'Failed to send messages to any parents')
+        
+        # Store detailed stats in session for display
+        request.session['bulk_message_stats'] = {
+            'stats': stats,
+            'subject': subject,
+            'timestamp': timezone.now().isoformat(),
+            'target_type': target_type,
+            'bulk_id': bulk_id
+        }
+        
+        # Log the bulk message for audit
+        self._log_bulk_message(request.user, target_type, stats, subject, bulk_id)
+        
+        return redirect('parent_bulk_message_results')
+    
+    def _get_target_parents(self, target_type, target_class, selected_parents, user):
+        """Get parents based on target criteria"""
+        parents = ParentGuardian.objects.all()
+        
+        if target_type == 'ALL':
+            return parents
+        
+        elif target_type == 'CLASS' and target_class:
+            return parents.filter(students__class_level=target_class).distinct()
+        
+        elif target_type == 'SELECTED' and selected_parents:
+            return parents.filter(id__in=selected_parents)
+        
+        elif target_type == 'OVERDUE_FEES':
+            # Get parents with students who have overdue fees
+            from core.models import Fee
+            overdue_fee_students = Fee.objects.filter(
+                payment_status__in=['UNPAID', 'PARTIAL'],
+                due_date__lt=timezone.now().date()
+            ).values_list('student_id', flat=True)
+            return parents.filter(students__id__in=overdue_fee_students).distinct()
+        
+        elif target_type == 'LOW_ATTENDANCE':
+            # Get parents with students with low attendance (< 70%) in current month
+            from core.models import StudentAttendance
+            current_month = timezone.now().month
+            current_year = timezone.now().year
+            
+            # Get student attendance stats
+            attendance_stats = StudentAttendance.objects.filter(
+                date__month=current_month,
+                date__year=current_year
+            ).values('student').annotate(
+                present=Count('id', filter=Q(status='present')),
+                total=Count('id')
+            )
+            
+            low_attendance_students = []
+            for stat in attendance_stats:
+                if stat['total'] > 0 and (stat['present'] / stat['total']) < 0.7:
+                    low_attendance_students.append(stat['student'])
+            
+            return parents.filter(students__id__in=low_attendance_students).distinct()
+        
+        elif target_type == 'POOR_GRADES':
+            # Get parents with students with average grade < 50%
+            from core.models import Grade
+            from django.db.models import Avg
+            
+            # Get students with poor grades (average < 50)
+            poor_grade_students = Grade.objects.values('student').annotate(
+                avg_score=Avg('total_score')
+            ).filter(avg_score__lt=50).values_list('student_id', flat=True)
+            
+            return parents.filter(students__id__in=poor_grade_students).distinct()
+        
+        elif target_type == 'INACTIVE':
+            # Parents who haven't logged in for 30 days
+            return parents.filter(
+                user__last_login__lt=timezone.now() - timedelta(days=30)
+            )
+        
+        elif target_type == 'PENDING':
+            # Parents with pending accounts
+            return parents.filter(account_status='pending')
+        
+        return ParentGuardian.objects.none()
+    
+    def _send_email_notification(self, parent, subject, message, sender, parent_message=None):
+        """Send email notification to parent"""
+        try:
+            # This is a placeholder - implement your email sending logic
+            # Example using Django send_mail:
+            from django.core.mail import send_mail
+            send_mail(
+                subject=f"[School] {subject}",
+                message=f"{message}\n\n---\nThis message was sent by {sender.get_full_name()}",
+                from_email='school@example.com',
+                recipient_list=[parent.email],
+                fail_silently=False,
+            )
+
+            # If we have a parent_message object, mark email as sent
+            if parent_message:
+                parent_message.mark_email_sent()
+            
+            logger.info(f"Email sent to {parent.email}: {subject}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email to {parent.email}: {str(e)}")
+            return False
+    
+    def _send_sms_notification(self, parent, subject, message, sender, parent_message=None):
+        """Send SMS notification to parent"""
+        try:
+            # This is a placeholder - implement your SMS sending logic
+            # Ensure phone number is valid
+            if not parent.has_valid_phone():
+                logger.warning(f"Invalid phone number for parent {parent.id}: {parent.phone_number}")
+                return False
+            
+            # Truncate message for SMS (160 characters max)
+            sms_message = f"{subject}: {message[:140]}..." if len(message) > 140 else f"{subject}: {message}"
+            
+            # Example using an SMS gateway API:
+            # sms_gateway.send_sms(parent.phone_number, sms_message)
+            
+            # If we have a parent_message object, mark SMS as sent
+            if parent_message:
+                parent_message.mark_sms_sent()
+            
+            logger.info(f"SMS sent to {parent.phone_number}: {sms_message[:50]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send SMS to {parent.phone_number}: {str(e)}")
+            return False
+    
+    def _format_success_message(self, stats):
+        """Format success message with statistics"""
+        parts = []
+        
+        if stats['success'] > 0:
+            parts.append(f"Successfully processed {stats['success']} parents")
+        
+        delivery_methods = []
+        if stats['in_app_sent'] > 0:
+            delivery_methods.append(f"{stats['in_app_sent']} in-app")
+        if stats['email_sent'] > 0:
+            delivery_methods.append(f"{stats['email_sent']} email")
+        if stats['sms_sent'] > 0:
+            delivery_methods.append(f"{stats['sms_sent']} SMS")
+        
+        if delivery_methods:
+            parts.append(f"via {', '.join(delivery_methods)}")
+        
+        if stats['failed'] > 0:
+            parts.append(f"(Failed: {stats['failed']})")
+        
+        return " ".join(parts)
+    
+    def _log_bulk_message(self, user, target_type, stats, subject, bulk_id):
+        """Log bulk message for audit purposes"""
+        from core.models import AuditLog
+        
+        try:
+            AuditLog.objects.create(
+                user=user,
+                action='BULK_MSG',  # Use shorter code (8 chars) to fit max_length=10
+                model_name='ParentMessage',
+                object_id=bulk_id,
+                details={
+                    'target_type': target_type,
+                    'bulk_id': bulk_id,
+                    'subject': subject[:100],
+                    'stats': stats,
+                    'timestamp': timezone.now().isoformat(),
+                },
+                ip_address=self.request.META.get('REMOTE_ADDR', ''),
+                user_agent=self.request.META.get('HTTP_USER_AGENT', '')
+            )
+        except Exception as e:
+            logger.error(f"Failed to log bulk message: {str(e)}")
+
+
+class BulkMessageResultsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Display results of a bulk message send"""
+    template_name = 'core/parents/bulk_message_results.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get stats from session
+        stats_data = self.request.session.pop('bulk_message_stats', None)
+        
+        if not stats_data:
+            messages.error(self.request, 'No bulk message results found')
+            return context
+        
+        context.update({
+            'stats': stats_data['stats'],
+            'subject': stats_data['subject'],
+            'timestamp': stats_data['timestamp'],
+            'target_type': stats_data['target_type'],
+            'bulk_id': stats_data['bulk_id'],
+        })
+        
+        # Get messages from this bulk send
+        if stats_data.get('bulk_id'):
+            context['messages'] = ParentMessage.get_bulk_messages(stats_data['bulk_id']).select_related(
+                'parent', 'receiver'
+            )[:50]  # Limit to 50 for display
+        
+        return context
+
+
+class ParentMessageAnalyticsView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+    """Analytics view for parent messages"""
+    template_name = 'core/parents/message_analytics.html'
+    
+    def test_func(self):
+        return is_admin(self.request.user) or is_teacher(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Time ranges
+        today = timezone.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        # Get messages sent by current user
+        all_messages = ParentMessage.objects.filter(sender=self.request.user)
+        
+        # Message statistics
+        context['total_messages'] = all_messages.count()
+        context['bulk_messages'] = all_messages.filter(is_bulk=True).count()
+        context['individual_messages'] = context['total_messages'] - context['bulk_messages']
+        
+        # Read rate
+        read_messages = all_messages.filter(is_read=True).count()
+        context['read_rate'] = round((read_messages / context['total_messages'] * 100), 1) if context['total_messages'] > 0 else 0
+        
+        # Delivery statistics
+        context['email_sent_count'] = all_messages.filter(email_sent=True).count()
+        context['sms_sent_count'] = all_messages.filter(sms_sent=True).count()
+        
+        # Recent activity
+        context['recent_week_messages'] = all_messages.filter(
+            timestamp__gte=week_ago
+        ).count()
+        
+        context['recent_month_messages'] = all_messages.filter(
+            timestamp__gte=month_ago
+        ).count()
+        
+        # Priority distribution
+        priority_distribution = all_messages.values('priority').annotate(
+            count=Count('id')
+        ).order_by('priority')
+        context['priority_distribution'] = list(priority_distribution)
+        
+        # Bulk message performance
+        bulk_messages = all_messages.filter(is_bulk=True).values('bulk_id').annotate(
+            count=Count('id'),
+            read_count=Count('id', filter=Q(is_read=True)),
+            email_count=Count('id', filter=Q(email_sent=True)),
+            sms_count=Count('id', filter=Q(sms_sent=True))
+        ).order_by('-count')[:10]
+        
+        context['top_bulk_messages'] = bulk_messages
+        
+        # Response rate (messages from parents to this user)
+        responses = ParentMessage.objects.filter(
+            receiver=self.request.user,
+            sender__parentguardian__isnull=False
+        ).count()
+        
+        context['response_rate'] = round((responses / context['total_messages'] * 100), 1) if context['total_messages'] > 0 else 0
+        
+        return context
 
 
 class ParentCommunicationLogView(LoginRequiredMixin, UserPassesTestMixin, ListView):
