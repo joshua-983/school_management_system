@@ -1,0 +1,633 @@
+<!-- templates/core/finance/payment/payment_gateway_interface.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Secure Online Payment - {{ school_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .payment-method-card {
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+
+    .payment-method-card:hover {
+        border-color: var(--primary-color);
+        background-color: #f8f9fa;
+    }
+
+    .payment-method-card.selected {
+        border-color: var(--primary-color);
+        background-color: rgba(52, 152, 219, 0.1);
+    }
+
+    .payment-method-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+        color: var(--primary-color);
+    }
+
+    .payment-details-card {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border-radius: 15px;
+        padding: 2rem;
+    }
+
+    .qr-code-container {
+        background: white;
+        padding: 1rem;
+        border-radius: 10px;
+        display: inline-block;
+    }
+
+    .payment-timer {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #e74c3c;
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+
+    .security-badge {
+        background: #27ae60;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        display: inline-block;
+    }
+
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+    }
+
+    .step {
+        text-align: center;
+        flex: 1;
+        position: relative;
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #dee2e6;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.5rem;
+        font-weight: bold;
+    }
+
+    .step.active .step-number {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .step.completed .step-number {
+        background: #27ae60;
+        color: white;
+    }
+
+    .step-line {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        width: 100%;
+        height: 2px;
+        background: #dee2e6;
+        z-index: -1;
+    }
+
+    .payment-success {
+        text-align: center;
+        padding: 3rem;
+    }
+
+    .success-icon {
+        font-size: 4rem;
+        color: #27ae60;
+        margin-bottom: 1rem;
+        animation: bounce 1s;
+    }
+
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+        40% {transform: translateY(-30px);}
+        60% {transform: translateY(-15px);}
+    }
+
+    .form-floating {
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="payment-container">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" id="step1">
+                <div class="step-number">1</div>
+                <div class="step-title">Select Method</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-number">2</div>
+                <div class="step-title">Payment Details</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-number">3</div>
+                <div class="step-title">Confirmation</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Select Payment Method -->
+        <div class="card shadow-lg mb-4" id="step1Content">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-credit-card me-2"></i>Select Payment Method</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Secure payment processed via encrypted channels. All transactions are PCI DSS compliant.
+                </div>
+
+                <div class="row">
+                    <!-- Mobile Money -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="mobile_money">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon">
+                                    <i class="bi bi-phone"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">Mobile Money</h5>
+                                    <p class="text-muted mb-0">MTN & Vodafone Cash</p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="security-badge">
+                                    <i class="bi bi-shield-check me-1"></i> Secure
+                                </div>
+                                <div class="text-muted small mt-2">
+                                    <i class="bi bi-lightning me-1"></i> Instant confirmation
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bank Transfer -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="bank_transfer">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon">
+                                    <i class="bi bi-bank"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">Bank Transfer</h5>
+                                    <p class="text-muted mb-0">Direct bank transfer</p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="security-badge">
+                                    <i class="bi bi-shield-check me-1"></i> Secure
+                                </div>
+                                <div class="text-muted small mt-2">
+                                    <i class="bi bi-clock me-1"></i> 1-2 business days
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Payment -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="card">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon">
+                                    <i class="bi bi-credit-card-2-front"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">Card</h5>
+                                    <p class="text-muted mb-0">Visa, Mastercard</p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="security-badge">
+                                    <i class="bi bi-shield-check me-1"></i> PCI DSS Compliant
+                                </div>
+                                <div class="text-muted small mt-2">
+                                    <i class="bi bi-lightning me-1"></i> Instant confirmation
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- USSD -->
+                    <div class="col-md-6 mb-3">
+                        <div class="payment-method-card" data-method="ussd">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon">
+                                    <i class="bi bi-phone-landscape"></i>
+                                </div>
+                                <div>
+                                    <h5 class="mb-1">USSD</h5>
+                                    <p class="text-muted mb-0">*170# or *110#</p>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="security-badge">
+                                    <i class="bi bi-shield-check me-1"></i> Secure
+                                </div>
+                                <div class="text-muted small mt-2">
+                                    <i class="bi bi-lightning me-1"></i> Instant confirmation
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Summary -->
+                <div class="card payment-details-card mt-4">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h4 class="mb-3">Payment Summary</h4>
+                            <table class="table table-borderless text-white">
+                                <tr>
+                                    <td>Student:</td>
+                                    <td class="text-end">{{ student.full_name|default:"John Doe" }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Student ID:</td>
+                                    <td class="text-end">{{ student.student_id|default:"STD001" }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Class:</td>
+                                    <td class="text-end">{{ student.class_level|default:"Grade 10" }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Description:</td>
+                                    <td class="text-end">{{ payment.description|default:"Term 1 Fees" }}</td>
+                                </tr>
+                                <tr class="border-top">
+                                    <td><strong>Total Amount:</strong></td>
+                                    <td class="text-end"><strong>GH₵{{ payment.amount|default:500|floatformat:2 }}</strong></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="qr-code-container mb-3">
+                                <div class="text-center p-3">
+                                    <i class="bi bi-qr-code fs-1 text-dark"></i>
+                                    <p class="mt-2 small">Scan to pay</p>
+                                </div>
+                            </div>
+                            <small class="text-white-50">Scan with mobile money</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button class="btn btn-primary btn-lg" id="proceedToPayment">
+                        Proceed to Payment <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                    <a href="{% url 'bill_detail'|default:'#' %}" class="btn btn-outline-secondary ms-2">
+                        Cancel Payment
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Payment Details -->
+        <div class="card shadow-lg mb-4 d-none" id="step2Content">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-credit-card me-2"></i>Payment Details</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-clock me-2"></i>
+                    <span id="paymentTimer" class="payment-timer">15:00</span> minutes remaining
+                </div>
+
+                <!-- Mobile Money Form -->
+                <div id="mobileMoneyForm" class="d-none">
+                    <h5 class="mb-4">Mobile Money Payment</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Mobile Network</label>
+                            <select class="form-select">
+                                <option value="">Select Network</option>
+                                <option value="mtn">MTN Mobile Money</option>
+                                <option value="vodafone">Vodafone Cash</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Mobile Number</label>
+                            <input type="tel" class="form-control" placeholder="055 123 4567">
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You will receive a prompt on your phone
+                    </div>
+                </div>
+
+                <!-- Card Payment Form -->
+                <div id="cardForm" class="d-none">
+                    <h5 class="mb-4">Card Payment</h5>
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Card Number</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" placeholder="1234 5678 9012 3456">
+                                <span class="input-group-text">
+                                    <i class="bi bi-credit-card"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Expiry Date</label>
+                            <input type="text" class="form-control" placeholder="MM/YY">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">CVV</label>
+                            <input type="text" class="form-control" placeholder="123">
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-shield-check me-2"></i>
+                        Your card details are encrypted
+                    </div>
+                </div>
+
+                <!-- Terms and Conditions -->
+                <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" id="agreeTerms">
+                    <label class="form-check-label" for="agreeTerms">
+                        I agree to the <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a>
+                    </label>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button class="btn btn-primary btn-lg" id="confirmPayment" disabled>
+                        <i class="bi bi-lock me-2"></i>Confirm & Pay GH₵{{ payment.amount|default:500|floatformat:2 }}
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" id="backToMethods">
+                        <i class="bi bi-arrow-left me-2"></i>Back
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Confirmation -->
+        <div class="card shadow-lg mb-4 d-none" id="step3Content">
+            <div class="card-body payment-success">
+                <div class="success-icon">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <h2 class="mb-3">Payment Successful!</h2>
+                <p class="lead">Thank you for your payment. Your transaction has been completed successfully.</p>
+                
+                <div class="card border-success mb-4" style="max-width: 500px; margin: 0 auto;">
+                    <div class="card-body">
+                        <h5 class="card-title">Transaction Details</h5>
+                        <table class="table">
+                            <tr>
+                                <td>Transaction ID:</td>
+                                <td class="text-end fw-bold" id="transactionId">TX{{ timestamp|date:"YmdHis" }}</td>
+                            </tr>
+                            <tr>
+                                <td>Amount Paid:</td>
+                                <td class="text-end fw-bold">GH₵{{ payment.amount|default:500|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>Date & Time:</td>
+                                <td class="text-end" id="paymentDateTime">{% now "d/m/Y H:i" %}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-receipt me-2"></i>
+                    An electronic receipt has been sent
+                </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-success me-2" id="downloadReceipt">
+                        <i class="bi bi-download me-2"></i>Download Receipt
+                    </button>
+                    <a href="{% url 'student_dashboard'|default:'#' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-house me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Badges -->
+        <div class="text-center mt-4">
+            <div class="d-inline-flex flex-wrap justify-content-center gap-3">
+                <div class="security-badge bg-primary">
+                    <i class="bi bi-shield-check me-1"></i> SSL Encrypted
+                </div>
+                <div class="security-badge bg-success">
+                    <i class="bi bi-lock me-1"></i> Secure Payment
+                </div>
+                <div class="security-badge bg-info">
+                    <i class="bi bi-arrow-repeat me-1"></i> Instant Confirmation
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terms & Conditions Modal -->
+<div class="modal fade" id="termsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Terms & Conditions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6>Payment Terms</h6>
+                <ol>
+                    <li>All payments are processed securely</li>
+                    <li>Transaction fees may apply</li>
+                    <li>Refunds are processed within 5-10 business days</li>
+                    <li>Your payment information is never stored</li>
+                </ol>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" id="acceptTerms">
+                    I Accept Terms
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let selectedMethod = '';
+        let timerInterval;
+        let timeLeft = 900; // 15 minutes in seconds
+
+        // Payment method selection
+        document.querySelectorAll('.payment-method-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.payment-method-card').forEach(c => {
+                    c.classList.remove('selected');
+                });
+                
+                this.classList.add('selected');
+                selectedMethod = this.dataset.method;
+                document.getElementById('proceedToPayment').disabled = false;
+            });
+        });
+
+        // Proceed to payment details
+        document.getElementById('proceedToPayment').addEventListener('click', function() {
+            if (!selectedMethod) {
+                alert('Please select a payment method');
+                return;
+            }
+
+            // Update steps
+            document.getElementById('step1').classList.remove('active');
+            document.getElementById('step1').classList.add('completed');
+            document.getElementById('step2').classList.add('active');
+            
+            // Show step 2 content
+            document.getElementById('step1Content').classList.add('d-none');
+            document.getElementById('step2Content').classList.remove('d-none');
+            
+            // Show selected form
+            document.querySelectorAll('[id$="Form"]').forEach(form => {
+                form.classList.add('d-none');
+            });
+            document.getElementById(selectedMethod + 'Form')?.classList.remove('d-none');
+            
+            // Start timer
+            startPaymentTimer();
+        });
+
+        // Back to methods
+        document.getElementById('backToMethods').addEventListener('click', function() {
+            document.getElementById('step2').classList.remove('active');
+            document.getElementById('step1').classList.add('active');
+            
+            document.getElementById('step2Content').classList.add('d-none');
+            document.getElementById('step1Content').classList.remove('d-none');
+            
+            clearInterval(timerInterval);
+        });
+
+        // Terms agreement
+        document.getElementById('agreeTerms').addEventListener('change', function() {
+            document.getElementById('confirmPayment').disabled = !this.checked;
+        });
+
+        // Accept terms from modal
+        document.getElementById('acceptTerms').addEventListener('click', function() {
+            document.getElementById('agreeTerms').checked = true;
+            document.getElementById('agreeTerms').dispatchEvent(new Event('change'));
+        });
+
+        // Confirm payment
+        document.getElementById('confirmPayment').addEventListener('click', function() {
+            if (!selectedMethod) {
+                alert('Please select a payment method');
+                return;
+            }
+
+            const btn = this;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                document.getElementById('step2').classList.remove('active');
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('active');
+                
+                document.getElementById('step2Content').classList.add('d-none');
+                document.getElementById('step3Content').classList.remove('d-none');
+                
+                clearInterval(timerInterval);
+                
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        });
+
+        // Payment timer
+        function startPaymentTimer() {
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    alert('Payment session expired. Please start again.');
+                    document.getElementById('backToMethods').click();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            const timerElement = document.getElementById('paymentTimer');
+            if (timerElement) {
+                timerElement.textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeLeft < 300) {
+                    timerElement.classList.add('text-danger');
+                }
+            }
+        }
+
+        // Download receipt
+        document.getElementById('downloadReceipt')?.addEventListener('click', function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                alert('Receipt downloaded successfully!');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 1000);
+        });
+
+        // Initialize
+        document.getElementById('proceedToPayment').disabled = true;
+    });
+</script>
+{% endblock %}

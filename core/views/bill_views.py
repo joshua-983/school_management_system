@@ -1,4 +1,12 @@
 # bill_views.py
+from core.middleware.security import FinancialSecurityMiddleware
+from core.models.audit import FinancialAuditTrail
+from core.utils.financial import FinancialCalculator
+import re
+
+from django.views.decorators.csrf import csrf_protect
+from django.utils.decorators import method_decorator
+
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
@@ -24,16 +32,38 @@ from ..forms import BillGenerationForm, BillPaymentForm
 logger = logging.getLogger(__name__)
 
 
-def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip_existing, request_user):
+
+def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip_existing, request_user, request):
     """
-    Generate bills for students based on mandatory fee categories
+    SECURE VERSION: Generate bills for students with audit trail
     """
     try:
-        # Get active students
-        students = Student.objects.filter(is_active=True)
+        # Validate inputs
+        if not academic_year or not term:
+            raise ValueError("Academic year and term are required")
         
+        # Validate academic year format (e.g., 2024/2025)
+        if not re.match(r'^\d{4}/\d{4}$', academic_year):
+            raise ValueError("Academic year must be in format YYYY/YYYY")
+        
+        # Validate term (1, 2, or 3)
+        if term not in [1, 2, 3]:
+            raise ValueError("Term must be 1, 2, or 3")
+        
+        # Validate due date is in the future
+        if due_date < timezone.now().date():
+            raise ValueError("Due date cannot be in the past")
+        
+        # Get active students with limit to prevent DoS
+        students = Student.objects.filter(is_active=True)
         if class_levels:
             students = students.filter(class_level__in=class_levels)
+        
+        # Limit maximum students to process at once
+        MAX_STUDENTS = 1000
+        student_count = students.count()
+        if student_count > MAX_STUDENTS:
+            raise ValueError(f"Cannot process more than {MAX_STUDENTS} students at once")
         
         # Get mandatory fee categories
         fee_categories = FeeCategory.objects.filter(
@@ -41,57 +71,78 @@ def generate_term_bills(academic_year, term, class_levels, due_date, notes, skip
             is_mandatory=True
         )
         
+        if not fee_categories.exists():
+            raise ValueError("No active mandatory fee categories found")
+        
         bills_created = 0
+        errors = []
         
         with transaction.atomic():
             for student in students:
-                # Check if bill already exists for this term
-                if skip_existing and Bill.objects.filter(
-                    student=student,
-                    academic_year=academic_year,
-                    term=term
-                ).exists():
-                    continue
-                
-                # Calculate total amount from fee categories - FIXED: Ensure Decimal operations
-                total_amount = Decimal('0.00')
-                bill_items = []
-                
-                for category in fee_categories:
-                    if category.is_applicable_to_class(student.class_level):
-                        # FIX: Convert to Decimal if needed
-                        category_amount = category.default_amount
-                        if isinstance(category_amount, float):
-                            category_amount = Decimal(str(category_amount))
-                        total_amount += category_amount
-                        bill_items.append({
-                            'category': category,
-                            'amount': category_amount,
-                            'description': f"{category.get_name_display()} - Term {term}"
-                        })
-                
-                if total_amount > Decimal('0.00'):
-                    # Create the bill
-                    bill = Bill.objects.create(
+                try:
+                    # Check if bill already exists for this term
+                    if skip_existing and Bill.objects.filter(
                         student=student,
                         academic_year=academic_year,
-                        term=term,
-                        due_date=due_date,
-                        total_amount=total_amount,
-                        notes=notes,
-                        recorded_by=request_user
-                    )
+                        term=term
+                    ).exists():
+                        continue
                     
-                    # Create bill items
-                    for item_data in bill_items:
-                        BillItem.objects.create(
-                            bill=bill,
-                            fee_category=item_data['category'],
-                            amount=item_data['amount'],
-                            description=item_data['description']
+                    # Calculate total amount using secure decimal operations
+                    total_amount = Decimal('0.00')
+                    bill_items = []
+                    
+                    for category in fee_categories:
+                        if category.is_applicable_to_class(student.class_level):
+                            # Use secure decimal conversion
+                            category_amount = FinancialCalculator.safe_decimal(category.default_amount)
+                            total_amount += category_amount
+                            bill_items.append({
+                                'category': category,
+                                'amount': category_amount,
+                                'description': f"{category.get_name_display()} - Term {term}"
+                            })
+                    
+                    if total_amount > Decimal('0.00'):
+                        # Create the bill
+                        bill = Bill.objects.create(
+                            student=student,
+                            academic_year=academic_year,
+                            term=term,
+                            due_date=due_date,
+                            total_amount=total_amount,
+                            notes=notes,
+                            recorded_by=request_user
                         )
-                    
-                    bills_created += 1
+                        
+                        # Create bill items
+                        for item_data in bill_items:
+                            BillItem.objects.create(
+                                bill=bill,
+                                fee_category=item_data['category'],
+                                amount=item_data['amount'],
+                                description=item_data['description']
+                            )
+                        
+                        # Log to audit trail
+                        FinancialAuditTrail.log_action(
+                            action='CREATE',
+                            model_name='Bill',
+                            object_id=bill.id,
+                            user=request_user,
+                            request=request,
+                            notes=f'Generated bill for {student.get_full_name()} - Term {term} {academic_year}'
+                        )
+                        
+                        bills_created += 1
+                        
+                except Exception as e:
+                    errors.append(f"Student {student.student_id}: {str(e)}")
+                    logger.error(f"Error generating bill for student {student.student_id}: {str(e)}")
+                    continue
+        
+        if errors and bills_created == 0:
+            raise Exception(f"Failed to generate any bills. Errors: {'; '.join(errors[:5])}")
         
         return bills_created
         
@@ -597,35 +648,128 @@ class BulkMarkPaidView(LoginRequiredMixin, UserPassesTestMixin, View):
             }, status=400)
 
 
+
+@method_decorator(csrf_protect, name='dispatch')
 class BulkDeleteBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
-    """Delete multiple bills"""
+    """SECURE VERSION: Delete multiple bills with validation"""
     
     def test_func(self):
         return is_admin(self.request.user)
     
     def post(self, request):
-        try:
-            data = json.loads(request.body)
-            bill_ids = data.get('bill_ids', [])
+        # Validate content type
+        if request.content_type != 'application/json':
+            return JsonResponse({
+                'success': False,
+                'message': 'Content-Type must be application/json'
+            }, status=400)
+        
+        # Add size limit check
+        if len(request.body) > 1024 * 1024:  # 1MB limit
+            return JsonResponse({
+                'success': False,
+                'message': 'Request too large'
+            }, status=413)
+        
+        try:  # <-- MOVED try: HERE (outside the JsonResponse)
+            # Parse JSON data
+            try:
+                data = json.loads(request.body)
+                bill_ids = data.get('bill_ids', [])
+            except json.JSONDecodeError as e:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Invalid JSON: {str(e)}'
+                }, status=400)
             
-            # Get the bills
+            # Validate bill_ids is a list
+            if not isinstance(bill_ids, list):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'bill_ids must be an array'
+                }, status=400)
+            
+            # Limit maximum bills to delete at once
+            MAX_DELETIONS = 100
+            if len(bill_ids) > MAX_DELETIONS:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Cannot delete more than {MAX_DELETIONS} bills at once'
+                }, status=400)
+            
+            # Get the bills with validation
             bills = Bill.objects.filter(bill_number__in=bill_ids)
+            
+            # Check if all bills exist
+            found_ids = set(bills.values_list('bill_number', flat=True))
+            invalid_ids = set(bill_ids) - found_ids
+            
+            if invalid_ids:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Invalid bill numbers: {", ".join(list(invalid_ids)[:5])}'
+                }, status=400)
+            
             deleted_count = 0
+            deleted_details = []
             
             with transaction.atomic():
                 for bill in bills:
                     # Only allow deletion of bills that are not paid and not cancelled
-                    if bill.status not in ['paid', 'cancelled']:
+                    if bill.status in ['paid', 'cancelled']:
+                        continue
+                    
+                    try:
+                        # Log before deletion for audit trail
+                        FinancialAuditTrail.log_action(
+                            action='DELETE',
+                            model_name='Bill',
+                            object_id=bill.id,
+                            user=request.user,
+                            request=request,
+                            before_state={
+                                'bill_number': bill.bill_number,
+                                'student': bill.student.get_full_name(),
+                                'amount': str(bill.total_amount),
+                                'status': bill.status
+                            },
+                            notes=f'Bulk delete operation'
+                        )
+                        
                         # Delete related bill items first
                         BillItem.objects.filter(bill=bill).delete()
+                        
+                        # Store details before deletion
+                        deleted_details.append({
+                            'bill_number': bill.bill_number,
+                            'student': bill.student.get_full_name(),
+                            'amount': str(bill.total_amount)
+                        })
+                        
                         # Delete the bill
                         bill.delete()
                         deleted_count += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error deleting bill {bill.bill_number}: {str(e)}")
+                        continue
+            
+            # Log bulk operation summary
+            if deleted_count > 0:
+                FinancialAuditTrail.log_action(
+                    action='DELETE',
+                    model_name='BulkOperation',
+                    object_id='bulk_delete_bills',
+                    user=request.user,
+                    request=request,
+                    notes=f'Deleted {deleted_count} bills: {", ".join([d["bill_number"] for d in deleted_details[:3]])}'
+                )
             
             return JsonResponse({
                 'success': True,
                 'message': f'Successfully deleted {deleted_count} bills',
-                'deleted_count': deleted_count
+                'deleted_count': deleted_count,
+                'deleted_bills': deleted_details[:10]  # Return first 10 for confirmation
             })
             
         except Exception as e:
@@ -633,4 +777,4 @@ class BulkDeleteBillsView(LoginRequiredMixin, UserPassesTestMixin, View):
             return JsonResponse({
                 'success': False,
                 'message': f'Error deleting bills: {str(e)}'
-            }, status=400)
+            }, status=500)

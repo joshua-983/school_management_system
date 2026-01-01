@@ -36,7 +36,7 @@ class GradeEntryForm(forms.ModelForm):
             'academic_year': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'YYYY/YYYY',
-                'pattern': '\d{4}/\d{4}'
+                'pattern': r'\d{4}/\d{4}'
             }),
             'term': forms.Select(attrs={'class': 'form-select'}),
             'homework_percentage': forms.NumberInput(attrs={

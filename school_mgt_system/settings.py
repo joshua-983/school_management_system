@@ -1,4 +1,6 @@
 import pymysql
+
+
 pymysql.install_as_MySQLdb()
 
 """
@@ -16,10 +18,18 @@ from celery.schedules import crontab
 from django.core.management.utils import get_random_secret_key
 from decouple import config, Csv
 import logging.config
+import environ
+from decimal import Decimal
+
+
 
 # ==================== BASE CONFIGURATION ====================
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Take environment variables from .env file
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # ==================== ENVIRONMENT DETECTION ====================
 ENVIRONMENT = config('DJANGO_ENVIRONMENT', default='development')
@@ -102,13 +112,14 @@ if DEBUG_TOOLBAR and not IS_TESTING:
 if IS_PRODUCTION:
     INSTALLED_APPS.append('django_healthchecks')
 
+
 # ==================== MIDDLEWARE CONFIGURATION ====================
-# Core middleware
+
 MIDDLEWARE = [
+    # Django core middleware
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'core.middleware.session_middleware.SessionProtectionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -117,10 +128,22 @@ MIDDLEWARE = [
     'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.middleware.SecurityHeadersMiddleware',
-    'core.middleware.MaintenanceModeMiddleware',
-    'core.middleware.UserBlockMiddleware',
-    'core.middleware.RateLimitMiddleware',
+    
+    # Your custom middleware - use direct paths without async wrapper
+    'core.middleware.session_middleware.SessionProtectionMiddleware',
+    'core.middleware.error_handling.ErrorHandlingMiddleware',
+    'core.middleware.session_timeout.SessionTimeoutMiddleware',
+    'core.middleware.csrf_protection.CSRFProtectionMiddleware',
+    'core.middleware.security.FinancialSecurityMiddleware',
+    'core.middleware.rate_limit.RateLimitMiddleware',
+    'core.middleware.password_rotation.PasswordRotationMiddleware',
+    'core.middleware.user_block.UserBlockMiddleware',
+    'core.middleware.maintenance.MaintenanceModeMiddleware',
+    'core.middleware.notification.NotificationMiddleware',
+    'core.middleware.security_headers.SecurityHeadersMiddleware',
+    'core.middleware.csp.ContentSecurityPolicyMiddleware',
+    'core.middleware.request_logging.RequestLoggingMiddleware',
+    'core.middleware.legacy.LegacyMiddlewareCompatibility',
 ]
 # Conditional middleware
 if DEBUG_TOOLBAR and not IS_TESTING:
@@ -128,8 +151,15 @@ if DEBUG_TOOLBAR and not IS_TESTING:
 
 # Add CSP middleware in production
 if IS_PRODUCTION and config('CSP_ENABLED', default=True, cast=bool):
-    MIDDLEWARE.insert(1, 'csp.middleware.CSPMiddleware')
-
+    try:
+        import csp
+        # Insert after SecurityHeadersMiddleware
+        csp_index = MIDDLEWARE.index('core.middleware.csp.ContentSecurityPolicyMiddleware')
+        MIDDLEWARE.pop(csp_index)  # Remove our custom CSP
+        MIDDLEWARE.insert(csp_index, 'csp.middleware.CSPMiddleware')
+    except ImportError:
+        # Keep our custom CSP middleware
+        pass
 # ==================== URL CONFIGURATION ====================
 ROOT_URLCONF = 'school_mgt_system.urls'
 
@@ -343,6 +373,10 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_SAVE_EVERY_REQUEST = False  # Reduce session writes to prevent corruption
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
+# Custom session settings
+MAX_USER_SESSIONS = 3  # Maximum number of concurrent sessions per user
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database-backed sessions
+
 # Session serialization - use JSON for better compatibility
 SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 
@@ -352,8 +386,16 @@ SESSION_CLEANUP_INTERVAL = timedelta(days=1)
 # Add session cookie secure settings based on environment
 if IS_PRODUCTION or IS_STAGING:
     SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 else:
     SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+    SECURE_HSTS_SECONDS = 0
 
 # Session cookie path
 SESSION_COOKIE_PATH = '/'
@@ -383,19 +425,7 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS',
 )
 
 # Environment-specific security settings
-if IS_PRODUCTION or IS_STAGING:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-else:
-    SECURE_SSL_REDIRECT = False
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-    SECURE_HSTS_SECONDS = 0
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if IS_PRODUCTION or IS_STAGING else None
 
 # ==================== EMAIL CONFIGURATION ====================
 if IS_TESTING:
@@ -625,13 +655,6 @@ AXES_HANDLER = 'core.axes_handlers.CustomAxesHandler'
 # Axes cache configuration (use default cache)
 AXES_CACHE = 'default'
 
-# Authentication backends - Axes MUST be first
-AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesBackend',  # Must be first
-    'django.contrib.auth.backends.ModelBackend',
-    'guardian.backends.ObjectPermissionBackend',
-]
-
 # ==================== LOGGING CONFIGURATION ====================
 # Create logs directory first
 LOGS_DIR = BASE_DIR / 'logs'
@@ -700,6 +723,14 @@ LOGGING = {
             'backupCount': 3,
             'formatter': 'daphne',
         },
+        'payment_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOGS_DIR / 'payments.log',
+            'maxBytes': 1024 * 1024 * 5,
+            'backupCount': 3,
+            'formatter': 'verbose',
+        },
         'mail_admins': {
             'level': 'ERROR',
             'filters': ['require_debug_false'],
@@ -757,6 +788,11 @@ LOGGING = {
             'handlers': ['console', 'daphne_file'],
             'level': 'WARNING',
             'propagate': False,
+        },
+        'core.services.payment_service': {
+            'handlers': ['console', 'payment_file'],
+            'level': 'INFO',
+            'propagate': True,
         },
     },
     'root': {
@@ -856,10 +892,6 @@ COMPRESS_JS_FILTERS = [
     'compressor.filters.jsmin.JSMinFilter',
 ]
 
-# ==================== SESSION FIXES ====================
-# REMOVED: The automatic session clearing from settings.py since it doesn't work
-# Run manual session clearing instead using the methods below
-
 # ==================== TEST CONFIGURATION ====================
 if IS_TESTING:
     print("🧪 TEST MODE: Using optimized settings for testing")
@@ -929,5 +961,65 @@ print(f"✅ Allowed Hosts: {ALLOWED_HOSTS}")
 print(f"✅ Session Engine: {SESSION_ENGINE}")
 print(f"✅ Static Storage: {STATICFILES_STORAGE}")
 
-# settings.py
-EMERGENCY_BYPASS_KEY = 'your-secret-emergency-key-here'
+# ==================== EMERGENCY SETTINGS ====================
+EMERGENCY_BYPASS_KEY = config('EMERGENCY_BYPASS_KEY', default='your-secret-emergency-key-here')
+
+
+# ==================== FINANCIAL SYSTEM SECURITY SETTINGS ====================
+# Financial System Security Settings
+FINANCIAL_SECURITY = {
+    'MAX_TRANSACTION_AMOUNT': Decimal('1000000.00'),  # 1 million GHS
+    'DAILY_TRANSACTION_LIMIT': Decimal('5000000.00'),  # 5 million GHS
+    'REQUIRE_2FA_ABOVE': Decimal('50000.00'),  # Require 2FA above 50k
+    'SESSION_TIMEOUT': 900,  # 15 minutes for financial pages
+    'ALLOWED_CURRENCIES': ['GHS', 'USD'],
+    'MIN_PASSWORD_LENGTH': 12,
+    'PASSWORD_COMPLEXITY': True,
+    'AUTO_RECONCILE': True,
+    'RECONCILE_HOUR': 18,  # 6 PM daily
+}
+
+# ==================== BACKUP CONFIGURATION ====================
+BACKUP_CONFIG = {
+    'daily': True,
+    'weekly': True,
+    'monthly': True,
+    'retention_days': 90,
+    'encrypt_backups': True,
+    'cloud_storage': config('BACKUP_CLOUD_STORAGE', default='s3'),  # or 'google', 'azure'
+}
+
+
+# ==================== PAYMENT GATEWAY SETTINGS ====================
+# Payment Gateway Settings
+PAYMENT_GATEWAYS = {
+    'FLUTTERWAVE': {
+        'SECRET_KEY': config('FLUTTERWAVE_SECRET_KEY', default=''),
+        'PUBLIC_KEY': config('FLUTTERWAVE_PUBLIC_KEY', default=''),
+        'ENCRYPTION_KEY': config('FLUTTERWAVE_ENCRYPTION_KEY', default=''),
+        'WEBHOOK_HASH': config('FLUTTERWAVE_WEBHOOK_HASH', default=''),
+        'BASE_URL': 'https://api.flutterwave.com/v3',
+        'ACTIVE': True,
+    },
+    'PAYSTACK': {
+        'SECRET_KEY': config('PAYSTACK_SECRET_KEY', default=''),
+        'PUBLIC_KEY': config('PAYSTACK_PUBLIC_KEY', default=''),
+        'BASE_URL': 'https://api.paystack.co',
+        'ACTIVE': True,
+    }
+}
+
+DEFAULT_PAYMENT_GATEWAY = config('DEFAULT_PAYMENT_GATEWAY', default='FLUTTERWAVE')
+
+# ==================== SCHOOL INFORMATION ====================
+# School Information
+SCHOOL_INFO = {
+    'NAME': config('SCHOOL_NAME', default='Judith\'s International School'),
+    'EMAIL': config('SCHOOL_EMAIL', default='accounts@judithschool.edu.gh'),
+    'PHONE': config('SCHOOL_PHONE', default='+233 054 134 5564'),
+    'ADDRESS': config('SCHOOL_ADDRESS', default='Accra, Ghana'),
+    'LOGO_URL': config('SCHOOL_LOGO_URL', default=''),
+}
+
+# ==================== ENCRYPTION ====================
+ENCRYPTION_KEY = config('ENCRYPTION_KEY', default='')

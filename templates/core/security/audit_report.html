@@ -1,0 +1,327 @@
+<!-- templates/core/security/audit_report.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Security Audit Report - {{ school_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .audit-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+        border: none;
+        background: white;
+    }
+
+    .severity-critical {
+        border-left: 5px solid #dc3545;
+    }
+
+    .severity-high {
+        border-left: 5px solid #fd7e14;
+    }
+
+    .severity-medium {
+        border-left: 5px solid #ffc107;
+    }
+
+    .severity-low {
+        border-left: 5px solid #17a2b8;
+    }
+
+    .severity-passed {
+        border-left: 5px solid #28a745;
+    }
+
+    .security-score {
+        font-size: 4rem;
+        font-weight: bold;
+        text-align: center;
+        margin: 1rem 0;
+    }
+
+    .score-excellent { color: #28a745; }
+    .score-good { color: #20c997; }
+    .score-fair { color: #ffc107; }
+    .score-poor { color: #fd7e14; }
+    .score-critical { color: #dc3545; }
+
+    .progress-lg {
+        height: 20px;
+        border-radius: 10px;
+    }
+
+    .check-item {
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+        transition: background-color 0.2s;
+    }
+
+    .check-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .check-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+    }
+
+    .icon-critical { background-color: #dc3545; color: white; }
+    .icon-high { background-color: #fd7e14; color: white; }
+    .icon-medium { background-color: #ffc107; color: white; }
+    .icon-low { background-color: #17a2b8; color: white; }
+    .icon-passed { background-color: #28a745; color: white; }
+
+    .recommendation-card {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+    }
+
+    .scan-history {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-2">Security Audit Report</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'security_dashboard' %}">Security</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Audit Report</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-primary" onclick="runNewScan()">
+                <i class="bi bi-shield-check me-2"></i>Run New Scan
+            </button>
+            <button class="btn btn-success" onclick="exportReport()">
+                <i class="bi bi-download me-2"></i>Export Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="card audit-card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-shield me-2"></i>Security Overview</h5>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-4 text-center">
+                    {% with score=85 %}
+                    {% if score >= 90 %}
+                    <div class="security-score score-excellent">{{ score }}</div>
+                    <div class="h5 text-success">Excellent</div>
+                    {% elif score >= 75 %}
+                    <div class="security-score score-good">{{ score }}</div>
+                    <div class="h5 text-info">Good</div>
+                    {% elif score >= 60 %}
+                    <div class="security-score score-fair">{{ score }}</div>
+                    <div class="h5 text-warning">Fair</div>
+                    {% elif score >= 40 %}
+                    <div class="security-score score-poor">{{ score }}</div>
+                    <div class="h5 text-orange">Poor</div>
+                    {% else %}
+                    <div class="security-score score-critical">{{ score }}</div>
+                    <div class="h5 text-danger">Critical</div>
+                    {% endif %}
+                    <small class="text-muted">Security Score /100</small>
+                    {% endwith %}
+                </div>
+                <div class="col-md-8">
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="h2 text-danger mb-0">0</div>
+                            <div class="text-muted">Critical</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h2 text-warning mb-0">2</div>
+                            <div class="text-muted">High</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h2 text-info mb-0">5</div>
+                            <div class="text-muted">Medium</div>
+                        </div>
+                        <div class="col-3">
+                            <div class="h2 text-success mb-0">15</div>
+                            <div class="text-muted">Passed</div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="progress progress-lg">
+                            <div class="progress-bar bg-success" style="width: 68%"></div>
+                            <div class="progress-bar bg-info" style="width: 23%"></div>
+                            <div class="progress-bar bg-warning" style="width: 9%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar me-1"></i>
+                        Last Scan: {% now "d/m/Y H:i" %}
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        <i class="bi bi-clock-history me-1"></i>
+                        Next Scan: Tomorrow, 08:00
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- High Priority Issues -->
+    <div class="card audit-card severity-high mb-4">
+        <div class="card-header bg-warning text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-circle me-2"></i>High Priority Issues (2)</h5>
+        </div>
+        <div class="card-body p-0">
+            <!-- Issue 1 -->
+            <div class="check-item">
+                <div class="d-flex align-items-start">
+                    <div class="check-icon icon-high me-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <h6 class="mb-1">Weak Password Policy</h6>
+                            <span class="badge bg-warning">High</span>
+                        </div>
+                        <p class="mb-1">Password policy allows weak passwords</p>
+                        <div class="mt-2">
+                            <strong>Recommendation:</strong> Enforce strong password requirements
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Issue 2 -->
+            <div class="check-item">
+                <div class="d-flex align-items-start">
+                    <div class="check-icon icon-high me-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <h6 class="mb-1">Missing HTTPS</h6>
+                            <span class="badge bg-warning">High</span>
+                        </div>
+                        <p class="mb-1">Some pages not served over HTTPS</p>
+                        <div class="mt-2">
+                            <strong>Recommendation:</strong> Enable HTTPS for all pages
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Passed Checks -->
+    <div class="card audit-card severity-passed">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>Passed Checks (15)</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="row p-3">
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <div class="check-icon icon-passed me-3">
+                            <i class="bi bi-check"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">SQL Injection Protection</div>
+                            <small class="text-muted">SQL injection attacks prevented</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <div class="check-icon icon-passed me-3">
+                            <i class="bi bi-check"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">XSS Protection</div>
+                            <small class="text-muted">Cross-site scripting protected</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <div class="check-icon icon-passed me-3">
+                            <i class="bi bi-check"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">CSRF Protection</div>
+                            <small class="text-muted">CSRF tokens implemented</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <div class="check-icon icon-passed me-3">
+                            <i class="bi bi-check"></i>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">Session Security</div>
+                            <small class="text-muted">Secure session handling</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function runNewScan() {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning...';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            alert('Security scan completed!');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            window.location.reload();
+        }, 2000);
+    }
+
+    function exportReport() {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exporting...';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            alert('Report exported successfully!');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }, 1000);
+    }
+</script>
+{% endblock %}

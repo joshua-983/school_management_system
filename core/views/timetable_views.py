@@ -2226,3 +2226,5 @@ def get_attendance_form(request):
     '''
     
     return JsonResponse({'form': form_html})
+
+

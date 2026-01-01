@@ -7,17 +7,7 @@ from . import views
 from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
 from .views.base_views import dashboard, home, admin_dashboard, teacher_dashboard, student_dashboard, parent_dashboard
-from .views.fee_views import ClearImportResultsView
-from . import views_group_management
-from core.models import Teacher
-from .views.grade_views import student_subject_grades
 
-from django.views.generic import RedirectView, TemplateView
-
-from .views.backup_views import (
-    backup_dashboard, create_backup, download_backup, 
-    delete_backup, cleanup_old_backups
-)
 
 from .api_views import (
     StudentListAPIView, AcademicTermAPIView, 
@@ -74,19 +64,10 @@ from .parent_auth_views import (
     ParentProfileView, ParentRegistrationSuccessView, ParentPasswordResetView
 )
 
-from .views.fee_views import (
-    FeeCategoryListView, FeeCategoryCreateView, FeeCategoryUpdateView, FeeCategoryDeleteView,
-    FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
-    FeePaymentCreateView, FeePaymentDeleteView, FeeReportView, FeeDashboardView,
-    FeeStatusReportView, GenerateTermFeesView,
-    BulkFeeUpdateView, SendPaymentRemindersView, FeeAnalyticsView,
-    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
-    PaymentSummaryView, RefreshPaymentDataView,
-    BulkFeeImportView, BulkFeeCreationView, DownloadFeeTemplateView
-)
 
 from .views.budget_views import (
-    BudgetManagementView, BudgetCreateView, BudgetUpdateView, BudgetDeleteView
+    BudgetManagementView, BudgetCreateView, BudgetUpdateView, BudgetDeleteView,
+    budget_summary_api, quick_budget_create
 )
 
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
@@ -158,6 +139,8 @@ from .views.audit_enhancements import (
 
 from .views.attendance_views import AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
 
+from django.views.generic import TemplateView, RedirectView
+
 # ==============================
 # TIMETABLE VIEWS
 # ==============================
@@ -174,6 +157,14 @@ from .views.timetable_views import (
     export_student_list, get_attendance_form
 )
 
+# In core/urls.py
+from .views.group_management_views import (
+    manage_timetable_groups, user_group_management, 
+    assign_user_to_group, remove_user_from_group
+)
+
+# ... rest of the code ...
+
 from .views.notifications_views import (
     NotificationListView, 
     mark_notification_read, 
@@ -182,12 +173,49 @@ from .views.notifications_views import (
 )
 
 # ==============================
+# FEE VIEW IMPORTS
+# ==============================
+from .views.fee_views import (
+    # Main fee views
+    FeeListView, FeeDetailView, FeeCreateView, FeeUpdateView, FeeDeleteView,
+    FeeDashboardView,
+    
+    # Fee category views
+    FeeCategoryListView, FeeCategoryCreateView, FeeCategoryDetailView,
+    FeeCategoryUpdateView, FeeCategoryDeleteView,
+    
+    # Bulk operations
+    BulkFeeImportView, BulkFeeCreationView, BulkFeeUpdateView,
+    DownloadFeeTemplateView, GenerateTermFeesView, SendPaymentRemindersView,
+    
+    # Reports and analytics
+    FeeReportView, FeeStatusReportView, FeeAnalyticsView,
+    FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
+    PaymentSummaryView, RefreshPaymentDataView,
+    
+    # Payment views
+    SecureFeePaymentCreateView, FeePaymentDeleteView,
+    
+    # Utilities
+    ClearImportResultsView
+)
+
+
+# ==============================
 # BILL VIEWS
 # ==============================
 from .views.bill_views import (
     BillListView, BillDetailView, BillGenerateView, BillPaymentView, BillCancelView,
     BulkSendRemindersView, BulkExportBillsView, BulkMarkPaidView, BulkDeleteBillsView,
     BillPaymentCreateView
+)
+
+from .views.backup_views import (
+    backup_dashboard,
+    create_backup, 
+    download_backup,
+    delete_backup,
+    cleanup_old_backups
 )
 
 # ==============================
@@ -375,7 +403,7 @@ urlpatterns = [
         path('<int:pk>/', FeeDetailView.as_view(), name='fee_detail'),
         path('<int:pk>/edit/', FeeUpdateView.as_view(), name='fee_update'),
         path('<int:pk>/delete/', FeeDeleteView.as_view(), name='fee_delete'),
-        path('<int:fee_id>/payments/add/', FeePaymentCreateView.as_view(), name='fee_payment_create'),
+        path('<int:fee_id>/payments/add/', SecureFeePaymentCreateView.as_view(), name='fee_payment_create'),
         path('generate-term-fees/', GenerateTermFeesView.as_view(), name='generate_term_fees'),
         path('bulk-update/', BulkFeeUpdateView.as_view(), name='bulk_fee_update'),
         path('send-reminders/', SendPaymentRemindersView.as_view(), name='send_payment_reminders'),
@@ -426,6 +454,9 @@ urlpatterns = [
         path('create/', BudgetCreateView.as_view(), name='budget_create'),
         path('<int:pk>/update/', BudgetUpdateView.as_view(), name='budget_update'),
         path('<int:pk>/delete/', BudgetDeleteView.as_view(), name='budget_delete'),
+        # API endpoints
+        path('api/summary/', budget_summary_api, name='budget_summary_api'),
+        path('api/quick-create/', quick_budget_create, name='budget_quick_create'),
     ])),
     
     # Fee Reports & Analytics
@@ -690,6 +721,8 @@ urlpatterns = [
         path('load-periods/', load_periods, name='load_periods'),
         path('student-attendance/', StudentAttendanceListView.as_view(), name='student_attendance_list'),
         path('report/', TemplateView.as_view(template_name='core/attendance/report.html'), name='attendance_report'),
+        # Add this to your urlpatterns
+        path('student/attendance/', StudentAttendanceView.as_view(), name='student_attendance'),
     ])),
     
     # ==============================
@@ -877,12 +910,12 @@ urlpatterns = [
     path('api/debug/database-stats/', debug_database_stats, name='debug_database_stats'),
     
     # Group Management
-    path('admin/timetable/groups/', views_group_management.manage_timetable_groups, name='manage_timetable_groups'),
-    path('admin/timetable/users/', views_group_management.user_group_management, name='user_group_management'),
+    path('admin/timetable/groups/', manage_timetable_groups, name='manage_timetable_groups'),
+    path('admin/timetable/users/', user_group_management, name='user_group_management'),
     path('admin/timetable/users/<int:user_id>/group/<int:group_id>/assign/', 
-         views_group_management.assign_user_to_group, name='assign_user_to_group'),
+         assign_user_to_group, name='assign_user_to_group'),
     path('admin/timetable/users/<int:user_id>/group/<int:group_id>/remove/', 
-         views_group_management.remove_user_from_group, name='remove_user_from_group'),
+         remove_user_from_group, name='remove_user_from_group'),
     
     # System URLs
     path('admin/group-permissions/', 
@@ -921,4 +954,37 @@ urlpatterns += [
     path('admin/backups/download/<str:backup_name>/', download_backup, name='download_backup'),
     path('admin/backups/delete/<str:backup_name>/', delete_backup, name='delete_backup'),
     path('admin/backups/cleanup/', cleanup_old_backups, name='cleanup_old_backups'),
+]
+
+
+urlpatterns += [
+    # Redirect old student_attendance URL to the new one
+    path('student/attendance/', RedirectView.as_view(pattern_name='student_portal_attendance', permanent=True), name='student_attendance'),
+]
+# ==============================
+# BACKWARD COMPATIBILITY URLS
+# ==============================
+
+urlpatterns += [
+    # CRITICAL: URLs that don't exist at all (5 URLs)
+    path('student/assignment-library/', 
+         RedirectView.as_view(pattern_name='student_portal_assignments', permanent=True), 
+         name='student_assignment_library'),
+    
+    path('student/grades/', 
+         RedirectView.as_view(pattern_name='student_portal_grades', permanent=True), 
+         name='student_grades'),
+    
+    path('student/profile/', 
+         RedirectView.as_view(pattern_name='student_portal_profile', permanent=True), 
+         name='student_profile'),
+    
+    path('student/fees/', 
+         RedirectView.as_view(pattern_name='student_portal_fees', permanent=True), 
+         name='student_fees'),
+    
+    # student_assignment_detail needs pk parameter
+    path('student/assignment/<int:pk>/', 
+         RedirectView.as_view(pattern_name='student_portal_assignment_detail', permanent=True), 
+         name='student_assignment_detail'),
 ]

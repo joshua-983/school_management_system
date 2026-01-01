@@ -702,4 +702,17 @@ admin.site.site_title = "School Admin"
 admin.site.index_title = "Welcome to School Administration"
 
 print("✅ Admin configuration loaded successfully!")
-print("🚨 IMPORTANT: To fix existing empty attachments, go to 'Data Maintenance' and run 'Fix ALL empty attachments'")
+# Check for empty attachments and warn if any exist
+try:
+    from core.models import Assignment, StudentAssignment
+    assignment_empty = Assignment.objects.filter(attachment='').count()
+    student_empty = StudentAssignment.objects.filter(file='').count()
+    total_empty = assignment_empty + student_empty
+    if total_empty > 0:
+        print(f"🚨 IMPORTANT: Found {total_empty} empty attachments/files. Go to 'Data Maintenance' and run 'Fix ALL empty attachments'")
+    else:
+        print("✅ No empty attachments found - all clean!")
+except Exception as e:
+    # If we can't check, show the generic warning
+    print("🚨 IMPORTANT: To fix existing empty attachments, go to 'Data Maintenance' and run 'Fix ALL empty attachments'")
+    print(f"   (Error checking: {e})")

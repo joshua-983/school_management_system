@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Make Payment - {{ school_name }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-credit-card me-2"></i>Make Payment
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-success">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-money-bill-wave fa-3x text-success mb-3"></i>
+                                    <h5>Fee Payment</h5>
+                                    <p class="text-muted">Pay for specific fee items</p>
+                                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#feeModal">
+                                        Pay Fee
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-invoice-dollar fa-3x text-primary mb-3"></i>
+                                    <h5>Bill Payment</h5>
+                                    <p class="text-muted">Pay outstanding bills</p>
+                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#billModal">
+                                        Pay Bill
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Methods -->
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">Available Payment Methods</h5>
+                        <div class="row">
+                            <div class="col-md-3 text-center mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-mobile-alt fa-2x text-primary"></i>
+                                    <div class="mt-2">Mobile Money</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-credit-card fa-2x text-success"></i>
+                                    <div class="mt-2">Card Payment</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-university fa-2x text-info"></i>
+                                    <div class="mt-2">Bank Transfer</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-center mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="fas fa-money-bill fa-2x text-warning"></i>
+                                    <div class="mt-2">Cash (at Office)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Payments -->
+                    <div class="mt-4">
+                        <h5 class="border-bottom pb-2">Recent Payments</h5>
+                        <div id="recentPayments">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fee Selection Modal -->
+<div class="modal fade" id="feeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Select Fee to Pay</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="feeList">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bill Selection Modal -->
+<div class="modal fade" id="billModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Select Bill to Pay</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="billList">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Load recent payments
+    loadRecentPayments();
+    
+    // Load fee list
+    loadFeeList();
+    
+    // Load bill list
+    loadBillList();
+    
+    function loadRecentPayments() {
+        $.ajax({
+            url: '/financial/payment/history/',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    displayRecentPayments(response.payments.slice(0, 5));
+                }
+            }
+        });
+    }
+    
+    function loadFeeList() {
+        $.ajax({
+            url: '/api/fees/outstanding/',
+            method: 'GET',
+            success: function(response) {
+                displayFeeList(response.fees);
+            }
+        });
+    }
+    
+    function displayFeeList(fees) {
+        let html = '';
+        if (fees && fees.length > 0) {
+            fees.forEach(function(fee) {
+                html += `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h6>${fee.category_display}</h6>
+                                <small class="text-muted">Term ${fee.term} • Due: ${fee.due_date}</small>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex justify-content-between">
+                                    <span>Balance:</span>
+                                    <strong class="text-danger">GH₵${fee.balance}</strong>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-success btn-sm" onclick="initiatePayment('fee', ${fee.id})">
+                                    Pay Now
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+        } else {
+            html = '<div class="alert alert-info">No outstanding fees found.</div>';
+        }
+        $('#feeList').html(html);
+    }
+});
+
+function initiatePayment(type, id) {
+    // Get selected gateway
+    const gateway = 'FLUTTERWAVE'; // Or let user select
+    
+    $.ajax({
+        url: '/financial/payment/initiate/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            type: type,
+            item_id: id,
+            gateway: gateway
+        }),
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            if (response.success) {
+                // Redirect to payment page
+                window.location.href = response.payment_url;
+            } else {
+                alert('Error: ' + response.message);
+            }
+        },
+        error: function() {
+            alert('Error initiating payment');
+        }
+    });
+}
+
+function getCookie(name) {
+    // Cookie helper function
+}
+</script>
+{% endblock %}

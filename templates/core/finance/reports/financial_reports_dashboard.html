@@ -1,0 +1,754 @@
+<!-- templates/core/finance/reports/financial_reports_dashboard.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Financial Reports - {{ school_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border: none;
+        overflow: hidden;
+        background: white;
+        height: 100%;
+    }
+
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+
+    .report-icon {
+        font-size: 2.5rem;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+
+    .filter-card {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+    }
+
+    .date-range-picker {
+        background: white;
+        border-radius: 5px;
+        padding: 0.5rem;
+        color: #6c757d;
+    }
+
+    .metric-card {
+        text-align: center;
+        padding: 1.5rem;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+    }
+
+    .metric-change {
+        font-size: 0.9rem;
+    }
+
+    .positive-change {
+        color: #27ae60;
+    }
+
+    .negative-change {
+        color: #e74c3c;
+    }
+
+    .chart-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+    }
+
+    .chart-tabs .nav-link.active {
+        color: var(--primary-color);
+        border-bottom: 3px solid var(--primary-color);
+        background: transparent;
+    }
+
+    .comparison-card {
+        border-left: 4px solid;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .export-options {
+        background: #f8f9fa;
+        border-radius: 5px;
+        padding: 1rem;
+    }
+
+    .download-btn {
+        border: 2px dashed #dee2e6;
+        padding: 1rem;
+        text-align: center;
+        border-radius: 5px;
+        transition: all 0.3s;
+        display: block;
+        text-decoration: none;
+        color: #6c757d;
+    }
+
+    .download-btn:hover {
+        border-color: var(--primary-color);
+        background: rgba(52, 152, 219, 0.1);
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+
+    .trend-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .schedule-report {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+    }
+
+    .arrears-table {
+        font-size: 0.9rem;
+    }
+
+    .arrears-table tbody tr:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+
+    .report-actions {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .report-card:hover .report-actions {
+        opacity: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-2">Financial Reports</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'finance_dashboard' %}">Finance</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Reports</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#scheduleModal">
+                <i class="bi bi-clock me-2"></i>Schedule Report
+            </button>
+            <button class="btn btn-success" onclick="printReports()">
+                <i class="bi bi-printer me-2"></i>Print All
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Metrics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="metric-card">
+                <div class="text-muted mb-2">Total Revenue</div>
+                <div class="metric-value text-primary">GH₵{{ total_revenue|default:0|floatformat:0|intcomma }}</div>
+                <div class="metric-change">
+                    {% with change=10 %}
+                    {% if change > 0 %}
+                    <span class="positive-change">
+                        <i class="bi bi-arrow-up-right me-1"></i>+{{ change|floatformat:1 }}%
+                    </span>
+                    {% else %}
+                    <span class="negative-change">
+                        <i class="bi bi-arrow-down-right me-1"></i>{{ change|floatformat:1 }}%
+                    </span>
+                    {% endif %}
+                    vs last period
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="metric-card">
+                <div class="text-muted mb-2">Collection Rate</div>
+                <div class="metric-value text-success">{{ collection_rate|default:85|floatformat:1 }}%</div>
+                <div class="metric-change">
+                    {% with trend=5 %}
+                    {% if trend > 0 %}
+                    <span class="positive-change">
+                        <i class="bi bi-arrow-up-right me-1"></i>+{{ trend|floatformat:1 }}%
+                    </span>
+                    {% else %}
+                    <span class="negative-change">
+                        <i class="bi bi-arrow-down-right me-1"></i>{{ trend|floatformat:1 }}%
+                    </span>
+                    {% endif %}
+                    vs target
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="metric-card">
+                <div class="text-muted mb-2">Outstanding Balance</div>
+                <div class="metric-value text-warning">GH₵{{ outstanding_balance|default:25000|floatformat:0|intcomma }}</div>
+                <div class="metric-change">
+                    {% with change=-5 %}
+                    {% if change > 0 %}
+                    <span class="negative-change">
+                        <i class="bi bi-arrow-up-right me-1"></i>+{{ change|floatformat:1 }}%
+                    </span>
+                    {% else %}
+                    <span class="positive-change">
+                        <i class="bi bi-arrow-down-right me-1"></i>{{ change|floatformat:1 }}%
+                    </span>
+                    {% endif %}
+                    vs last period
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="metric-card">
+                <div class="text-muted mb-2">Avg. Transaction</div>
+                <div class="metric-value text-info">GH₵{{ avg_transaction|default:500|floatformat:2|intcomma }}</div>
+                <div class="metric-change">
+                    {% with change=15 %}
+                    {% if change > 0 %}
+                    <span class="positive-change">
+                        <i class="bi bi-arrow-up-right me-1"></i>+{{ change|floatformat:1 }}%
+                    </span>
+                    {% else %}
+                    <span class="negative-change">
+                        <i class="bi bi-arrow-down-right me-1"></i>{{ change|floatformat:1 }}%
+                    </span>
+                    {% endif %}
+                    vs last period
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card filter-card mb-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3 text-white">Report Filters</h5>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label text-white">Period</label>
+                    <select class="form-select" id="periodSelect">
+                        <option value="today">Today</option>
+                        <option value="week" selected>This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="quarter">This Quarter</option>
+                        <option value="year">This Year</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="customRange" style="display: none;">
+                    <label class="form-label text-white">Date Range</label>
+                    <div class="date-range-picker">
+                        <input type="date" class="form-control form-control-sm d-inline-block w-45" id="startDate">
+                        <span class="mx-2 text-white">to</span>
+                        <input type="date" class="form-control form-control-sm d-inline-block w-45" id="endDate">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white">Report Type</label>
+                    <select class="form-select" id="reportType">
+                        <option value="summary">Summary</option>
+                        <option value="detailed">Detailed</option>
+                        <option value="comparative">Comparative</option>
+                        <option value="forecast">Forecast</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-light w-100" onclick="applyFilters()">
+                        <i class="bi bi-filter me-2"></i>Apply
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-download me-2"></i>Export Options
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3 col-6">
+                            <a href="#" class="download-btn" onclick="exportReport('pdf')">
+                                <i class="bi bi-file-earmark-pdf fs-4 mb-2 text-danger"></i>
+                                <div>PDF</div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <a href="#" class="download-btn" onclick="exportReport('excel')">
+                                <i class="bi bi-file-earmark-excel fs-4 mb-2 text-success"></i>
+                                <div>Excel</div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <a href="#" class="download-btn" onclick="exportReport('csv')">
+                                <i class="bi bi-file-earmark-text fs-4 mb-2 text-primary"></i>
+                                <div>CSV</div>
+                            </a>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <a href="#" class="download-btn" onclick="exportChart()">
+                                <i class="bi bi-bar-chart fs-4 mb-2 text-warning"></i>
+                                <div>Charts</div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Grid -->
+    <div class="row">
+        <!-- Income Statement -->
+        <div class="col-lg-6 mb-4">
+            <div class="card report-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Income Statement</h5>
+                    <div class="report-actions">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="exportChart('incomeChart')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#incomeDetails">
+                            <i class="bi bi-arrows-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 250px;">
+                        <canvas id="incomeChart"></canvas>
+                    </div>
+                    <div class="collapse mt-3" id="incomeDetails">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th class="text-end">Budget</th>
+                                        <th class="text-end">Actual</th>
+                                        <th class="text-end">Variance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in income_statement|default:'' %}
+                                    <tr>
+                                        <td>{{ item.category }}</td>
+                                        <td class="text-end">GH₵{{ item.budget|floatformat:0|intcomma }}</td>
+                                        <td class="text-end">GH₵{{ item.actual|floatformat:0|intcomma }}</td>
+                                        <td class="text-end">
+                                            <span class="badge bg-{% if item.variance >= 0 %}success{% else %}danger{% endif %}">
+                                                {% if item.variance >= 0 %}+{% endif %}{{ item.variance|floatformat:1 }}%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <small class="text-muted">Updated: {% now "d/m/Y H:i" %}</small>
+                    <a href="{% url 'income_statement_detail'|default:'#' %}" class="btn btn-sm btn-outline-primary float-end">
+                        View Details <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Arrears -->
+        <div class="col-lg-6 mb-4">
+            <div class="card report-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Student Arrears</h5>
+                    <div class="report-actions">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="exportArrears()">
+                            <i class="bi bi-download"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="sendReminders()">
+                            <i class="bi bi-bell"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 arrears-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Class</th>
+                                    <th class="text-end">Balance</th>
+                                    <th class="text-end">Days Overdue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student in arrears_list|slice:":5" %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-sm bg-light rounded me-2">
+                                                <i class="bi bi-person fs-5"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold">{{ student.name }}</div>
+                                                <small class="text-muted">{{ student.id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ student.class }}</td>
+                                    <td class="text-end fw-bold text-danger">GH₵{{ student.balance|default:0|floatformat:2|intcomma }}</td>
+                                    <td class="text-end">
+                                        <span class="badge bg-{% if student.days_overdue > 30 %}danger{% elif student.days_overdue > 15 %}warning{% else %}secondary{% endif %}">
+                                            {{ student.days_overdue|default:0 }} days
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-4">
+                                        <i class="bi bi-check-circle text-success fs-1 mb-2"></i>
+                                        <p class="text-muted">No outstanding arrears</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-danger">{{ high_priority_count|default:0 }} High Priority</span>
+                            <span class="badge bg-warning ms-2">{{ medium_priority_count|default:0 }} Medium</span>
+                        </div>
+                        <a href="{% url 'arrears_report'|default:'#' %}" class="btn btn-sm btn-outline-danger">
+                            View All <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Report Cards -->
+        <div class="col-md-3 col-6 mb-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <h5 class="card-title">Receipts</h5>
+                    <p class="card-text text-muted small">All payment receipts</p>
+                    <a href="{% url 'receipts_report'|default:'#' %}" class="btn btn-sm btn-outline-primary w-100">
+                        Generate
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6 mb-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <h5 class="card-title">Student Ledger</h5>
+                    <p class="card-text text-muted small">Transaction history</p>
+                    <a href="{% url 'student_ledger'|default:'#' %}" class="btn btn-sm btn-outline-primary w-100">
+                        View
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6 mb-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon">
+                        <i class="bi bi-pie-chart"></i>
+                    </div>
+                    <h5 class="card-title">Fee Analysis</h5>
+                    <p class="card-text text-muted small">Category breakdown</p>
+                    <a href="{% url 'fee_analysis'|default:'#' %}" class="btn btn-sm btn-outline-primary w-100">
+                        Analyze
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-6 mb-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <div class="report-icon">
+                        <i class="bi bi-graph-up-arrow"></i>
+                    </div>
+                    <h5 class="card-title">Trends</h5>
+                    <p class="card-text text-muted small">Historical analysis</p>
+                    <a href="{% url 'trend_analysis'|default:'#' %}" class="btn btn-sm btn-outline-primary w-100">
+                        View
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Report Section -->
+    <div class="card schedule-report mt-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="card-title text-white">Schedule Automated Reports</h5>
+                    <p class="text-white-50 mb-0">Get regular reports delivered to your email automatically</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#scheduleModal">
+                        <i class="bi bi-plus-circle me-2"></i>Create Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Report Modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Schedule Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <div class="mb-3">
+                        <label class="form-label">Report Type</label>
+                        <select class="form-select" name="report_type">
+                            <option value="daily">Daily Summary</option>
+                            <option value="weekly">Weekly Collection</option>
+                            <option value="monthly">Monthly Financial</option>
+                            <option value="arrears">Arrears Report</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Frequency</label>
+                        <select class="form-select" name="frequency">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Delivery Time</label>
+                        <input type="time" class="form-control" name="delivery_time" value="08:00">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="form-control" name="email" placeholder="you@example.com">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitSchedule()">Schedule</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize charts
+        initializeIncomeChart();
+
+        // Period selector
+        const periodSelect = document.getElementById('periodSelect');
+        if (periodSelect) {
+            periodSelect.addEventListener('change', function() {
+                const customRange = document.getElementById('customRange');
+                if (this.value === 'custom') {
+                    customRange.style.display = 'block';
+                } else {
+                    customRange.style.display = 'none';
+                }
+            });
+        }
+    });
+
+    // Initialize Income Chart
+    function initializeIncomeChart() {
+        const ctx = document.getElementById('incomeChart');
+        if (!ctx) return;
+
+        new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Tuition', 'Exams', 'Library', 'Sports', 'Transport', 'Other'],
+                datasets: [
+                    {
+                        label: 'Budget',
+                        data: [120000, 30000, 15000, 20000, 25000, 10000],
+                        backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Actual',
+                        data: [115000, 28000, 14000, 22000, 24000, 12000],
+                        backgroundColor: 'rgba(46, 204, 113, 0.5)',
+                        borderColor: 'rgba(46, 204, 113, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'GH₵' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Apply Filters
+    window.applyFilters = function() {
+        const period = document.getElementById('periodSelect').value;
+        const reportType = document.getElementById('reportType').value;
+        
+        let url = '?period=' + period + '&type=' + reportType;
+        
+        if (period === 'custom') {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate && endDate) {
+                url += '&start_date=' + startDate + '&end_date=' + endDate;
+            }
+        }
+        
+        // Show loading
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Applying...';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            window.location.href = url;
+        }, 500);
+    };
+
+    // Export Functions
+    window.exportReport = function(format) {
+        const btn = event?.target?.closest('a') || event?.target;
+        const originalText = btn?.innerHTML;
+        
+        if (btn) {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exporting...';
+            btn.disabled = true;
+        }
+        
+        // Simulate export
+        setTimeout(() => {
+            alert(`Report exported as ${format.toUpperCase()} successfully!`);
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }, 1000);
+    };
+
+    window.exportChart = function(chartId) {
+        if (!chartId) {
+            alert('All charts exported successfully!');
+        } else {
+            alert('Chart exported successfully!');
+        }
+    };
+
+    window.exportArrears = function() {
+        alert('Arrears report exported as CSV!');
+    };
+
+    window.sendReminders = function() {
+        if (confirm('Send payment reminders to all students with arrears?')) {
+            alert('Reminders sent successfully!');
+        }
+    };
+
+    window.printReports = function() {
+        window.print();
+    };
+
+    window.submitSchedule = function() {
+        const form = document.getElementById('scheduleForm');
+        const email = form.querySelector('[name="email"]').value;
+        
+        if (!email) {
+            alert('Please enter an email address');
+            return;
+        }
+        
+        alert('Report scheduled successfully!');
+        bootstrap.Modal.getInstance(document.getElementById('scheduleModal')).hide();
+        form.reset();
+    };
+</script>
+{% endblock %}

@@ -1,15 +1,18 @@
+# school_mgt_system/__init__.py - FIXED VERSION
 from __future__ import absolute_import, unicode_literals
 
-# This will make sure the app is always imported when
-# Django starts so that shared_task will use this app.
-from .celery import app as celery_app
-
+# Initialize celery_app to None by default
+celery_app = None
 __all__ = ('celery_app',)
 
-# Alternative approach if the above causes issues:
-# try:
-#     from .celery import app as celery_app
-#     __all__ = ('celery_app',)
-# except ImportError:
-#     # Celery not configured, but don't break Django
-#     pass
+# Try to import Celery app, but don't fail if it doesn't work
+try:
+    # Import at the end to avoid circular imports
+    from .celery import app as celery_app
+    print("✅ Celery app imported successfully")
+except ImportError as e:
+    print(f"⚠️  Celery import error: {e}")
+    print("⚠️  Running without Celery (tasks will be synchronous)")
+except Exception as e:
+    print(f"⚠️  Unexpected error importing Celery: {e}")
+    print("⚠️  Running without Celery")

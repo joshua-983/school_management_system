@@ -44,6 +44,7 @@ class AuditAlertRule(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_alert_rules')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    has_financial_access = models.BooleanField(default=True, verbose_name="Has Financial Access")
 
     def __str__(self):
         return self.name
@@ -212,7 +213,12 @@ class UserProfile(models.Model):
     last_login_attempt = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
+    has_financial_access = models.BooleanField(
+        default=False,
+        verbose_name="Has Financial Access",
+        help_text="Whether this user can access and manage financial operations"
+    )
     class Meta:
         verbose_name = "User Profile"
         verbose_name_plural = "User Profiles"

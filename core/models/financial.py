@@ -1,3 +1,9 @@
+
+from django.utils import timezone
+from django.conf import settings
+import hashlib
+import json
+
 import logging
 from decimal import Decimal
 from django.db import models
@@ -174,7 +180,6 @@ class FeeCategory(models.Model):
         
         return cls.objects.count()
 
-
 class Bill(models.Model):
     """Represents an invoice sent to a student for specific fees"""
     bill_number = models.CharField(max_length=20, unique=True)
@@ -331,6 +336,19 @@ class BillPayment(models.Model):
     reference_number = models.CharField(max_length=50, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    # NEW: Add these missing fields
+    is_confirmed = models.BooleanField(default=False, verbose_name="Confirmed")
+    confirmed_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='confirmed_bill_payments',
+        verbose_name="Confirmed By"
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name="Confirmation Date")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -340,15 +358,31 @@ class BillPayment(models.Model):
         verbose_name_plural = 'Bill Payments'
         indexes = [
             models.Index(fields=['bill', 'payment_date']),
+            models.Index(fields=['is_confirmed']),  # NEW: Add index for better querying
         ]
 
     def __str__(self):
         return f"Payment of GH₵{self.amount:.2f} for Bill #{self.bill.bill_number}"
 
     def save(self, *args, **kwargs):
+        # Auto-confirm if needed (cash and mobile money can be auto-confirmed)
+        if not self.is_confirmed and self.payment_mode in ['cash', 'mobile_money']:
+            self.is_confirmed = True
+            self.confirmed_at = timezone.now()
+            if self.recorded_by:
+                self.confirmed_by = self.recorded_by
+            
         # Update the bill's paid amount when a payment is saved
         super().save(*args, **kwargs)
         self.bill.update_status()
+    
+    def confirm_payment(self, user):
+        """Manually confirm payment"""
+        if not self.is_confirmed:
+            self.is_confirmed = True
+            self.confirmed_by = user
+            self.confirmed_at = timezone.now()
+            self.save()
 
 
 class Fee(models.Model):
@@ -605,3 +639,171 @@ class FeeInstallment(models.Model):
         
     def __str__(self):
         return f"Installment of {self.amount} due {self.due_date}"
+
+
+class PaymentGateway(models.Model):
+    """Configuration for payment gateways"""
+    GATEWAY_CHOICES = [
+        ('FLUTTERWAVE', 'Flutterwave'),
+        ('PAYSTACK', 'Paystack'),
+        ('STRIPE', 'Stripe'),
+    ]
+    
+    name = models.CharField(max_length=20, choices=GATEWAY_CHOICES)
+    is_active = models.BooleanField(default=True)
+    secret_key = models.CharField(max_length=255, blank=True)
+    public_key = models.CharField(max_length=255, blank=True)
+    encryption_key = models.CharField(max_length=255, blank=True)
+    webhook_hash = models.CharField(max_length=255, blank=True)
+    test_mode = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Payment Gateway'
+        verbose_name_plural = 'Payment Gateways'
+    
+    def __str__(self):
+        return f"{self.get_name_display()} ({'Active' if self.is_active else 'Inactive'})"
+    
+    def get_config(self):
+        """Get gateway configuration"""
+        return {
+            'secret_key': self.secret_key,
+            'public_key': self.public_key,
+            'encryption_key': self.encryption_key,
+            'webhook_hash': self.webhook_hash,
+            'test_mode': self.test_mode,
+        }
+
+
+class OnlinePayment(models.Model):
+    """Track online payments"""
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('SUCCESS', 'Successful'),
+        ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
+        ('REFUNDED', 'Refunded'),
+    ]
+    
+    transaction_id = models.CharField(max_length=100, unique=True)
+    reference = models.CharField(max_length=100, blank=True)
+    gateway = models.ForeignKey(PaymentGateway, on_delete=models.SET_NULL, null=True)
+    
+    # Link to fee or bill
+    fee = models.ForeignKey('Fee', on_delete=models.SET_NULL, null=True, blank=True)
+    bill = models.ForeignKey('Bill', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='GHS')
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    payment_status = models.CharField(max_length=100, blank=True)
+    
+    # Customer information
+    customer_email = models.EmailField(blank=True)
+    customer_name = models.CharField(max_length=200, blank=True)
+    customer_phone = models.CharField(max_length=20, blank=True)
+    
+    # Gateway response data
+    gateway_response = models.JSONField(default=dict, blank=True)
+    
+    # Timestamps
+    initiated_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-initiated_at']
+        indexes = [
+            models.Index(fields=['transaction_id']),
+            models.Index(fields=['status']),
+            models.Index(fields=['gateway']),
+        ]
+    
+    def __str__(self):
+        return f"Payment {self.transaction_id} - {self.get_status_display()}"
+    
+    def mark_successful(self, gateway_response=None):
+        """Mark payment as successful"""
+        self.status = 'SUCCESS'
+        self.payment_status = 'successful'
+        self.completed_at = timezone.now()
+        if gateway_response:
+            self.gateway_response = gateway_response
+        self.save()
+        
+        # Create corresponding payment record
+        self.create_payment_record()
+    
+    def mark_failed(self, error_message):
+        """Mark payment as failed"""
+        self.status = 'FAILED'
+        self.payment_status = 'failed'
+        self.completed_at = timezone.now()
+        self.gateway_response['error'] = error_message
+        self.save()
+    
+    def create_payment_record(self):
+        """Create FeePayment or BillPayment record"""
+        if self.fee:
+            # Create FeePayment
+            from .financial import FeePayment  # Import here to avoid circular import
+            
+            fee_payment = FeePayment.objects.create(
+                fee=self.fee,
+                amount=self.amount,
+                payment_mode='online',
+                payment_date=timezone.now().date(),
+                receipt_number=self.generate_receipt_number(),
+                recorded_by=None,  # System action
+                notes=f"Online payment via {self.gateway.name} - Ref: {self.transaction_id}",
+                bank_reference=self.transaction_id,
+                is_confirmed=True
+            )
+            
+            # Update fee
+            self.fee.amount_paid += self.amount
+            self.fee.save()
+            
+        elif self.bill:
+            # Create BillPayment
+            from .financial import BillPayment
+            
+            bill_payment = BillPayment.objects.create(
+                bill=self.bill,
+                amount=self.amount,
+                payment_mode='online',
+                payment_date=timezone.now().date(),
+                reference_number=self.transaction_id,
+                recorded_by=None,  # System action
+                notes=f"Online payment via {self.gateway.name}"
+            )
+            
+            # Update bill
+            self.bill.update_status()
+    
+    def generate_receipt_number(self):
+        """Generate receipt number"""
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        random_str = hashlib.md5(str(timezone.now().timestamp()).encode()).hexdigest()[:6]
+        return f"ONLINE-{timestamp}-{random_str}"
+    
+    @property
+    def payment_type(self):
+        """Get payment type"""
+        if self.fee:
+            return 'fee'
+        elif self.bill:
+            return 'bill'
+        return None
+    
+    @property
+    def student(self):
+        """Get associated student"""
+        if self.fee:
+            return self.fee.student
+        elif self.bill:
+            return self.bill.student
+        return None

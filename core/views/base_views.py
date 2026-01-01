@@ -2,7 +2,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from core.permissions import is_parent, is_admin, is_teacher
 from core.utils.logger import log_view_exception
-
+from django.db.models import Max, Min
 
 from django.shortcuts import render, redirect
 from django.http import Http404, JsonResponse
@@ -76,6 +76,8 @@ def home(request):
             # Regular authenticated user without specific role - show home page with info
             try:
                 context = {
+            'user': request.user,
+
                     'current_year': timezone.now().year,
                     'featured_stats': {
                         'total_students': Student.objects.filter(is_active=True).count(),
@@ -179,7 +181,7 @@ def admin_dashboard(request):
         )
         
         # Recent activities with error handling
-        recent_logs = AuditLog.objects.select_related('user').order_by('-timestamp')[:10]
+        recent_logs = AuditLog.objects.select_related('user').filter(user__isnull=False).order_by('-timestamp')[:10]
         
         # Get system alerts
         overdue_fees = Fee.objects.filter(
@@ -212,6 +214,7 @@ def admin_dashboard(request):
         )
         
         context = {
+            'user': request.user,
             'total_students': total_students,
             'total_teachers': total_teachers,
             'total_subjects': total_subjects,

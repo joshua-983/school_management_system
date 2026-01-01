@@ -2,6 +2,11 @@
 import logging
 import json
 import csv
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
+
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.contrib.auth.models import User
@@ -200,6 +205,7 @@ def get_category_display_name(category):
 
 
 # Fee management
+
 class FeeCategoryListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
     model = FeeCategory
     template_name = 'core/Finance/categories/fee_category_list.html'
@@ -1241,221 +1247,80 @@ class FeeDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-# Fee Payment Views
-class FeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+
+@method_decorator(csrf_protect, name='dispatch')
+class SecureFeePaymentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = FeePayment
     form_class = PaymentForm
     template_name = 'core/finance/fees/fee_payment_form.html'
-    
+
     def test_func(self):
-        return is_admin(self.request.user) or is_teacher(self.request.user)
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        fee_id = self.kwargs.get('fee_id')
-        print(f"DEBUG: Fee ID from URL: {fee_id}")
-        
-        # Check if fee exists
-        try:
-            fee = Fee.objects.get(pk=fee_id)
-            print(f"DEBUG: Fee found: {fee}")
-        except Fee.DoesNotExist:
-            print(f"DEBUG: Fee with ID {fee_id} does not exist")
-        
-        kwargs['fee_id'] = fee_id
-        return kwargs
-    
+        # ADD ADDITIONAL CHECKS
+        if not is_admin(self.request.user) and not is_teacher(self.request.user):
+            return False
+
+        # Check if user has financial permissions
+        if hasattr(self.request.user, 'profile'):
+            return self.request.user.profile.has_financial_access
+        return True
+
     def get_context_data(self, **kwargs):
+        """Get the fee object and add it to context"""
         context = super().get_context_data(**kwargs)
         fee_id = self.kwargs.get('fee_id')
-        
+
+        print(f"DEBUG: get_context_data - fee_id = {fee_id}")
+
         try:
-            fee = Fee.objects.get(pk=fee_id)
+            fee = Fee.objects.get(id=fee_id)
+            print(f"DEBUG: Found fee {fee.id}")
             context['fee'] = fee
-            # Add display name for category
-            context['category_display_name'] = fee.category.get_name_display()
-            print(f"DEBUG: Fee added to context: {fee}")
+            context['student'] = fee.student
+            context['remaining_balance'] = fee.balance
         except Fee.DoesNotExist:
+            print(f"DEBUG: Fee {fee_id} not found")
+            # Fee not found - this is what's causing your error
+            context['error'] = "Fee Record Not Found"
             context['fee'] = None
-            print(f"DEBUG: Fee not found, setting to None")
-            messages.error(self.request, 'The requested fee record could not be found or is invalid.')
-        
+
         return context
-    
-    def form_valid(self, form):
-        print("DEBUG: form_valid method called")
+
+    def get_initial(self):
+        """Set initial form values"""
+        initial = super().get_initial()
         fee_id = self.kwargs.get('fee_id')
+
         try:
-            fee = Fee.objects.get(pk=fee_id)
-            print(f"DEBUG: Fee found in form_valid: {fee}")
+            fee = Fee.objects.get(id=fee_id)
+            initial['fee'] = fee
+            # Set default amount to the remaining balance
+            if fee.balance > 0:
+                initial['amount'] = fee.balance
+            else:
+                initial['amount'] = fee.amount_payable
+        except Fee.DoesNotExist:
+            pass
+
+        return initial
+
+    def form_valid(self, form):
+        """Set the fee before saving"""
+        fee_id = self.kwargs.get('fee_id')
+
+        try:
+            fee = Fee.objects.get(id=fee_id)
             form.instance.fee = fee
         except Fee.DoesNotExist:
-            print(f"DEBUG: Fee not found in form_valid")
-            messages.error(self.request, 'The requested fee record could not be found.')
+            form.add_error(None, "Fee record not found")
             return self.form_invalid(form)
-        
-        # Ensure recorded_by is set (fallback)
-        if not form.cleaned_data.get('recorded_by'):
-            form.instance.recorded_by = self.request.user
-        
-        # FIX: Auto-confirm payments when created
-        form.instance.is_confirmed = True
-        form.instance.confirmed_by = self.request.user
-        form.instance.confirmed_at = timezone.now()
-        
-        print(f"DEBUG: Recorded by: {form.instance.recorded_by}")
-        print(f"DEBUG: Payment amount: {form.instance.amount}")
-        print(f"DEBUG: Payment mode: {form.instance.payment_mode}")
-        print(f"DEBUG: Payment date: {form.instance.payment_date}")
-        print(f"DEBUG: Payment confirmed: {form.instance.is_confirmed}")
-        
-        try:
-            with transaction.atomic():
-                # Save the payment first
-                response = super().form_valid(form)
-                print(f"DEBUG: Payment saved successfully, ID: {self.object.pk}")
-                
-                # Update the parent fee record - CALCULATE TOTAL FROM PAYMENTS
-                fee = form.instance.fee
-                print(f"DEBUG: Before update - Amount paid: {fee.amount_paid}, Balance: {fee.balance}")
-                
-                # Calculate total paid from all payments (including the new one)
-                total_paid = fee.payments.aggregate(total=Sum('amount'))['total'] or 0
-                fee.amount_paid = total_paid
-                fee.balance = fee.amount_payable - fee.amount_paid
-                
-                # FIXED: Proper status calculation with overpayment handling
-                if fee.amount_paid >= fee.amount_payable:
-                    fee.payment_status = 'paid'
-                    fee.payment_date = timezone.now().date()
-                elif fee.amount_paid > 0:
-                    fee.payment_status = 'partial'
-                else:
-                    fee.payment_status = 'unpaid'
-                
-                # Check if overdue
-                if (fee.due_date and 
-                    fee.due_date < timezone.now().date() and 
-                    fee.payment_status != 'paid'):
-                    fee.payment_status = 'overdue'
-                
-                fee.save()
-                print(f"DEBUG: After update - Amount paid: {fee.amount_paid}, Balance: {fee.balance}, Status: {fee.payment_status}")
-                
-                # Handle overpayment - create credit record
-                if hasattr(fee, 'has_overpayment') and fee.has_overpayment:
-                    # Create or update student credit
-                    credit, created = StudentCredit.objects.get_or_create(
-                        student=fee.student,
-                        source_fee=fee,
-                        is_used=False,
-                        defaults={
-                            'credit_amount': fee.overpayment_amount,
-                            'reason': f'Overpayment for {fee.category.get_name_display()}'
-                        }
-                    )
-                    if not created:
-                        credit.credit_amount = fee.overpayment_amount
-                        credit.save()
-                    
-                    messages.warning(
-                        self.request, 
-                        f'Payment recorded successfully! Overpayment of GH₵{fee.overpayment_amount:.2f} has been credited to student account.'
-                    )
-                else:
-                    messages.success(
-                        self.request, 
-                        f'Payment of GH₵{form.instance.amount:.2f} recorded successfully for {fee.student.get_full_name()}'
-                    )
-                
-                print("DEBUG: Success message set")
-                return response
-                
-        except Exception as e:
-            print(f"DEBUG: Error in form_valid: {str(e)}")
-            messages.error(self.request, f'Error recording payment: {str(e)}')
-            return self.form_invalid(form)
-    
-    def form_invalid(self, form):
-        print("DEBUG: form_invalid method called")
-        print(f"DEBUG: Form errors: {form.errors}")
-        messages.error(self.request, 'Please correct the errors below.')
-        return super().form_invalid(form)
-    
+
+        return super().form_valid(form)
+
     def get_success_url(self):
-        print("DEBUG: get_success_url called")
-        if hasattr(self, 'object') and self.object.fee:
-            url = reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
-            print(f"DEBUG: Success URL: {url}")
-            return url
-        print("DEBUG: No object, returning to fee list")
+        """Redirect to fee detail page after payment"""
+        if hasattr(self.object, 'fee') and self.object.fee:
+            return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
         return reverse_lazy('fee_list')
-
-
-# Add Refresh Payment Data View
-class RefreshPaymentDataView(LoginRequiredMixin, UserPassesTestMixin, View):
-    def test_func(self):
-        return is_admin(self.request.user)
-    
-    def post(self, request):
-        """Force refresh of payment summary data"""
-        # This forces a fresh query without any caching
-        fee_payments_count = FeePayment.objects.all().count()
-        bill_payments_count = BillPayment.objects.all().count()
-        
-        messages.success(
-            request, 
-            f'Payment data refreshed successfully. Found {fee_payments_count} fee payments and {bill_payments_count} bill payments.'
-        )
-        return redirect('payment_summary')
-
-
-class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
-    model = FeePayment
-    template_name = 'core/finance/fees/fee_payment_confirm_delete.html'
-    
-    def test_func(self):
-        return is_admin(self.request.user)
-    
-    def delete(self, request, *args, **kwargs):
-        with transaction.atomic():
-            payment = self.get_object()
-            fee = payment.fee
-            
-            # Delete the payment first
-            payment.delete()
-            
-            # Recalculate total paid from remaining payments
-            total_paid = fee.payments.aggregate(total=Sum('amount'))['total'] or 0
-            fee.amount_paid = total_paid
-            fee.balance = fee.amount_payable - fee.amount_paid
-            
-            # FIXED: Use lowercase statuses consistently
-            if fee.amount_paid <= 0:
-                fee.payment_status = 'unpaid'
-                fee.payment_date = None
-            elif fee.amount_paid < fee.amount_payable:
-                fee.payment_status = 'partial'
-            else:
-                fee.payment_status = 'paid'
-            
-            # Check if overdue
-            if (fee.due_date and 
-                fee.due_date < timezone.now().date() and 
-                fee.payment_status != 'paid'):
-                fee.payment_status = 'overdue'
-            
-            fee.save()
-            
-            messages.success(request, 'Payment record deleted successfully')
-            return HttpResponseRedirect(self.get_success_url())
-    
-    def get_success_url(self):
-        return reverse_lazy('fee_detail', kwargs={'pk': self.object.fee.pk})
-
-
-
-# NEW: Automated Fee Generation
 class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
     def test_func(self):
         return is_admin(self.request.user)
@@ -2778,7 +2643,6 @@ class FinancialHealthView(LoginRequiredMixin, UserPassesTestMixin, TemplateView)
             return 50  # Default neutral score
 
 
-# Payment Summary View - FIXED AND ENHANCED VERSION
 class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     template_name = 'core/finance/reports/payment_summary.html'
     
@@ -2838,7 +2702,7 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             bill_payments = BillPayment.objects.none()
         
         # Calculate summary by payment method
-        payment_methods = ['cash', 'mobile_money', 'bank_transfer', 'check', 'other']
+        payment_methods = ['cash', 'mobile_money', 'bank_transfer', 'check', 'other', 'cheque']
         summary_by_method = {}
         
         total_collected = Decimal('0.00')
@@ -2907,7 +2771,7 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             logger.error(f"Error calculating average transaction: {str(e)}")
             average_transaction = Decimal('0.00')
         
-        # Additional statistics
+        # Additional statistics - FIXED VERSION
         try:
             # Highest payment method
             highest_method = max(
@@ -2916,8 +2780,20 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
                 default=(None, {'total_amount': Decimal('0.00')})
             )
             
-            # Payment confirmation rate
-            confirmed_payments = fee_payments.filter(is_confirmed=True).count() + bill_payments.filter(is_confirmed=True).count()
+            # Payment confirmation rate - SAFE VERSION
+            # Use safe attribute access
+            confirmed_fee_payments = fee_payments.filter(is_confirmed=True).count()
+            
+            # For bill payments, check if field exists before using it
+            try:
+                if hasattr(BillPayment, 'is_confirmed'):
+                    confirmed_bill_payments = bill_payments.filter(is_confirmed=True).count()
+                else:
+                    confirmed_bill_payments = bill_payments.count()  # Assume all are confirmed if field doesn't exist
+            except:
+                confirmed_bill_payments = bill_payments.count()
+            
+            confirmed_payments = confirmed_fee_payments + confirmed_bill_payments
             total_payment_count = fee_payments.count() + bill_payments.count()
             confirmation_rate = (confirmed_payments / total_payment_count * 100) if total_payment_count > 0 else 0
             
@@ -2950,6 +2826,7 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             'mobile_money': 'Mobile Money',
             'bank_transfer': 'Bank Transfer',
             'check': 'Cheque',
+            'cheque': 'Cheque',
             'other': 'Other'
         }
         return display_names.get(method, method.title())
@@ -2963,7 +2840,7 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             while current_date <= end_date:
                 # Get fee payments for the day
                 day_fee_total = FeePayment.objects.filter(
-                    payment_date=current_date
+                    payment_date__date=current_date  # Use __date for DateTimeField
                 ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
                 
                 # Get bill payments for the day
@@ -3017,13 +2894,13 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             for payment in fee_payments:
                 all_payments.append({
                     'type': 'fee',
-                    'date': payment.payment_date,
+                    'date': payment.payment_date.date() if hasattr(payment.payment_date, 'date') else payment.payment_date,
                     'student': payment.fee.student if payment.fee else None,
                     'amount': payment.amount,
                     'method': payment.payment_mode,
                     'receipt_number': payment.receipt_number or f"FEE-{payment.id}",
                     'payment_obj': payment,
-                    'is_confirmed': payment.is_confirmed
+                    'is_confirmed': payment.is_confirmed if hasattr(payment, 'is_confirmed') else True
                 })
             
             # Combine and format bill payments
@@ -3034,9 +2911,9 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
                     'student': payment.bill.student if payment.bill else None,
                     'amount': payment.amount,
                     'method': payment.payment_mode,
-                    'receipt_number': getattr(payment, 'receipt_number', f"BILL-{payment.id}"),
+                    'receipt_number': getattr(payment, 'reference_number', f"BILL-{payment.id}"),
                     'payment_obj': payment,
-                    'is_confirmed': getattr(payment, 'is_confirmed', True)
+                    'is_confirmed': getattr(payment, 'is_confirmed', True)  # Safe access
                 })
             
             # Sort by date descending and take top N
@@ -3118,7 +2995,6 @@ class PaymentSummaryView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             logger.error(f"Error in export_to_excel: {str(e)}")
             raise
 
-
 class ClearImportResultsView(LoginRequiredMixin, UserPassesTestMixin, View):
     """Clear import results from session"""
     
@@ -3133,3 +3009,38 @@ class ClearImportResultsView(LoginRequiredMixin, UserPassesTestMixin, View):
             del request.session['skipped_warnings']
         
         return JsonResponse({'success': True})
+class FeePaymentDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    """View for deleting fee payments."""
+    model = FeePayment
+    template_name = 'core/finance/fees/fee_payment_confirm_delete.html'
+    
+    def test_func(self):
+        """Only admins can delete fee payments."""
+        return is_admin(self.request.user)
+    
+    def get_success_url(self):
+        """Redirect to fee detail page after deletion."""
+        fee_payment = self.object
+        if hasattr(fee_payment, 'fee') and fee_payment.fee:
+            # Update the fee balance
+            fee = fee_payment.fee
+            fee.balance += fee_payment.amount
+            fee.save(update_fields=['balance'])
+            
+            return reverse_lazy('fee_detail', kwargs={'pk': fee.pk})
+        return reverse_lazy('fee_list')
+
+class RefreshPaymentDataView(LoginRequiredMixin, UserPassesTestMixin, View):
+    def test_func(self):
+        return is_admin(self.request.user)
+
+    def post(self, request):
+        """Force refresh of payment summary data"""
+        # This forces a fresh query without any caching
+        fee_payments_count = FeePayment.objects.all().count()
+        
+        # Return a simple response
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Payment data refreshed. Total payments: {fee_payments_count}'
+        })
