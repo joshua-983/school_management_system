@@ -1,3 +1,4 @@
+# admin.py - UPDATED WITH DataMaintenance import
 from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -6,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import (
     Student, AcademicTerm, Announcement, Assignment, AttendancePeriod,
@@ -13,7 +15,7 @@ from .models import (
     FeePayment, Grade, Notification, ParentGuardian, ReportCard, 
     StudentAssignment, StudentAttendance, Subject, Teacher,
     SchoolConfiguration, AnalyticsCache, GradeAnalytics, AttendanceAnalytics,
-    TimeSlot, Timetable, TimetableEntry
+    TimeSlot, Timetable, TimetableEntry,
 )
 
 # ===========================================
@@ -64,6 +66,31 @@ class AssignmentAdminForm(forms.ModelForm):
         return cleaned_data
 
 
+class AcademicTermAdminForm(forms.ModelForm):
+    """Custom form for AcademicTerm with dynamic period choices"""
+    class Meta:
+        model = AcademicTerm
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Dynamically set period_number choices based on selected system
+        if 'period_system' in self.data:
+            period_system = self.data.get('period_system')
+        elif self.instance.pk:
+            period_system = self.instance.period_system
+        else:
+            period_system = 'TERM'
+        
+        # Get period choices for the selected system
+        from core.models.base import get_period_choices_for_system
+        period_choices = get_period_choices_for_system(period_system)
+        
+        # Update period_number field choices
+        self.fields['period_number'].widget = forms.Select(choices=period_choices)
+
+
 # ===========================================
 # ADMIN CLASSES
 # ===========================================
@@ -98,24 +125,130 @@ class ParentGuardianAdmin(admin.ModelAdmin):
 
 @admin.register(AcademicTerm)
 class AcademicTermAdmin(admin.ModelAdmin):
-    list_display = ('term', 'academic_year', 'start_date', 'end_date', 'is_active', 'get_progress_percentage')
-    list_editable = ('is_active',)
-    ordering = ('-academic_year', 'term')
-    search_fields = ('academic_year',)
+    form = AcademicTermAdminForm
+    list_display = ('get_period_display', 'academic_year', 'period_system', 'start_date', 'end_date', 'is_active', 'is_locked', 'get_progress_percentage')
+    list_editable = ('is_active', 'is_locked')
+    list_filter = ('period_system', 'academic_year', 'is_active', 'is_locked')
+    search_fields = ('name', 'academic_year')
+    ordering = ('-academic_year', 'sequence_num')
     list_per_page = 20
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('period_system', 'period_number', 'name', 'academic_year')
+        }),
+        ('Dates', {
+            'fields': ('start_date', 'end_date'),
+            'description': 'Start and end dates for this academic period'
+        }),
+        ('Status', {
+            'fields': ('is_active', 'is_locked'),
+            'description': 'Active period is the current period. Locked periods cannot be modified.'
+        }),
+    )
+    
+    def get_period_display(self, obj):
+        return obj.get_period_display()
+    get_period_display.short_description = 'Academic Period'
+    get_period_display.admin_order_field = 'sequence_num'
     
     def get_progress_percentage(self, obj):
         return f"{obj.get_progress_percentage()}%"
     get_progress_percentage.short_description = 'Progress'
+    
+    def save_model(self, request, obj, form, change):
+        """Set name automatically if not provided"""
+        if not obj.name:
+            obj.name = obj.get_period_display()
+        super().save_model(request, obj, form, change)
+    
+    actions = ['create_academic_year_periods', 'toggle_lock_status']
+    
+    def create_academic_year_periods(self, request, queryset):
+        """Create complete academic year periods for selected academic years"""
+        from datetime import date
+        
+        created_count = 0
+        skipped_count = 0
+        
+        for academic_term in queryset:
+            # Get the academic year from the selected term
+            academic_year = academic_term.academic_year
+            period_system = academic_term.period_system
+            
+            # Check if periods already exist for this academic year and system
+            existing_periods = AcademicTerm.objects.filter(
+                academic_year=academic_year,
+                period_system=period_system
+            ).count()
+            
+            if existing_periods >= 3:  # At least 3 periods already exist (for terms)
+                skipped_count += 1
+                self.message_user(
+                    request, 
+                    f"⚠️ Academic periods for {academic_year} ({period_system}) already exist.",
+                    level='warning'
+                )
+                continue
+            
+            try:
+                # Create periods using the new AcademicTerm class method
+                periods = AcademicTerm.create_academic_year(
+                    academic_year=academic_year,
+                    period_system=period_system
+                )
+                
+                created_count += len(periods)
+                
+                self.message_user(
+                    request, 
+                    f"✅ Created {len(periods)} academic periods for {academic_year} ({period_system})",
+                    level='success'
+                )
+            except Exception as e:
+                self.message_user(
+                    request, 
+                    f"❌ Error creating periods for {academic_year}: {str(e)}",
+                    level='error'
+                )
+        
+        # Final summary
+        if created_count > 0:
+            self.message_user(
+                request,
+                f"✅ Successfully created {created_count} academic periods total.",
+                level='success'
+            )
+    
+    def toggle_lock_status(self, request, queryset):
+        """Toggle lock status of selected periods"""
+        for period in queryset:
+            period.is_locked = not period.is_locked
+            period.save()
+        
+        self.message_user(
+            request, 
+            f"✅ Toggled lock status for {queryset.count()} periods",
+            level='success'
+        )
+    
+    create_academic_year_periods.short_description = "📅 Create academic year periods"
+    toggle_lock_status.short_description = "🔒 Toggle lock status"
 
 
 @admin.register(AttendancePeriod)
 class AttendancePeriodAdmin(admin.ModelAdmin):
-    list_display = ('period_type', 'name', 'term', 'start_date', 'end_date', 'is_locked', 'get_total_school_days')
-    list_filter = ('period_type', 'term', 'is_locked')
+    list_display = ('period_type', 'name', 'term_link', 'start_date', 'end_date', 'is_locked', 'get_total_school_days')
+    list_filter = ('period_type', 'term__period_system', 'is_locked')
     ordering = ('-start_date',)
-    search_fields = ('name',)
+    search_fields = ('name', 'term__name', 'term__academic_year')
     list_per_page = 20
+    raw_id_fields = ('term',)
+    
+    def term_link(self, obj):
+        return obj.term.get_period_display() if obj.term else "No Term"
+    term_link.short_description = 'Academic Period'
+    term_link.admin_order_field = 'term__sequence_num'
     
     def get_total_school_days(self, obj):
         return obj.get_total_school_days()
@@ -124,12 +257,17 @@ class AttendancePeriodAdmin(admin.ModelAdmin):
 
 @admin.register(StudentAttendance)
 class StudentAttendanceAdmin(admin.ModelAdmin):
-    list_display = ('student', 'date', 'status', 'term', 'period', 'recorded_by', 'is_ghana_school_day')
-    list_filter = ('status', 'term', 'period', 'date')
+    list_display = ('student', 'date', 'status', 'term_link', 'period', 'recorded_by', 'is_ghana_school_day')
+    list_filter = ('status', 'term__period_system', 'period', 'date')
     search_fields = ('student__first_name', 'student__last_name', 'student__student_id')
     date_hierarchy = 'date'
     raw_id_fields = ('student', 'period', 'term', 'recorded_by')
     list_per_page = 50
+    
+    def term_link(self, obj):
+        return obj.term.get_period_display() if obj.term else "No Term"
+    term_link.short_description = 'Academic Period'
+    term_link.admin_order_field = 'term__sequence_num'
     
     def is_ghana_school_day(self, obj):
         return "✅" if obj.is_ghana_school_day() else "❌"
@@ -138,11 +276,16 @@ class StudentAttendanceAdmin(admin.ModelAdmin):
 
 @admin.register(AttendanceSummary)
 class AttendanceSummaryAdmin(admin.ModelAdmin):
-    list_display = ('student', 'term', 'period', 'days_present', 'days_absent', 'attendance_rate', 'get_ges_compliance')
-    list_filter = ('term', 'period')
+    list_display = ('student', 'term_link', 'period', 'days_present', 'days_absent', 'attendance_rate', 'get_ges_compliance')
+    list_filter = ('term__period_system', 'period')
     readonly_fields = ('attendance_rate', 'present_rate', 'last_updated')
     search_fields = ('student__first_name', 'student__last_name', 'student__student_id')
     list_per_page = 30
+    
+    def term_link(self, obj):
+        return obj.term.get_period_display() if obj.term else "No Term"
+    term_link.short_description = 'Academic Period'
+    term_link.admin_order_field = 'term__sequence_num'
     
     def get_ges_compliance(self, obj):
         return "✅" if obj.get_ges_compliance() else "❌"
@@ -164,11 +307,18 @@ class FeeCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Fee)
 class FeeAdmin(admin.ModelAdmin):
-    list_display = ('student', 'category', 'amount_payable', 'amount_paid', 'balance', 'payment_status', 'due_date', 'get_remaining_days')
-    list_filter = ('payment_status', 'category', 'due_date', 'academic_year', 'term')
+    list_display = ('student', 'category', 'amount_payable', 'amount_paid', 'balance', 'payment_status', 'academic_period_link', 'due_date', 'get_remaining_days')
+    list_filter = ('payment_status', 'category', 'due_date', 'academic_year', 'academic_term__period_system')
     search_fields = ('student__first_name', 'student__last_name', 'student__student_id', 'receipt_number')
-    raw_id_fields = ('student', 'category', 'bill')
+    raw_id_fields = ('student', 'category', 'bill', 'academic_term')
     list_per_page = 50
+    
+    def academic_period_link(self, obj):
+        if obj.academic_term:
+            return obj.academic_term.get_period_display()
+        return f"Term {obj.term} ({obj.academic_year})"
+    academic_period_link.short_description = 'Academic Period'
+    academic_period_link.admin_order_field = 'academic_term__sequence_num'
     
     def get_remaining_days(self, obj):
         return obj.get_remaining_days()
@@ -419,12 +569,19 @@ class StudentAssignmentAdmin(admin.ModelAdmin):
 
 @admin.register(Grade)
 class GradeAdmin(admin.ModelAdmin):
-    list_display = ('student', 'subject', 'academic_year', 'term', 'total_score', 'ges_grade', 'letter_grade', 'is_passing', 'requires_review')
-    list_filter = ('academic_year', 'term', 'subject', 'ges_grade', 'requires_review')
+    list_display = ('student', 'subject', 'academic_year', 'academic_period_link', 'total_score', 'ges_grade', 'letter_grade', 'is_passing', 'requires_review')
+    list_filter = ('academic_year', 'academic_term__period_system', 'subject', 'ges_grade', 'requires_review')
     search_fields = ('student__first_name', 'student__last_name', 'subject__name')
-    raw_id_fields = ('student', 'subject', 'class_assignment')
+    raw_id_fields = ('student', 'subject', 'class_assignment', 'academic_term')
     list_per_page = 50
     actions = ['mark_for_review', 'clear_review_flag']
+    
+    def academic_period_link(self, obj):
+        if obj.academic_term:
+            return obj.academic_term.get_period_display()
+        return f"Term {obj.term}"
+    academic_period_link.short_description = 'Academic Period'
+    academic_period_link.admin_order_field = 'academic_term__sequence_num'
     
     # Custom method to check if passing
     def is_passing(self, obj):
@@ -448,12 +605,19 @@ class GradeAdmin(admin.ModelAdmin):
 
 @admin.register(ReportCard)
 class ReportCardAdmin(admin.ModelAdmin):
-    list_display = ('student', 'academic_year', 'term', 'average_score', 'overall_grade', 'is_published', 'created_at')
-    list_filter = ('academic_year', 'term', 'is_published')
+    list_display = ('student', 'academic_year', 'academic_period_link', 'average_score', 'overall_grade', 'is_published', 'created_at')
+    list_filter = ('academic_year', 'academic_term__period_system', 'is_published')
     search_fields = ('student__first_name', 'student__last_name', 'student__student_id')
-    raw_id_fields = ('student', 'created_by')
+    raw_id_fields = ('student', 'created_by', 'academic_term')
     list_per_page = 30
     actions = ['publish_report_cards', 'unpublish_report_cards']
+    
+    def academic_period_link(self, obj):
+        if obj.academic_term:
+            return obj.academic_term.get_period_display()
+        return f"Term {obj.term}"
+    academic_period_link.short_description = 'Academic Period'
+    academic_period_link.admin_order_field = 'academic_term__sequence_num'
     
     # Admin action to publish report cards
     def publish_report_cards(self, request, queryset):
@@ -516,12 +680,13 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(SchoolConfiguration)
 class SchoolConfigurationAdmin(admin.ModelAdmin):
-    list_display = ['grading_system', 'academic_year', 'current_term', 'is_locked', 'school_name']
-    list_editable = ['is_locked', 'current_term']
+    list_display = ['grading_system', 'academic_period_system', 'academic_year', 'current_term', 'is_locked', 'school_name']
+    list_editable = ['is_locked', 'current_term', 'academic_period_system']
+    
     fieldsets = (
         ('Grading System Configuration', {
-            'fields': ('grading_system', 'is_locked'),
-            'description': 'Configure the grading system used throughout the application.'
+            'fields': ('grading_system', 'academic_period_system', 'is_locked'),
+            'description': 'Configure the grading system and academic period system.'
         }),
         ('Academic Information', {
             'fields': ('academic_year', 'current_term')
@@ -529,11 +694,75 @@ class SchoolConfigurationAdmin(admin.ModelAdmin):
         ('School Information', {
             'fields': ('school_name', 'school_address', 'school_phone', 'school_email', 'principal_name')
         }),
+        ('Assessment Weights', {
+            'fields': ('classwork_weight', 'homework_weight', 'test_weight', 'exam_weight'),
+            'classes': ('collapse',),
+            'description': 'Weight percentages for different assessment types (must total 100%)'
+        }),
+        ('Grading Boundaries - GES System', {
+            'fields': ('grade_1_min', 'grade_2_min', 'grade_3_min', 'grade_4_min', 
+                      'grade_5_min', 'grade_6_min', 'grade_7_min', 'grade_8_min', 'grade_9_max'),
+            'classes': ('collapse',),
+            'description': 'Minimum percentages for GES grading (1-9)'
+        }),
+        ('Grading Boundaries - Letter System', {
+            'fields': ('letter_a_plus_min', 'letter_a_min', 'letter_b_plus_min', 'letter_b_min',
+                      'letter_c_plus_min', 'letter_c_min', 'letter_d_plus_min', 'letter_d_min', 'letter_f_max'),
+            'classes': ('collapse',),
+            'description': 'Minimum percentages for letter grading (A+ to F)'
+        }),
+        ('Pass/Fail Configuration', {
+            'fields': ('passing_mark',),
+            'classes': ('collapse',),
+        }),
     )
     
     def has_add_permission(self, request):
         # Only allow one configuration instance
         return not SchoolConfiguration.objects.exists()
+    
+    actions = ['create_academic_periods']
+    
+    def create_academic_periods(self, request, queryset):
+        """Create academic periods for selected configurations"""
+        for config in queryset:
+            try:
+                from core.models.academic import AcademicTerm
+                
+                # Check if periods already exist for this academic year and system
+                existing_periods = AcademicTerm.objects.filter(
+                    academic_year=config.academic_year,
+                    period_system=config.academic_period_system
+                ).count()
+                
+                if existing_periods >= 3:  # At least 3 periods already exist
+                    self.message_user(
+                        request, 
+                        f"⚠️ Academic periods for {config.academic_year} ({config.academic_period_system}) already exist.",
+                        level='warning'
+                    )
+                    continue
+                
+                # Create periods using the new method
+                periods = AcademicTerm.create_academic_year(
+                    academic_year=config.academic_year,
+                    period_system=config.academic_period_system
+                )
+                
+                self.message_user(
+                    request, 
+                    f"✅ Created {len(periods)} academic periods for {config.academic_year} ({config.academic_period_system})",
+                    level='success'
+                )
+                
+            except Exception as e:
+                self.message_user(
+                    request, 
+                    f"❌ Error creating periods for {config.academic_year}: {str(e)}",
+                    level='error'
+                )
+    
+    create_academic_periods.short_description = "📅 Create academic periods"
 
 
 @admin.register(Announcement)
@@ -571,12 +800,19 @@ class TimeSlotAdmin(admin.ModelAdmin):
 
 @admin.register(Timetable)
 class TimetableAdmin(admin.ModelAdmin):
-    list_display = ('class_level', 'day_of_week', 'academic_year', 'term', 'is_active', 'created_by')
-    list_filter = ('class_level', 'day_of_week', 'academic_year', 'term', 'is_active')
+    list_display = ('class_level', 'day_of_week', 'academic_year', 'academic_period_link', 'is_active', 'created_by')
+    list_filter = ('class_level', 'day_of_week', 'academic_year', 'academic_term__period_system', 'is_active')
     search_fields = ('class_level', 'academic_year')
     ordering = ('class_level', 'day_of_week')
     list_editable = ('is_active',)
     list_per_page = 30
+    raw_id_fields = ('academic_term',)
+    
+    def academic_period_link(self, obj):
+        if obj.academic_term:
+            return obj.academic_term.get_period_display()
+        return f"Term {obj.term}"
+    academic_period_link.short_description = 'Academic Period'
 
 
 @admin.register(TimetableEntry)
@@ -615,89 +851,11 @@ class AttendanceAnalyticsAdmin(admin.ModelAdmin):
 
 
 # ===========================================
-# DATA CLEANUP ADMIN (NEW)
+# ADDITIONAL SETUP
 # ===========================================
-
-    """Admin for data cleanup operations"""
-    actions = ['cleanup_empty_attachments', 'recalculate_attendance_summaries', 'recalculate_grade_averages']
-    
-    def has_add_permission(self, request):
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        return False
-    
-    def cleanup_empty_attachments(self, request, queryset):
-        """Clean up ALL assignments with empty string attachments"""
-        from core.models import Assignment
-        
-        # Find all assignments with empty string attachments
-        empty_assignments = Assignment.objects.filter(Q(attachment='') | Q(attachment__isnull=True))
-        fixed_count = 0
-        
-        for assignment in empty_assignments:
-            assignment.attachment = None
-            assignment.save()
-            fixed_count += 1
-        
-        self.message_user(request, f"✅ Fixed {fixed_count} assignments with empty attachments.")
-    
-    def recalculate_attendance_summaries(self, request, queryset):
-        """Recalculate attendance summaries for all terms"""
-        from core.models import AttendanceSummary, AcademicTerm
-        
-        terms = AcademicTerm.objects.all()
-        recalculated_count = 0
-        
-        for term in terms:
-            summaries = AttendanceSummary.objects.filter(term=term)
-            for summary in summaries:
-                summary.calculate_summary()
-                recalculated_count += 1
-        
-        self.message_user(request, f"✅ Recalculated {recalculated_count} attendance summaries.")
-    
-    def recalculate_grade_averages(self, request, queryset):
-        """Recalculate report card averages"""
-        from core.models import ReportCard
-        
-        report_cards = ReportCard.objects.all()
-        recalculated_count = 0
-        
-        for report_card in report_cards:
-            report_card.calculate_grades()
-            report_card.save()
-            recalculated_count += 1
-        
-        self.message_user(request, f"✅ Recalculated {recalculated_count} report cards.")
-    
-    cleanup_empty_attachments.short_description = "🚨 Fix ALL empty attachments"
-    recalculate_attendance_summaries.short_description = "📊 Recalculate attendance summaries"
-    recalculate_grade_averages.short_description = "📈 Recalculate grade averages"
-
-
-from django.db import models
-
-#     """Proxy model for data cleanup operations"""
-#     class Meta:
-#         verbose_name = "Data Maintenance"
-#         verbose_name_plural = "Data Maintenance"
-#         proxy = True
-# 
-# 
-
-# ===========================================
-# ADDITIONAL IMPORTS AND SETUP
-# ===========================================
-
-# Import timezone for use in methods
-from django.utils import timezone
 
 # Customize admin site header
-admin.site.site_header = "Judith's School Management System"
+admin.site.site_header = "School Management System"
 admin.site.site_title = "School Admin"
 admin.site.index_title = "Welcome to School Administration"
 

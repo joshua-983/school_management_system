@@ -1,10 +1,13 @@
-# core/models/report_card.py - COMPLETE FIXED VERSION
+# core/models/report_card.py - COMPLETE FIXED VERSION WITH IMPORT
 from decimal import Decimal
 from django.db import models
 from django.conf import settings
 from django.urls import reverse
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.utils import timezone
+
+# ADD THIS IMPORT
+from core.models.academic import AcademicTerm
 
 class ReportCard(models.Model):
     TERM_CHOICES = [
@@ -34,6 +37,17 @@ class ReportCard(models.Model):
         choices=TERM_CHOICES, 
         validators=[MinValueValidator(1), MaxValueValidator(3)]
     )
+    
+    # ADD THIS NEW FIELD:
+    academic_term = models.ForeignKey(
+        AcademicTerm,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name="Academic Period",
+        help_text="Link to academic period (optional)"
+    )
+    
     average_score = models.DecimalField(
         max_digits=5, 
         decimal_places=2, 
@@ -72,6 +86,7 @@ class ReportCard(models.Model):
             models.Index(fields=['student', 'academic_year', 'term']),
             models.Index(fields=['is_published']),
             models.Index(fields=['average_score']),
+            models.Index(fields=['academic_term']),  # ADD THIS INDEX
         ]
     
     def __str__(self):
@@ -80,6 +95,19 @@ class ReportCard(models.Model):
     def save(self, *args, **kwargs):
         """Calculate grades if not already calculated"""
         is_new = self.pk is None
+        
+        # Try to link to AcademicTerm if not set
+        if not self.academic_term and self.academic_year and self.term:
+            try:
+                academic_term = AcademicTerm.objects.filter(
+                    academic_year=self.academic_year,
+                    period_system='TERM',
+                    period_number=self.term
+                ).first()
+                if academic_term:
+                    self.academic_term = academic_term
+            except Exception:
+                pass
     
         # Ensure we always have a grade (CRITICAL FIX)
         if not self.overall_grade or self.overall_grade == '':

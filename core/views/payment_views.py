@@ -295,7 +295,53 @@ class PaymentCallbackView(View):
         
         return render(request, 'core/finance/payment/payment_result.html', context)
 
+# Add to core/views/payment_views.py (at the end, before the last line)
 
+class OutstandingFeesAPIView(LoginRequiredMixin, View):
+    """API endpoint for outstanding fees"""
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            # Get student
+            if hasattr(request.user, 'student'):
+                student = request.user.student
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Student profile not found'
+                }, status=404)
+            
+            # Get outstanding fees
+            outstanding_fees = Fee.objects.filter(
+                student=student,
+                status__in=['unpaid', 'partial']
+            ).select_related('category').order_by('due_date')
+            
+            fees_data = []
+            for fee in outstanding_fees:
+                fees_data.append({
+                    'id': fee.id,
+                    'category_display': fee.category.get_name_display(),
+                    'term': fee.term,
+                    'due_date': fee.due_date.strftime('%Y-%m-%d') if fee.due_date else '',
+                    'balance': float(fee.balance),
+                    'description': f"{fee.category.get_name_display()} - Term {fee.term}"
+                })
+            
+            return JsonResponse({
+                'success': True,
+                'fees': fees_data,
+                'total_outstanding': float(sum(fee.balance for fee in outstanding_fees))
+            })
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Outstanding fees API error: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Unable to fetch outstanding fees'
+            }, status=500)
 @method_decorator(csrf_exempt, name='dispatch')
 class PaymentWebhookView(View):
     """Handle payment webhooks from gateways"""

@@ -7,7 +7,8 @@ from . import views
 from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
 from .views.base_views import dashboard, home, admin_dashboard, teacher_dashboard, student_dashboard, parent_dashboard
-
+# Add this import
+from . import urls_financial
 
 from .api_views import (
     StudentListAPIView, AcademicTermAPIView, 
@@ -163,7 +164,6 @@ from .views.group_management_views import (
     assign_user_to_group, remove_user_from_group
 )
 
-# ... rest of the code ...
 
 from .views.notifications_views import (
     NotificationListView, 
@@ -987,4 +987,9 @@ urlpatterns += [
     path('student/assignment/<int:pk>/', 
          RedirectView.as_view(pattern_name='student_portal_assignment_detail', permanent=True), 
          name='student_assignment_detail'),
+]
+
+urlpatterns += [
+    # Include financial URLs
+    path('financial/', include('core.urls_financial')),
 ]

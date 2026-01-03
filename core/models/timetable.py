@@ -1,10 +1,11 @@
+# models/timetable.py - UPDATED VERSION
 """
 Timetable management models.
 """
 from django.db import models
 from django.contrib.auth import get_user_model
 
-from core.models.base import CLASS_LEVEL_CHOICES
+from core.models.base import CLASS_LEVEL_CHOICES, TERM_CHOICES  # ADD TERM_CHOICES
 from core.models.academic import Subject, AcademicTerm
 from core.models.teacher import Teacher
 
@@ -60,7 +61,20 @@ class Timetable(models.Model):
     class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
     day_of_week = models.PositiveSmallIntegerField(choices=DAYS_OF_WEEK)
     academic_year = models.CharField(max_length=20)
-    term = models.PositiveSmallIntegerField(choices=AcademicTerm.TERM_CHOICES)
+    
+    # FIX: Use TERM_CHOICES from base.py instead of AcademicTerm.TERM_CHOICES
+    term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    
+    # NEW: Add foreign key to AcademicTerm for better integration
+    academic_term = models.ForeignKey(
+        AcademicTerm,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Academic Period",
+        help_text="Link to academic period (optional)"
+    )
+    
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -77,7 +91,40 @@ class Timetable(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.get_class_level_display()} - {self.get_day_of_week_display()} - {self.academic_year} Term {self.term}"
+        # Use academic_term display if available, otherwise use term number
+        if self.academic_term:
+            period_display = self.academic_term.get_period_display()
+        else:
+            period_display = f"Term {self.term}"
+        
+        return f"{self.get_class_level_display()} - {self.get_day_of_week_display()} - {self.academic_year} {period_display}"
+    
+    def save(self, *args, **kwargs):
+        """Try to link to AcademicTerm automatically if not set"""
+        if not self.academic_term and self.academic_year and self.term:
+            try:
+                # Look for matching AcademicTerm
+                academic_term = AcademicTerm.objects.filter(
+                    academic_year=self.academic_year,
+                    period_system='TERM',  # Assuming term system
+                    period_number=self.term
+                ).first()
+                
+                if academic_term:
+                    self.academic_term = academic_term
+            except Exception:
+                pass  # Silently fail if can't find match
+        
+        super().save(*args, **kwargs)
+    
+    def get_period_display(self):
+        """Get display name for the academic period"""
+        if self.academic_term:
+            return self.academic_term.get_period_display()
+        else:
+            # Fallback to term number
+            term_display_map = dict(TERM_CHOICES)
+            return term_display_map.get(self.term, f"Term {self.term}")
 
 
 class TimetableEntry(models.Model):

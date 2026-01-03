@@ -1,3 +1,4 @@
+# models/base.py
 """
 Base classes, constants, and utility functions shared across all models.
 """
@@ -30,11 +31,68 @@ CLASS_LEVEL_CHOICES = [
 
 CLASS_LEVEL_DISPLAY_MAP = dict(CLASS_LEVEL_CHOICES)
 
+# === ACADEMIC PERIOD CONSTANTS ===
+# Original TERM_CHOICES kept for backward compatibility
 TERM_CHOICES = [
     (1, 'Term 1'),
     (2, 'Term 2'),
     (3, 'Term 3'),
 ]
+
+# NEW: Academic Period System Choices
+ACADEMIC_PERIOD_SYSTEM_CHOICES = [
+    ('TERM', '3-Term System'),
+    ('SEMESTER', '2-Semester System'),
+    ('QUARTER', '4-Quarter System'),
+    ('TRIMESTER', '3-Trimester System'),
+    ('CUSTOM', 'Custom System'),
+]
+
+# NEW: Period choices for each system
+PERIOD_CHOICES_BY_SYSTEM = {
+    'TERM': [
+        (1, 'Term 1'),
+        (2, 'Term 2'),
+        (3, 'Term 3'),
+    ],
+    'SEMESTER': [
+        (1, 'Semester 1'),
+        (2, 'Semester 2'),
+    ],
+    'QUARTER': [
+        (1, 'Quarter 1'),
+        (2, 'Quarter 2'),
+        (3, 'Quarter 3'),
+        (4, 'Quarter 4'),
+    ],
+    'TRIMESTER': [
+        (1, 'Trimester 1'),
+        (2, 'Trimester 2'),
+        (3, 'Trimester 3'),
+    ],
+    'CUSTOM': [
+        (1, 'Period 1'),
+        (2, 'Period 2'),
+        (3, 'Period 3'),
+        (4, 'Period 4'),
+        (5, 'Period 5'),
+        (6, 'Period 6'),
+    ]
+}
+
+# Helper function to get period choices
+def get_period_choices_for_system(system='TERM'):
+    """Get period choices for a specific academic period system."""
+    return PERIOD_CHOICES_BY_SYSTEM.get(system, TERM_CHOICES)
+
+# Helper function to get period display name
+def get_period_display(system, period_number):
+    """Get display name for a period based on system and number."""
+    if system not in PERIOD_CHOICES_BY_SYSTEM:
+        return f"Period {period_number}"
+    
+    choices = dict(PERIOD_CHOICES_BY_SYSTEM[system])
+    return choices.get(period_number, f"Period {period_number}")
 
 # Image path functions
 def student_image_path(instance, filename):

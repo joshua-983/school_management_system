@@ -1,3 +1,4 @@
+# models/__init__.py - UPDATED WITH DataMaintenance
 """
 Models package initialization.
 Exports all models for backward compatibility.
@@ -10,6 +11,9 @@ from .base import (
     GENDER_CHOICES,
     CLASS_LEVEL_CHOICES,
     TERM_CHOICES,
+    ACADEMIC_PERIOD_SYSTEM_CHOICES,
+    get_period_choices_for_system,
+    get_period_display,
     CLASS_LEVEL_DISPLAY_MAP,
     student_image_path,
     teacher_image_path,
@@ -44,8 +48,6 @@ from .attendance import (
     StudentAttendance,
     AttendanceSummary,
 )
-
-
 
 # Import assignment models
 from .assignments import (
@@ -92,16 +94,15 @@ from .security import (
     UserProfile,
 )
 
-# Import analytics models (REMOVE Budget and Expense from here)
+# Import analytics models
 from .analytics import (
     AnalyticsCache,
     GradeAnalytics,
     AttendanceAnalytics,
     Holiday,
-
 )
 
-# Correct - singular
+# Import configuration models
 from .configuration import (
     SchoolConfiguration,
     MaintenanceMode,
@@ -109,7 +110,8 @@ from .configuration import (
     ReportCardConfiguration,
     PromotionConfiguration,
 )
-# Import budget models (ADD THIS - these are the correct Budget and Expense models)
+
+# Import budget models
 from .budget_models import (
     Budget,
     Expense,
@@ -121,6 +123,9 @@ __all__ = [
     'GENDER_CHOICES',
     'CLASS_LEVEL_CHOICES',
     'TERM_CHOICES',
+    'ACADEMIC_PERIOD_SYSTEM_CHOICES',
+    'get_period_choices_for_system',
+    'get_period_display',
     'GhanaEducationMixin',
     
     # Academic
@@ -189,15 +194,13 @@ __all__ = [
     'GradeAnalytics',
     'AttendanceAnalytics',
     'Holiday',
-    # 'Budget',  # REMOVE FROM HERE
-    # 'Expense',  # REMOVE FROM HERE
     
     # Configuration
     'SchoolConfiguration',
     'MaintenanceMode',
     'ScheduledMaintenance',
     
-    # Budget Models (ADD THESE)
+    # Budget Models
     'Budget',
     'Expense',
 ]

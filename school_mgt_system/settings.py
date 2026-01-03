@@ -57,12 +57,11 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,::1,testser
 INTERNAL_IPS = config('INTERNAL_IPS', default='127.0.0.1,localhost', cast=Csv())
 
 # ==================== APPLICATION DEFINITION ====================
-# Core Django applications
 DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
-    'django.contrib.sessions',  # Required for sessions
+    'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
@@ -89,6 +88,7 @@ THIRD_PARTY_APPS = [
     'compressor',
     'django_cleanup.apps.CleanupConfig',
     'widget_tweaks',
+    'maintenance.apps.MaintenanceConfig',
 ]
 
 # Local applications
@@ -211,7 +211,7 @@ else:
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
             'OPTIONS': {
-                'timeout': 30,  # Add timeout for SQLite
+                'timeout': 30,
             }
         }
     }
@@ -991,7 +991,7 @@ BACKUP_CONFIG = {
 
 
 # ==================== PAYMENT GATEWAY SETTINGS ====================
-# Payment Gateway Settings
+# Payment Gateway Settings (update existing section)
 PAYMENT_GATEWAYS = {
     'FLUTTERWAVE': {
         'SECRET_KEY': config('FLUTTERWAVE_SECRET_KEY', default=''),
@@ -1000,16 +1000,39 @@ PAYMENT_GATEWAYS = {
         'WEBHOOK_HASH': config('FLUTTERWAVE_WEBHOOK_HASH', default=''),
         'BASE_URL': 'https://api.flutterwave.com/v3',
         'ACTIVE': True,
+        'CURRENCY': 'GHS',
+        'REDIRECT_URL': '/financial/payment/callback/flutterwave/',
+        'WEBHOOK_URL': '/financial/payment/webhook/flutterwave/',
+        'TIMEOUT': 30,
     },
     'PAYSTACK': {
         'SECRET_KEY': config('PAYSTACK_SECRET_KEY', default=''),
         'PUBLIC_KEY': config('PAYSTACK_PUBLIC_KEY', default=''),
         'BASE_URL': 'https://api.paystack.co',
         'ACTIVE': True,
+        'CURRENCY': 'GHS',
+        'REDIRECT_URL': '/financial/payment/callback/paystack/',
+        'WEBHOOK_URL': '/financial/payment/webhook/paystack/',
+        'TIMEOUT': 30,
     }
 }
 
+# Default payment gateway
 DEFAULT_PAYMENT_GATEWAY = config('DEFAULT_PAYMENT_GATEWAY', default='FLUTTERWAVE')
+
+# Payment system settings
+PAYMENT_SETTINGS = {
+    'ALLOWED_CURRENCIES': ['GHS', 'USD'],
+    'MINIMUM_PAYMENT': Decimal('0.50'),
+    'MAXIMUM_PAYMENT': Decimal('100000.00'),
+    'DEFAULT_CURRENCY': 'GHS',
+    'AUTO_CONFIRM_PAYMENTS': True,
+    'RECEIPT_PREFIX': 'REC',
+    'FEE_PREFIX': 'FEE',
+    'BILL_PREFIX': 'BILL',
+    'ENABLE_EMAIL_RECEIPTS': True,
+    'ENABLE_SMS_NOTIFICATIONS': False,  # Set to True if you have SMS service
+}
 
 # ==================== SCHOOL INFORMATION ====================
 # School Information

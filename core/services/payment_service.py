@@ -523,33 +523,3 @@ class PaystackGateway:
         pass
 
 
-# Pending Payment Model (Add to models.py)
-class PendingPayment(models.Model):
-    """Track pending online payments"""
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('cancelled', 'Cancelled'),
-    ]
-    
-    reference = models.CharField(max_length=100, unique=True)
-    fee = models.ForeignKey(Fee, on_delete=models.CASCADE, null=True, blank=True)
-    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, null=True, blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    gateway = models.CharField(max_length=20)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    initiated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    metadata = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['reference']),
-            models.Index(fields=['status']),
-        ]
-    
-    def __str__(self):
-        return f"Pending: {self.reference} - GH₵{self.amount}"

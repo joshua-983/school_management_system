@@ -68,6 +68,16 @@ class Grade(models.Model):
         validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Academic year must be in format YYYY/YYYY')]
     )
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
+    
+    academic_term = models.ForeignKey(
+        AcademicTerm,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name="Academic Period",
+        help_text="Link to academic period (optional)"
+    )
+
 
     # ========== RAW PERCENTAGE SCORES (0-100%) ==========
     # These fields store the raw percentage scores (e.g., 75.5%)
@@ -212,6 +222,7 @@ class Grade(models.Model):
             models.Index(fields=['student', 'academic_year', 'term']),
             models.Index(fields=['subject', 'academic_year', 'term']),
             models.Index(fields=['total_score']),
+            models.Index(fields=['academic_term']),  # ADD THIS INDEX
         ]
     
     def __str__(self):
@@ -261,6 +272,19 @@ class Grade(models.Model):
             # Set class_level from student
             if self.student and not self.class_level:
                 self.class_level = self.student.class_level
+            
+            # Try to link to AcademicTerm if not set
+            if not self.academic_term and self.academic_year and self.term:
+                try:
+                    academic_term = AcademicTerm.objects.filter(
+                        academic_year=self.academic_year,
+                        period_system='TERM',
+                        period_number=self.term
+                    ).first()
+                    if academic_term:
+                        self.academic_term = academic_term
+                except Exception:
+                    pass
         
             # Try to set class_assignment if not set
             if not self.class_assignment_id and self.student and self.subject:
@@ -298,6 +322,17 @@ class Grade(models.Model):
         except Exception as e:
             logger.error(f"Error saving grade: {str(e)}", exc_info=True)
             raise
+    
+    @property
+    def term_display(self):
+        """Get display term for backward compatibility"""
+        try:
+            if hasattr(self, 'academic_term'):
+                return self.academic_term.get_period_display()
+            return f"Term {self.term}"
+        except:
+            return f"Term {self.term}"
+    
     
     def calculate_total_score(self):
         """Calculate weighted total score using SchoolConfiguration weights"""

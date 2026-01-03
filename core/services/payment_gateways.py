@@ -1,4 +1,3 @@
-# core/services/payment_gateways.py
 import logging
 import hashlib
 import hmac
@@ -44,7 +43,7 @@ class PaymentGateway(ABC):
     def format_amount(self, amount: Decimal, currency: str) -> int:
         """Convert Decimal amount to smallest currency unit (e.g., pesewas)"""
         if currency.upper() in ['GHS', 'USD', 'EUR', 'GBP']:
-            return int(amount * 100)  # Convert to cents/pesewas
+            return int(amount * 100)
         return int(amount)
     
     def log_transaction(self, transaction_type: str, data: Dict[str, Any], 

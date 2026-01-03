@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.conf import settings
 import hashlib
 import json
-
+from core.models.academic import AcademicTerm
 import logging
 from decimal import Decimal
 from django.db import models
@@ -13,13 +13,11 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.db.models import Sum
-
-# ADD THIS LINE:
 from datetime import timedelta, datetime
 
 from core.models.base import TERM_CHOICES
 from core.models.student import Student
-from core.models.academic import AcademicTerm
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -394,6 +392,16 @@ class Fee(models.Model):
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
+    # ADD THIS NEW FIELD:
+    academic_term = models.ForeignKey(
+        AcademicTerm,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name="Academic Period",
+        help_text="Link to academic period (optional)"
+    )
+    
     amount_payable = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
@@ -424,16 +432,31 @@ class Fee(models.Model):
             models.Index(fields=['student']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['due_date']),
+            models.Index(fields=['academic_term']),  # ADD THIS INDEX
         ]
 
     def __str__(self):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
+
 
     def update_payment_status(self):
         """Update payment status with proper overpayment handling"""
         tolerance = PAYMENT_TOLERANCE
         grace_period = PAYMENT_GRACE_PERIOD
         today = timezone.now().date()
+        
+        # Ensure due_date is a date object
+        if isinstance(self.due_date, str):
+            from datetime import datetime
+            try:
+                self.due_date = datetime.strptime(self.due_date, '%Y-%m-%d').date()
+            except ValueError:
+                try:
+                    self.due_date = datetime.strptime(self.due_date, '%d/%m/%Y').date()
+                except ValueError:
+                    # Default to today if can't parse
+                    self.due_date = today
+        
         effective_due_date = self.due_date + timedelta(days=grace_period)
         
         # Don't update if status is cancelled or refunded
@@ -482,6 +505,31 @@ class Fee(models.Model):
 
     def save(self, *args, **kwargs):
         """Auto-calculate balance and update payment status before saving"""
+        # Try to link to AcademicTerm if not set
+        if not self.academic_term and self.academic_year and self.term:
+            try:
+                academic_term = AcademicTerm.objects.filter(
+                    academic_year=self.academic_year,
+                    period_system='TERM',
+                    period_number=self.term
+                ).first()
+                if academic_term:
+                    self.academic_term = academic_term
+            except Exception:
+                pass
+        
+        # Ensure due_date is a date object
+        if isinstance(self.due_date, str):
+            from datetime import datetime
+            try:
+                self.due_date = datetime.strptime(self.due_date, '%Y-%m-%d').date()
+            except ValueError:
+                try:
+                    self.due_date = datetime.strptime(self.due_date, '%d/%m/%Y').date()
+                except ValueError:
+                    # Default to 30 days from now
+                    self.due_date = timezone.now().date() + timedelta(days=30)
+        
         # Calculate balance (can be negative for overpayment)
         self.balance = self.amount_payable - self.amount_paid
         
@@ -807,3 +855,35 @@ class OnlinePayment(models.Model):
         elif self.bill:
             return self.bill.student
         return None
+
+
+# Pending Payment Model (Add to models.py)
+class PendingPayment(models.Model):
+    """Track pending online payments"""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    reference = models.CharField(max_length=100, unique=True)
+    fee = models.ForeignKey(Fee, on_delete=models.CASCADE, null=True, blank=True)
+    bill = models.ForeignKey(Bill, on_delete=models.CASCADE, null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    gateway = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    initiated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['reference']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"Pending: {self.reference} - GH₵{self.amount}"

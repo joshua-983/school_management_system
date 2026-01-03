@@ -1,3 +1,4 @@
+# models/configuration.py - CORRECTED VERSION
 """
 System configuration models.
 """
@@ -11,7 +12,12 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models.base import TERM_CHOICES, CLASS_LEVEL_CHOICES
+# UPDATE IMPORTS TO INCLUDE ACADEMIC_PERIOD_SYSTEM_CHOICES
+from core.models.base import (
+    TERM_CHOICES, 
+    CLASS_LEVEL_CHOICES,
+    ACADEMIC_PERIOD_SYSTEM_CHOICES  # ADDED
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -293,6 +299,15 @@ class SchoolConfiguration(models.Model):
         help_text="School operates on 3-term system"
     )
     
+    # NEW: Academic Period System
+    academic_period_system = models.CharField(
+        max_length=10,
+        choices=ACADEMIC_PERIOD_SYSTEM_CHOICES,
+        default='TERM',
+        verbose_name="Academic Period System",
+        help_text="System used for academic periods (Terms, Semesters, etc.)"
+    )
+    
     # School Information
     school_name = models.CharField(
         max_length=200, 
@@ -434,6 +449,18 @@ class SchoolConfiguration(models.Model):
     def get_school_level_display_name(self):
         """Get user-friendly school level name."""
         return dict(self.SCHOOL_LEVEL_CHOICES).get(self.school_level, 'COMBINED')
+    
+    def get_current_academic_period(self):
+        """Get the current academic period based on configuration"""
+        from core.models.academic import AcademicTerm
+        
+        current_period = AcademicTerm.objects.filter(
+            academic_year=self.academic_year,
+            period_system=self.academic_period_system,
+            is_active=True
+        ).first()
+        
+        return current_period
     
     def get_ges_grade_for_score(self, score):
         """Get GES grade (1-9) for a given score."""
@@ -610,7 +637,6 @@ class SchoolConfiguration(models.Model):
         # Ensure weights total 100%
         self._validate_weights()
     
-    
     def get_display_grade_for_score(self, score):
         """Get display grade based on score and grading system"""
         try:
@@ -630,7 +656,6 @@ class SchoolConfiguration(models.Model):
         except (ValueError, TypeError):
             return "N/A"
 
-        # Also add this method for better color handling
     def get_grade_color_for_display(self, grade):
         """Get Bootstrap color class for grade display"""
         if grade in ['1', '2', 'A+', 'A']:
@@ -645,6 +670,36 @@ class SchoolConfiguration(models.Model):
             return 'danger'
         else:
             return 'secondary'
+
+    def create_academic_periods_for_year(self):
+        """Create academic periods for the current academic year"""
+        from core.models.academic import AcademicTerm
+        
+        try:
+            # Check if periods already exist
+            existing = AcademicTerm.objects.filter(
+                academic_year=self.academic_year,
+                period_system=self.academic_period_system
+            ).exists()
+            
+            if existing:
+                return False, f"Academic periods for {self.academic_year} already exist."
+            
+            # Create periods
+            periods = AcademicTerm.create_academic_year(
+                academic_year=self.academic_year,
+                period_system=self.academic_period_system
+            )
+            
+            return True, f"Created {len(periods)} academic periods for {self.academic_year} ({self.academic_period_system})"
+            
+        except Exception as e:
+            return False, f"Error creating academic periods: {str(e)}"
+    
+    def get_period_system_display(self):
+        """Get display name for academic period system"""
+        system_map = dict(ACADEMIC_PERIOD_SYSTEM_CHOICES)
+        return system_map.get(self.academic_period_system, 'Term System')
 
 
 class ReportCardConfiguration(models.Model):

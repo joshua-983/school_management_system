@@ -1,4 +1,3 @@
-# core/views/payment_gateway_views.py
 import logging
 import json
 from django.views.decorators.csrf import csrf_exempt
@@ -11,10 +10,12 @@ from django.utils import timezone
 from django.conf import settings
 from django.urls import reverse
 from django.db import transaction
-
+from django.views.generic import TemplateView
+from django.conf import settings
 from core.services.payment_service import PaymentService
 from core.models import Fee, Bill, Student
 from core.models.audit import FinancialAuditTrail
+from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
 
@@ -267,3 +268,75 @@ class GeneratePaymentReceiptView(LoginRequiredMixin, View):
         
         filename = f"receipt_{payment_data['receipt_number']}.pdf"
         return receipt_generator.generate_receipt_response(payment_data, student_data, filename)
+
+
+class ContactSupportView(TemplateView):
+    """Simple contact support page"""
+    template_name = 'payment/contact_support.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'school_name': settings.SCHOOL_INFO.get('NAME', 'School Management System'),
+            'contact_email': settings.SCHOOL_INFO.get('EMAIL', 'support@school.edu'),
+            'contact_phone': settings.SCHOOL_INFO.get('PHONE', '+233 XXX XXX XXXX')
+        })
+        return context
+
+
+class OutstandingFeesAPIView(LoginRequiredMixin, View):
+    """API endpoint for outstanding fees"""
+    
+    def get(self, request):
+        try:
+            # Get current user's outstanding fees
+            if hasattr(request.user, 'student'):
+                student = request.user.student
+                
+                # Query outstanding fees
+                outstanding_fees = Fee.objects.filter(
+                    student=student,
+                    status__in=['unpaid', 'partial']
+                ).select_related('category').order_by('due_date')
+                
+                # Format response
+                fees_data = []
+                for fee in outstanding_fees:
+                    fees_data.append({
+                        'id': fee.id,
+                        'category': fee.category.get_name_display(),
+                        'category_display': fee.category.get_name_display(),
+                        'term': fee.term,
+                        'academic_year': fee.academic_year,
+                        'amount': float(fee.amount),
+                        'paid': float(fee.paid_amount),
+                        'balance': float(fee.balance),
+                        'description': f"{fee.category.get_name_display()} - Term {fee.term}",
+                        'due_date': fee.due_date.strftime('%Y-%m-%d'),
+                        'status': fee.get_status_display(),
+                        'status_code': fee.status,
+                        'is_overdue': fee.due_date < timezone.now().date() and fee.balance > 0
+                    })
+                
+                return JsonResponse({
+                    'success': True,
+                    'fees': fees_data,
+                    'total_outstanding': sum(fee.balance for fee in outstanding_fees),
+                    'count': len(fees_data)
+                })
+            else:
+                return JsonResponse({
+                    'success': True,
+                    'fees': [],
+                    'total_outstanding': 0,
+                    'count': 0,
+                    'message': 'No student profile found'
+                })
+                
+        except Exception as e:
+            logger.error(f"Outstanding fees API error: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Unable to fetch outstanding fees',
+                'message': str(e)
+            }, status=500)

@@ -1,0 +1,578 @@
+<!-- templates/core/finance/payment/payment_result.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Payment Result - {{ school_name|default:"School Management System" }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --success-color: #28a745;
+        --error-color: #dc3545;
+        --warning-color: #ffc107;
+        --info-color: #17a2b8;
+        --primary-color: #0d6efd;
+        --light-bg: #f8f9fa;
+        --border-color: #dee2e6;
+        --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .payment-container {
+        max-width: 900px;
+        margin: 2rem auto;
+    }
+    
+    .payment-card {
+        background: white;
+        border-radius: 15px;
+        box-shadow: var(--shadow);
+        border: none;
+        overflow: hidden;
+    }
+    
+    .payment-header {
+        padding: 2rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .success-header {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+    }
+    
+    .error-header {
+        background: linear-gradient(135deg, #dc3545, #e83e8c);
+        color: white;
+    }
+    
+    .payment-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    
+    .payment-status {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .payment-message {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin-bottom: 1.5rem;
+    }
+    
+    .payment-body {
+        padding: 2rem;
+    }
+    
+    .receipt-section {
+        background: var(--light-bg);
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--border-color);
+    }
+    
+    .receipt-title {
+        color: var(--primary-color);
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--primary-color);
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px dashed var(--border-color);
+    }
+    
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        color: #666;
+    }
+    
+    .info-value {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .amount-highlight {
+        font-size: 1.5rem;
+        color: var(--success-color);
+        font-weight: 700;
+    }
+    
+    .student-info {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid var(--primary-color);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 2rem;
+    }
+    
+    .btn-icon {
+        margin-right: 0.5rem;
+    }
+    
+    .print-btn {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        border: none;
+        color: white;
+    }
+    
+    .print-btn:hover {
+        background: linear-gradient(135deg, #138496, #117a8b);
+        color: white;
+    }
+    
+    .home-btn {
+        background: linear-gradient(135deg, #6c757d, #5a6268);
+        border: none;
+        color: white;
+    }
+    
+    .home-btn:hover {
+        background: linear-gradient(135deg, #5a6268, #545b62);
+        color: white;
+    }
+    
+    .transaction-details {
+        background: #fff8e1;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+        border-left: 4px solid var(--warning-color);
+    }
+    
+    .timestamp {
+        color: #666;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 1rem;
+    }
+    
+    .alert-container {
+        margin-bottom: 2rem;
+    }
+    
+    @media print {
+        body {
+            background: white;
+            padding: 0;
+        }
+        
+        .payment-container {
+            margin: 0;
+            max-width: 100%;
+        }
+        
+        .payment-card {
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
+        
+        .action-buttons,
+        .no-print {
+            display: none !important;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .payment-body {
+            padding: 1rem;
+        }
+        
+        .info-row {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .action-buttons .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="payment-container">
+        {% if success %}
+        <!-- Success Payment -->
+        <div class="payment-card">
+            <div class="payment-header success-header">
+                <div class="payment-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <h1 class="payment-status">Payment Successful!</h1>
+                <p class="payment-message">{{ message }}</p>
+                <div class="alert alert-light alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    A receipt has been generated and sent to your email. Please keep this for your records.
+                </div>
+            </div>
+            
+            <div class="payment-body">
+                <!-- Student Information -->
+                {% if receipt_data.student %}
+                <div class="student-info">
+                    <h5><i class="bi bi-person-badge me-2"></i>Student Information</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Student Name:</span>
+                                <span class="info-value">{{ receipt_data.student.name }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Student ID:</span>
+                                <span class="info-value">{{ receipt_data.student.student_id }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Class/Grade:</span>
+                                <span class="info-value">{{ receipt_data.student.class }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Payment Date:</span>
+                                <span class="info-value">{{ receipt_data.payment_date|date:"F d, Y H:i" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Receipt Details -->
+                <div class="receipt-section">
+                    <h4 class="receipt-title">
+                        <i class="bi bi-receipt me-2"></i>Payment Receipt
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Receipt Number:</span>
+                                <span class="info-value">{{ receipt_data.receipt_number }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Transaction ID:</span>
+                                <span class="info-value">{{ receipt_data.transaction_id }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Payment Method:</span>
+                                <span class="info-value">{{ receipt_data.payment_method }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Payment Status:</span>
+                                <span class="info-value">
+                                    <span class="badge bg-success">Completed</span>
+                                </span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Processed Date:</span>
+                                <span class="info-value">{% now "F d, Y H:i" %}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-row mt-3 pt-3" style="border-top: 2px solid var(--success-color);">
+                        <span class="info-label">Amount Paid:</span>
+                        <span class="amount-highlight">GH₵{{ receipt_data.amount }}</span>
+                    </div>
+                </div>
+                
+                <!-- Transaction Details -->
+                {% if receipt_data.verification_data %}
+                <div class="transaction-details">
+                    <h5><i class="bi bi-credit-card me-2"></i>Transaction Details</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Gateway Reference:</span>
+                                <span class="info-value">{{ receipt_data.verification_data.data.tx_ref|default:"N/A" }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Payment Gateway:</span>
+                                <span class="info-value">{{ receipt_data.verification_data.gateway|default:"Online" }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <span class="info-label">Currency:</span>
+                                <span class="info-value">{{ receipt_data.verification_data.data.currency|default:"GHS" }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Gateway Status:</span>
+                                <span class="info-value">
+                                    <span class="badge bg-success">{{ receipt_data.verification_data.status|default:"successful" }}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button onclick="window.print()" class="btn btn-lg print-btn">
+                        <i class="bi bi-printer btn-icon"></i> Print Receipt
+                    </button>
+                    <a href="{% url 'admin:index' %}" class="btn btn-lg home-btn">
+                        <i class="bi bi-house-door btn-icon"></i> Back to Dashboard
+                    </a>
+                    {% if payment_id %}
+                    <a href="{% url 'generate_receipt_pdf' payment_id=payment_id %}" class="btn btn-lg btn-info">
+                        <i class="bi bi-download btn-icon"></i> Download PDF
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'payment_history' %}" class="btn btn-lg btn-secondary">
+                        <i class="bi bi-clock-history btn-icon"></i> View Payment History
+                    </a>
+                </div>
+                
+                <div class="timestamp no-print">
+                    <i class="bi bi-clock me-1"></i>
+                    Generated on {% now "F d, Y \a\t H:i:s" %}
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <!-- Failed Payment -->
+        <div class="payment-card">
+            <div class="payment-header error-header">
+                <div class="payment-icon">
+                    <i class="bi bi-x-circle-fill"></i>
+                </div>
+                <h1 class="payment-status">Payment Failed</h1>
+                <p class="payment-message">{{ message }}</p>
+            </div>
+            
+            <div class="payment-body">
+                <div class="alert-container">
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Payment Processing Issue
+                        </h4>
+                        <p>The payment could not be completed. Please try again or contact support if the issue persists.</p>
+                        <hr>
+                        <p class="mb-0"><strong>Error Details:</strong> {{ message }}</p>
+                    </div>
+                    
+                    <div class="alert alert-warning" role="alert">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Note:</strong> If money was deducted from your account, it will be automatically refunded within 24 hours.
+                    </div>
+                </div>
+                
+                <!-- Troubleshooting Tips -->
+                <div class="receipt-section">
+                    <h4 class="receipt-title">
+                        <i class="bi bi-lightbulb me-2"></i>What to do next?
+                    </h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="bi bi-arrow-repeat text-primary me-2"></i>Try Again</h5>
+                                    <p class="card-text">Check your payment details and try the payment again.</p>
+                                    <a href="javascript:history.back()" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-arrow-left me-1"></i> Go Back
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5><i class="bi bi-headset text-success me-2"></i>Contact Support</h5>
+                                    <p class="card-text">Get assistance from our support team.</p>
+                                    <a href="mailto:finance@{{ site_url|default:'school.edu' }}" class="btn btn-success btn-sm">
+                                        <i class="bi bi-envelope me-1"></i> Email Support
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons for Failed Payment -->
+                <div class="action-buttons">
+                    <a href="{% url 'admin:index' %}" class="btn btn-lg home-btn">
+                        <i class="bi bi-house-door btn-icon"></i> Back to Dashboard
+                    </a>
+                    <a href="javascript:history.back()" class="btn btn-lg btn-primary">
+                        <i class="bi bi-arrow-repeat btn-icon"></i> Try Again
+                    </a>
+                    <a href="{% url 'contact_support' %}" class="btn btn-lg btn-outline-danger">
+                        <i class="bi bi-headset btn-icon"></i> Contact Support
+                    </a>
+                </div>
+                
+                <!-- Support Information -->
+                <div class="transaction-details mt-4">
+                    <h5><i class="bi bi-info-circle me-2"></i>Support Information</h5>
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="info-row">
+                                <span class="info-label">Email:</span>
+                                <span class="info-value">finance@{{ site_url|default:'school.edu' }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-row">
+                                <span class="info-label">Phone:</span>
+                                <span class="info-value">{{ support_phone|default:'+233 XX XXX XXXX' }}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-row">
+                                <span class="info-label">Hours:</span>
+                                <span class="info-value">{{ support_hours|default:'Mon-Fri, 8AM-5PM' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-hide alerts after 10 seconds
+    setTimeout(function() {
+        var alerts = document.querySelectorAll('.alert:not(.alert-warning)');
+        alerts.forEach(function(alert) {
+            var bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        });
+    }, 10000);
+    
+    // Print receipt function
+    function printReceipt() {
+        window.print();
+    }
+    
+    // Generate PDF receipt (if PDF generation endpoint exists)
+    function generatePDF() {
+        {% if payment_id %}
+        fetch("{% url 'generate_receipt_pdf' payment_id=payment_id %}")
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'receipt_{{ receipt_data.receipt_number }}.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('Error generating PDF:', error);
+                alert('Failed to generate PDF. Please try again.');
+            });
+        {% endif %}
+    }
+    
+    // Copy receipt number to clipboard
+    function copyReceiptNumber() {
+        const receiptNumber = "{{ receipt_data.receipt_number }}";
+        navigator.clipboard.writeText(receiptNumber)
+            .then(() => {
+                // Show toast notification
+                showToast('Receipt number copied to clipboard!', 'success');
+            })
+            .catch(err => {
+                console.error('Failed to copy: ', err);
+                showToast('Failed to copy receipt number', 'error');
+            });
+    }
+    
+    // Show toast notification
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            // Create toast container if it doesn't exist
+            const container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(container);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        document.getElementById('toast-container').appendChild(toast);
+        
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        // Remove toast after it's hidden
+        toast.addEventListener('hidden.bs.toast', function () {
+            toast.remove();
+        });
+    }
+    
+    // Success message auto-redirect after 30 seconds
+    {% if success %}
+    setTimeout(function() {
+        window.location.href = "{% url 'admin:index' %}";
+    }, 30000);
+    {% endif %}
+    
+    // Add copy button functionality if needed
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add copy button to receipt number if not present
+        const receiptNumberEl = document.querySelector('.info-row .info-value');
+        if (receiptNumberEl && !document.querySelector('.copy-btn')) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'btn btn-sm btn-outline-secondary ms-2 copy-btn';
+            copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>';
+            copyBtn.title = 'Copy to clipboard';
+            copyBtn.onclick = copyReceiptNumber;
+            receiptNumberEl.appendChild(copyBtn);
+        }
+    });
+</script>
+{% endblock %}

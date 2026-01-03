@@ -17,25 +17,52 @@ logger = logging.getLogger(__name__)
 class AcademicTermForm(forms.ModelForm):
     class Meta:
         model = AcademicTerm
-        fields = ['term', 'academic_year', 'start_date', 'end_date', 'is_active']
+        fields = ['period_system', 'period_number', 'name', 'academic_year', 'start_date', 'end_date', 'is_active']
         widgets = {
+            'period_system': forms.Select(attrs={'class': 'form-select'}),
+            'period_number': forms.Select(attrs={'class': 'form-select'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional custom name (e.g., "First Term")'}),
+            'academic_year': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'YYYY/YYYY'}),
             'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
-            'term': forms.Select(attrs={'class': 'form-select'}),
-            'academic_year': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'YYYY/YYYY'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         help_texts = {
             'academic_year': 'Format: YYYY/YYYY (e.g., 2024/2025)',
-            'is_active': 'Only one term can be active per academic year',
+            'is_active': 'Only one period can be active per academic year',
+            'name': 'Optional. If empty, will be generated automatically',
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Dynamically set period_number choices based on selected system
+        if 'period_system' in self.data:
+            period_system = self.data.get('period_system')
+        elif self.instance.pk:
+            period_system = self.instance.period_system
+        else:
+            period_system = 'TERM'
+        
+        # Get period choices for the selected system
+        from core.models.base import get_period_choices_for_system
+        period_choices = get_period_choices_for_system(period_system)
+        
+        # Update period_number field choices
+        self.fields['period_number'].widget = forms.Select(choices=period_choices)
+        
+        # Make academic_year read-only for existing terms
+        if self.instance and self.instance.pk:
+            self.fields['academic_year'].widget.attrs['readonly'] = True
+            self.fields['academic_year'].widget.attrs['class'] = 'readonly'
     
     def clean(self):
         cleaned_data = super().clean()
         start_date = cleaned_data.get('start_date')
         end_date = cleaned_data.get('end_date')
         academic_year = cleaned_data.get('academic_year')
-        term = cleaned_data.get('term')
+        period_system = cleaned_data.get('period_system')
+        period_number = cleaned_data.get('period_number')
         
         if start_date and end_date:
             if start_date > end_date:
@@ -43,26 +70,29 @@ class AcademicTermForm(forms.ModelForm):
             
             delta = end_date - start_date
             if delta.days > 150:
-                raise ValidationError("Term duration should not exceed 5 months")
+                raise ValidationError("Period duration should not exceed 5 months")
             
             overlapping = AcademicTerm.objects.filter(
                 Q(start_date__lte=end_date) & Q(end_date__gte=start_date)
             ).exclude(pk=self.instance.pk if self.instance else None)
             
             if overlapping.exists():
-                raise ValidationError("This term overlaps with an existing term")
+                raise ValidationError("This academic period overlaps with an existing period")
             
-            if academic_year and term:
+            if academic_year and period_system and period_number:
                 existing = AcademicTerm.objects.filter(
-                    term=term, academic_year=academic_year
+                    period_system=period_system,
+                    period_number=period_number,
+                    academic_year=academic_year
                 ).exclude(pk=self.instance.pk if self.instance else None)
                 
                 if existing.exists():
                     raise ValidationError(
-                        f"A {AcademicTerm(term=term).get_term_display()} already exists for {academic_year}"
+                        f"A {period_system} {period_number} already exists for {academic_year}"
                     )
         
         return cleaned_data
+
 
 class AttendancePeriodForm(forms.ModelForm):
     class Meta:
@@ -109,6 +139,7 @@ class AttendancePeriodForm(forms.ModelForm):
                 raise ValidationError("Custom period requires a name")
         
         return cleaned_data
+
 
 class StudentAttendanceForm(forms.ModelForm):
     class Meta:
@@ -190,7 +221,7 @@ class StudentAttendanceForm(forms.ModelForm):
             
             if not (term.start_date <= date <= term.end_date):
                 raise ValidationError(
-                    f"Date must be within {term} ({term.start_date} to {term.end_date})"
+                    f"Date must be within {term.get_period_display()} ({term.start_date} to {term.end_date})"
                 )
             
             if period and not (period.start_date <= date <= period.end_date):
@@ -203,12 +234,13 @@ class StudentAttendanceForm(forms.ModelForm):
         
         return cleaned_data
 
+
 class BulkAttendanceForm(forms.Form):
     term = forms.ModelChoiceField(
         queryset=AcademicTerm.objects.filter(is_active=True),
         widget=forms.Select(attrs={'class': 'form-select'}),
         required=True,
-        label="Academic Term"
+        label="Academic Period"
     )
     
     period = forms.ModelChoiceField(
@@ -277,7 +309,7 @@ class BulkAttendanceForm(forms.Form):
         if date and term:
             if not (term.start_date <= date <= term.end_date):
                 raise ValidationError(
-                    f"Date must be within {term} ({term.start_date} to {term.end_date})"
+                    f"Date must be within {term.get_period_display()} ({term.start_date} to {term.end_date})"
                 )
             
             if date > timezone.now().date():
@@ -295,6 +327,7 @@ class BulkAttendanceForm(forms.Form):
                 raise ValidationError("File size must be less than 5MB")
         
         return csv_file
+
 
 class AttendanceRecordForm(forms.Form):
     """Form for recording attendance for multiple students at once"""
@@ -344,6 +377,7 @@ class AttendanceRecordForm(forms.Form):
                 label="Notes"
             )
 
+
 class AttendanceFilterForm(forms.Form):
     STATUS_CHOICES = [
         ('', 'All Statuses'),
@@ -358,7 +392,7 @@ class AttendanceFilterForm(forms.Form):
         queryset=AcademicTerm.objects.all(),
         widget=forms.Select(attrs={'class': 'form-select'}),
         required=False,
-        label="Academic Term"
+        label="Academic Period"
     )
     
     period = forms.ModelChoiceField(
