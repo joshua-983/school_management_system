@@ -382,17 +382,115 @@ class BillPayment(models.Model):
             self.confirmed_at = timezone.now()
             self.save()
 
+class FeeGenerationBatch(models.Model):
+    """Track fee generation batches for auditing"""
+    BATCH_STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('GENERATED', 'Generated'),
+        ('UNDER_REVIEW', 'Under Review'),
+        ('VERIFIED', 'Verified'),
+        ('LOCKED', 'Locked'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
+    batch_number = models.CharField(max_length=50, unique=True)
+    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.PROTECT)
+    status = models.CharField(max_length=20, choices=BATCH_STATUS_CHOICES, default='DRAFT')
+    
+    # Statistics
+    total_students = models.IntegerField(default=0)
+    total_fees = models.IntegerField(default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    
+    # Tracking
+    generated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='fee_batches')
+    generated_at = models.DateTimeField(auto_now_add=True)
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='verified_batches')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='locked_batches')
+    locked_at = models.DateTimeField(null=True, blank=True)
+    
+    notes = models.TextField(blank=True)
+    
+    class Meta:
+        verbose_name = 'Fee Generation Batch'
+        verbose_name_plural = 'Fee Generation Batches'
+        ordering = ['-generated_at']
+    
+    def __str__(self):
+        return f"Batch {self.batch_number} - {self.academic_term}"
+    
+    def save(self, *args, **kwargs):
+        if not self.batch_number:
+            self.batch_number = self.generate_batch_number()
+        super().save(*args, **kwargs)
+    
+    def generate_batch_number(self):
+        """Generate unique batch number"""
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        return f"FEE-BATCH-{timestamp}"
+    
+    def verify_batch(self, user):
+        """Verify all fees in this batch"""
+        if self.status != 'GENERATED':
+            raise ValidationError("Only GENERATED batches can be verified")
+        
+        # Update all fees to VERIFIED
+        fees = Fee.objects.filter(generation_batch=self)
+        for fee in fees:
+            fee.update_generation_status('VERIFIED')
+        
+        self.status = 'VERIFIED'
+        self.verified_by = user
+        self.verified_at = timezone.now()
+        self.save()
+    
+    def lock_batch(self, user):
+        """Lock all fees in this batch (ready for billing)"""
+        if self.status != 'VERIFIED':
+            raise ValidationError("Only VERIFIED batches can be locked")
+        
+        # Update all fees to LOCKED
+        fees = Fee.objects.filter(generation_batch=self)
+        for fee in fees:
+            fee.update_generation_status('LOCKED')
+        
+        self.status = 'LOCKED'
+        self.locked_by = user
+        self.locked_at = timezone.now()
+        self.save()
+    
+    def get_statistics(self):
+        """Get batch statistics"""
+        fees = Fee.objects.filter(generation_batch=self)
+        return {
+            'total_fees': fees.count(),
+            'total_amount': fees.aggregate(Sum('amount_payable'))['amount_payable__sum'] or 0,
+            'draft_count': fees.filter(generation_status='DRAFT').count(),
+            'generated_count': fees.filter(generation_status='GENERATED').count(),
+            'verified_count': fees.filter(generation_status='VERIFIED').count(),
+            'locked_count': fees.filter(generation_status='LOCKED').count(),
+        }
+
 
 class Fee(models.Model):
     PAYMENT_STATUS_CHOICES = FEE_STATUS_CHOICES
     PAYMENT_MODE_CHOICES = PAYMENT_METHOD_CHOICES
-
+    
+    # ADD THESE NEW CONSTANTS at the top of Fee class
+    GENERATION_STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('GENERATED', 'Generated'),
+        ('VERIFIED', 'Verified'),
+        ('LOCKED', 'Locked'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+    
     student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name='fees')
     category = models.ForeignKey(FeeCategory, on_delete=models.PROTECT, related_name='fees')
     academic_year = models.CharField(max_length=9)
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
-    # ADD THIS NEW FIELD:
     academic_term = models.ForeignKey(
         AcademicTerm,
         on_delete=models.PROTECT,
@@ -402,9 +500,59 @@ class Fee(models.Model):
         help_text="Link to academic period (optional)"
     )
     
+    # FIXED: Use string reference for FeeGenerationBatch
+    generation_batch = models.ForeignKey(
+        'FeeGenerationBatch',  # ✅ FIXED: String reference instead of class
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='fees',
+        verbose_name="Generation Batch"
+    )
+    
     amount_payable = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
     balance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
+    
+    # ADD THIS FIELD for generation workflow
+    generation_status = models.CharField(
+        max_length=20,
+        choices=GENERATION_STATUS_CHOICES,
+        default='DRAFT',
+        verbose_name="Generation Status",
+        help_text="Status in the fee generation workflow"
+    )
+    
+    # NEW FIELDS: Verification and locking tracking
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_fees',
+        verbose_name="Verified By"
+    )
+    
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Verification Date"
+    )
+    
+    locked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='locked_fees',
+        verbose_name="Locked By"
+    )
+    
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Locking Date"
+    )
     
     payment_status = models.CharField(
         max_length=20, 
@@ -415,7 +563,7 @@ class Fee(models.Model):
     payment_date = models.DateField(blank=True, null=True)
     due_date = models.DateField()
     
-    bill = models.ForeignKey(Bill, on_delete=models.SET_NULL, null=True, blank=True, related_name='fees')
+    bill = models.ForeignKey('Bill', on_delete=models.SET_NULL, null=True, blank=True, related_name='fees')
     
     receipt_number = models.CharField(max_length=20, blank=True)
     notes = models.TextField(blank=True)
@@ -432,13 +580,59 @@ class Fee(models.Model):
             models.Index(fields=['student']),
             models.Index(fields=['payment_status']),
             models.Index(fields=['due_date']),
-            models.Index(fields=['academic_term']),  # ADD THIS INDEX
+            models.Index(fields=['academic_term']),
+            models.Index(fields=['generation_status']),
+            models.Index(fields=['generation_batch']),
         ]
 
     def __str__(self):
         return f"{self.student} - {self.category} ({self.academic_year} Term {self.term})"
 
 
+    def update_generation_status(self, status, user=None):
+        """Update generation status with validation"""
+        valid_transitions = {
+            'DRAFT': ['GENERATED', 'VERIFIED', 'CANCELLED'],
+            'GENERATED': ['DRAFT', 'VERIFIED', 'CANCELLED'],
+            'VERIFIED': ['LOCKED', 'DRAFT', 'CANCELLED'],
+            'LOCKED': [],  # Cannot change from LOCKED
+            'CANCELLED': ['DRAFT'],
+        }
+        
+        if self.generation_status == 'LOCKED':
+            raise ValidationError("Cannot change status of a LOCKED fee")
+        
+        if status not in valid_transitions.get(self.generation_status, []):
+            raise ValidationError(
+                f"Cannot transition from {self.generation_status} to {status}"
+            )
+        
+        self.generation_status = status
+        
+        # Set timestamps for verification and locking
+        if status == 'VERIFIED' and user:
+            self.verified_by = user
+            self.verified_at = timezone.now()
+        elif status == 'LOCKED' and user:
+            self.locked_by = user
+            self.locked_at = timezone.now()
+            # Set proper due date when locking
+            if self.academic_term:
+                self.due_date = self.academic_term.start_date + timedelta(days=14)
+        
+        self.save()
+    
+    @property
+    def is_editable(self):
+        """Check if fee is editable"""
+        return self.generation_status in ['DRAFT', 'GENERATED']
+    
+    @property
+    def is_billable(self):
+        """Check if fee can be included in a bill"""
+        return self.generation_status in ['VERIFIED', 'LOCKED']
+
+    # KEEP YOUR EXISTING update_payment_status() method as is
     def update_payment_status(self):
         """Update payment status with proper overpayment handling"""
         tolerance = PAYMENT_TOLERANCE
@@ -498,11 +692,13 @@ class Fee(models.Model):
                 'payment_status': 'Cannot mark as paid when amount paid is less than payable'
             })
         
-        if not self.pk and self.due_date < timezone.now().date():
+        # Modify validation for DRAFT fees
+        if not self.pk and self.due_date < timezone.now().date() and self.generation_status not in ['DRAFT', 'GENERATED']:
             raise ValidationError({
-                'due_date': 'Due date cannot be in the past for new fees'
+                'due_date': 'Due date cannot be in the past for new non-draft fees'
             })
 
+    # UPDATE the save() method to handle draft fees properly:
     def save(self, *args, **kwargs):
         """Auto-calculate balance and update payment status before saving"""
         # Try to link to AcademicTerm if not set
@@ -527,13 +723,19 @@ class Fee(models.Model):
                 try:
                     self.due_date = datetime.strptime(self.due_date, '%d/%m/%Y').date()
                 except ValueError:
-                    # Default to 30 days from now
-                    self.due_date = timezone.now().date() + timedelta(days=30)
+                    # For DRAFT fees, set far future date
+                    if self.generation_status in ['DRAFT', 'GENERATED']:
+                        self.due_date = timezone.now().date() + timedelta(days=365)
+                    else:
+                        # Default to 30 days from now for non-draft fees
+                        self.due_date = timezone.now().date() + timedelta(days=30)
         
         # Calculate balance (can be negative for overpayment)
         self.balance = self.amount_payable - self.amount_paid
         
-        self.update_payment_status()
+        # Only auto-update payment status for non-draft fees
+        if self.generation_status not in ['DRAFT', 'GENERATED']:
+            self.update_payment_status()
         
         if self.payment_status == 'paid' and not self.payment_date:
             self.payment_date = timezone.now().date()
@@ -542,6 +744,7 @@ class Fee(models.Model):
             
         super().save(*args, **kwargs)
 
+    # KEEP YOUR EXISTING get_payment_status_html() method
     def get_payment_status_html(self):
         """Get HTML badge for payment status with overpayment indicator"""
         status_display = self.get_payment_status_display()
@@ -575,7 +778,6 @@ class Fee(models.Model):
             return "Due today"
         else:
             return f"{remaining} days remaining"
-
 
 class FeePayment(models.Model):
     PAYMENT_MODE_CHOICES = [

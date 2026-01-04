@@ -12,6 +12,7 @@
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
                     <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_batch_list' %}">Fee Batches</a></li>
                     <li class="breadcrumb-item active">Generate Fees</li>
                 </ol>
             </nav>
@@ -21,10 +22,10 @@
     <div class="row">
         <div class="col-lg-8 mx-auto">
             <div class="card shadow-sm">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header bg-info text-white">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        Generate Fees for Current Term
+                        <i class="bi bi-file-earmark-plus me-2"></i>
+                        Generate Draft Fees for Current Term
                     </h5>
                 </div>
                 <div class="card-body">
@@ -33,7 +34,8 @@
                             <i class="bi bi-info-circle me-2"></i>About This Process
                         </h6>
                         <p class="mb-0">
-                            This will automatically create fee records for all active students based on mandatory fee categories for the current academic term.
+                            This will automatically create <strong>DRAFT</strong> fee records for all active students.
+                            You will be able to review and edit these fees before finalizing them for billing.
                         </p>
                     </div>
 
@@ -91,6 +93,54 @@
                         </div>
                     </div>
 
+                    <!-- Workflow Visualization -->
+                    <div class="mb-4">
+                        <h6>Fee Generation Workflow:</h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="steps">
+                                    <div class="step-item">
+                                        <div class="step-number bg-info text-white">1</div>
+                                        <div class="step-content">
+                                            <h6 class="mb-1">Generate Draft Fees</h6>
+                                            <p class="mb-0 text-muted small">Create draft fees for review</p>
+                                        </div>
+                                    </div>
+                                    <div class="step-connector">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number bg-secondary text-white">2</div>
+                                        <div class="step-content">
+                                            <h6 class="mb-1">Review & Edit</h6>
+                                            <p class="mb-0 text-muted small">Edit amounts, add/remove fees</p>
+                                        </div>
+                                    </div>
+                                    <div class="step-connector">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number bg-warning text-white">3</div>
+                                        <div class="step-content">
+                                            <h6 class="mb-1">Verify Fees</h6>
+                                            <p class="mb-0 text-muted small">Confirm all fees are correct</p>
+                                        </div>
+                                    </div>
+                                    <div class="step-connector">
+                                        <i class="bi bi-arrow-right"></i>
+                                    </div>
+                                    <div class="step-item">
+                                        <div class="step-number bg-success text-white">4</div>
+                                        <div class="step-content">
+                                            <h6 class="mb-1">Lock for Billing</h6>
+                                            <p class="mb-0 text-muted small">Finalize fees for billing</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Mandatory Categories -->
                     <div class="mb-4">
                         <h6>Mandatory Fee Categories:</h6>
@@ -99,20 +149,25 @@
                             <div class="list-group-item">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h6 class="mb-1">{{ category.name }}</h6>
+                                        <h6 class="mb-1">{{ category.get_name_display }}</h6>
                                         <small class="text-muted">
                                             Default Amount: GH₵{{ category.default_amount|floatformat:2 }}
                                             {% if category.class_levels %}
-                                            • Classes: {{ category.class_levels }}
+                                            • Applies to: {{ category.class_levels }}
+                                            {% endif %}
+                                            {% if not category.is_mandatory %}
+                                            <span class="text-warning">(Optional)</span>
                                             {% endif %}
                                         </small>
                                     </div>
-                                    <span class="badge bg-success">Mandatory</span>
+                                    <span class="badge bg-{% if category.is_mandatory %}success{% else %}info{% endif %}">
+                                        {% if category.is_mandatory %}Mandatory{% else %}Optional{% endif %}
+                                    </span>
                                 </div>
                             </div>
                             {% empty %}
                             <div class="list-group-item text-center text-muted">
-                                No mandatory fee categories found
+                                No fee categories found. Please set up fee categories first.
                             </div>
                             {% endfor %}
                         </div>
@@ -126,20 +181,33 @@
                                 <i class="bi bi-exclamation-triangle me-2"></i>Important Notes
                             </h6>
                             <ul class="mb-0">
-                                <li>This process will only create fees for students who don't already have fees for the current term</li>
-                                <li>Fees will be generated based on mandatory categories applicable to each student's class</li>
-                                <li>Due dates will be set to 2 weeks after the term start date</li>
-                                <li>This action cannot be undone automatically</li>
+                                <li>This process creates <strong>DRAFT</strong> fees that can be reviewed and edited</li>
+                                <li>You will be redirected to a review page where you can edit amounts or remove fees</li>
+                                <li>You must <strong>Verify</strong> and then <strong>Lock</strong> fees before generating bills</li>
+                                <li>Only locked fees will be included in bills sent to parents</li>
+                                <li>Draft fees have far future due dates that will be corrected when locked</li>
+                                <li>This process will skip students who already have draft fees for this term</li>
                             </ul>
+                        </div>
+
+                        <!-- Optional: Add notes about the batch -->
+                        <div class="mb-3">
+                            <label for="batch_notes" class="form-label">
+                                <i class="bi bi-chat-left-text me-1"></i>Batch Notes (Optional)
+                            </label>
+                            <textarea name="batch_notes" id="batch_notes" class="form-control" rows="2" 
+                                      placeholder="Add any notes about this fee generation batch..."></textarea>
                         </div>
 
                         <div class="d-flex justify-content-between align-items-center mt-4">
                             <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left me-2"></i>Cancel
                             </a>
-                            <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-gear me-2"></i>Generate Term Fees
-                            </button>
+                            <div>
+                                <button type="submit" class="btn btn-info">
+                                    <i class="bi bi-file-earmark-plus me-2"></i>Generate Draft Fees
+                                </button>
+                            </div>
                         </div>
                     </form>
                     {% else %}
@@ -155,11 +223,121 @@
                         <a href="{% url 'fee_list' %}" class="btn btn-primary">
                             <i class="bi bi-arrow-left me-2"></i>Back to Fee Records
                         </a>
+                        {% if is_admin %}
+                        <a href="{% url 'academic_term_create' %}" class="btn btn-success ms-2">
+                            <i class="bi bi-plus-circle me-2"></i>Create Academic Term
+                        </a>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
             </div>
+
+            <!-- Recent Fee Batches (if any) -->
+            {% if is_admin %}
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Recent Fee Batches
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% with recent_batches=FeeGenerationBatch.objects.all|slice:":5" %}
+                        {% if recent_batches %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Batch Number</th>
+                                        <th>Status</th>
+                                        <th>Fees</th>
+                                        <th>Generated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for batch in recent_batches %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'review_term_fees' batch_id=batch.id %}" class="text-decoration-none">
+                                                {{ batch.batch_number|truncatechars:15 }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-{{ batch.status|lower }}">
+                                                {{ batch.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ batch.total_fees }}</td>
+                                        <td>{{ batch.generated_at|timesince }} ago</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center mt-2">
+                            <a href="{% url 'fee_batch_list' %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-list-ul me-1"></i>View All Batches
+                            </a>
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center mb-0">No fee batches have been created yet.</p>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
+
+<style>
+.steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin: 0 -10px;
+}
+.step-item {
+    flex: 1;
+    text-align: center;
+    padding: 0 10px;
+    position: relative;
+}
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin: 0 auto 10px;
+    font-size: 18px;
+}
+.step-content h6 {
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+.step-connector {
+    flex: 0 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 20px;
+    color: #6c757d;
+}
+@media (max-width: 768px) {
+    .steps {
+        flex-wrap: wrap;
+    }
+    .step-item {
+        flex: 0 0 50%;
+        margin-bottom: 20px;
+    }
+    .step-connector {
+        display: none;
+    }
+}
+</style>
 {% endblock %}

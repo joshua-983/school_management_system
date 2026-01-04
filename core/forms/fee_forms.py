@@ -10,12 +10,12 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 
 from core.models import (
-    FeeCategory, Fee, FeePayment, FeeDiscount, FeeInstallment,  # ADDED FeePayment
-    Student, CLASS_LEVEL_CHOICES, TERM_CHOICES
+    FeeCategory, Fee, FeePayment, FeeDiscount, FeeInstallment,
+    Student, CLASS_LEVEL_CHOICES, TERM_CHOICES, FeeGenerationBatch,
+    AcademicTerm 
 )
 
 logger = logging.getLogger(__name__)
-
 
 class FeeCategoryForm(forms.ModelForm):
     class Meta:
@@ -75,9 +75,10 @@ class FeeForm(forms.ModelForm):
     
     class Meta:
         model = Fee
-        fields = ['student', 'category', 'academic_year', 'term', 
-                 'amount_payable', 'amount_paid', 'payment_status', 'payment_mode', 
-                 'payment_date', 'due_date', 'notes']
+        fields = ['student', 'category', 'academic_year', 'term', 'academic_term',
+                 'amount_payable', 'amount_paid', 'payment_status', 'payment_mode',
+                 'payment_date', 'due_date', 'notes', 'generation_status',
+                 'generation_batch', 'bill']  # ADDED generation_status, generation_batch
         widgets = {
             'student': forms.Select(attrs={
                 'class': 'form-control',
@@ -93,6 +94,9 @@ class FeeForm(forms.ModelForm):
                 'placeholder': 'YYYY/YYYY e.g., 2024/2025'
             }),
             'term': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'academic_term': forms.Select(attrs={
                 'class': 'form-control'
             }),
             'amount_payable': forms.NumberInput(attrs={
@@ -127,12 +131,23 @@ class FeeForm(forms.ModelForm):
                 'rows': 2,
                 'placeholder': 'Additional notes...'
             }),
+            'generation_status': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'generation_batch': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'bill': forms.Select(attrs={
+                'class': 'form-control'
+            }),
         }
         labels = {
             'amount_payable': 'Amount Payable (GH₵)',
             'amount_paid': 'Amount Paid (GH₵)',
             'payment_mode': 'Payment Method',
             'payment_date': 'Payment Date',
+            'generation_status': 'Generation Status',
+            'generation_batch': 'Generation Batch',
         }
 
     def __init__(self, *args, **kwargs):
@@ -154,6 +169,18 @@ class FeeForm(forms.ModelForm):
         if 'student' in self.fields:
             self.fields['student'].queryset = Student.objects.filter(is_active=True)
         
+        # Generation batch field setup
+        if 'generation_batch' in self.fields:
+            self.fields['generation_batch'].queryset = FeeGenerationBatch.objects.all().order_by('-generated_at')
+            self.fields['generation_batch'].required = False
+            self.fields['generation_batch'].empty_label = "--------- No Batch ---------"
+        
+        # Academic term field setup
+        if 'academic_term' in self.fields:
+            self.fields['academic_term'].queryset = AcademicTerm.objects.all().order_by('-start_date')
+            self.fields['academic_term'].required = False
+            self.fields['academic_term'].empty_label = "--------- Select Term ---------"
+        
         current_year = timezone.now().year
         next_year = current_year + 1
         self.fields['academic_year'].initial = f"{current_year}/{next_year}"
@@ -169,6 +196,16 @@ class FeeForm(forms.ModelForm):
             self.fields['due_date'].initial = timezone.now().date() + timezone.timedelta(days=30)
         
         self.fields['payment_status'].initial = 'unpaid'
+        
+        # Set default generation status for new fees
+        if not self.instance.pk:
+            self.fields['generation_status'].initial = 'DRAFT'
+        
+        # For existing fees, make generation status read-only if LOCKED
+        if self.instance.pk and self.instance.generation_status == 'LOCKED':
+            self.fields['generation_status'].widget.attrs['readonly'] = True
+            self.fields['generation_status'].widget.attrs['disabled'] = True
+            self.fields['generation_status'].help_text = "Cannot change status of LOCKED fees"
         
         if self.student_id:
             try:
@@ -227,10 +264,40 @@ class FeeForm(forms.ModelForm):
 
     def clean_due_date(self):
         due_date = self.cleaned_data.get('due_date')
+        generation_status = self.cleaned_data.get('generation_status', self.instance.generation_status if self.instance else 'DRAFT')
+        
+        # For DRAFT and GENERATED fees, allow far future dates
+        if generation_status in ['DRAFT', 'GENERATED']:
+            return due_date  # No validation for draft fees
+        
+        # For non-draft fees, validate due date
         if due_date and due_date < timezone.now().date():
             if not self.instance.pk:
-                raise ValidationError("Due date cannot be in the past for new fees")
+                raise ValidationError("Due date cannot be in the past for new non-draft fees")
         return due_date
+    
+    def clean_generation_status(self):
+        generation_status = self.cleaned_data.get('generation_status')
+        current_status = self.instance.generation_status if self.instance else 'DRAFT'
+        
+        # Validate status transitions
+        valid_transitions = {
+            'DRAFT': ['GENERATED', 'VERIFIED', 'CANCELLED'],
+            'GENERATED': ['DRAFT', 'VERIFIED', 'CANCELLED'],
+            'VERIFIED': ['LOCKED', 'DRAFT', 'CANCELLED'],
+            'LOCKED': [],  # Cannot change from LOCKED
+            'CANCELLED': ['DRAFT'],
+        }
+        
+        if current_status == 'LOCKED' and generation_status != 'LOCKED':
+            raise ValidationError("Cannot change status of a LOCKED fee")
+        
+        if generation_status not in valid_transitions.get(current_status, []):
+            raise ValidationError(
+                f"Cannot transition from {current_status} to {generation_status}"
+            )
+        
+        return generation_status
 
     def clean(self):
         cleaned_data = super().clean()
@@ -243,6 +310,7 @@ class FeeForm(forms.ModelForm):
         payment_mode = cleaned_data.get('payment_mode')
         payment_date = cleaned_data.get('payment_date')
         payment_status = cleaned_data.get('payment_status', 'unpaid')
+        generation_status = cleaned_data.get('generation_status', 'DRAFT')
 
         if not category:
             self.add_error('category', 'Please select a fee category')
@@ -272,6 +340,13 @@ class FeeForm(forms.ModelForm):
                 self.add_error('payment_mode', 'Payment method is required when an amount is paid')
             if not payment_date:
                 self.add_error('payment_date', 'Payment date is required when an amount is paid')
+        
+        # Additional validation for LOCKED fees
+        if generation_status == 'LOCKED':
+            if not cleaned_data.get('due_date'):
+                self.add_error('due_date', 'Due date is required for LOCKED fees')
+            elif cleaned_data.get('due_date') and cleaned_data['due_date'] < timezone.now().date():
+                self.add_error('due_date', 'Due date cannot be in the past for LOCKED fees')
 
         return cleaned_data
 
@@ -371,7 +446,6 @@ class FeeInstallmentForm(forms.ModelForm):
         if due_date and due_date < timezone.now().date():
             raise ValidationError("Due date cannot be in the past")
         return due_date
-
 
 
 class PaymentForm(forms.ModelForm):
@@ -491,6 +565,15 @@ class FeeFilterForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+    
+    # ADDED generation_status filter
+    generation_status = forms.ChoiceField(
+        choices=[('', 'All Statuses'), ('DRAFT', 'Draft'), ('GENERATED', 'Generated'), 
+                ('VERIFIED', 'Verified'), ('LOCKED', 'Locked'), ('CANCELLED', 'Cancelled')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     category = forms.ModelChoiceField(
         queryset=FeeCategory.objects.filter(is_active=True),
         required=False,
@@ -549,6 +632,15 @@ class FeeStatusReportForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+    
+    # ADDED generation_status filter for reports
+    generation_status = forms.ChoiceField(
+        choices=[('', 'All Statuses'), ('DRAFT', 'Draft'), ('GENERATED', 'Generated'), 
+                ('VERIFIED', 'Verified'), ('LOCKED', 'Locked')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     bill_status = forms.ChoiceField(
         choices=[('', 'All'), ('billed', 'Billed'), ('unbilled', 'Unbilled')],
         required=False,
@@ -597,6 +689,15 @@ class BulkFeeImportForm(forms.Form):
         initial=1,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+    
+    # ADDED generation_status field for bulk imports
+    generation_status = forms.ChoiceField(
+        choices=[('DRAFT', 'Draft'), ('GENERATED', 'Generated'), ('VERIFIED', 'Verified')],
+        initial='DRAFT',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     update_existing = forms.BooleanField(
         required=False,
         initial=False,
@@ -614,6 +715,7 @@ class BulkFeeUpdateForm(forms.Form):
         ('mark_paid', 'Mark as Paid'),
         ('mark_overdue', 'Mark as Overdue'),
         ('add_payment', 'Add Payment'),
+        ('update_generation_status', 'Update Generation Status'),  # ADDED new action
     ]
     
     action = forms.ChoiceField(
@@ -655,6 +757,14 @@ class BulkFeeUpdateForm(forms.Form):
     )
     adjustment_type = forms.ChoiceField(
         choices=[('', 'Select Type'), ('increase', 'Increase'), ('decrease', 'Decrease'), ('set', 'Set to Amount')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # ADDED generation status update field
+    new_generation_status = forms.ChoiceField(
+        choices=[('', 'Select Generation Status'), ('DRAFT', 'Draft'), ('GENERATED', 'Generated'), 
+                ('VERIFIED', 'Verified'), ('LOCKED', 'Locked')],
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
@@ -707,6 +817,14 @@ class BulkFeeCreationForm(forms.Form):
             'type': 'date'
         })
     )
+    
+    # ADDED generation_status field for bulk creation
+    generation_status = forms.ChoiceField(
+        choices=[('DRAFT', 'Draft'), ('GENERATED', 'Generated'), ('VERIFIED', 'Verified')],
+        initial='DRAFT',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     description = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={
@@ -715,3 +833,87 @@ class BulkFeeCreationForm(forms.Form):
             'placeholder': 'Optional description...'
         })
     )
+
+
+# NEW FORM: For generating term fees
+class GenerateTermFeesForm(forms.Form):
+    """Form for generating term fees"""
+    academic_term = forms.ModelChoiceField(
+        queryset=AcademicTerm.objects.all().order_by('-start_date'),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Academic Term",
+        help_text="Select the term for which to generate fees"
+    )
+    
+    include_optional = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Include optional fee categories',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Check to include non-mandatory fee categories"
+    )
+    
+    def clean_academic_term(self):
+        academic_term = self.cleaned_data.get('academic_term')
+        
+        # Check if fees already exist for this term
+        existing_fees = Fee.objects.filter(academic_term=academic_term).exists()
+        if existing_fees:
+            raise ValidationError(
+                "Fees already exist for this academic term. "
+                "Please review existing fees before generating new ones."
+            )
+        
+        return academic_term
+
+
+# NEW FORM: For batch management
+class FeeBatchFilterForm(forms.Form):
+    """Form for filtering fee batches"""
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses'), ('DRAFT', 'Draft'), ('GENERATED', 'Generated'), 
+                ('VERIFIED', 'Verified'), ('LOCKED', 'Locked'), ('CANCELLED', 'Cancelled')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    academic_term = forms.ModelChoiceField(
+        queryset=AcademicTerm.objects.all().order_by('-start_date'),
+        required=False,
+        empty_label="All Terms",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    generated_by = forms.ModelChoiceField(
+        queryset=None,  # Will be set in __init__
+        required=False,
+        empty_label="All Users",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        label="Generated After"
+    )
+    
+    end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        label="Generated Before"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set the generated_by queryset to users who have generated batches
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.fields['generated_by'].queryset = User.objects.filter(
+            fee_batches__isnull=False
+        ).distinct().order_by('username')

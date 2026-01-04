@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Generate Bills from Fees{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="bi bi-receipt me-2"></i>Generate Bills from Locked Fees</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'fee_list' %}">Fee Records</a></li>
+                    <li class="breadcrumb-item active">Generate Bills</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-lock me-2"></i>
+                Locked Fees Ready for Billing
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">{{ locked_fees_count }}</h3>
+                            <small class="text-muted">Locked Fees</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">GH₵{{ total_amount|floatformat:2 }}</h3>
+                            <small class="text-muted">Total Amount</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">{{ students_count }}</h3>
+                            <small class="text-muted">Students</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Locked Batches -->
+    {% if locked_batches %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-collection me-2"></i>
+                Locked Fee Batches
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Batch Number</th>
+                            <th>Academic Term</th>
+                            <th>Fees Count</th>
+                            <th>Total Amount</th>
+                            <th>Locked By</th>
+                            <th>Locked At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for batch in locked_batches %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'review_term_fees' batch_id=batch.id %}">
+                                    {{ batch.batch_number }}
+                                </a>
+                            </td>
+                            <td>{{ batch.academic_term }}</td>
+                            <td>{{ batch.total_fees }}</td>
+                            <td>GH₵{{ batch.total_amount|floatformat:2 }}</td>
+                            <td>{{ batch.locked_by.get_full_name|default:"N/A" }}</td>
+                            <td>{{ batch.locked_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Generate Bills Form -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-gear me-2"></i>
+                Generate Bills
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <h6 class="alert-heading">
+                    <i class="bi bi-info-circle me-2"></i>About This Process
+                </h6>
+                <p class="mb-0">
+                    This will create official bills/invoices from all locked fees. 
+                    Each student will receive one bill containing all their locked fees for the term.
+                </p>
+            </div>
+
+            {% if locked_fees_count == 0 %}
+            <div class="alert alert-warning">
+                <h6 class="alert-heading">
+                    <i class="bi bi-exclamation-triangle me-2"></i>No Locked Fees Found
+                </h6>
+                <p class="mb-0">
+                    There are no locked fees available for billing. 
+                    Please generate fees, review them, and lock them first.
+                </p>
+            </div>
+            {% else %}
+            <form method="post">
+                {% csrf_token %}
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-exclamation-triangle me-2"></i>Important Notes
+                    </h6>
+                    <ul class="mb-0">
+                        <li>This will create official bills that will be sent to parents</li>
+                        <li>Bills cannot be edited after creation (use Credit/Debit Notes for adjustments)</li>
+                        <li>Each student will receive one consolidated bill for all their locked fees</li>
+                        <li>Bill due dates will be set to 2 weeks after term start date</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="{% url 'fee_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-receipt me-2"></i>Generate Bills from Locked Fees
+                    </button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

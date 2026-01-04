@@ -187,7 +187,7 @@ from .views.fee_views import (
     # Bulk operations
     BulkFeeImportView, BulkFeeCreationView, BulkFeeUpdateView,
     DownloadFeeTemplateView, GenerateTermFeesView, SendPaymentRemindersView,
-    
+    ReviewTermFeesView, GenerateBillsFromFeesView, FeeBatchListView, FeeBatchDetailView, CancelFeeBatchView,
     # Reports and analytics
     FeeReportView, FeeStatusReportView, FeeAnalyticsView,
     FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
@@ -410,6 +410,15 @@ urlpatterns = [
         path('bulk-import/', BulkFeeImportView.as_view(), name='bulk_fee_import'),
         path('bulk-creation/', BulkFeeCreationView.as_view(), name='bulk_fee_creation'),
         path('download-template/<str:file_type>/', DownloadFeeTemplateView.as_view(), name='download_fee_template'),
+        
+        path('fees/generate/', GenerateTermFeesView.as_view(), name='generate_term_fees'),
+        path('fees/review/<int:batch_id>/', ReviewTermFeesView.as_view(), name='review_term_fees'),
+        path('fees/generate-bills/', GenerateBillsFromFeesView.as_view(), name='generate_bills_from_fees'),
+    
+        # Batch management URLs
+        path('fees/batches/', FeeBatchListView.as_view(), name='fee_batch_list'),
+        path('fees/batches/<int:pk>/', FeeBatchDetailView.as_view(), name='fee_batch_detail'),
+        path('fees/batches/<int:pk>/cancel/', CancelFeeBatchView.as_view(), name='cancel_fee_batch'),
     ])),
     
     # Fee Categories

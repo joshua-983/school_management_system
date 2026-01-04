@@ -32,7 +32,7 @@ from django.utils.timezone import make_aware
 from django.core.serializers.json import DjangoJSONEncoder
 
 from .base_views import is_admin, is_teacher, is_student
-from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, BillPayment, Bill, Student, ClassAssignment, StudentCredit, Expense, Budget
+from ..models import FeeCategory, Fee, FeePayment, AcademicTerm, BillPayment, Bill, Student, ClassAssignment, StudentCredit, Expense, Budget, FeeGenerationBatch 
 from ..forms.billing_forms import BillPaymentForm
 from django.contrib import messages
 
@@ -900,7 +900,7 @@ class FeeListView(LoginRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = super().get_queryset().select_related('student', 'category', 'bill')
+        queryset = super().get_queryset().select_related('student', 'category', 'bill', 'generation_batch')
         
         # Apply filters from GET parameters
         form = FeeFilterForm(self.request.GET)
@@ -911,7 +911,9 @@ class FeeListView(LoginRequiredMixin, ListView):
             category = form.cleaned_data.get('category')
             student = form.cleaned_data.get('student')
             has_bill = form.cleaned_data.get('has_bill')
-            
+            # NEW: Add generation status filter
+            generation_status = self.request.GET.get('generation_status')
+                        
             if academic_year:
                 queryset = queryset.filter(academic_year=academic_year)
             if term:
@@ -926,6 +928,10 @@ class FeeListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(bill__isnull=False)
             elif has_bill == 'no':
                 queryset = queryset.filter(bill__isnull=True)
+            
+            # NEW: Apply generation status filter
+            if generation_status:
+                queryset = queryset.filter(generation_status=generation_status)
         
         # Apply user-specific filters
         if is_student(self.request.user):
@@ -941,30 +947,38 @@ class FeeListView(LoginRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['filter_form'] = FeeFilterForm(self.request.GET)
         
-        # Add summary statistics
+        # Get the form with initial data including generation_status
+        form_data = self.request.GET.copy()
+        form = FeeFilterForm(form_data)
+        context['filter_form'] = form
+        
+        # Add summary statistics - include generation status breakdown
         queryset = self.get_queryset()
+        
+        # Generation status counts
+        context['draft_count'] = queryset.filter(generation_status='DRAFT').count()
+        context['generated_count'] = queryset.filter(generation_status='GENERATED').count()
+        context['verified_count'] = queryset.filter(generation_status='VERIFIED').count()
+        context['locked_count'] = queryset.filter(generation_status='LOCKED').count()
+        
+        # Keep existing statistics
         total_payable = queryset.aggregate(Sum('amount_payable'))['amount_payable__sum'] or Decimal('0.00')
         total_paid = queryset.aggregate(Sum('amount_paid'))['amount_paid__sum'] or Decimal('0.00')
         total_balance = total_payable - total_paid
         
-        # Calculate completion rate
         if total_payable > 0:
             completion_rate = (total_paid / total_payable) * 100
         else:
             completion_rate = 0
         
-        # FIXED: Use lowercase statuses for counting
         paid_count = queryset.filter(payment_status='paid').count()
         pending_count = queryset.filter(payment_status__in=['unpaid', 'partial', 'overdue']).count()
         
-        # Count by status for detailed breakdown
         unpaid_count = queryset.filter(payment_status='unpaid').count()
         partial_count = queryset.filter(payment_status='partial').count()
         overdue_count = queryset.filter(payment_status='overdue').count()
         
-        # Add display names to categories
         categories_in_view = FeeCategory.objects.filter(
             id__in=queryset.values_list('category', flat=True).distinct()
         )
@@ -985,7 +999,6 @@ class FeeListView(LoginRequiredMixin, ListView):
             'category_display_map': category_display_map,
         })
         
-        # Add all students for the modal - FIXED
         if is_admin(self.request.user) or is_teacher(self.request.user):
             context['all_students'] = Student.objects.filter(is_active=True).order_by('first_name', 'last_name')
         else:
@@ -1083,8 +1096,6 @@ class FeeDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
         
         return context
 
-
-# In fee_views.py - Update FeeCreateView
 
 class FeeCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Fee
@@ -1332,7 +1343,7 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
             is_active=True, 
             is_mandatory=True
         )
-        active_students = Student.objects.filter(is_active=True).count()
+        active_students = Student.objects.filter(is_active=True, status='active').count()
         
         context = {
             'current_term': current_term,
@@ -1342,11 +1353,96 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
         return render(request, 'core/finance/fees/generate_term_fees.html', context)
     
     def post(self, request):
-        """Generate fees for current term"""
-        created_count = generate_term_fees(request.user)
-        messages.success(request, f'Generated {created_count} fee records for current term')
-        return redirect('fee_list')
-
+        """Generate DRAFT fees for current term"""
+        try:
+            with transaction.atomic():
+                current_term = AcademicTerm.objects.filter(is_active=True).first()
+                if not current_term:
+                    messages.error(request, 'No active academic term found')
+                    return redirect('fee_list')
+                
+                # Create a new batch record
+                batch = FeeGenerationBatch.objects.create(
+                    academic_term=current_term,
+                    generated_by=request.user,
+                    status='DRAFT'
+                )
+                
+                # Get all active students
+                active_students = Student.objects.filter(is_active=True, status='active')
+                
+                # Get mandatory fee categories
+                mandatory_categories = FeeCategory.objects.filter(
+                    is_mandatory=True,
+                    is_active=True
+                )
+                
+                created_count = 0
+                skipped_count = 0
+                
+                for student in active_students:
+                    # Check if student already has DRAFT fees for this term
+                    existing_draft_fees = Fee.objects.filter(
+                        student=student,
+                        academic_term=current_term,
+                        generation_status='DRAFT'
+                    )
+                    
+                    if existing_draft_fees.exists():
+                        skipped_count += 1
+                        continue  # Skip if already has draft fees
+                    
+                    # Generate fees for each applicable category
+                    for category in mandatory_categories:
+                        if category.is_applicable_to_class(student.current_class):
+                            # Calculate amount (apply discounts if any)
+                            amount = category.default_amount
+                            
+                            # Create DRAFT fee with future due date
+                            Fee.objects.create(
+                                student=student,
+                                category=category,
+                                academic_year=current_term.academic_year,
+                                term=current_term.period_number,
+                                academic_term=current_term,
+                                amount_payable=amount,
+                                amount_paid=Decimal('0.00'),
+                                balance=amount,
+                                payment_status='unpaid',
+                                generation_status='DRAFT',
+                                generation_batch=batch,
+                                due_date=timezone.now().date() + timedelta(days=365),  # Far future for drafts
+                                recorded_by=request.user
+                            )
+                            created_count += 1
+                
+                # Update batch statistics
+                batch.total_students = active_students.count()
+                batch.total_fees = created_count
+                batch.total_amount = Fee.objects.filter(
+                    generation_batch=batch
+                ).aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
+                batch.status = 'GENERATED'
+                batch.save()
+                
+                if created_count > 0:
+                    messages.success(
+                        request, 
+                        f"Successfully generated {created_count} DRAFT fees for {active_students.count()} students. "
+                        f"{skipped_count} students already had draft fees."
+                    )
+                    return redirect('review_term_fees', batch_id=batch.id)
+                else:
+                    messages.warning(
+                        request,
+                        f"No new fees generated. All {active_students.count()} students already have draft fees."
+                    )
+                    return redirect('generate_term_fees')
+                
+        except Exception as e:
+            logger.error(f"Error generating term fees: {str(e)}")
+            messages.error(request, f'Error generating fees: {str(e)}')
+            return redirect('generate_term_fees')
 
 # NEW: Bulk Fee Operations
 class BulkFeeUpdateView(LoginRequiredMixin, UserPassesTestMixin, View):
@@ -1917,65 +2013,89 @@ class FeeDashboardView(LoginRequiredMixin, TemplateView):
 
 # Fee generation automation
 def generate_term_fees(request_user=None):
-    """Automatically generate fees for all students for the current term"""
+    """Automatically generate DRAFT fees for all students for the current term"""
     current_term = AcademicTerm.objects.filter(is_active=True).first()
     if not current_term:
         return 0
-        
-    # Get all active students
-    students = Student.objects.filter(is_active=True)
     
-    # Get all mandatory fee categories
-    categories = FeeCategory.objects.filter(
-        is_active=True,
-        is_mandatory=True
-    )
-    
-    created_count = 0
-    
-    with transaction.atomic():
-        for student in students:
-            for category in categories:
-                # Check if category applies to student's class
-                if (category.class_levels and 
-                    student.class_level not in [level.strip() for level in category.class_levels.split(',')]):
-                    continue
-                
-                # Check if fee already exists
-                if Fee.objects.filter(
-                    student=student,
-                    category=category,
-                    academic_year=current_term.academic_year,
-                    term=current_term.term
-                ).exists():
-                    continue
-                
-                # Calculate due date (e.g., 2 weeks after term starts)
-                due_date = current_term.start_date + timedelta(days=14)
-                
-                # Create the fee - use the provided user or fallback to a default
-                if request_user and request_user.is_authenticated:
-                    recorded_by = request_user
-                else:
-                    # Fallback: try to find an admin user or use the first superuser
-                    try:
-                        recorded_by = User.objects.filter(is_superuser=True).first()
-                    except:
-                        recorded_by = None
-                
-                Fee.objects.create(
-                    student=student,
-                    category=category,
-                    academic_year=current_term.academic_year,
-                    term=current_term.term,
-                    amount_payable=category.default_amount,
-                    due_date=due_date,
-                    recorded_by=recorded_by,
-                    payment_status='unpaid'  # Set initial status
-                )
-                created_count += 1
-                
-    return created_count
+    try:
+        with transaction.atomic():
+            # Create a new batch record
+            if request_user and request_user.is_authenticated:
+                generated_by = request_user
+            else:
+                # Fallback: try to find an admin user or use the first superuser
+                try:
+                    generated_by = User.objects.filter(is_superuser=True).first()
+                except:
+                    generated_by = None
+            
+            batch = FeeGenerationBatch.objects.create(
+                academic_term=current_term,
+                generated_by=generated_by,
+                status='DRAFT'
+            )
+            
+            # Get all active students
+            students = Student.objects.filter(is_active=True)
+            
+            # Get all mandatory fee categories
+            categories = FeeCategory.objects.filter(
+                is_active=True,
+                is_mandatory=True
+            )
+            
+            created_count = 0
+            
+            for student in students:
+                for category in categories:
+                    # Check if category applies to student's class
+                    if (category.class_levels and 
+                        student.class_level not in [level.strip() for level in category.class_levels.split(',')]):
+                        continue
+                    
+                    # Check if fee already exists
+                    if Fee.objects.filter(
+                        student=student,
+                        category=category,
+                        academic_year=current_term.academic_year,
+                        term=current_term.term,
+                        generation_status__in=['DRAFT', 'GENERATED', 'VERIFIED']
+                    ).exists():
+                        continue
+                    
+                    # Create DRAFT fee with future due date
+                    Fee.objects.create(
+                        student=student,
+                        category=category,
+                        academic_year=current_term.academic_year,
+                        term=current_term.term,
+                        academic_term=current_term,
+                        amount_payable=category.default_amount,
+                        amount_paid=Decimal('0.00'),
+                        balance=category.default_amount,
+                        payment_status='unpaid',
+                        generation_status='DRAFT',
+                        generation_batch=batch,
+                        due_date=timezone.now().date() + timedelta(days=365),  # Far future for drafts
+                        recorded_by=generated_by
+                    )
+                    created_count += 1
+            
+            # Update batch statistics
+            batch.total_students = students.count()
+            batch.total_fees = created_count
+            batch.total_amount = Fee.objects.filter(
+                generation_batch=batch
+            ).aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
+            batch.status = 'GENERATED'
+            batch.save()
+            
+            return created_count
+            
+    except Exception as e:
+        logger.error(f"Error in automated fee generation: {str(e)}")
+        return 0
 
 
 class CustomJSONEncoder(DjangoJSONEncoder):
@@ -3044,3 +3164,443 @@ class RefreshPaymentDataView(LoginRequiredMixin, UserPassesTestMixin, View):
             'status': 'success',
             'message': f'Payment data refreshed. Total payments: {fee_payments_count}'
         })
+
+
+class ReviewTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Review and edit draft fees"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request, batch_id):
+        batch = get_object_or_404(FeeGenerationBatch, id=batch_id)
+        fees = Fee.objects.filter(
+            generation_batch=batch
+        ).select_related('student', 'category').order_by('student__last_name', 'student__first_name')
+        
+        # Group fees by student for easier editing
+        students_with_fees = {}
+        for fee in fees:
+            student_id = fee.student.id
+            if student_id not in students_with_fees:
+                students_with_fees[student_id] = {
+                    'student': fee.student,
+                    'fees': [],
+                    'total_amount': Decimal('0.00')
+                }
+            students_with_fees[student_id]['fees'].append(fee)
+            students_with_fees[student_id]['total_amount'] += fee.amount_payable
+        
+        # Get all categories for the add fee modal
+        all_categories = FeeCategory.objects.filter(is_active=True).order_by('name')
+        
+        context = {
+            'batch': batch,
+            'fees': fees,
+            'students_with_fees': students_with_fees,
+            'all_categories': all_categories,
+            'total_fees_count': fees.count(),
+            'total_amount': fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00'),
+        }
+        return render(request, 'core/finance/fees/review_term_fees.html', context)
+    
+    def post(self, request, batch_id):
+        """Update fee amounts or verify batch"""
+        batch = get_object_or_404(FeeGenerationBatch, id=batch_id)
+        action = request.POST.get('action')
+        
+        try:
+            with transaction.atomic():
+                if action == 'update_fees':
+                    # Update individual fee amounts
+                    updated_count = 0
+                    for key, value in request.POST.items():
+                        if key.startswith('amount_'):
+                            fee_id = key.replace('amount_', '')
+                            try:
+                                fee = Fee.objects.get(id=fee_id, generation_batch=batch)
+                                if fee.generation_status == 'DRAFT':
+                                    new_amount = Decimal(value)
+                                    if new_amount >= 0:
+                                        fee.amount_payable = new_amount
+                                        fee.balance = new_amount - fee.amount_paid
+                                        fee.save()
+                                        updated_count += 1
+                            except (Fee.DoesNotExist, InvalidOperation):
+                                pass
+                    
+                    messages.success(request, f'{updated_count} fee amounts updated successfully')
+                    
+                elif action == 'verify_batch':
+                    # Verify all fees in the batch
+                    if batch.status != 'GENERATED':
+                        messages.error(request, "Only GENERATED batches can be verified")
+                        return redirect('review_term_fees', batch_id=batch_id)
+                    
+                    # Update all fees to VERIFIED
+                    fees = Fee.objects.filter(generation_batch=batch)
+                    verified_count = 0
+                    for fee in fees:
+                        try:
+                            fee.update_generation_status('VERIFIED', request.user)
+                            verified_count += 1
+                        except ValidationError:
+                            pass
+                    
+                    # Update batch
+                    batch.status = 'VERIFIED'
+                    batch.verified_by = request.user
+                    batch.verified_at = timezone.now()
+                    batch.save()
+                    
+                    messages.success(request, f'Batch verified successfully. {verified_count} fees verified.')
+                    
+                elif action == 'lock_batch':
+                    # Lock the batch for billing
+                    if batch.status != 'VERIFIED':
+                        messages.error(request, "Only VERIFIED batches can be locked")
+                        return redirect('review_term_fees', batch_id=batch_id)
+                    
+                    # Update all fees to LOCKED and set proper due dates
+                    fees = Fee.objects.filter(generation_batch=batch)
+                    locked_count = 0
+                    for fee in fees:
+                        try:
+                            fee.update_generation_status('LOCKED', request.user)
+                            locked_count += 1
+                        except ValidationError:
+                            pass
+                    
+                    # Update batch
+                    batch.status = 'LOCKED'
+                    batch.locked_by = request.user
+                    batch.locked_at = timezone.now()
+                    # Recalculate total amount after locking
+                    batch.total_amount = fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
+                    batch.save()
+                    
+                    messages.success(request, f'Batch locked successfully. {locked_count} fees locked and ready for billing.')
+                
+                elif action == 'add_student_fee':
+                    # Add a fee for a specific student
+                    student_id = request.POST.get('student_id')
+                    category_id = request.POST.get('category_id')
+                    amount = request.POST.get('amount')
+                    
+                    if student_id and category_id and amount:
+                        try:
+                            student = Student.objects.get(id=student_id)
+                            category = FeeCategory.objects.get(id=category_id)
+                            amount = Decimal(amount)
+                            
+                            # Check if fee already exists
+                            existing_fee = Fee.objects.filter(
+                                student=student,
+                                category=category,
+                                academic_term=batch.academic_term,
+                                generation_batch=batch
+                            ).first()
+                            
+                            if not existing_fee:
+                                Fee.objects.create(
+                                    student=student,
+                                    category=category,
+                                    academic_year=batch.academic_term.academic_year,
+                                    term=batch.academic_term.period_number,
+                                    academic_term=batch.academic_term,
+                                    amount_payable=amount,
+                                    amount_paid=Decimal('0.00'),
+                                    balance=amount,
+                                    payment_status='unpaid',
+                                    generation_status='DRAFT',
+                                    generation_batch=batch,
+                                    due_date=timezone.now().date() + timedelta(days=365),
+                                    recorded_by=request.user
+                                )
+                                messages.success(request, 'Fee added successfully')
+                            else:
+                                messages.warning(request, 'Fee already exists for this student and category')
+                                
+                        except (Student.DoesNotExist, FeeCategory.DoesNotExist, InvalidOperation):
+                            messages.error(request, 'Invalid data provided')
+                
+                elif action == 'remove_fee':
+                    # Remove a specific fee
+                    fee_id = request.POST.get('fee_id')
+                    if fee_id:
+                        try:
+                            fee = Fee.objects.get(id=fee_id, generation_batch=batch)
+                            if fee.generation_status == 'DRAFT':
+                                fee.delete()
+                                messages.success(request, 'Fee removed successfully')
+                            else:
+                                messages.error(request, 'Only DRAFT fees can be removed')
+                        except Fee.DoesNotExist:
+                            messages.error(request, 'Fee not found')
+                
+                elif action == 'cancel_batch':
+                    # Cancel the entire batch
+                    if batch.status != 'LOCKED':
+                        batch.status = 'CANCELLED'
+                        batch.save()
+                        
+                        # Cancel all fees in batch
+                        fees = Fee.objects.filter(generation_batch=batch)
+                        for fee in fees:
+                            if fee.generation_status != 'LOCKED':
+                                fee.generation_status = 'CANCELLED'
+                                fee.save()
+                        
+                        messages.success(request, 'Batch cancelled successfully')
+                    else:
+                        messages.error(request, 'Cannot cancel a LOCKED batch')
+                
+        except Exception as e:
+            logger.error(f"Error in review term fees: {str(e)}")
+            messages.error(request, f'Error: {str(e)}')
+        
+        return redirect('review_term_fees', batch_id=batch_id)
+
+
+class GenerateBillsFromFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Generate bills from LOCKED fees"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get(self, request):
+        # Get all batches with LOCKED status
+        locked_batches = FeeGenerationBatch.objects.filter(
+            status='LOCKED'
+        ).order_by('-locked_at')
+        
+        # Get students with LOCKED fees
+        students_with_locked_fees = Student.objects.filter(
+            fees__generation_status='LOCKED'
+        ).distinct()
+        
+        # Calculate summary statistics
+        locked_fees = Fee.objects.filter(generation_status='LOCKED')
+        
+        context = {
+            'locked_batches': locked_batches,
+            'students_count': students_with_locked_fees.count(),
+            'locked_fees_count': locked_fees.count(),
+            'total_amount': locked_fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00'),
+        }
+        return render(request, 'core/finance/fees/generate_bills.html', context)
+    
+    def post(self, request):
+        """Generate bills from LOCKED fees"""
+        try:
+            with transaction.atomic():
+                # Get all LOCKED fees
+                locked_fees = Fee.objects.filter(generation_status='LOCKED').select_related(
+                    'student', 'category', 'academic_term'
+                )
+                
+                if not locked_fees.exists():
+                    messages.warning(request, 'No locked fees found for billing')
+                    return redirect('generate_bills_from_fees')
+                
+                # Group fees by student and term
+                fees_by_student_term = {}
+                for fee in locked_fees:
+                    student_id = fee.student.id
+                    term_key = f"{fee.academic_year}_{fee.term}"
+                    
+                    key = f"{student_id}_{term_key}"
+                    if key not in fees_by_student_term:
+                        fees_by_student_term[key] = {
+                            'student': fee.student,
+                            'academic_year': fee.academic_year,
+                            'term': fee.term,
+                            'academic_term': fee.academic_term,
+                            'fees': [],
+                            'total_amount': Decimal('0.00')
+                        }
+                    fees_by_student_term[key]['fees'].append(fee)
+                    fees_by_student_term[key]['total_amount'] += fee.amount_payable
+                
+                created_bills = 0
+                skipped_bills = 0
+                
+                for key, data in fees_by_student_term.items():
+                    student = data['student']
+                    
+                    # Check if bill already exists for this term
+                    existing_bill = Bill.objects.filter(
+                        student=student,
+                        academic_year=data['academic_year'],
+                        term=data['term']
+                    ).first()
+                    
+                    if existing_bill:
+                        skipped_bills += 1
+                        continue  # Skip if bill already exists
+                    
+                    # Create a new bill
+                    bill = Bill.objects.create(
+                        student=student,
+                        academic_year=data['academic_year'],
+                        term=data['term'],
+                        total_amount=data['total_amount'],
+                        amount_paid=Decimal('0.00'),
+                        balance=data['total_amount'],
+                        due_date=data['academic_term'].start_date + timedelta(days=14) if data['academic_term'] else timezone.now().date() + timedelta(days=14),
+                        status='issued',
+                        recorded_by=request.user
+                    )
+                    
+                    # Create bill items
+                    for fee in data['fees']:
+                        BillItem.objects.create(
+                            bill=bill,
+                            fee_category=fee.category,
+                            amount=fee.amount_payable,
+                            description=fee.category.description
+                        )
+                        
+                        # Link fee to bill
+                        fee.bill = bill
+                        fee.save()
+                    
+                    created_bills += 1
+                
+                if created_bills > 0:
+                    messages.success(
+                        request, 
+                        f"Successfully generated {created_bills} bills from locked fees"
+                    )
+                    if skipped_bills > 0:
+                        messages.warning(
+                            request,
+                            f"Skipped {skipped_bills} students who already have bills for this term"
+                        )
+                    return redirect('bill_list')
+                else:
+                    messages.warning(
+                        request,
+                        "No new bills generated. All students with locked fees already have bills."
+                    )
+                    return redirect('generate_bills_from_fees')
+                
+        except Exception as e:
+            logger.error(f"Error generating bills: {str(e)}")
+            messages.error(request, f'Error generating bills: {str(e)}')
+            return redirect('generate_bills_from_fees')
+
+
+class FeeBatchListView(LoginRequiredMixin, UserPassesTestMixin, ListView):
+    """List all fee generation batches"""
+    model = FeeGenerationBatch
+    template_name = 'core/finance/fees/fee_batch_list.html'
+    context_object_name = 'batches'
+    paginate_by = 20
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related(
+            'academic_term', 'generated_by', 'verified_by', 'locked_by'
+        ).order_by('-generated_at')
+        
+        # Filter by status if provided
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        # Filter by term if provided
+        term_id = self.request.GET.get('term')
+        if term_id:
+            queryset = queryset.filter(academic_term_id=term_id)
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add statistics
+        context['draft_batches'] = FeeGenerationBatch.objects.filter(status='DRAFT').count()
+        context['generated_batches'] = FeeGenerationBatch.objects.filter(status='GENERATED').count()
+        context['verified_batches'] = FeeGenerationBatch.objects.filter(status='VERIFIED').count()
+        context['locked_batches'] = FeeGenerationBatch.objects.filter(status='LOCKED').count()
+        
+        # Add all terms for filter
+        context['all_terms'] = AcademicTerm.objects.all().order_by('-start_date')
+        
+        return context
+
+
+class FeeBatchDetailView(LoginRequiredMixin, UserPassesTestMixin, DetailView):
+    """View batch details"""
+    model = FeeGenerationBatch
+    template_name = 'core/finance/fees/fee_batch_detail.html'
+    context_object_name = 'batch'
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        batch = self.object
+        
+        # Get all fees in this batch
+        fees = Fee.objects.filter(generation_batch=batch).select_related(
+            'student', 'category', 'bill'
+        )
+        
+        # Get statistics by generation status
+        status_stats = fees.values('generation_status').annotate(
+            count=Count('id'),
+            total=Sum('amount_payable')
+        ).order_by('generation_status')
+        
+        # Get statistics by student class
+        class_stats = fees.values('student__class_level').annotate(
+            count=Count('id'),
+            total=Sum('amount_payable')
+        ).order_by('student__class_level')
+        
+        context.update({
+            'fees': fees.order_by('student__last_name', 'student__first_name')[:50],  # Limit to 50
+            'total_fees_count': fees.count(),
+            'status_stats': status_stats,
+            'class_stats': class_stats,
+            'total_amount': fees.aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00'),
+        })
+        
+        return context
+
+
+class CancelFeeBatchView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Cancel a fee generation batch"""
+    
+    def test_func(self):
+        return is_admin(self.request.user)
+    
+    def post(self, request, pk):
+        batch = get_object_or_404(FeeGenerationBatch, id=pk)
+        
+        if batch.status == 'LOCKED':
+            messages.error(request, 'Cannot cancel a LOCKED batch')
+        else:
+            try:
+                with transaction.atomic():
+                    batch.status = 'CANCELLED'
+                    batch.save()
+                    
+                    # Cancel all fees in batch
+                    fees = Fee.objects.filter(generation_batch=batch)
+                    for fee in fees:
+                        if fee.generation_status != 'LOCKED':
+                            fee.generation_status = 'CANCELLED'
+                            fee.save()
+                    
+                    messages.success(request, 'Batch cancelled successfully')
+            except Exception as e:
+                logger.error(f"Error cancelling batch: {str(e)}")
+                messages.error(request, f'Error cancelling batch: {str(e)}')
+        
+        return redirect('fee_batch_detail', pk=pk)

@@ -64,7 +64,7 @@ from .timetable import (
     TimetableEntry,
 )
 
-# Import financial models
+# Import financial models - UPDATED TO INCLUDE FeeGenerationBatch
 from .financial import (
     FeeCategory,
     Bill,
@@ -75,6 +75,10 @@ from .financial import (
     StudentCredit,
     FeeDiscount,
     FeeInstallment,
+    PaymentGateway,
+    OnlinePayment,
+    PendingPayment,
+    FeeGenerationBatch,  # ADDED THIS LINE
 )
 
 # Import communication models
@@ -117,7 +121,7 @@ from .budget_models import (
     Expense,
 )
 
-# Export all models for backward compatibility
+# Export all models for backward compatibility - UPDATED TO INCLUDE FeeGenerationBatch
 __all__ = [
     # Base
     'GENDER_CHOICES',
@@ -132,6 +136,7 @@ __all__ = [
     'Subject',
     'AcademicTerm',
     'ClassAssignment',
+    'AcademicTerm',
     
     # Student
     'Student',
@@ -165,7 +170,7 @@ __all__ = [
     'Timetable',
     'TimetableEntry',
     
-    # Financial
+    # Financial - UPDATED
     'FeeCategory',
     'Bill',
     'BillItem',
@@ -175,6 +180,10 @@ __all__ = [
     'StudentCredit',
     'FeeDiscount',
     'FeeInstallment',
+    'PaymentGateway',
+    'OnlinePayment',
+    'PendingPayment',
+    'FeeGenerationBatch',
     
     # Communication
     'Announcement',
@@ -199,6 +208,8 @@ __all__ = [
     'SchoolConfiguration',
     'MaintenanceMode',
     'ScheduledMaintenance',
+    'ReportCardConfiguration',
+    'PromotionConfiguration',
     
     # Budget Models
     'Budget',
