@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.conf import settings
 import hashlib
 import json
-from core.models.academic import AcademicTerm
+from core.models.academic_term import AcademicTerm
 import logging
 from decimal import Decimal
 from django.db import models

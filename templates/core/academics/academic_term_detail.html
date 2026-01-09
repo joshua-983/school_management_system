@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% load static humanize %}
+
+{% block title %}{{ term.name }} - Academic Term{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'academic_dashboard' %}">Academic</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'academic_term_list' %}">Terms</a></li>
+                    <li class="breadcrumb-item active">{{ term.name }}</li>
+                </ol>
+            </nav>
+            <h1 class="h2 mb-1">
+                {{ term.name }}
+                {% if term.is_active %}
+                <span class="badge bg-success">Active</span>
+                {% endif %}
+                {% if term.is_locked %}
+                <span class="badge bg-danger">Locked</span>
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {{ term.academic_year.name }} • {{ term.get_period_system_display }}
+            </p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'academic_term_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Back to List
+            </a>
+            {% if not term.is_locked %}
+            <a href="{% url 'academic_term_update' term.pk %}" class="btn btn-primary">
+                <i class="fas fa-edit me-1"></i> Edit
+            </a>
+            {% endif %}
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" 
+                        data-bs-toggle="dropdown">
+                    <i class="fas fa-cog me-1"></i> Actions
+                </button>
+                <ul class="dropdown-menu">
+                    {% if term.is_active %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'academic_term_lock' term.pk %}">
+                            <i class="fas fa-lock text-danger me-2"></i> Lock Term
+                        </a>
+                    </li>
+                    {% elif not term.is_active and not term.is_locked %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'quick_set_active_term' term.pk %}">
+                            <i class="fas fa-check-circle text-success me-2"></i> Set as Active
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if term.is_locked %}
+                    <li>
+                        <a class="dropdown-item" href="{% url 'quick_unlock_term' term.pk %}">
+                            <i class="fas fa-unlock text-warning me-2"></i> Unlock Term
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    <li><hr class="dropdown-divider"></li>
+                    
+                    <li>
+                        <a class="dropdown-item" href="{% url 'academic_calendar' %}">
+                            <i class="fas fa-calendar-alt me-2"></i> View Calendar
+                        </a>
+                    </li>
+                    
+                    {% if not term.is_locked %}
+                    <li>
+                        <a class="dropdown-item text-danger" href="{% url 'academic_term_delete' term.pk %}">
+                            <i class="fas fa-trash me-2"></i> Delete Term
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Term Progress</h6>
+                <span class="badge bg-primary">{{ progress|floatformat:1 }}% Complete</span>
+            </div>
+            <div class="progress" style="height: 10px;">
+                <div class="progress-bar bg-primary" role="progressbar" 
+                     style="width: {{ progress }}%">
+                </div>
+            </div>
+            <div class="row mt-2 text-center">
+                <div class="col">
+                    <small class="text-muted">Start Date</small>
+                    <div class="fw-bold">{{ term.start_date|date:"M d, Y" }}</div>
+                </div>
+                <div class="col">
+                    <small class="text-muted">Today</small>
+                    <div class="fw-bold">{{ today|date:"M d, Y" }}</div>
+                </div>
+                <div class="col">
+                    <small class="text-muted">End Date</small>
+                    <div class="fw-bold">{{ term.end_date|date:"M d, Y" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column: Term Details -->
+        <div class="col-lg-8">
+            <!-- Term Information Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i> Term Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th width="40%">Academic Year:</th>
+                                        <td>
+                                            <strong>{{ term.academic_year.name }}</strong>
+                                            {% if term.academic_year.is_active %}
+                                            <span class="badge bg-success ms-2">Active Year</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Period System:</th>
+                                        <td>
+                                            {{ term.get_period_system_display }}
+                                            <span class="badge bg-light text-dark ms-2">
+                                                Period {{ term.period_number }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Sequence:</th>
+                                        <td>{{ term.sequence_num }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Status:</th>
+                                        <td>
+                                            {% if term.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                            <small class="text-muted ms-2">Currently active term</small>
+                                            {% elif term.status == 'LOCKED' %}
+                                            <span class="badge bg-danger">Locked</span>
+                                            {% elif term.status == 'COMPLETED' %}
+                                            <span class="badge bg-secondary">Completed</span>
+                                            {% elif term.status == 'PLANNED' %}
+                                            <span class="badge bg-info">Planned</span>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ term.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tbody>
+                                    <tr>
+                                        <th width="40%">Start Date:</th>
+                                        <td>
+                                            {{ term.start_date|date:"l, F d, Y" }}
+                                            <div class="text-muted small">
+                                                {{ term.start_date|timesince }} ago
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>End Date:</th>
+                                        <td>
+                                            {{ term.end_date|date:"l, F d, Y" }}
+                                            <div class="text-muted small">
+                                                {{ term.end_date|timeuntil }} from now
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Duration:</th>
+                                        <td>
+                                            {{ term.get_total_days }} days total
+                                            <div class="text-muted small">
+                                                {{ term.get_total_school_days }} school days
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Remaining:</th>
+                                        <td>
+                                            {% if remaining_days > 0 %}
+                                            <span class="text-success fw-bold">{{ remaining_days }} days</span>
+                                            {% else %}
+                                            <span class="text-muted">Term ended</span>
+                                            {% endif %}
+                                            <div class="text-muted small">
+                                                Week {{ term.get_week_number }} of term
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    {% if term.description %}
+                    <div class="mt-3">
+                        <h6 class="text-muted">Description</h6>
+                        <div class="border rounded p-3 bg-light">
+                            {{ term.description|linebreaks }}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Associated Data Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-database me-2"></i> Associated Data</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 text-center">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h2 class="text-primary">{{ grade_count|intcomma }}</h2>
+                                    <p class="text-muted mb-0">Grades</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h2 class="text-success">{{ fee_count|intcomma }}</h2>
+                                    <p class="text-muted mb-0">Fees</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h2 class="text-warning">0</h2>
+                                    <p class="text-muted mb-0">Assignments</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h2 class="text-danger">0</h2>
+                                    <p class="text-muted mb-0">Bills</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if term.is_locked %}
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This term is locked. Associated data cannot be modified.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Actions & Navigation -->
+        <div class="col-lg-4">
+            <!-- Quick Actions Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if term.is_active %}
+                        <a href="{% url 'academic_term_lock' term.pk %}" class="btn btn-danger btn-lg">
+                            <i class="fas fa-lock me-2"></i> Lock This Term
+                        </a>
+                        <div class="alert alert-warning small mb-0">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            Locking prevents all modifications to this term's data.
+                        </div>
+                        {% elif not term.is_active and not term.is_locked %}
+                        <a href="{% url 'quick_set_active_term' term.pk %}" class="btn btn-success btn-lg">
+                            <i class="fas fa-check-circle me-2"></i> Set as Active Term
+                        </a>
+                        {% endif %}
+                        
+                        {% if term.is_locked %}
+                        <a href="{% url 'quick_unlock_term' term.pk %}" class="btn btn-warning btn-lg">
+                            <i class="fas fa-unlock me-2"></i> Unlock This Term
+                        </a>
+                        <div class="alert alert-danger small mb-0">
+                            <i class="fas fa-exclamation-circle me-1"></i>
+                            Unlocking allows modifications. Use with caution!
+                        </div>
+                        {% endif %}
+                        
+                        {% if not term.is_locked %}
+                        <a href="{% url 'academic_term_update' term.pk %}" class="btn btn-primary">
+                            <i class="fas fa-edit me-2"></i> Edit Term Details
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{% url 'academic_calendar' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-calendar-alt me-2"></i> View Academic Calendar
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Card -->
+            <div class="card shadow">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-exchange-alt me-2"></i> Navigation</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% if previous_term %}
+                        <a href="{% url 'academic_term_detail' previous_term.pk %}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <div>
+                                    <i class="fas fa-arrow-left text-primary me-2"></i>
+                                    <strong>Previous Term</strong>
+                                </div>
+                                <small class="text-muted">{{ previous_term.academic_year.name }}</small>
+                            </div>
+                            <small class="text-muted">{{ previous_term.name }}</small>
+                        </a>
+                        {% endif %}
+                        
+                        {% if next_term %}
+                        <a href="{% url 'academic_term_detail' next_term.pk %}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <div>
+                                    <i class="fas fa-arrow-right text-primary me-2"></i>
+                                    <strong>Next Term</strong>
+                                </div>
+                                <small class="text-muted">{{ next_term.academic_year.name }}</small>
+                            </div>
+                            <small class="text-muted">{{ next_term.name }}</small>
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{% url 'academic_term_detail' term.academic_year.get_active_term.pk %}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <div>
+                                    <i class="fas fa-star text-warning me-2"></i>
+                                    <strong>Active Term</strong>
+                                </div>
+                                <span class="badge bg-success">Current</span>
+                            </div>
+                            <small class="text-muted">{{ term.academic_year.get_active_term.name }}</small>
+                        </a>
+                        
+                        <a href="{% url 'academic_term_list' %}?academic_year={{ term.academic_year.name }}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <div>
+                                    <i class="fas fa-list text-info me-2"></i>
+                                    <strong>All Terms in {{ term.academic_year.name }}</strong>
+                                </div>
+                                <i class="fas fa-chevron-right text-muted"></i>
+                            </div>
+                            <small class="text-muted">View all terms in this academic year</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Term Lock Information -->
+            {% if term.is_locked %}
+            <div class="card shadow border-danger mt-4">
+                <div class="card-header bg-danger text-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-lock me-2"></i> Lock Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        This term is locked and cannot be modified.
+                    </div>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Locked At:</th>
+                            <td>{{ term.locked_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                        {% if term.locked_by %}
+                        <tr>
+                            <th>Locked By:</th>
+                            <td>{{ term.locked_by.get_full_name|default:term.locked_by.username }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.badge-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    padding: 0;
+}
+.progress {
+    background-color: #e9ecef;
+}
+</style>
+{% endblock %}

@@ -119,6 +119,17 @@ from .views.reportcard_views import (
     report_card_statistics_debug
 )
 
+# Academic Term Views
+from .views.academic_term_views import (
+    AcademicDashboardView,
+    AcademicTermListView, AcademicTermDetailView,
+    AcademicTermCreateView, AcademicTermUpdateView, AcademicTermDeleteView,
+    AcademicYearCreationView, TermLockUnlockView, SetActiveTermView,
+    AcademicCalendarView, TermProgressAPIView, TermBulkActionsView,
+    quick_set_active_term, quick_lock_term, quick_unlock_term,
+    get_academic_years_json, get_terms_for_year_json, check_term_availability
+)
+
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
 
 from .views.audit_views import (
@@ -617,6 +628,45 @@ urlpatterns = [
         path('<int:report_card_id>/publish/', publish_report_card, name='publish_report_card'),
         path('force-recalculate/', force_recalculate_reportcards, name='force_recalculate_reportcards'),
         path('statistics-debug/', report_card_statistics_debug, name='report_card_statistics_debug'),
+    ])),
+    
+    # ==============================
+    # ACADEMIC TERM MANAGEMENT
+    # ==============================
+    path('academic/', include([
+        # Dashboard
+        path('dashboard/', AcademicDashboardView.as_view(), name='academic_dashboard'),
+    
+        # Term management
+        path('terms/', AcademicTermListView.as_view(), name='academic_term_list'),
+        path('terms/create/', AcademicTermCreateView.as_view(), name='academic_term_create'),
+        path('terms/<int:pk>/', AcademicTermDetailView.as_view(), name='academic_term_detail'),
+        path('terms/<int:pk>/edit/', AcademicTermUpdateView.as_view(), name='academic_term_update'),
+        path('terms/<int:pk>/delete/', AcademicTermDeleteView.as_view(), name='academic_term_delete'),
+    
+        # Year creation
+        path('years/create/', AcademicYearCreationView.as_view(), name='academic_year_create'),
+    
+        # Term actions
+        path('terms/<int:pk>/lock/', TermLockUnlockView.as_view(), name='academic_term_lock'),
+        path('terms/<int:pk>/set-active/', SetActiveTermView.as_view(), name='academic_term_set_active'),
+        path('terms/<int:pk>/progress/', TermProgressAPIView.as_view(), name='academic_term_progress'),
+    
+        # Calendar
+        path('calendar/', AcademicCalendarView.as_view(), name='academic_calendar'),
+    
+        # Bulk actions
+        path('bulk-actions/', TermBulkActionsView.as_view(), name='academic_term_bulk_actions'),
+    
+        # Quick actions
+        path('terms/<int:pk>/quick-active/', quick_set_active_term, name='academic_term_quick_active'),
+        path('terms/<int:pk>/quick-lock/', quick_lock_term, name='academic_term_quick_lock'),
+        path('terms/<int:pk>/quick-unlock/', quick_unlock_term, name='academic_term_quick_unlock'),
+    
+        # API endpoints
+        path('api/years/', get_academic_years_json, name='academic_years_json'),
+        path('api/years/<str:academic_year>/terms/', get_terms_for_year_json, name='terms_for_year_json'),
+        path('api/check-availability/', check_term_availability, name='check_term_availability'),
     ])),
     
     # ==============================

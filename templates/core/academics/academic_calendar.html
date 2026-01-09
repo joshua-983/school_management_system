@@ -1,0 +1,757 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Academic Calendar{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">📅 Academic Calendar</h1>
+            <p class="text-muted mb-0">View and manage academic schedules</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'academic_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a href="{% url 'academic_year_create' %}" class="btn btn-primary">
+                <i class="fas fa-calendar-plus me-1"></i> New Academic Year
+            </a>
+        </div>
+    </div>
+    
+    <!-- Year Navigation -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">Academic Year: {{ current_academic_year }}</h5>
+                    <small class="text-muted">Current academic year</small>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary" onclick="previousYear()">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="btn btn-outline-primary" id="currentYearBtn">Current Year</button>
+                    <button class="btn btn-outline-secondary" onclick="nextYear()">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Academic Years Timeline -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">
+                <i class="fas fa-history me-2"></i>
+                Academic Years Timeline
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="timeline">
+                {% for year_data in academic_years %}
+                <div class="timeline-item {% if year_data.is_current %}current-year{% endif %}">
+                    <div class="timeline-marker">
+                        {% if year_data.is_current %}
+                        <span class="badge bg-primary">Current</span>
+                        {% endif %}
+                    </div>
+                    <div class="timeline-content">
+                        <h6 class="mb-1">{{ year_data.academic_year }}</h6>
+                        <div class="small text-muted mb-2">
+                            {{ year_data.terms.count }} terms
+                        </div>
+                        <div class="term-bars">
+                            {% for term in year_data.terms %}
+                            <div class="term-bar" 
+                                 data-toggle="tooltip" 
+                                 title="{{ term.name }} ({{ term.start_date|date:'M d' }} - {{ term.end_date|date:'M d' }})">
+                                <div class="term-progress" 
+                                     style="width: {{ term.get_progress_percentage }}%">
+                                </div>
+                                <span class="term-label">{{ term.name|slice:":1" }}{{ term.period_number }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-2">
+                            <a href="{% url 'academic_term_list' %}?academic_year={{ year_data.academic_year }}" 
+                               class="btn btn-sm btn-outline-primary">
+                                View Details
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-4">
+                    <div class="text-muted">
+                        <i class="fas fa-calendar-alt fa-3x mb-3"></i>
+                        <h5>No academic years found</h5>
+                        <p>Create your first academic year to get started</p>
+                        <a href="{% url 'academic_year_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i> Create Academic Year
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Calendar View -->
+    <div class="card shadow">
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Monthly Calendar View
+                </h5>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary active" onclick="showMonthView()">
+                        <i class="fas fa-calendar me-1"></i> Month
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="showYearView()">
+                        <i class="fas fa-calendar-alt me-1"></i> Year
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Month View -->
+            <div id="monthView">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h4 id="currentMonth">Loading...</h4>
+                        <small class="text-muted" id="currentYearDisplay"></small>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary" onclick="previousMonth()">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="todayMonth()">
+                            Today
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="nextMonth()">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="monthCalendar">
+                        <thead>
+                            <tr>
+                                <th class="text-center" style="width: 14.28%">Sun</th>
+                                <th class="text-center" style="width: 14.28%">Mon</th>
+                                <th class="text-center" style="width: 14.28%">Tue</th>
+                                <th class="text-center" style="width: 14.28%">Wed</th>
+                                <th class="text-center" style="width: 14.28%">Thu</th>
+                                <th class="text-center" style="width: 14.28%">Fri</th>
+                                <th class="text-center" style="width: 14.28%">Sat</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthCalendarBody">
+                            <!-- Calendar will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Year View (Hidden by default) -->
+            <div id="yearView" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h4 id="currentYearView">Loading...</h4>
+                        <small class="text-muted">Academic year overview</small>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary" onclick="previousYearView()">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="todayYearView()">
+                            Current Year
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="nextYearView()">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="row" id="yearCalendar">
+                    <!-- Year view will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-footer bg-light">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Calendar Legend</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge bg-primary">Current Day</span>
+                        <span class="badge bg-success">Term Active</span>
+                        <span class="badge bg-info">Term Planned</span>
+                        <span class="badge bg-secondary">Term Completed</span>
+                        <span class="badge bg-danger">Holiday</span>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button class="btn btn-outline-primary" onclick="printCalendar()">
+                        <i class="fas fa-print me-1"></i> Print Calendar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Term Details Modal -->
+<div class="modal fade" id="termDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Term Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="termDetailsContent">
+                <!-- Content loaded by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" class="btn btn-primary" id="viewTermBtn">View Full Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #dee2e6;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -30px;
+    top: 0;
+    z-index: 1;
+}
+
+.timeline-content {
+    padding: 15px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.current-year .timeline-content {
+    border-color: #0d6efd;
+    background: #f8f9fa;
+}
+
+/* Term Bars */
+.term-bars {
+    display: flex;
+    gap: 2px;
+    height: 24px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.term-bar {
+    position: relative;
+    flex: 1;
+    background: #dee2e6;
+    cursor: pointer;
+}
+
+.term-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #0d6efd;
+    opacity: 0.7;
+}
+
+.term-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10px;
+    font-weight: bold;
+    color: #495057;
+    z-index: 1;
+}
+
+/* Calendar Styles */
+#monthCalendar th {
+    background: #f8f9fa;
+    font-weight: 600;
+}
+
+.calendar-day {
+    height: 100px;
+    padding: 5px;
+    border: 1px solid #dee2e6;
+    position: relative;
+    overflow: hidden;
+}
+
+.calendar-day.today {
+    background: #e7f1ff;
+    border-color: #0d6efd;
+}
+
+.calendar-day.other-month {
+    background: #f8f9fa;
+    color: #adb5bd;
+}
+
+.day-number {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.day-events {
+    max-height: 70px;
+    overflow-y: auto;
+}
+
+.event-badge {
+    font-size: 0.7em;
+    padding: 1px 4px;
+    margin: 1px 0;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+/* Year View */
+.month-card {
+    height: 200px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 20px;
+    background: white;
+}
+
+.month-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.month-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.month-day {
+    text-align: center;
+    padding: 2px;
+    font-size: 0.8em;
+    border-radius: 3px;
+}
+
+.month-day.weekend {
+    background: #f8f9fa;
+}
+
+.month-day.today {
+    background: #0d6efd;
+    color: white;
+    font-weight: bold;
+}
+
+.month-day.term-day {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+</style>
+
+<script>
+let currentDate = new Date();
+let currentViewYear = currentDate.getFullYear();
+
+// Month names
+const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+];
+
+// Academic terms data (would come from server in real app)
+const academicTerms = [
+    {% for year_data in academic_years %}
+        {% for term in year_data.terms %}
+        {
+            id: {{ term.id }},
+            name: "{{ term.name }}",
+            academic_year: "{{ year_data.academic_year }}",
+            start_date: "{{ term.start_date|date:'Y-m-d' }}",
+            end_date: "{{ term.end_date|date:'Y-m-d' }}",
+            status: "{{ term.status }}",
+            is_active: {% if term.is_active %}true{% else %}false{% endif %},
+            url: "{% url 'academic_term_detail' term.id %}",
+            color: "{% if term.is_active %}#28a745{% elif term.status == 'COMPLETED' %}#6c757d{% elif term.status == 'PLANNED' %}#17a2b8{% else %}#ffc107%}"
+        },
+        {% endfor %}
+    {% endfor %}
+];
+
+// Initialize calendar
+document.addEventListener('DOMContentLoaded', function() {
+    renderMonthCalendar();
+    renderYearCalendar();
+    initTooltips();
+});
+
+// Tooltips
+function initTooltips() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+}
+
+// Month View Functions
+function renderMonthCalendar() {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Update header
+    document.getElementById('currentMonth').textContent = `${monthNames[month]} ${year}`;
+    document.getElementById('currentYearDisplay').textContent = `Academic Year: ${getAcademicYearForDate(currentDate)}`;
+    
+    // Get first day of month and total days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay(); // 0 = Sunday
+    
+    // Clear calendar
+    const calendarBody = document.getElementById('monthCalendarBody');
+    calendarBody.innerHTML = '';
+    
+    let date = 1;
+    let currentWeek = document.createElement('tr');
+    
+    // Add empty cells for days before first day of month
+    for (let i = 0; i < startingDay; i++) {
+        const cell = createCalendarCell(date, year, month, true);
+        currentWeek.appendChild(cell);
+    }
+    
+    // Add days of month
+    for (let i = startingDay; i < 42; i++) { // 6 weeks max
+        if (i % 7 === 0 && i > 0) {
+            calendarBody.appendChild(currentWeek);
+            currentWeek = document.createElement('tr');
+        }
+        
+        if (date <= daysInMonth) {
+            const cell = createCalendarCell(date, year, month, false);
+            currentWeek.appendChild(cell);
+            date++;
+        } else {
+            const cell = createCalendarCell(date - daysInMonth, year, month + 1, true);
+            currentWeek.appendChild(cell);
+        }
+    }
+    
+    // Add last week
+    if (currentWeek.children.length > 0) {
+        calendarBody.appendChild(currentWeek);
+    }
+}
+
+function createCalendarCell(day, year, month, isOtherMonth) {
+    const cell = document.createElement('td');
+    cell.className = 'calendar-day';
+    
+    if (isOtherMonth) {
+        cell.classList.add('other-month');
+    }
+    
+    // Check if today
+    const today = new Date();
+    if (day === today.getDate() && 
+        month === today.getMonth() && 
+        year === today.getFullYear() && 
+        !isOtherMonth) {
+        cell.classList.add('today');
+    }
+    
+    // Day number
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    cell.appendChild(dayNumber);
+    
+    // Day events
+    const eventsDiv = document.createElement('div');
+    eventsDiv.className = 'day-events';
+    
+    // Find terms for this day
+    const cellDate = new Date(year, month, day);
+    const cellDateStr = cellDate.toISOString().split('T')[0];
+    
+    academicTerms.forEach(term => {
+        if (cellDateStr >= term.start_date && cellDateStr <= term.end_date) {
+            const eventBadge = document.createElement('span');
+            eventBadge.className = 'event-badge badge';
+            eventBadge.style.backgroundColor = term.color;
+            eventBadge.style.color = 'white';
+            eventBadge.textContent = term.name;
+            eventBadge.title = `${term.name} (${term.academic_year})`;
+            eventBadge.setAttribute('data-term-id', term.id);
+            eventBadge.addEventListener('click', function() {
+                showTermDetails(term.id);
+            });
+            eventsDiv.appendChild(eventBadge);
+        }
+    });
+    
+    cell.appendChild(eventsDiv);
+    return cell;
+}
+
+function previousMonth() {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderMonthCalendar();
+}
+
+function nextMonth() {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderMonthCalendar();
+}
+
+function todayMonth() {
+    currentDate = new Date();
+    renderMonthCalendar();
+}
+
+// Year View Functions
+function renderYearCalendar() {
+    const year = currentViewYear;
+    document.getElementById('currentYearView').textContent = year;
+    
+    const yearContainer = document.getElementById('yearCalendar');
+    yearContainer.innerHTML = '';
+    
+    for (let month = 0; month < 12; month++) {
+        const monthCard = createMonthCard(year, month);
+        yearContainer.appendChild(monthCard);
+    }
+}
+
+function createMonthCard(year, month) {
+    const col = document.createElement('div');
+    col.className = 'col-md-3';
+    
+    const card = document.createElement('div');
+    card.className = 'month-card';
+    
+    // Month header
+    const header = document.createElement('div');
+    header.className = 'month-header';
+    header.textContent = monthNames[month];
+    card.appendChild(header);
+    
+    // Days grid
+    const daysGrid = document.createElement('div');
+    daysGrid.className = 'month-days';
+    
+    // Day headers
+    ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(day => {
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'month-day';
+        dayHeader.textContent = day;
+        dayHeader.style.fontWeight = 'bold';
+        daysGrid.appendChild(dayHeader);
+    });
+    
+    // Get first day and total days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDay = firstDay.getDay();
+    
+    // Empty cells for days before first day
+    for (let i = 0; i < startingDay; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'month-day';
+        daysGrid.appendChild(emptyCell);
+    }
+    
+    // Days of month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayCell = document.createElement('div');
+        dayCell.className = 'month-day';
+        dayCell.textContent = day;
+        
+        // Check if weekend
+        const dayOfWeek = new Date(year, month, day).getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+            dayCell.classList.add('weekend');
+        }
+        
+        // Check if today
+        const today = new Date();
+        if (day === today.getDate() && 
+            month === today.getMonth() && 
+            year === today.getFullYear()) {
+            dayCell.classList.add('today');
+        }
+        
+        // Check if in academic term
+        const cellDateStr = new Date(year, month, day).toISOString().split('T')[0];
+        const isInTerm = academicTerms.some(term => 
+            cellDateStr >= term.start_date && cellDateStr <= term.end_date
+        );
+        
+        if (isInTerm) {
+            dayCell.classList.add('term-day');
+            dayCell.title = 'In academic term';
+        }
+        
+        daysGrid.appendChild(dayCell);
+    }
+    
+    card.appendChild(daysGrid);
+    col.appendChild(card);
+    return col;
+}
+
+function previousYearView() {
+    currentViewYear--;
+    renderYearCalendar();
+}
+
+function nextYearView() {
+    currentViewYear++;
+    renderYearCalendar();
+}
+
+function todayYearView() {
+    currentViewYear = new Date().getFullYear();
+    renderYearCalendar();
+}
+
+// View Switching
+function showMonthView() {
+    document.getElementById('monthView').style.display = 'block';
+    document.getElementById('yearView').style.display = 'none';
+    document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+function showYearView() {
+    document.getElementById('monthView').style.display = 'none';
+    document.getElementById('yearView').style.display = 'block';
+    document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+// Navigation functions
+function previousYear() {
+    // Navigate to previous academic year in timeline
+    alert('Navigate to previous academic year');
+}
+
+function nextYear() {
+    // Navigate to next academic year in timeline
+    alert('Navigate to next academic year');
+}
+
+// Get academic year for a date
+function getAcademicYearForDate(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    
+    // Assuming academic year runs from September to August
+    if (month >= 9) {
+        return `${year}/${year + 1}`;
+    } else {
+        return `${year - 1}/${year}`;
+    }
+}
+
+// Show term details in modal
+function showTermDetails(termId) {
+    const term = academicTerms.find(t => t.id === termId);
+    if (!term) return;
+    
+    const modalContent = document.getElementById('termDetailsContent');
+    const viewBtn = document.getElementById('viewTermBtn');
+    
+    modalContent.innerHTML = `
+        <h5>${term.name}</h5>
+        <p class="text-muted">${term.academic_year}</p>
+        
+        <table class="table table-sm">
+            <tr>
+                <th>Status:</th>
+                <td>
+                    <span class="badge" style="background-color: ${term.color}">
+                        ${term.is_active ? 'Active' : term.status}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <th>Start Date:</th>
+                <td>${new Date(term.start_date).toLocaleDateString()}</td>
+            </tr>
+            <tr>
+                <th>End Date:</th>
+                <td>${new Date(term.end_date).toLocaleDateString()}</td>
+            </tr>
+            <tr>
+                <th>Duration:</th>
+                <td>
+                    ${Math.ceil((new Date(term.end_date) - new Date(term.start_date)) / (1000 * 60 * 60 * 24)) + 1} days
+                </td>
+            </tr>
+        </table>
+    `;
+    
+    viewBtn.href = term.url;
+    
+    const modal = new bootstrap.Modal(document.getElementById('termDetailsModal'));
+    modal.show();
+}
+
+// Print calendar
+function printCalendar() {
+    window.print();
+}
+
+// Year navigation for timeline
+document.getElementById('currentYearBtn').textContent = currentDate.getFullYear();
+</script>
+{% endblock %}

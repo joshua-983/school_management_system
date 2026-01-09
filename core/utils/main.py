@@ -1,4 +1,3 @@
-# core/utils/main.py
 """
 Main utility module - contains all core utility functions.
 """
@@ -17,7 +16,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
-from core.models.academic import Subject
+from core.models.subject import Subject
 from core.models.attendance import StudentAttendance
 
 
@@ -443,8 +442,7 @@ def calculate_report_card_average(grades):
 def get_attendance_summary(student, academic_year, term):
     """Get comprehensive attendance summary for student - COMPLETELY FIXED"""
     try:
-        from core.models.academic import AcademicTerm
-        from core.models.attendance import StudentAttendance  # FIXED IMPORT
+        from core.models.academic_term import AcademicTerm
         from django.db.models import Q
         
         logger.info(f"Getting attendance for {student.get_full_name()}, {academic_year}, Term {term}")

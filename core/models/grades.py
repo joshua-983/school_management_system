@@ -1,4 +1,4 @@
-# core/models/grades.py - UPDATED
+# core/models/grades.py - UPDATE IMPORTS AT TOP
 import re
 import logging
 from decimal import Decimal, InvalidOperation
@@ -12,12 +12,18 @@ from django.db.models import Avg, Sum
 from datetime import date
 
 from core.models.base import CLASS_LEVEL_CHOICES, TERM_CHOICES
-from core.models.academic import Subject, ClassAssignment, AcademicTerm
+
+# NEW: Import from separate files
+from core.models.subject import Subject
+from core.models.class_assignment import ClassAssignment
+from core.models.academic_term import AcademicTerm
+
 from core.models.student import Student
 from core.models.configuration import SchoolConfiguration
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
 
 class Grade(models.Model):
     """
@@ -167,7 +173,7 @@ class Grade(models.Model):
     
     # Class level field to help with class assignment creation
     class_level = models.CharField(
-        max_length=2,
+        max_length=20,
         choices=CLASS_LEVEL_CHOICES,
         blank=True,
         null=True,

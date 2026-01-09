@@ -1,4 +1,4 @@
-# core/models/report_card.py - COMPLETE FIXED VERSION WITH IMPORT
+# core/models/report_card.py - UPDATED VERSION
 from decimal import Decimal
 from django.db import models
 from django.conf import settings
@@ -6,8 +6,10 @@ from django.urls import reverse
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.utils import timezone
 
-# ADD THIS IMPORT
-from core.models.academic import AcademicTerm
+# CHANGE THIS IMPORT:
+# OLD: from core.models.academic import AcademicTerm
+# NEW: Import from academic_term instead
+from core.models.academic_term import AcademicTerm
 
 class ReportCard(models.Model):
     TERM_CHOICES = [
@@ -38,7 +40,7 @@ class ReportCard(models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(3)]
     )
     
-    # ADD THIS NEW FIELD:
+    # Use AcademicTerm from academic_term.py
     academic_term = models.ForeignKey(
         AcademicTerm,
         on_delete=models.PROTECT,
@@ -86,7 +88,7 @@ class ReportCard(models.Model):
             models.Index(fields=['student', 'academic_year', 'term']),
             models.Index(fields=['is_published']),
             models.Index(fields=['average_score']),
-            models.Index(fields=['academic_term']),  # ADD THIS INDEX
+            models.Index(fields=['academic_term']),
         ]
     
     def __str__(self):
@@ -100,7 +102,7 @@ class ReportCard(models.Model):
         if not self.academic_term and self.academic_year and self.term:
             try:
                 academic_term = AcademicTerm.objects.filter(
-                    academic_year=self.academic_year,
+                    academic_year__name=self.academic_year,  # Changed from academic_year to academic_year__name
                     period_system='TERM',
                     period_number=self.term
                 ).first()
@@ -108,11 +110,11 @@ class ReportCard(models.Model):
                     self.academic_term = academic_term
             except Exception:
                 pass
-    
+        
         # Ensure we always have a grade (CRITICAL FIX)
         if not self.overall_grade or self.overall_grade == '':
             self.calculate_grades()
-    
+        
         # Double-check: NEVER allow empty grades
         if not self.overall_grade or self.overall_grade == '':
             if self.average_score and float(self.average_score) > 0:
@@ -137,13 +139,13 @@ class ReportCard(models.Model):
                     self.overall_grade = 'E'
             else:
                 self.overall_grade = 'E'  # Default to E, NEVER empty!
-    
+        
         super().save(*args, **kwargs)
-    
+        
         # For new report cards, also create/update related objects
         if is_new:
             self.update_related_data()
-    
+
     def calculate_grades(self):
         """Calculate average score and overall grade from student's grades"""
         try:

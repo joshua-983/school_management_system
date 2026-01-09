@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Academic Terms{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">📚 Academic Terms</h1>
+            <p class="text-muted mb-0">Manage all academic periods and terms</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'academic_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a href="{% url 'academic_term_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i> New Term
+            </a>
+            <a href="{% url 'academic_year_create' %}" class="btn btn-success">
+                <i class="fas fa-calendar-plus me-1"></i> New Academic Year
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Academic Year</label>
+                    <select name="academic_year" class="form-select">
+                        <option value="">All Years</option>
+                        {% for year in academic_years %}
+                        <option value="{{ year }}" {% if selected_academic_year == year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Period System</label>
+                    <select name="period_system" class="form-select">
+                        <option value="">All Systems</option>
+                        {% for system_code, system_name in period_systems %}
+                        <option value="{{ system_code }}" {% if selected_period_system == system_code %}selected{% endif %}>
+                            {{ system_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="locked" {% if selected_status == 'locked' %}selected{% endif %}>Locked</option>
+                        <option value="upcoming" {% if selected_status == 'upcoming' %}selected{% endif %}>Upcoming</option>
+                        <option value="completed" {% if selected_status == 'completed' %}selected{% endif %}>Completed</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" 
+                               placeholder="Search terms..." value="{{ search_query }}">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-filter me-1"></i> Apply Filters
+                        </button>
+                        <a href="{% url 'academic_term_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i> Clear Filters
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Terms Table -->
+    <div class="card shadow">
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-1"></i> Academic Terms
+                    <span class="badge bg-secondary ms-2">{{ page_obj.paginator.count }}</span>
+                </h5>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" 
+                            data-bs-toggle="dropdown">
+                        <i class="fas fa-download me-1"></i> Export
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-file-excel me-2"></i> Excel</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-file-pdf me-2"></i> PDF</a></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-file-csv me-2"></i> CSV</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="30">
+                                <input type="checkbox" class="form-check-input" id="selectAll">
+                            </th>
+                            <th>Academic Year & Term</th>
+                            <th>Period System</th>
+                            <th>Dates</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for term in terms %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input select-item" 
+                                       data-id="{{ term.id }}">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-2">
+                                        {% if term.is_active %}
+                                        <span class="badge bg-success badge-dot" title="Active"></span>
+                                        {% elif term.status == 'LOCKED' %}
+                                        <span class="badge bg-danger badge-dot" title="Locked"></span>
+                                        {% elif term.status == 'COMPLETED' %}
+                                        <span class="badge bg-secondary badge-dot" title="Completed"></span>
+                                        {% else %}
+                                        <span class="badge bg-info badge-dot" title="Planned"></span>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <strong>{{ term.name }}</strong>
+                                        <div class="text-muted small">{{ term.academic_year.name }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark">
+                                    {{ term.get_period_system_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="small">
+                                    <div>{{ term.start_date|date:"M d, Y" }}</div>
+                                    <div class="text-muted">to {{ term.end_date|date:"M d, Y" }}</div>
+                                    <div class="text-muted">
+                                        {{ term.get_total_days }} days
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if term.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% elif term.status == 'LOCKED' %}
+                                <span class="badge bg-danger">Locked</span>
+                                {% elif term.status == 'COMPLETED' %}
+                                <span class="badge bg-secondary">Completed</span>
+                                {% elif term.status == 'PLANNED' %}
+                                <span class="badge bg-info">Planned</span>
+                                {% else %}
+                                <span class="badge bg-warning">{{ term.status }}</span>
+                                {% endif %}
+                                
+                                {% if term.is_active %}
+                                <div class="small text-success mt-1">
+                                    <i class="fas fa-check-circle"></i> Currently active
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ term.get_progress_percentage }}%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ term.get_progress_percentage|floatformat:0 }}%</small>
+                                </div>
+                                <small class="text-muted">
+                                    {{ term.get_remaining_days }} days remaining
+                                </small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'academic_term_detail' term.pk %}" 
+                                       class="btn btn-outline-primary" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if not term.is_locked %}
+                                    <a href="{% url 'academic_term_update' term.pk %}" 
+                                       class="btn btn-outline-secondary" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    {% if term.is_active %}
+                                    <a href="{% url 'quick_lock_term' term.pk %}" 
+                                       class="btn btn-outline-danger" title="Lock Term">
+                                        <i class="fas fa-lock"></i>
+                                    </a>
+                                    {% elif not term.is_active and not term.is_locked %}
+                                    <a href="{% url 'quick_set_active_term' term.pk %}" 
+                                       class="btn btn-outline-success" title="Set as Active">
+                                        <i class="fas fa-check-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    {% if term.is_locked %}
+                                    <a href="{% url 'quick_unlock_term' term.pk %}" 
+                                       class="btn btn-outline-warning" title="Unlock">
+                                        <i class="fas fa-unlock"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                                    <h4>No academic terms found</h4>
+                                    <p class="mb-3">Create your first academic term to get started</p>
+                                    <a href="{% url 'academic_term_create' %}" class="btn btn-primary me-2">
+                                        <i class="fas fa-plus me-1"></i> Create Term
+                                    </a>
+                                    <a href="{% url 'academic_year_create' %}" class="btn btn-success">
+                                        <i class="fas fa-calendar-plus me-1"></i> Create Academic Year
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Bulk Actions -->
+        <div class="card-footer bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <button class="btn btn-outline-danger btn-sm" id="bulkDeleteBtn" disabled>
+                        <i class="fas fa-trash me-1"></i> Delete Selected
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm" id="bulkLockBtn" disabled>
+                        <i class="fas fa-lock me-1"></i> Lock Selected
+                    </button>
+                    <button class="btn btn-outline-success btn-sm" id="bulkUnlockBtn" disabled>
+                        <i class="fas fa-unlock me-1"></i> Unlock Selected
+                    </button>
+                </div>
+                
+                <!-- Pagination -->
+                {% if is_paginated %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    padding: 0;
+    display: inline-block;
+}
+.progress {
+    min-width: 80px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select all functionality
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.select-item');
+    const bulkBtns = document.querySelectorAll('#bulkDeleteBtn, #bulkLockBtn, #bulkUnlockBtn');
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = this.checked);
+        updateBulkButtons();
+    });
+    
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBulkButtons);
+    });
+    
+    function updateBulkButtons() {
+        const checked = document.querySelectorAll('.select-item:checked');
+        const hasChecked = checked.length > 0;
+        
+        bulkBtns.forEach(btn => {
+            btn.disabled = !hasChecked;
+        });
+    }
+    
+    // Bulk actions
+    document.getElementById('bulkDeleteBtn').addEventListener('click', function() {
+        const ids = Array.from(document.querySelectorAll('.select-item:checked'))
+            .map(cb => cb.dataset.id);
+        
+        if (confirm(`Delete ${ids.length} selected term(s)? This action cannot be undone.`)) {
+            // Implement bulk delete
+            console.log('Deleting:', ids);
+        }
+    });
+    
+    document.getElementById('bulkLockBtn').addEventListener('click', function() {
+        const ids = Array.from(document.querySelectorAll('.select-item:checked'))
+            .map(cb => cb.dataset.id);
+        
+        if (confirm(`Lock ${ids.length} selected term(s)?`)) {
+            // Implement bulk lock
+            console.log('Locking:', ids);
+        }
+    });
+    
+    document.getElementById('bulkUnlockBtn').addEventListener('click', function() {
+        const ids = Array.from(document.querySelectorAll('.select-item:checked'))
+            .map(cb => cb.dataset.id);
+        
+        if (confirm(`Unlock ${ids.length} selected term(s)?`)) {
+            // Implement bulk unlock
+            console.log('Unlocking:', ids);
+        }
+    });
+});
+</script>
+{% endblock %}

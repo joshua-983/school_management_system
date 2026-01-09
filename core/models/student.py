@@ -46,7 +46,7 @@ class Student(models.Model):
         help_text="10-digit phone number starting with 0 (e.g., 0245478847)"
     )
     profile_picture = models.ImageField(upload_to=student_image_path, blank=True, null=True)
-    class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)
     admission_date = models.DateField(default=timezone.now)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

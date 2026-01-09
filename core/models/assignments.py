@@ -1,7 +1,9 @@
+# core/models/assignments.py - FIXED VERSION
 """
 Assignment management models.
 """
 import logging
+from datetime import date, timedelta  # Added date and timedelta
 from django.db import models, transaction
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
@@ -11,7 +13,11 @@ from django.urls import reverse
 from django.db.models import Avg, Sum, Count
 
 from core.models.base import CLASS_LEVEL_CHOICES
-from core.models.academic import Subject, ClassAssignment
+# CHANGE THESE IMPORTS:
+# OLD: from core.models.academic import Subject, ClassAssignment
+# NEW: Import from separate files
+from core.models.subject import Subject
+from core.models.class_assignment import ClassAssignment
 from core.models.student import Student
 from core.models.teacher import Teacher
 

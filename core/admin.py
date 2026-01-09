@@ -162,8 +162,9 @@ class AcademicTermAdmin(admin.ModelAdmin):
             obj.name = obj.get_period_display()
         super().save_model(request, obj, form, change)
     
-    actions = ['create_academic_year_periods', 'toggle_lock_status']
-    
+    actions = ['create_academic_year_periods', 'toggle_lock_status', 'set_current_period']
+
+
     def create_academic_year_periods(self, request, queryset):
         """Create complete academic year periods for selected academic years"""
         from datetime import date
@@ -176,24 +177,23 @@ class AcademicTermAdmin(admin.ModelAdmin):
             academic_year = academic_term.academic_year
             period_system = academic_term.period_system
             
-            # Check if periods already exist for this academic year and system
+            # Check if periods already exist
             existing_periods = AcademicTerm.objects.filter(
                 academic_year=academic_year,
                 period_system=period_system
             ).count()
             
-            if existing_periods >= 3:  # At least 3 periods already exist (for terms)
-                skipped_count += 1
+            if existing_periods > 0:
                 self.message_user(
                     request, 
-                    f"⚠️ Academic periods for {academic_year} ({period_system}) already exist.",
+                    f"⚠️ Academic periods for {academic_year} ({period_system}) already exist. Use 'Sync with academic system' in School Configuration instead.",
                     level='warning'
                 )
                 continue
             
             try:
-                # Create periods using the new AcademicTerm class method
-                periods = AcademicTerm.create_academic_year(
+                # Create periods
+                periods = AcademicTerm.create_default_terms(
                     academic_year=academic_year,
                     period_system=period_system
                 )
@@ -212,14 +212,45 @@ class AcademicTermAdmin(admin.ModelAdmin):
                     level='error'
                 )
         
-        # Final summary
         if created_count > 0:
             self.message_user(
                 request,
-                f"✅ Successfully created {created_count} academic periods total.",
+                f"✅ Successfully created {created_count} academic periods.",
                 level='success'
             )
     
+    def set_current_period(self, request, queryset):
+        """Set selected period as current/active"""
+        # Deactivate all other periods first
+        AcademicTerm.objects.filter(is_active=True).update(is_active=False)
+        
+        # Activate selected periods
+        for period in queryset:
+            period.is_active = True
+            period.save()
+        
+        # Update school configuration if it exists
+        try:
+            from core.models import SchoolConfiguration
+            config = SchoolConfiguration.objects.first()
+            if config and config.current_academic_year:
+                # Find the active period's academic year
+                active_year = AcademicTerm.objects.filter(is_active=True).first()
+                if active_year:
+                    config.current_academic_year = active_year.academic_year
+                    config.save()
+        except:
+            pass
+        
+        self.message_user(
+            request, 
+            f"✅ Set {queryset.count()} periods as current",
+            level='success'
+        )
+    
+    set_current_period.short_description = "⭐ Set as current period"
+
+
     def toggle_lock_status(self, request, queryset):
         """Toggle lock status of selected periods"""
         for period in queryset:
@@ -680,19 +711,20 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(SchoolConfiguration)
 class SchoolConfigurationAdmin(admin.ModelAdmin):
-    list_display = ['grading_system', 'academic_period_system', 'academic_year', 'current_term', 'is_locked', 'school_name']
-    list_editable = ['is_locked', 'current_term', 'academic_period_system']
+    list_display = ['school_name', 'current_academic_year', 'default_academic_period_system', 'grading_system', 'is_locked']
+    list_editable = ['is_locked', 'default_academic_period_system']
     
     fieldsets = (
-        ('Grading System Configuration', {
-            'fields': ('grading_system', 'academic_period_system', 'is_locked'),
-            'description': 'Configure the grading system and academic period system.'
-        }),
-        ('Academic Information', {
-            'fields': ('academic_year', 'current_term')
-        }),
         ('School Information', {
             'fields': ('school_name', 'school_address', 'school_phone', 'school_email', 'principal_name')
+        }),
+        ('Academic Configuration', {
+            'fields': ('current_academic_year', 'default_academic_period_system'),
+            'description': 'Configure current academic year and period system'
+        }),
+        ('Grading Configuration', {
+            'fields': ('grading_system', 'is_locked'),
+            'description': 'Configure the grading system'
         }),
         ('Assessment Weights', {
             'fields': ('classwork_weight', 'homework_weight', 'test_weight', 'exam_weight'),
@@ -721,49 +753,29 @@ class SchoolConfigurationAdmin(admin.ModelAdmin):
         # Only allow one configuration instance
         return not SchoolConfiguration.objects.exists()
     
-    actions = ['create_academic_periods']
+    actions = ['sync_with_academic_system']
     
-    def create_academic_periods(self, request, queryset):
-        """Create academic periods for selected configurations"""
+    def sync_with_academic_system(self, request, queryset):
+        """Sync school configuration with standalone academic system"""
         for config in queryset:
             try:
-                from core.models.academic import AcademicTerm
-                
-                # Check if periods already exist for this academic year and system
-                existing_periods = AcademicTerm.objects.filter(
-                    academic_year=config.academic_year,
-                    period_system=config.academic_period_system
-                ).count()
-                
-                if existing_periods >= 3:  # At least 3 periods already exist
-                    self.message_user(
-                        request, 
-                        f"⚠️ Academic periods for {config.academic_year} ({config.academic_period_system}) already exist.",
-                        level='warning'
-                    )
-                    continue
-                
-                # Create periods using the new method
-                periods = AcademicTerm.create_academic_year(
-                    academic_year=config.academic_year,
-                    period_system=config.academic_period_system
-                )
+                # Sync with academic system
+                config.sync_with_standalone_system()
                 
                 self.message_user(
                     request, 
-                    f"✅ Created {len(periods)} academic periods for {config.academic_year} ({config.academic_period_system})",
+                    f"✅ Successfully synced {config.school_name} with academic system",
                     level='success'
                 )
                 
             except Exception as e:
                 self.message_user(
                     request, 
-                    f"❌ Error creating periods for {config.academic_year}: {str(e)}",
+                    f"❌ Error syncing {config.school_name}: {str(e)}",
                     level='error'
                 )
     
-    create_academic_periods.short_description = "📅 Create academic periods"
-
+    sync_with_academic_system.short_description = "🔄 Sync with academic system"
 
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):

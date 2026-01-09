@@ -1,0 +1,632 @@
+{% extends "base.html" %}
+{% load static crispy_forms_tags %}
+
+{% block title %}Bulk Academic Term Actions{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">⚡ Bulk Academic Term Actions</h1>
+            <p class="text-muted mb-0">Perform actions on multiple terms at once</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'academic_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a href="{% url 'academic_term_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-list me-1"></i> All Terms
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Card -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tasks me-2"></i>
+                        Bulk Operations
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post" id="bulkActionsForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Action Selection -->
+                        <div class="card border mb-4">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">1. Select Action</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    {{ form.action }}
+                                    {% if form.action.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.action.errors }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Action Descriptions -->
+                                <div id="actionDescriptions" class="mt-3">
+                                    <div class="action-desc" id="desc-create" style="display: none;">
+                                        <div class="alert alert-info">
+                                            <h6><i class="fas fa-calendar-plus me-2"></i>Create Academic Years</h6>
+                                            <p class="mb-0">Create complete academic years with all terms using the selected period system.</p>
+                                        </div>
+                                    </div>
+                                    <div class="action-desc" id="desc-lock" style="display: none;">
+                                        <div class="alert alert-warning">
+                                            <h6><i class="fas fa-lock me-2"></i>Lock Terms</h6>
+                                            <p class="mb-0">Lock selected academic years' terms to prevent modifications.</p>
+                                        </div>
+                                    </div>
+                                    <div class="action-desc" id="desc-unlock" style="display: none;">
+                                        <div class="alert alert-success">
+                                            <h6><i class="fas fa-unlock me-2"></i>Unlock Terms</h6>
+                                            <p class="mb-0">Unlock selected academic years' terms to allow modifications.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Academic Years -->
+                        <div class="card border mb-4">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">2. Select Academic Years</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    {{ form.academic_years }}
+                                    {% if form.academic_years.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.academic_years.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <small class="text-muted">
+                                        Enter one academic year per line (YYYY/YYYY format)
+                                    </small>
+                                </div>
+                                
+                                <!-- Quick Selection -->
+                                <div class="mt-3">
+                                    <h6>Quick Selection:</h6>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-secondary" onclick="selectCurrentYear()">
+                                            Current Year
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="selectNextYear()">
+                                            Next Year
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="selectLast3Years()">
+                                            Last 3 Years
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="selectNext3Years()">
+                                            Next 3 Years
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger" onclick="clearYears()">
+                                            Clear All
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Year Preview -->
+                                <div class="mt-3" id="yearPreview">
+                                    <h6>Selected Years Preview:</h6>
+                                    <div class="border rounded p-3 bg-light" id="previewYears">
+                                        <small class="text-muted">No years selected yet</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Period System (for create action) -->
+                        <div class="card border mb-4" id="periodSystemCard">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">3. Period System</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    {{ form.period_system }}
+                                    {% if form.period_system.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.period_system.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <small class="text-muted">
+                                        Required for creating new academic years
+                                    </small>
+                                </div>
+                                
+                                <!-- System Preview -->
+                                <div class="mt-3" id="systemPreview">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6>System Information:</h6>
+                                            <div id="systemInfoContent">
+                                                Select a period system to see details
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>Estimated Terms:</h6>
+                                            <div id="termsPreview">
+                                                <!-- Terms will be populated by JavaScript -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Confirmation -->
+                        <div class="card border-danger">
+                            <div class="card-header bg-danger text-white">
+                                <h6 class="mb-0">4. Confirmation</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-danger">
+                                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Important Notice</h6>
+                                    <p class="mb-2">Bulk actions affect multiple academic years and terms. Please verify:</p>
+                                    <ul class="mb-0">
+                                        <li>You have selected the correct action</li>
+                                        <li>You have entered the correct academic years</li>
+                                        <li>You understand the implications of this action</li>
+                                        <li>You have appropriate permissions</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="form-check mb-4">
+                                    <input type="checkbox" class="form-check-input" id="confirmAction" required>
+                                    <label class="form-check-label fw-bold" for="confirmAction">
+                                        I confirm that I want to perform this bulk action
+                                    </label>
+                                </div>
+                                
+                                <!-- Submit Button -->
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-danger btn-lg" id="submitBtn" disabled>
+                                        <i class="fas fa-play me-2"></i> Execute Bulk Action
+                                    </button>
+                                    <small class="text-muted text-center mt-2">
+                                        This action cannot be undone. Please proceed with caution.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Stats -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>
+                        System Statistics
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% with stats=term_stats %}
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-primary">{{ stats.total_years }}</div>
+                            <small class="text-muted">Academic Years</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-success">{{ stats.total_terms }}</div>
+                            <small class="text-muted">Academic Terms</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-warning">{{ stats.active_terms }}</div>
+                            <small class="text-muted">Active Terms</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 text-danger">{{ stats.locked_terms }}</div>
+                            <small class="text-muted">Locked Terms</small>
+                        </div>
+                    </div>
+                    {% endwith %}
+                </div>
+            </div>
+            
+            <!-- Recent Actions -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>
+                        Recent Bulk Actions
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <small class="text-muted">No recent bulk actions</small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Add more items as needed -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Help Card -->
+            <div class="card shadow">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle me-2"></i>
+                        Need Help?
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="helpAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#help1">
+                                    When to use bulk actions?
+                                </button>
+                            </h2>
+                            <div id="help1" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                                <div class="accordion-body small">
+                                    <ul>
+                                        <li>At the start of a new school year</li>
+                                        <li>When migrating to a new system</li>
+                                        <li>When applying system-wide changes</li>
+                                        <li>During data cleanup operations</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#help2">
+                                    Best practices
+                                </button>
+                            </h2>
+                            <div id="help2" class="accordion-collapse collapse" data-bs-parent="#helpAccordion">
+                                <div class="accordion-body small">
+                                    <ul>
+                                        <li>Always backup data first</li>
+                                        <li>Test with one year first</li>
+                                        <li>Inform stakeholders</li>
+                                        <li>Schedule during off-hours</li>
+                                        <li>Verify results immediately</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.action-desc {
+    animation: fadeIn 0.3s;
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.display-6 {
+    font-size: 2.5rem;
+    font-weight: 300;
+}
+.list-group-item {
+    border-left: none;
+    border-right: none;
+}
+.accordion-button:not(.collapsed) {
+    background-color: #f8f9fa;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const actionSelect = document.getElementById('{{ form.action.id_for_label }}');
+    const yearsTextarea = document.getElementById('{{ form.academic_years.id_for_label }}');
+    const periodSystemSelect = document.getElementById('{{ form.period_system.id_for_label }}');
+    const periodSystemCard = document.getElementById('periodSystemCard');
+    const confirmCheckbox = document.getElementById('confirmAction');
+    const submitBtn = document.getElementById('submitBtn');
+    const previewYears = document.getElementById('previewYears');
+    const systemInfoContent = document.getElementById('systemInfoContent');
+    const termsPreview = document.getElementById('termsPreview');
+    
+    // System descriptions
+    const systemDescriptions = {
+        'TERM': {
+            name: 'Term System (3 terms)',
+            description: 'Three terms per academic year. Common in Ghana Education System.',
+            terms: [
+                {name: 'First Term', duration: 'Sep - Dec'},
+                {name: 'Second Term', duration: 'Jan - Apr'},
+                {name: 'Third Term', duration: 'Apr - Jul'}
+            ]
+        },
+        'SEMESTER': {
+            name: 'Semester System (2 semesters)',
+            description: 'Two semesters per academic year. Common in higher education.',
+            terms: [
+                {name: 'First Semester', duration: 'Sep - Jan'},
+                {name: 'Second Semester', duration: 'Feb - Jun'}
+            ]
+        },
+        'QUARTER': {
+            name: 'Quarter System (4 quarters)',
+            description: 'Four quarters per academic year. Common in some international schools.',
+            terms: [
+                {name: 'First Quarter', duration: 'Sep - Nov'},
+                {name: 'Second Quarter', duration: 'Dec - Feb'},
+                {name: 'Third Quarter', duration: 'Mar - May'},
+                {name: 'Fourth Quarter', duration: 'Jun - Aug'}
+            ]
+        },
+        'TRIMESTER': {
+            name: 'Trimester System (3 trimesters)',
+            description: 'Three trimesters per academic year. Balanced workload distribution.',
+            terms: [
+                {name: 'First Trimester', duration: 'Sep - Dec'},
+                {name: 'Second Trimester', duration: 'Jan - Apr'},
+                {name: 'Third Trimester', duration: 'Apr - Jul'}
+            ]
+        },
+        'CUSTOM': {
+            name: 'Custom Period System',
+            description: 'Flexible period structure. Define your own academic periods.',
+            terms: []
+        }
+    };
+    
+    // Update action description
+    function updateActionDescription() {
+        // Hide all descriptions
+        document.querySelectorAll('.action-desc').forEach(desc => {
+            desc.style.display = 'none';
+        });
+        
+        // Show selected description
+        const selectedAction = actionSelect.value;
+        const descElement = document.getElementById('desc-' + selectedAction);
+        if (descElement) {
+            descElement.style.display = 'block';
+        }
+        
+        // Show/hide period system card
+        if (selectedAction === 'create') {
+            periodSystemCard.style.display = 'block';
+            updateSystemPreview();
+        } else {
+            periodSystemCard.style.display = 'none';
+        }
+    }
+    
+    // Update years preview
+    function updateYearsPreview() {
+        const yearsText = yearsTextarea.value.trim();
+        if (!yearsText) {
+            previewYears.innerHTML = '<small class="text-muted">No years selected yet</small>';
+            return;
+        }
+        
+        const years = yearsText.split('\n')
+            .map(y => y.trim())
+            .filter(y => y.match(/^\d{4}\/\d{4}$/));
+        
+        if (years.length === 0) {
+            previewYears.innerHTML = '<small class="text-muted">No valid years found</small>';
+            return;
+        }
+        
+        let html = '<div class="row">';
+        years.forEach(year => {
+            html += `
+                <div class="col-6 mb-2">
+                    <span class="badge bg-primary">${year}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        html += `<small class="text-muted">${years.length} year(s) selected</small>`;
+        
+        previewYears.innerHTML = html;
+    }
+    
+    // Update system preview
+    function updateSystemPreview() {
+        const selectedSystem = periodSystemSelect.value;
+        const systemInfo = systemDescriptions[selectedSystem];
+        
+        if (!systemInfo) {
+            systemInfoContent.innerHTML = 'Select a period system';
+            termsPreview.innerHTML = '';
+            return;
+        }
+        
+        // System info
+        systemInfoContent.innerHTML = `
+            <h6>${systemInfo.name}</h6>
+            <p class="small">${systemInfo.description}</p>
+        `;
+        
+        // Terms preview
+        if (systemInfo.terms.length > 0) {
+            let termsHtml = '<div class="list-group list-group-flush">';
+            systemInfo.terms.forEach(term => {
+                termsHtml += `
+                    <div class="list-group-item py-2">
+                        <div class="d-flex justify-content-between">
+                            <span>${term.name}</span>
+                            <small class="text-muted">${term.duration}</small>
+                        </div>
+                    </div>
+                `;
+            });
+            termsHtml += '</div>';
+            termsPreview.innerHTML = termsHtml;
+        } else {
+            termsPreview.innerHTML = '<small class="text-muted">Custom terms to be defined</small>';
+        }
+    }
+    
+    // Quick selection functions
+    function getCurrentAcademicYear() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        
+        if (month >= 9) {
+            return `${year}/${year + 1}`;
+        } else {
+            return `${year - 1}/${year}`;
+        }
+    }
+    
+    function selectCurrentYear() {
+        const currentYear = getCurrentAcademicYear();
+        addYearToList(currentYear);
+    }
+    
+    function selectNextYear() {
+        const currentYear = getCurrentAcademicYear();
+        const [year1, year2] = currentYear.split('/');
+        const nextYear = `${parseInt(year2)}/${parseInt(year2) + 1}`;
+        addYearToList(nextYear);
+    }
+    
+    function selectLast3Years() {
+        const currentYear = getCurrentAcademicYear();
+        const [year1, year2] = currentYear.split('/');
+        
+        for (let i = 1; i <= 3; i++) {
+            const year = `${parseInt(year1) - i}/${parseInt(year2) - i}`;
+            addYearToList(year);
+        }
+    }
+    
+    function selectNext3Years() {
+        const currentYear = getCurrentAcademicYear();
+        const [year1, year2] = currentYear.split('/');
+        
+        for (let i = 1; i <= 3; i++) {
+            const year = `${parseInt(year1) + i}/${parseInt(year2) + i}`;
+            addYearToList(year);
+        }
+    }
+    
+    function addYearToList(year) {
+        const currentText = yearsTextarea.value.trim();
+        const years = currentText ? currentText.split('\n') : [];
+        
+        if (!years.includes(year)) {
+            years.push(year);
+            yearsTextarea.value = years.join('\n');
+            updateYearsPreview();
+        }
+    }
+    
+    function clearYears() {
+        yearsTextarea.value = '';
+        updateYearsPreview();
+    }
+    
+    // Update submit button state
+    function updateSubmitButton() {
+        submitBtn.disabled = !confirmCheckbox.checked;
+    }
+    
+    // Form validation
+    document.getElementById('bulkActionsForm').addEventListener('submit', function(e) {
+        const action = actionSelect.value;
+        const yearsText = yearsTextarea.value.trim();
+        
+        if (!confirmCheckbox.checked) {
+            e.preventDefault();
+            alert('Please confirm the action before proceeding.');
+            confirmCheckbox.focus();
+            return false;
+        }
+        
+        if (!yearsText) {
+            e.preventDefault();
+            alert('Please enter at least one academic year.');
+            yearsTextarea.focus();
+            return false;
+        }
+        
+        // Validate year formats
+        const years = yearsText.split('\n')
+            .map(y => y.trim())
+            .filter(y => y);
+        
+        for (const year of years) {
+            if (!year.match(/^\d{4}\/\d{4}$/)) {
+                e.preventDefault();
+                alert(`Invalid academic year format: ${year}\nFormat should be YYYY/YYYY`);
+                yearsTextarea.focus();
+                return false;
+            }
+            
+            const [year1, year2] = year.split('/');
+            if (parseInt(year2) !== parseInt(year1) + 1) {
+                e.preventDefault();
+                alert(`Invalid academic year sequence: ${year}\nThe second year must be exactly one year after the first`);
+                yearsTextarea.focus();
+                return false;
+            }
+        }
+        
+        if (action === 'create' && !periodSystemSelect.value) {
+            e.preventDefault();
+            alert('Please select a period system for creating academic years.');
+            periodSystemSelect.focus();
+            return false;
+        }
+        
+        // Final confirmation
+        const actionName = actionSelect.options[actionSelect.selectedIndex].text;
+        const yearCount = years.length;
+        
+        if (!confirm(`Execute "${actionName}" on ${yearCount} academic year(s)?\n\nThis action will affect ${yearCount * (action === 'create' ? 3 : 1)} term(s) approximately.`)) {
+            e.preventDefault();
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Event listeners
+    actionSelect.addEventListener('change', updateActionDescription);
+    yearsTextarea.addEventListener('input', updateYearsPreview);
+    periodSystemSelect.addEventListener('change', updateSystemPreview);
+    confirmCheckbox.addEventListener('change', updateSubmitButton);
+    
+    // Initialize
+    updateActionDescription();
+    updateYearsPreview();
+    updateSystemPreview();
+    updateSubmitButton();
+});
+</script>
+{% endblock %}

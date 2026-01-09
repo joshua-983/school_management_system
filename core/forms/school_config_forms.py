@@ -31,17 +31,24 @@ class SchoolConfigurationForm(forms.ModelForm):
         ]
     )
     
+    # NEW: Current academic year field for standalone system
+    current_academic_year = forms.ModelChoiceField(
+        queryset=None,  # Will be set in __init__
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Select current academic year from standalone system"
+    )
+    
     class Meta:
         model = None  # Will be set in __init__
         fields = [
-            'grading_system', 'is_locked', 'academic_year', 'current_term',
+            'grading_system', 'is_locked', 'current_academic_year', 'default_academic_period_system',
             'school_name', 'school_address', 'school_phone', 'school_email', 'principal_name'
         ]
         widgets = {
             'grading_system': forms.Select(attrs={'class': 'form-control'}),
             'is_locked': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'academic_year': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'YYYY/YYYY'}),
-            'current_term': forms.Select(attrs={'class': 'form-control'}),
+            'default_academic_period_system': forms.Select(attrs={'class': 'form-control'}),
             'school_name': forms.TextInput(attrs={'class': 'form-control'}),
             'school_address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'school_email': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -51,8 +58,42 @@ class SchoolConfigurationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         # Lazy import to avoid circular imports
         from core.models import SchoolConfiguration
+        from core.models.academic_term import AcademicYear, ACADEMIC_PERIOD_SYSTEM_CHOICES
+        
         self.Meta.model = SchoolConfiguration
         super().__init__(*args, **kwargs)
+        
+        # Set queryset for current_academic_year field
+        self.fields['current_academic_year'].queryset = AcademicYear.objects.all().order_by('-name')
+        
+        # Set choices for default_academic_period_system
+        self.fields['default_academic_period_system'].choices = ACADEMIC_PERIOD_SYSTEM_CHOICES
+        
+        # Set initial value for current_academic_year if instance has one
+        if self.instance and self.instance.current_academic_year:
+            self.initial['current_academic_year'] = self.instance.current_academic_year
+        
+        # Remove old academic_year field if it exists in instance
+        if hasattr(self.instance, 'academic_year'):
+            # This handles migration from old CharField to new ForeignKey
+            if self.instance.academic_year and not self.instance.current_academic_year:
+                # Try to find matching AcademicYear
+                try:
+                    matching_year = AcademicYear.objects.get(name=self.instance.academic_year)
+                    self.initial['current_academic_year'] = matching_year
+                except AcademicYear.DoesNotExist:
+                    # Create new AcademicYear if doesn't exist
+                    try:
+                        year1, year2 = map(int, self.instance.academic_year.split('/'))
+                        matching_year = AcademicYear.objects.create(
+                            name=self.instance.academic_year,
+                            start_date=timezone.datetime(year1, 9, 1).date(),
+                            end_date=timezone.datetime(year2, 8, 31).date(),
+                            is_active=True
+                        )
+                        self.initial['current_academic_year'] = matching_year
+                    except:
+                        pass  # If creation fails, leave as None
     
     def clean_school_phone(self):
         phone_number = self.cleaned_data.get('school_phone')
@@ -62,19 +103,32 @@ class SchoolConfigurationForm(forms.ModelForm):
                 raise ValidationError("Phone number must be exactly 10 digits starting with 0")
         return phone_number
     
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data.get('academic_year')
-        if academic_year:
-            if not re.match(r'^\d{4}/\d{4}$', academic_year):
-                raise forms.ValidationError("Academic year must be in format YYYY/YYYY")
-            
-            try:
-                year1, year2 = map(int, academic_year.split('/'))
-                if year2 != year1 + 1:
-                    raise forms.ValidationError("The second year should be exactly one year after the first year")
-            except (ValueError, IndexError):
-                raise forms.ValidationError("Invalid academic year format")
+    def clean(self):
+        """Additional validation."""
+        cleaned_data = super().clean()
         
-        return academic_year
-
-
+        # Sync current_academic_year with AcademicYear.is_active
+        current_academic_year = cleaned_data.get('current_academic_year')
+        if current_academic_year:
+            # If we're setting a current academic year, mark it as active
+            from core.models.academic_term import AcademicYear
+            
+            # Deactivate all other academic years
+            AcademicYear.objects.filter(is_active=True).exclude(pk=current_academic_year.pk).update(is_active=False)
+            
+            # Activate this one
+            if not current_academic_year.is_active:
+                current_academic_year.is_active = True
+                current_academic_year.save()
+        
+        return cleaned_data
+    
+    def save(self, commit=True):
+        """Save the form and handle academic year activation."""
+        instance = super().save(commit=False)
+        
+        if commit:
+            instance.save()
+            self.save_m2m()
+        
+        return instance

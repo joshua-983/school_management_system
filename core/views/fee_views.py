@@ -1343,7 +1343,8 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
             is_active=True, 
             is_mandatory=True
         )
-        active_students = Student.objects.filter(is_active=True, status='active').count()
+        # FIXED: Removed the non-existent 'status' field filter
+        active_students = Student.objects.filter(is_active=True).count()
         
         context = {
             'current_term': current_term,
@@ -1357,45 +1358,49 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
         try:
             with transaction.atomic():
                 current_term = AcademicTerm.objects.filter(is_active=True).first()
-                if not current_term:
-                    messages.error(request, 'No active academic term found')
-                    return redirect('fee_list')
-                
-                # Create a new batch record
-                batch = FeeGenerationBatch.objects.create(
+            if not current_term:
+                messages.error(request, 'No active academic term found')
+                return redirect('fee_list')
+            
+            # Create a new batch record
+            batch = FeeGenerationBatch.objects.create(
+                academic_term=current_term,
+                generated_by=request.user,
+                status='DRAFT'
+            )
+            
+            # Get all active students
+            active_students = Student.objects.filter(is_active=True)
+            
+            # Get mandatory fee categories
+            mandatory_categories = FeeCategory.objects.filter(
+                is_mandatory=True,
+                is_active=True
+            )
+            
+            created_count = 0
+            skipped_count = 0
+            
+            for student in active_students:
+                # Check if student already has DRAFT fees for this term
+                existing_draft_fees = Fee.objects.filter(
+                    student=student,
                     academic_term=current_term,
-                    generated_by=request.user,
-                    status='DRAFT'
+                    generation_status='DRAFT'
                 )
                 
-                # Get all active students
-                active_students = Student.objects.filter(is_active=True, status='active')
+                if existing_draft_fees.exists():
+                    skipped_count += 1
+                    continue  # Skip if already has draft fees
                 
-                # Get mandatory fee categories
-                mandatory_categories = FeeCategory.objects.filter(
-                    is_mandatory=True,
-                    is_active=True
-                )
-                
-                created_count = 0
-                skipped_count = 0
-                
-                for student in active_students:
-                    # Check if student already has DRAFT fees for this term
-                    existing_draft_fees = Fee.objects.filter(
-                        student=student,
-                        academic_term=current_term,
-                        generation_status='DRAFT'
-                    )
-                    
-                    if existing_draft_fees.exists():
-                        skipped_count += 1
-                        continue  # Skip if already has draft fees
-                    
-                    # Generate fees for each applicable category
-                    for category in mandatory_categories:
-                        if category.is_applicable_to_class(student.current_class):
-                            # Calculate amount (apply discounts if any)
+                # Generate fees for each applicable category
+                for category in mandatory_categories:
+                    # Check if category applies to student's class
+                    # FIXED: Use student.class_level instead of student.current_class
+                    if category.class_levels and student.class_level:
+                        # Check if student's class level is in the category's applicable classes
+                        applicable_classes = [cls.strip() for cls in category.class_levels.split(',')]
+                        if student.class_level in applicable_classes:
                             amount = category.default_amount
                             
                             # Create DRAFT fee with future due date
@@ -1411,11 +1416,32 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
                                 payment_status='unpaid',
                                 generation_status='DRAFT',
                                 generation_batch=batch,
-                                due_date=timezone.now().date() + timedelta(days=365),  # Far future for drafts
+                                due_date=timezone.now().date() + timedelta(days=365),
                                 recorded_by=request.user
                             )
                             created_count += 1
-                
+                    else:
+                        # If no class restrictions, apply to all students
+                        amount = category.default_amount
+                        
+                        # Create DRAFT fee with future due date
+                        Fee.objects.create(
+                            student=student,
+                            category=category,
+                            academic_year=current_term.academic_year,
+                            term=current_term.period_number,
+                            academic_term=current_term,
+                            amount_payable=amount,
+                            amount_paid=Decimal('0.00'),
+                            balance=amount,
+                            payment_status='unpaid',
+                            generation_status='DRAFT',
+                            generation_batch=batch,
+                            due_date=timezone.now().date() + timedelta(days=365),
+                            recorded_by=request.user
+                        )
+                        created_count += 1
+            
                 # Update batch statistics
                 batch.total_students = active_students.count()
                 batch.total_fees = created_count
@@ -1424,7 +1450,7 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
                 ).aggregate(total=Sum('amount_payable'))['total'] or Decimal('0.00')
                 batch.status = 'GENERATED'
                 batch.save()
-                
+            
                 if created_count > 0:
                     messages.success(
                         request, 
@@ -1438,7 +1464,7 @@ class GenerateTermFeesView(LoginRequiredMixin, UserPassesTestMixin, View):
                         f"No new fees generated. All {active_students.count()} students already have draft fees."
                     )
                     return redirect('generate_term_fees')
-                
+            
         except Exception as e:
             logger.error(f"Error generating term fees: {str(e)}")
             messages.error(request, f'Error generating fees: {str(e)}')

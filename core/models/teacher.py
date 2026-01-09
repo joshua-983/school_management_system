@@ -1,3 +1,4 @@
+# core/models/teacher.py - UPDATED
 """
 Teacher management models.
 """
@@ -8,7 +9,12 @@ from django.core.validators import RegexValidator
 from django.utils import timezone
 
 from core.models.base import GENDER_CHOICES
-from core.models.academic import Subject, ClassAssignment
+
+# CHANGE THESE IMPORTS:
+# OLD: from core.models.academic import Subject, ClassAssignment
+# NEW:
+from core.models.subject import Subject  # Import from new location
+# Don't import ClassAssignment here to avoid circular import
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -94,6 +100,8 @@ class Teacher(models.Model):
     
     def get_assigned_classes(self):
         """Get classes assigned to this teacher"""
+        # Import here to avoid circular import
+        from core.models.class_assignment import ClassAssignment
         return ClassAssignment.objects.filter(teacher=self)
     
     def get_students_count(self):

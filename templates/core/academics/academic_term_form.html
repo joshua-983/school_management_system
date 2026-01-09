@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% load static crispy_forms_tags %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Form Card -->
+            <div class="card shadow">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="mb-0">
+                            <i class="fas fa-calendar-plus me-2"></i>{{ title }}
+                        </h3>
+                        <a href="{% url 'academic_term_list' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <form method="post" id="academicTermForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                            <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row">
+                            <!-- Left Column -->
+                            <div class="col-md-6">
+                                <!-- Academic Year -->
+                                <div class="mb-3">
+                                    <label class="form-label">Academic Year *</label>
+                                    <div class="input-group">
+                                        {{ form.academic_year }}
+                                        <button class="btn btn-outline-secondary" type="button" 
+                                                data-bs-toggle="modal" data-bs-target="#yearModal">
+                                            <i class="fas fa-calendar-alt"></i>
+                                        </button>
+                                    </div>
+                                    {% if form.academic_year.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.academic_year.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <small class="text-muted">Format: YYYY/YYYY (e.g., 2024/2025)</small>
+                                </div>
+                                
+                                <!-- Period System -->
+                                <div class="mb-3">
+                                    <label class="form-label">Period System *</label>
+                                    {{ form.period_system }}
+                                    {% if form.period_system.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.period_system.errors }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Period Number -->
+                                <div class="mb-3">
+                                    <label class="form-label">Period Number *</label>
+                                    {{ form.period_number }}
+                                    {% if form.period_number.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.period_number.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <small class="text-muted" id="periodNumberHelp">
+                                        1-3 for Terms, 1-2 for Semesters, 1-4 for Quarters
+                                    </small>
+                                </div>
+                                
+                                <!-- Term Name -->
+                                <div class="mb-3">
+                                    <label class="form-label">Term Name</label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.name.errors }}
+                                    </div>
+                                    {% endif %}
+                                    <small class="text-muted">Optional custom name (e.g., "First Term", "Fall Semester")</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column -->
+                            <div class="col-md-6">
+                                <!-- Start Date -->
+                                <div class="mb-3">
+                                    <label class="form-label">Start Date *</label>
+                                    {{ form.start_date }}
+                                    {% if form.start_date.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.start_date.errors }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- End Date -->
+                                <div class="mb-3">
+                                    <label class="form-label">End Date *</label>
+                                    {{ form.end_date }}
+                                    {% if form.end_date.errors %}
+                                    <div class="text-danger small mt-1">
+                                        {{ form.end_date.errors }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Duration Preview -->
+                                <div class="card bg-light mb-3">
+                                    <div class="card-body py-2">
+                                        <div class="row text-center">
+                                            <div class="col">
+                                                <small class="text-muted">Duration</small>
+                                                <div class="fw-bold" id="durationDisplay">0 days</div>
+                                            </div>
+                                            <div class="col">
+                                                <small class="text-muted">School Days</small>
+                                                <div class="fw-bold" id="schoolDaysDisplay">0 days</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Active Checkbox -->
+                                <div class="form-check form-switch mb-4">
+                                    {{ form.is_active }}
+                                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                        Set as Active Term
+                                    </label>
+                                    <small class="text-muted d-block">
+                                        Only one term can be active per academic year
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Description -->
+                        <div class="mb-4">
+                            <label class="form-label">Description</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                            <div class="text-danger small mt-1">
+                                {{ form.description.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <a href="{% url 'academic_term_list' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-1"></i> Cancel
+                                </a>
+                                {% if object and not is_locked %}
+                                <a href="{% url 'academic_term_delete' object.pk %}" class="btn btn-outline-danger">
+                                    <i class="fas fa-trash me-1"></i> Delete
+                                </a>
+                                {% endif %}
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> {{ submit_text }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Help Card -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0"><i class="fas fa-question-circle me-2"></i> Guidelines</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Academic Year Guidelines:</h6>
+                            <ul class="small">
+                                <li>Format: YYYY/YYYY (e.g., 2024/2025)</li>
+                                <li>Academic year typically runs from September to August</li>
+                                <li>The second year must be exactly one year after the first</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Term Guidelines:</h6>
+                            <ul class="small">
+                                <li>Dates should not overlap with other terms in same academic year</li>
+                                <li>End date must be after start date</li>
+                                <li>Lock terms after they end to prevent modifications</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Academic Year Modal -->
+<div class="modal fade" id="yearModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Academic Year Reference</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Current academic years in system:</p>
+                <div class="list-group">
+                    {% for year in academic_years %}
+                    <button type="button" class="list-group-item list-group-item-action year-select" 
+                            data-year="{{ year }}">
+                        {{ year }}
+                    </button>
+                    {% empty %}
+                    <div class="text-center text-muted py-3">
+                        No academic years found
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+.form-switch .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const periodSystem = document.getElementById('{{ form.period_system.id_for_label }}');
+    const periodNumber = document.getElementById('{{ form.period_number.id_for_label }}');
+    const startDate = document.getElementById('{{ form.start_date.id_for_label }}');
+    const endDate = document.getElementById('{{ form.end_date.id_for_label }}');
+    const durationDisplay = document.getElementById('durationDisplay');
+    const schoolDaysDisplay = document.getElementById('schoolDaysDisplay');
+    const periodNumberHelp = document.getElementById('periodNumberHelp');
+    
+    // Update period number limits based on system
+    function updatePeriodNumberLimits() {
+        const system = periodSystem.value;
+        const maxPeriods = {
+            'TERM': 3,
+            'SEMESTER': 2,
+            'QUARTER': 4,
+            'TRIMESTER': 3,
+            'CUSTOM': 6,
+        };
+        
+        const max = maxPeriods[system] || 3;
+        periodNumber.max = max;
+        periodNumber.min = 1;
+        
+        periodNumberHelp.textContent = 
+            `1-${max} for ${system === 'TERM' ? 'Terms' : 
+                          system === 'SEMESTER' ? 'Semesters' : 
+                          system === 'QUARTER' ? 'Quarters' : 
+                          system === 'TRIMESTER' ? 'Trimesters' : 'Periods'}`;
+    }
+    
+    // Calculate duration
+    function calculateDuration() {
+        if (startDate.value && endDate.value) {
+            const start = new Date(startDate.value);
+            const end = new Date(endDate.value);
+            
+            if (start <= end) {
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                durationDisplay.textContent = `${diffDays} days`;
+                
+                // Calculate school days (excluding weekends)
+                let schoolDays = 0;
+                let current = new Date(start);
+                
+                while (current <= end) {
+                    // Sunday = 0, Saturday = 6
+                    if (current.getDay() !== 0 && current.getDay() !== 6) {
+                        schoolDays++;
+                    }
+                    current.setDate(current.getDate() + 1);
+                }
+                
+                schoolDaysDisplay.textContent = `${schoolDays} days`;
+            } else {
+                durationDisplay.textContent = 'Invalid dates';
+                schoolDaysDisplay.textContent = 'Invalid dates';
+            }
+        } else {
+            durationDisplay.textContent = '0 days';
+            schoolDaysDisplay.textContent = '0 days';
+        }
+    }
+    
+    // Year select in modal
+    document.querySelectorAll('.year-select').forEach(button => {
+        button.addEventListener('click', function() {
+            const yearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
+            yearInput.value = this.dataset.year;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('yearModal'));
+            modal.hide();
+        });
+    });
+    
+    // Auto-generate name if empty
+    document.getElementById('{{ form.name.id_for_label }}').addEventListener('blur', function() {
+        if (!this.value.trim() && periodSystem.value && periodNumber.value) {
+            const systemNames = {
+                'TERM': `Term ${periodNumber.value}`,
+                'SEMESTER': `Semester ${periodNumber.value}`,
+                'QUARTER': `Quarter ${periodNumber.value}`,
+                'TRIMESTER': `Trimester ${periodNumber.value}`,
+                'CUSTOM': `Period ${periodNumber.value}`,
+            };
+            this.value = systemNames[periodSystem.value] || `Period ${periodNumber.value}`;
+        }
+    });
+    
+    // Validate form before submit
+    document.getElementById('academicTermForm').addEventListener('submit', function(e) {
+        // Check for date overlap (you would need to implement server-side validation)
+        if (startDate.value && endDate.value && new Date(startDate.value) > new Date(endDate.value)) {
+            e.preventDefault();
+            alert('End date must be after start date');
+            endDate.focus();
+            return false;
+        }
+        
+        // Check academic year format
+        const yearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
+        const yearRegex = /^\d{4}\/\d{4}$/;
+        if (!yearRegex.test(yearInput.value)) {
+            e.preventDefault();
+            alert('Academic year must be in format YYYY/YYYY (e.g., 2024/2025)');
+            yearInput.focus();
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Initialize
+    updatePeriodNumberLimits();
+    calculateDuration();
+    
+    // Event listeners
+    periodSystem.addEventListener('change', updatePeriodNumberLimits);
+    startDate.addEventListener('change', calculateDuration);
+    endDate.addEventListener('change', calculateDuration);
+});
+</script>
+{% endblock %}

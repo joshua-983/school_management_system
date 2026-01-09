@@ -1,12 +1,16 @@
-# models/timetable.py - UPDATED VERSION
+# core/models/timetable.py - FIXED VERSION
 """
 Timetable management models.
 """
 from django.db import models
 from django.contrib.auth import get_user_model
 
-from core.models.base import CLASS_LEVEL_CHOICES, TERM_CHOICES  # ADD TERM_CHOICES
-from core.models.academic import Subject, AcademicTerm
+from core.models.base import CLASS_LEVEL_CHOICES, TERM_CHOICES
+# CHANGE THESE IMPORTS:
+# OLD: from core.models.academic import Subject, AcademicTerm
+# NEW: Import from separate files
+from core.models.subject import Subject
+from core.models.academic_term import AcademicTerm
 from core.models.teacher import Teacher
 
 User = get_user_model()
@@ -58,14 +62,12 @@ class Timetable(models.Model):
         (5, 'Saturday'),
     ]
     
-    class_level = models.CharField(max_length=2, choices=CLASS_LEVEL_CHOICES)
+    class_level = models.CharField(max_length=20, choices=CLASS_LEVEL_CHOICES)  # Changed from 2 to 20
     day_of_week = models.PositiveSmallIntegerField(choices=DAYS_OF_WEEK)
     academic_year = models.CharField(max_length=20)
     
-    # FIX: Use TERM_CHOICES from base.py instead of AcademicTerm.TERM_CHOICES
     term = models.PositiveSmallIntegerField(choices=TERM_CHOICES)
     
-    # NEW: Add foreign key to AcademicTerm for better integration
     academic_term = models.ForeignKey(
         AcademicTerm,
         on_delete=models.SET_NULL,
@@ -91,7 +93,6 @@ class Timetable(models.Model):
         ]
     
     def __str__(self):
-        # Use academic_term display if available, otherwise use term number
         if self.academic_term:
             period_display = self.academic_term.get_period_display()
         else:
@@ -104,15 +105,30 @@ class Timetable(models.Model):
         if not self.academic_term and self.academic_year and self.term:
             try:
                 # Look for matching AcademicTerm
+                # Note: AcademicTerm now has academic_year as a ForeignKey to AcademicYear
+                # We need to find by academic_year__name
+                from core.models.academic_term import AcademicYear
+                
+                # First, get or create the AcademicYear
+                academic_year_obj, created = AcademicYear.objects.get_or_create(
+                    name=self.academic_year,
+                    defaults={
+                        'start_date': f"{self.academic_year.split('/')[0]}-09-01",
+                        'end_date': f"{self.academic_year.split('/')[1]}-08-31",
+                    }
+                )
+                
+                # Then find the AcademicTerm
                 academic_term = AcademicTerm.objects.filter(
-                    academic_year=self.academic_year,
-                    period_system='TERM',  # Assuming term system
+                    academic_year=academic_year_obj,
+                    period_system='TERM',
                     period_number=self.term
                 ).first()
                 
                 if academic_term:
                     self.academic_term = academic_term
-            except Exception:
+            except Exception as e:
+                print(f"Could not link to AcademicTerm: {e}")
                 pass  # Silently fail if can't find match
         
         super().save(*args, **kwargs)
@@ -122,7 +138,6 @@ class Timetable(models.Model):
         if self.academic_term:
             return self.academic_term.get_period_display()
         else:
-            # Fallback to term number
             term_display_map = dict(TERM_CHOICES)
             return term_display_map.get(self.term, f"Term {self.term}")
 

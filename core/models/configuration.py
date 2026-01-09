@@ -1,6 +1,6 @@
-# models/configuration.py - CORRECTED VERSION
+# models/configuration.py - UPDATED TO LINK WITH STANDALONE SYSTEM
 """
-System configuration models.
+System configuration models - LINKED TO STANDALONE ACADEMIC SYSTEM
 """
 import logging
 import re
@@ -12,12 +12,15 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-# UPDATE IMPORTS TO INCLUDE ACADEMIC_PERIOD_SYSTEM_CHOICES
+# UPDATE IMPORTS - Remove academic imports from base
 from core.models.base import (
-    TERM_CHOICES, 
+    TERM_CHOICES,  # Keep if needed elsewhere
     CLASS_LEVEL_CHOICES,
-    ACADEMIC_PERIOD_SYSTEM_CHOICES  # ADDED
+    # REMOVE: ACADEMIC_PERIOD_SYSTEM_CHOICES - Now in academic_term
 )
+
+# IMPORT STANDALONE ACADEMIC MODELS
+from core.models.academic_term import AcademicYear, AcademicTerm, ACADEMIC_PERIOD_SYSTEM_CHOICES
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -43,7 +46,9 @@ class SchoolConfiguration(models.Model):
         ('OTHER', 'Other'),
     ]
     
-    # Grading System Configuration
+    # ========================
+    # GRADING CONFIGURATION
+    # ========================
     grading_system = models.CharField(
         max_length=10, 
         choices=GRADING_SYSTEM_CHOICES, 
@@ -52,7 +57,6 @@ class SchoolConfiguration(models.Model):
         help_text="Select the grading system to use"
     )
     
-    # School Level Information
     school_level = models.CharField(
         max_length=20, 
         choices=SCHOOL_LEVEL_CHOICES, 
@@ -279,36 +283,30 @@ class SchoolConfiguration(models.Model):
         help_text="Lock the configuration to prevent changes"
     )
     
-    # Academic Information
-    academic_year = models.CharField(
-        max_length=9, 
-        default=f"{timezone.now().year}/{timezone.now().year + 1}",
-        validators=[RegexValidator(r'^\d{4}/\d{4}$', 'Academic year must be in format YYYY/YYYY')],
-        verbose_name="Current Academic Year"
+    # ========================
+    # ACADEMIC LINKING TO STANDALONE SYSTEM
+    # ========================
+    current_academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='active_configurations',
+        verbose_name="Current Academic Year",
+        help_text="Link to the active academic year in the standalone system"
     )
     
-    current_term = models.PositiveSmallIntegerField(
-        choices=TERM_CHOICES, 
-        default=1,
-        verbose_name="Current Term"
-    )
-    
-    has_three_terms = models.BooleanField(
-        default=True, 
-        verbose_name="Three-Term System",
-        help_text="School operates on 3-term system"
-    )
-    
-    # NEW: Academic Period System
-    academic_period_system = models.CharField(
+    default_academic_period_system = models.CharField(
         max_length=10,
         choices=ACADEMIC_PERIOD_SYSTEM_CHOICES,
         default='TERM',
-        verbose_name="Academic Period System",
-        help_text="System used for academic periods (Terms, Semesters, etc.)"
+        verbose_name="Default Academic Period System",
+        help_text="Default system used for academic periods (Terms, Semesters, etc.)"
     )
     
-    # School Information
+    # ========================
+    # SCHOOL INFORMATION
+    # ========================
     school_name = models.CharField(
         max_length=200, 
         default="Ghana Education Service School",
@@ -377,18 +375,6 @@ class SchoolConfiguration(models.Model):
                 errors['school_phone'] = 'Phone number must be exactly 10 digits starting with 0'
             self.school_phone = cleaned_phone
         
-        # Validate academic year format
-        if self.academic_year:
-            if not re.match(r'^\d{4}/\d{4}$', self.academic_year):
-                errors['academic_year'] = 'Academic year must be in format YYYY/YYYY'
-            else:
-                try:
-                    year1, year2 = map(int, self.academic_year.split('/'))
-                    if year2 != year1 + 1:
-                        errors['academic_year'] = 'The second year must be exactly one year after the first year'
-                except (ValueError, IndexError):
-                    errors['academic_year'] = 'Invalid academic year format'
-        
         # Validate grade boundaries are in descending order
         grade_boundaries = [
             self.grade_1_min, self.grade_2_min, self.grade_3_min, self.grade_4_min,
@@ -442,6 +428,10 @@ class SchoolConfiguration(models.Model):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
     
+    # ========================
+    # UPDATED METHODS FOR STANDALONE SYSTEM
+    # ========================
+    
     def get_grading_system_display_name(self):
         """Get user-friendly grading system name."""
         return dict(self.GRADING_SYSTEM_CHOICES).get(self.grading_system, 'GES')
@@ -451,16 +441,37 @@ class SchoolConfiguration(models.Model):
         return dict(self.SCHOOL_LEVEL_CHOICES).get(self.school_level, 'COMBINED')
     
     def get_current_academic_period(self):
-        """Get the current academic period based on configuration"""
-        from core.models.academic import AcademicTerm
-        
-        current_period = AcademicTerm.objects.filter(
-            academic_year=self.academic_year,
-            period_system=self.academic_period_system,
-            is_active=True
-        ).first()
-        
-        return current_period
+        """Get the current academic period from standalone system."""
+        if self.current_academic_year:
+            # Get active term for the current academic year
+            return AcademicTerm.objects.filter(
+                academic_year=self.current_academic_year,
+                is_active=True
+            ).first()
+        return None
+    
+    def get_current_academic_year_name(self):
+        """Get current academic year name."""
+        if self.current_academic_year:
+            return self.current_academic_year.name
+        # Fallback to current year if not set
+        from core.utils.academic_term import get_current_academic_year
+        return get_current_academic_year()
+    
+    def get_current_term(self):
+        """Get current active term from standalone system."""
+        term = self.get_current_academic_period()
+        if term:
+            return term
+        # Fallback to global current term
+        return AcademicTerm.get_current_term()
+    
+    def get_current_term_number(self):
+        """Get current term number."""
+        term = self.get_current_term()
+        if term:
+            return term.period_number
+        return 1  # Default to term 1
     
     def get_ges_grade_for_score(self, score):
         """Get GES grade (1-9) for a given score."""
@@ -673,25 +684,26 @@ class SchoolConfiguration(models.Model):
 
     def create_academic_periods_for_year(self):
         """Create academic periods for the current academic year"""
-        from core.models.academic import AcademicTerm
+        if not self.current_academic_year:
+            return False, "No current academic year selected in configuration"
         
         try:
             # Check if periods already exist
             existing = AcademicTerm.objects.filter(
-                academic_year=self.academic_year,
-                period_system=self.academic_period_system
+                academic_year=self.current_academic_year,
+                period_system=self.default_academic_period_system
             ).exists()
             
             if existing:
-                return False, f"Academic periods for {self.academic_year} already exist."
+                return False, f"Academic periods for {self.current_academic_year.name} already exist."
             
-            # Create periods
-            periods = AcademicTerm.create_academic_year(
-                academic_year=self.academic_year,
-                period_system=self.academic_period_system
+            # Create periods using standalone system
+            periods = AcademicTerm.create_default_terms(
+                academic_year=self.current_academic_year,
+                period_system=self.default_academic_period_system
             )
             
-            return True, f"Created {len(periods)} academic periods for {self.academic_year} ({self.academic_period_system})"
+            return True, f"Created {len(periods)} academic periods for {self.current_academic_year.name} ({self.default_academic_period_system})"
             
         except Exception as e:
             return False, f"Error creating academic periods: {str(e)}"
@@ -699,7 +711,18 @@ class SchoolConfiguration(models.Model):
     def get_period_system_display(self):
         """Get display name for academic period system"""
         system_map = dict(ACADEMIC_PERIOD_SYSTEM_CHOICES)
-        return system_map.get(self.academic_period_system, 'Term System')
+        return system_map.get(self.default_academic_period_system, 'Term System')
+    
+    def sync_with_standalone_system(self):
+        """Sync configuration with standalone academic system."""
+        # Auto-set current academic year if not set
+        if not self.current_academic_year:
+            current_year = AcademicYear.get_current_year()
+            if current_year:
+                self.current_academic_year = current_year
+                self.save()
+                return True, f"Synced with academic year: {current_year.name}"
+        return False, "Already synced or no academic year available"
 
 
 class ReportCardConfiguration(models.Model):

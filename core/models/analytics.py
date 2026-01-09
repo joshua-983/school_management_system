@@ -5,10 +5,10 @@ import logging
 from django.db import models
 from django.utils import timezone
 from django.db.models import Avg, Sum, Count
-
 from core.models.base import CLASS_LEVEL_CHOICES
-from core.models.academic import Subject
+from core.models.subject import Subject
 from core.models.student import Student
+
 
 logger = logging.getLogger(__name__)
 

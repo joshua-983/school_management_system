@@ -1,12 +1,9 @@
-# models/__init__.py - UPDATED WITH DataMaintenance
+# core/models/__init__.py - UPDATED VERSION
 """
-Models package initialization.
-Exports all models for backward compatibility.
+Models package initialization - Updated version
 """
-from .grades import Grade
-from .report_card import ReportCard 
 
-# Import base classes and constants
+# Import base classes and constants FIRST
 from .base import (
     GENDER_CHOICES,
     CLASS_LEVEL_CHOICES,
@@ -14,22 +11,32 @@ from .base import (
     ACADEMIC_PERIOD_SYSTEM_CHOICES,
     get_period_choices_for_system,
     get_period_display,
-    CLASS_LEVEL_DISPLAY_MAP,
+    get_current_academic_year,
     student_image_path,
     teacher_image_path,
     parent_image_path,
     GhanaEducationMixin,
+    BaseModel,
+    TimeStampedModel,
+    StatusMixin,
 )
 
-# Import academic models
-from .academic import (
-    Subject,
-    AcademicTerm,
-    ClassAssignment,
-)
+# Import Academic Term models
+from .academic_term import AcademicYear, AcademicTerm
+
+# Import Subject and ClassAssignment from separate files
+from .subject import Subject
+from .class_assignment import ClassAssignment
+
+# Import grades models
+from .grades import Grade
+from .report_card import ReportCard
 
 # Import student models
 from .student import Student
+
+# Import teacher models
+from .teacher import Teacher
 
 # Import parent models
 from .parent import (
@@ -38,9 +45,6 @@ from .parent import (
     ParentMessage,
     ParentEvent,
 )
-
-# Import teacher models
-from .teacher import Teacher
 
 # Import attendance models
 from .attendance import (
@@ -64,7 +68,7 @@ from .timetable import (
     TimetableEntry,
 )
 
-# Import financial models - UPDATED TO INCLUDE FeeGenerationBatch
+# Import financial models
 from .financial import (
     FeeCategory,
     Bill,
@@ -78,10 +82,10 @@ from .financial import (
     PaymentGateway,
     OnlinePayment,
     PendingPayment,
-    FeeGenerationBatch,  # ADDED THIS LINE
+    FeeGenerationBatch,
 )
 
-# Import communication models
+# Import communication models - ADD THIS IMPORT
 from .communication import (
     Announcement,
     UserAnnouncementView,
@@ -121,22 +125,29 @@ from .budget_models import (
     Expense,
 )
 
-# Export all models for backward compatibility - UPDATED TO INCLUDE FeeGenerationBatch
+# Export all models for backward compatibility
 __all__ = [
-    # Base
+    # Base constants
     'GENDER_CHOICES',
     'CLASS_LEVEL_CHOICES',
     'TERM_CHOICES',
     'ACADEMIC_PERIOD_SYSTEM_CHOICES',
     'get_period_choices_for_system',
     'get_period_display',
+    'get_current_academic_year',
+    'student_image_path',
+    'teacher_image_path',
+    'parent_image_path',
     'GhanaEducationMixin',
+    'BaseModel',
+    'TimeStampedModel',
+    'StatusMixin',
     
-    # Academic
+    # Academic Models
+    'AcademicYear',
+    'AcademicTerm',
     'Subject',
-    'AcademicTerm',
     'ClassAssignment',
-    'AcademicTerm',
     
     # Student
     'Student',
@@ -170,7 +181,7 @@ __all__ = [
     'Timetable',
     'TimetableEntry',
     
-    # Financial - UPDATED
+    # Financial
     'FeeCategory',
     'Bill',
     'BillItem',
@@ -185,7 +196,7 @@ __all__ = [
     'PendingPayment',
     'FeeGenerationBatch',
     
-    # Communication
+    # Communication - ADD THESE
     'Announcement',
     'UserAnnouncementView',
     'Notification',
@@ -216,38 +227,30 @@ __all__ = [
     'Expense',
 ]
 
-# Utility function for backward compatibility
-def get_unread_count(user):
-    """
-    Get count of unread notifications for a user
-    """
-    from .communication import Notification
-    return Notification.get_unread_count_for_user(user)
+# Utility functions for backward compatibility
+def get_current_academic_term():
+    """Get current active academic term"""
+    try:
+        return AcademicTerm.get_current_term()
+    except Exception:
+        return None
 
-def create_notification(recipient, title, message, notification_type="GENERAL", link=None, related_object=None):
-    """Utility function to create notifications"""
-    from .communication import Notification
-    return Notification.create_notification(
-        recipient=recipient,
-        title=title,
-        message=message,
-        notification_type=notification_type,
-        link=link,
-        related_object=related_object
-    )
-
-def is_admin(user):
-    """Check if user is admin"""
-    return user.is_staff or user.is_superuser
-
-def is_student(user):
-    """Check if user is a student"""
-    return hasattr(user, 'student')
-
-def is_teacher(user):
-    """Check if user is a teacher"""
-    return hasattr(user, 'teacher')
-
-def is_parent(user):
-    """Check if user is a parent"""
-    return hasattr(user, 'parentguardian')
+def get_or_create_subject(name, code=None):
+    """Get or create a subject"""
+    try:
+        if code:
+            return Subject.objects.get_or_create(code=code, defaults={'name': name})
+        else:
+            # Find by name
+            subject = Subject.objects.filter(name__iexact=name).first()
+            if subject:
+                return subject, False
+            # Create new
+            subject = Subject(name=name)
+            subject.save()
+            return subject, True
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error getting/creating subject: {e}")
+        return None, False
