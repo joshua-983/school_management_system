@@ -1,4 +1,3 @@
-# models/configuration.py - UPDATED TO LINK WITH STANDALONE SYSTEM
 """
 System configuration models - LINKED TO STANDALONE ACADEMIC SYSTEM
 """
@@ -362,6 +361,13 @@ class SchoolConfiguration(models.Model):
         # Validate weight totals
         self._validate_weights()
         
+        # Auto-sync academic years if current_academic_year is not set
+        if not self.current_academic_year:
+            try:
+                self.auto_sync_with_academic_system()
+            except Exception as e:
+                logger.error(f"Error auto-syncing academic system: {str(e)}")
+        
         super().save(*args, **kwargs)
     
     def clean(self):
@@ -426,6 +432,15 @@ class SchoolConfiguration(models.Model):
     def get_config(cls):
         """Get or create the single configuration instance."""
         obj, created = cls.objects.get_or_create(pk=1)
+        
+        # Auto-sync on first get
+        if created:
+            try:
+                obj.auto_sync_with_academic_system()
+                obj.save()
+            except Exception as e:
+                logger.error(f"Error auto-syncing on config creation: {str(e)}")
+        
         return obj
     
     # ========================
@@ -472,6 +487,37 @@ class SchoolConfiguration(models.Model):
         if term:
             return term.period_number
         return 1  # Default to term 1
+    
+    def auto_sync_with_academic_system(self):
+        """
+        PROFESSIONAL AUTO-SYNC: Automatically sync with academic system
+        - Ensures academic years exist
+        - Links current academic year
+        - Creates terms if needed
+        """
+        try:
+            # Ensure academic years exist (creates if they don't)
+            created_years = AcademicYear.ensure_years_exist(years_ahead=2)
+            
+            # Get current academic year
+            current_year = AcademicYear.get_current_year()
+            
+            if current_year:
+                self.current_academic_year = current_year
+                
+                # Log sync activity
+                if created_years:
+                    logger.info(f"✅ Auto-synced configuration with {len(created_years)} new academic years")
+                else:
+                    logger.info(f"✅ Auto-synced configuration with existing academic system")
+                
+                return True, f"Synced with academic year: {current_year.name}"
+            
+            return False, "No academic year available for sync"
+            
+        except Exception as e:
+            logger.error(f"❌ Error in auto-sync: {str(e)}")
+            return False, f"Sync error: {str(e)}"
     
     def get_ges_grade_for_score(self, score):
         """Get GES grade (1-9) for a given score."""
@@ -715,14 +761,7 @@ class SchoolConfiguration(models.Model):
     
     def sync_with_standalone_system(self):
         """Sync configuration with standalone academic system."""
-        # Auto-set current academic year if not set
-        if not self.current_academic_year:
-            current_year = AcademicYear.get_current_year()
-            if current_year:
-                self.current_academic_year = current_year
-                self.save()
-                return True, f"Synced with academic year: {current_year.name}"
-        return False, "Already synced or no academic year available"
+        return self.auto_sync_with_academic_system()
 
 
 class ReportCardConfiguration(models.Model):

@@ -18,6 +18,99 @@
             <a href="{% url 'academic_year_create' %}" class="btn btn-success">
                 <i class="fas fa-calendar-plus me-1"></i> New Academic Year
             </a>
+            <a href="{% url 'academic_quick_sync' %}" class="btn btn-info">
+                <i class="fas fa-sync-alt me-1"></i> Sync Now
+            </a>
+        </div>
+    </div>
+
+    <!-- Professional Academic System Sync -->
+    <div class="card mb-4 border-info">
+        <div class="card-header bg-info text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-sync-alt me-2"></i>Academic System Sync
+                </h5>
+                <span class="badge bg-light text-dark">
+                    {% now "F d, Y" %}
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <p class="card-text mb-3">
+                        The academic system <strong>automatically syncs</strong> with the current date. 
+                        Based on today's date, the current academic year is automatically set to:
+                        <strong class="text-primary">{{ current_academic_year.name|default:"Not set" }}</strong>
+                    </p>
+                    
+                    <!-- Auto-Generation Info -->
+                    <div class="alert alert-success mb-0">
+                        <i class="fas fa-robot me-2"></i>
+                        <strong>Professional Auto-Generation:</strong> 
+                        The system automatically creates academic years and terms based on the 
+                        <strong>Ghana Education System</strong> calendar (365 days total).
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'academic_quick_sync' %}" class="btn btn-outline-info">
+                            <i class="fas fa-sync-alt me-2"></i>Manual Sync Now
+                        </a>
+                        <a href="{% url 'academic_term_list' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-2"></i>View All Terms
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Academic Year Statistics -->
+            {% if current_year_data %}
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-calendar-check me-2"></i>Academic Year Summary</h6>
+                        <div class="row mt-2">
+                            <div class="col-6">
+                                <small class="text-muted">Total Days</small>
+                                <div class="fw-bold fs-5">{{ current_academic_year.get_total_days|default:365 }} days</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Teaching Days</small>
+                                <div class="fw-bold fs-5">{{ current_year_data.total_teaching_days }} days</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Vacation Days</small>
+                                <div class="fw-bold fs-5">{{ current_year_data.vacation_days }} days</div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Progress</small>
+                                <div class="fw-bold fs-5">{{ current_academic_year.get_progress_percentage|floatformat:1 }}%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-book me-2"></i>Term Summary</h6>
+                        <p class="mb-2"><strong>{{ current_year_data.total_teaching_days }} teaching days</strong> across 3 terms:</p>
+                        <ul class="mb-0 ps-3">
+                            {% for term_data in current_year_data.terms %}
+                            <li>
+                                {{ term_data.term.name }}: 
+                                <strong>{{ term_data.days }} days</strong> 
+                                ({{ term_data.progress|floatformat:0 }}%)
+                                {% if term_data.term.is_active %}
+                                <span class="badge bg-success ms-2">Active</span>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -130,9 +223,16 @@
                 <div class="card-header bg-white py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">📅 Current Academic Year: {{ current_academic_year_str|default:"Not set" }}</h5>
-                        <a href="{% url 'academic_calendar' %}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-calendar me-1"></i> Full Calendar
-                        </a>
+                        <div class="btn-group">
+                            <a href="{% url 'academic_calendar' %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-calendar me-1"></i> Full Calendar
+                            </a>
+                            {% if current_academic_year and current_year_terms.count == 0 %}
+                            <a href="{% url 'academic_quick_sync' %}" class="btn btn-sm btn-info">
+                                <i class="fas fa-sync-alt me-1"></i> Create Terms
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 <div class="card-body p-0">
@@ -142,6 +242,7 @@
                                 <tr>
                                     <th>Term</th>
                                     <th>Dates</th>
+                                    <th>Duration</th>
                                     <th>Status</th>
                                     <th>Progress</th>
                                     <th>Actions</th>
@@ -174,6 +275,11 @@
                                             <div>{{ term.start_date|date:"M d, Y" }}</div>
                                             <div class="text-muted">to {{ term.end_date|date:"M d, Y" }}</div>
                                         </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            {{ term.get_total_days }} days
+                                        </span>
                                     </td>
                                     <td>
                                         {% if term.is_active %}
@@ -212,7 +318,7 @@
                                             </a>
                                             {% endif %}
                                             {% if term.is_active %}
-                                            <a href="{% url 'quick_lock_term' term.pk %}" 
+                                            <a href="{% url 'academic_term_quick_lock' term.pk %}" 
                                                class="btn btn-outline-danger" title="Lock">
                                                 <i class="fas fa-lock"></i>
                                             </a>
@@ -222,19 +328,24 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center py-4">
+                                    <td colspan="6" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fas fa-calendar-times fa-2x mb-2"></i>
                                             <p>No terms found for current academic year</p>
-                                            {% if current_academic_year %}
-                                            <a href="{% url 'academic_term_create' %}" class="btn btn-sm btn-primary">
-                                                Add First Term
-                                            </a>
-                                            {% else %}
-                                            <a href="{% url 'academic_year_create' %}" class="btn btn-sm btn-primary">
-                                                Create Academic Year First
-                                            </a>
-                                            {% endif %}
+                                            <div class="d-flex justify-content-center gap-2 mt-3">
+                                                {% if current_academic_year %}
+                                                <a href="{% url 'academic_term_create' %}" class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-plus me-1"></i> Add First Term
+                                                </a>
+                                                <a href="{% url 'academic_quick_sync' %}" class="btn btn-sm btn-info">
+                                                    <i class="fas fa-sync-alt me-1"></i> Auto-Create Terms
+                                                </a>
+                                                {% else %}
+                                                <a href="{% url 'academic_year_create' %}" class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-calendar-plus me-1"></i> Create Academic Year
+                                                </a>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -261,7 +372,10 @@
                         <a href="{% url 'academic_term_create' %}" class="btn btn-primary btn-lg">
                             <i class="fas fa-plus me-2"></i> Add New Term
                         </a>
-                        <a href="{% url 'academic_term_bulk_actions' %}" class="btn btn-info btn-lg">
+                        <a href="{% url 'academic_quick_sync' %}" class="btn btn-info btn-lg">
+                            <i class="fas fa-sync-alt me-2"></i> Sync Academic System
+                        </a>
+                        <a href="{% url 'academic_term_bulk_actions' %}" class="btn btn-secondary btn-lg">
                             <i class="fas fa-tasks me-2"></i> Bulk Actions
                         </a>
                         <a href="{% url 'academic_calendar' %}" class="btn btn-outline-secondary btn-lg">
@@ -287,8 +401,12 @@
                                 </div>
                                 <div class="text-end">
                                     <div class="small">{{ term.start_date|date:"M d" }}</div>
-                                    <span class="badge bg-info">{{ term.get_remaining_days }} days</span>
+                                    <span class="badge bg-info">{{ term.get_days_until_start }} days</span>
                                 </div>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                <i class="fas fa-clock me-1"></i>
+                                {{ term.start_date|date:"F d, Y" }}
                             </div>
                         </div>
                         {% empty %}
@@ -308,42 +426,49 @@
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">📚 Academic Years</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📚 Academic Years</h5>
+                        <span class="badge bg-primary">{{ academic_years|length }} total</span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         {% for year_data in academic_years|slice:":6" %}
                         <div class="col-md-4 mb-3">
-                            <div class="card h-100 border">
+                            <div class="card h-100 border {% if year_data.is_current %}border-primary{% endif %}">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <h5 class="card-title mb-0">{{ year_data.name }}</h5>
-                                        {% if year_data.is_current %}
-                                        <span class="badge bg-success">Current</span>
-                                        {% endif %}
+                                        <h5 class="card-title mb-0">
+                                            {{ year_data.name }}
+                                            {% if year_data.obj.is_active %}
+                                            <span class="badge bg-success ms-2">Active</span>
+                                            {% endif %}
+                                        </h5>
+                                        <span class="badge bg-light text-dark">
+                                            {{ year_data.term_count }} terms
+                                        </span>
                                     </div>
-                                    <p class="card-text small text-muted">
-                                        {{ year_data.term_count }} terms • 
-                                        {{ year_data.completed_count }} completed
+                                    <p class="card-text small text-muted mb-2">
+                                        {{ year_data.obj.start_date|date:"M d, Y" }} - {{ year_data.obj.end_date|date:"M d, Y" }}
                                     </p>
-                                    <div class="progress mb-2" style="height: 4px;">
+                                    <div class="progress mb-2" style="height: 6px;">
                                         <div class="progress-bar bg-success" 
-                                             style="width: {% if year_data.term_count > 0 %}{% widthratio year_data.completed_count year_data.term_count 100 %}%{% else %}0%{% endif %}">
+                                             style="width: {{ year_data.progress|default:0 }}%">
                                         </div>
                                     </div>
-                                    <div class="small mb-2">
-                                        <i class="fas fa-calendar-alt me-1"></i>
-                                        {{ year_data.start_date|date:"M d, Y" }} - {{ year_data.end_date|date:"M d, Y" }}
+                                    <div class="small text-muted mb-3">
+                                        <i class="fas fa-chart-line me-1"></i>
+                                        {{ year_data.progress|default:0|floatformat:1 }}% complete
                                     </div>
                                     <div class="d-flex gap-2">
-                                        <a href="{% url 'academic_term_list' %}?academic_year={{ year_data.name }}" 
+                                        <a href="{% url 'academic_term_list' %}?academic_year={{ year_data.obj.id }}" 
                                            class="btn btn-sm btn-outline-primary">
                                             View Terms
                                         </a>
                                         {% if year_data.term_count == 0 %}
-                                        <a href="{% url 'academic_term_create' %}?academic_year={{ year_data.name }}" 
-                                           class="btn btn-sm btn-outline-success">
-                                            Add Term
+                                        <a href="{% url 'academic_quick_sync' %}" 
+                                           class="btn btn-sm btn-outline-info">
+                                            Auto-Create Terms
                                         </a>
                                         {% endif %}
                                     </div>
@@ -356,9 +481,14 @@
                                 <i class="fas fa-calendar-alt fa-3x mb-3"></i>
                                 <h5>No academic years found</h5>
                                 <p>Create your first academic year to get started</p>
-                                <a href="{% url 'academic_year_create' %}" class="btn btn-primary">
-                                    <i class="fas fa-plus me-1"></i> Create Academic Year
-                                </a>
+                                <div class="d-flex justify-content-center gap-2 mt-3">
+                                    <a href="{% url 'academic_year_create' %}" class="btn btn-primary">
+                                        <i class="fas fa-plus me-1"></i> Create Academic Year
+                                    </a>
+                                    <a href="{% url 'academic_quick_sync' %}" class="btn btn-info">
+                                        <i class="fas fa-sync-alt me-1"></i> Auto-Sync
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -366,7 +496,7 @@
                     {% if academic_years|length > 6 %}
                     <div class="text-center mt-3">
                         <a href="{% url 'academic_term_list' %}" class="btn btn-outline-secondary">
-                            View All Academic Years
+                            <i class="fas fa-list me-1"></i> View All Academic Years
                         </a>
                     </div>
                     {% endif %}

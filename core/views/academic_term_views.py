@@ -1,7 +1,6 @@
-
 """
 ACADEMIC TERM MANAGEMENT VIEWS
-Professional school management system for academic period administration
+Professional school management system for academic period administration - UPDATED FOR STANDALONE SYSTEM
 """
 import logging
 from django.shortcuts import render, redirect, get_object_or_404
@@ -20,16 +19,15 @@ from django.utils import timezone
 from django import forms
 import json
 from datetime import date, datetime, timedelta
-from core.models.academic_term import AcademicTerm
+from core.models.academic_term import AcademicTerm, AcademicYear
 from core.models.subject import Subject
-from core.utils.academic_term import get_current_academic_year
+from core.utils.academic_term import get_current_academic_year_string
 from core.forms.academic_term_forms import (
     AcademicTermForm, AcademicYearCreationForm,
-    TermBulkCreationForm, TermLockForm, AcademicYear
+    TermBulkCreationForm, TermLockForm
 )
 
 logger = logging.getLogger(__name__)
-
 
 
 class AcademicDashboardView(LoginRequiredMixin, TemplateView):
@@ -39,34 +37,15 @@ class AcademicDashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get current academic year as string
-        current_academic_year_str = get_current_academic_year()
-        
-        # Get the AcademicYear object
+        # AUTO-SYNC: Ensure academic years exist before displaying
         try:
-            academic_year_obj = AcademicYear.objects.get(name=current_academic_year_str)
-        except AcademicYear.DoesNotExist:
-            # Fallback: use first academic year or create a placeholder
-            academic_year_obj = AcademicYear.objects.first()
-            if not academic_year_obj:
-                # Create a placeholder if no academic years exist
-                try:
-                    year1, year2 = map(int, current_academic_year_str.split('/'))
-                    academic_year_obj = AcademicYear.objects.create(
-                        name=current_academic_year_str,
-                        start_date=date(year1, 9, 1),
-                        end_date=date(year2, 8, 31),
-                        is_active=True
-                    )
-                except:
-                    # If parsing fails, create with current year
-                    today = timezone.now().date()
-                    academic_year_obj = AcademicYear.objects.create(
-                        name=current_academic_year_str,
-                        start_date=today,
-                        end_date=today + timedelta(days=365),
-                        is_active=True
-                    )
+            AcademicYear.ensure_years_exist(years_ahead=2)
+        except Exception as e:
+            logger.error(f"Error auto-syncing academic years: {str(e)}")
+        
+        # Get current academic year OBJECT
+        current_academic_year = AcademicYear.get_current_year()
+        current_academic_year_str = get_current_academic_year_string()
         
         # Get all academic years (objects)
         academic_years = AcademicYear.objects.all().order_by('-start_date')
@@ -74,10 +53,13 @@ class AcademicDashboardView(LoginRequiredMixin, TemplateView):
         # Get current active term
         current_term = AcademicTerm.get_current_term()
         
-        # Get terms for current academic year (using ForeignKey object)
-        current_year_terms = AcademicTerm.objects.filter(
-            academic_year=academic_year_obj
-        ).order_by('sequence_num')
+        # Get terms for current academic year
+        if current_academic_year:
+            current_year_terms = AcademicTerm.objects.filter(
+                academic_year=current_academic_year
+            ).order_by('sequence_num')
+        else:
+            current_year_terms = AcademicTerm.objects.none()
         
         # Get upcoming terms
         today = timezone.now().date()
@@ -97,26 +79,48 @@ class AcademicDashboardView(LoginRequiredMixin, TemplateView):
         locked_terms = AcademicTerm.objects.filter(is_locked=True).count()
         upcoming_count = AcademicTerm.objects.filter(start_date__gt=today).count()
         
-        # Prepare academic years list for template (with term counts)
+        # Prepare academic years list for template
         academic_years_list = []
         for year in academic_years:
             term_count = year.terms.count()
             completed_terms_count = year.terms.filter(is_locked=True).count()
             academic_years_list.append({
-                'obj': year,  # Object for methods
-                'name': year.name,  # String for display
+                'obj': year,
+                'name': year.name,
                 'term_count': term_count,
                 'completed_count': completed_terms_count,
-                'is_current': year == academic_year_obj,
+                'is_current': year == current_academic_year,
                 'start_date': year.start_date,
                 'end_date': year.end_date,
+                'progress': year.get_progress_percentage(),
             })
         
+        # Calculate academic year totals (365 days system)
+        current_year_data = None
+        if current_academic_year:
+            terms_data = []
+            total_teaching_days = 0
+            for term in current_year_terms:
+                term_days = term.get_total_days()
+                total_teaching_days += term_days
+                terms_data.append({
+                    'term': term,
+                    'days': term_days,
+                    'remaining_days': term.get_remaining_days(),
+                    'progress': term.get_progress_percentage(),
+                })
+            
+            current_year_data = {
+                'total_teaching_days': total_teaching_days,
+                'total_days': current_academic_year.get_total_days(),  # Should be 365
+                'vacation_days': current_academic_year.get_total_days() - total_teaching_days,
+                'terms': terms_data,
+            }
+        
         context.update({
-            'current_academic_year': academic_year_obj,  # Object for methods
-            'current_academic_year_str': academic_year_obj.name,  # String for display
-            'academic_years': academic_years_list,  # List of dicts for template
-            'academic_years_objects': academic_years,  # Original queryset if needed
+            'current_academic_year': current_academic_year,
+            'current_academic_year_str': current_academic_year_str,
+            'academic_years': academic_years_list,
             'current_term': current_term,
             'current_year_terms': current_year_terms,
             'upcoming_terms': upcoming_terms,
@@ -126,6 +130,7 @@ class AcademicDashboardView(LoginRequiredMixin, TemplateView):
             'locked_terms': locked_terms,
             'upcoming_count': upcoming_count,
             'today': today,
+            'current_year_data': current_year_data,
         })
         
         return context
@@ -139,12 +144,12 @@ class AcademicTermListView(LoginRequiredMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        queryset = AcademicTerm.objects.all().order_by('-academic_year', 'sequence_num')
+        queryset = AcademicTerm.objects.select_related('academic_year').all().order_by('-academic_year__start_date', 'sequence_num')
         
-        # Filter by academic year
-        academic_year = self.request.GET.get('academic_year')
-        if academic_year:
-            queryset = queryset.filter(academic_year=academic_year)
+        # Filter by academic year (using ID)
+        academic_year_id = self.request.GET.get('academic_year')
+        if academic_year_id and academic_year_id.isdigit():
+            queryset = queryset.filter(academic_year_id=int(academic_year_id))
         
         # Filter by period system
         period_system = self.request.GET.get('period_system')
@@ -168,7 +173,7 @@ class AcademicTermListView(LoginRequiredMixin, ListView):
         search_query = self.request.GET.get('search', '')
         if search_query:
             queryset = queryset.filter(
-                Q(academic_year__icontains=search_query) |
+                Q(academic_year__name__icontains=search_query) |
                 Q(name__icontains=search_query) |
                 Q(period_system__icontains=search_query)
             )
@@ -178,26 +183,34 @@ class AcademicTermListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
+        # AUTO-SYNC: Ensure academic years exist
+        try:
+            AcademicYear.ensure_years_exist(years_ahead=1)
+        except Exception as e:
+            logger.error(f"Error syncing academic years in term list: {str(e)}")
+        
         # Get unique academic years for filter
-        academic_years = AcademicTerm.objects.values_list(
-            'academic_year', flat=True
-        ).distinct().order_by('-academic_year')
+        academic_years = AcademicYear.objects.all().order_by('-start_date')
         
         # Get period system choices
         from core.models.base import ACADEMIC_PERIOD_SYSTEM_CHOICES
         period_systems = ACADEMIC_PERIOD_SYSTEM_CHOICES
         
+        # Get current academic year object
+        current_academic_year = AcademicYear.get_current_year()
+        
         context.update({
             'academic_years': academic_years,
             'period_systems': period_systems,
-            'current_academic_year': get_current_academic_year(),
+            'current_academic_year': current_academic_year,
             'search_query': self.request.GET.get('search', ''),
-            'selected_academic_year': self.request.GET.get('academic_year', ''),
+            'selected_academic_year_id': self.request.GET.get('academic_year', ''),
             'selected_period_system': self.request.GET.get('period_system', ''),
             'selected_status': self.request.GET.get('status', ''),
         })
         
         return context
+
 
 
 class AcademicTermDetailView(LoginRequiredMixin, DetailView):
@@ -231,23 +244,33 @@ class AcademicTermDetailView(LoginRequiredMixin, DetailView):
             status = "Not Started"
         
         # Get related data counts (you'll need to implement these)
-        from core.models import Grade, Fee, Attendance, Assignment
+        from core.models import Grade, Fee, Assignment
         grade_count = Grade.objects.filter(
-            academic_year=term.academic_year,
+            academic_year=term.academic_year.name if term.academic_year else '',
             term=term.period_number
-        ).count() if term.is_term_system else 0
+        ).count() if term.period_system == 'TERM' else 0
         
         fee_count = Fee.objects.filter(
-            academic_year=term.academic_year,
+            academic_year=term.academic_year.name if term.academic_year else '',
             term=term.period_number
-        ).count() if term.is_term_system else 0
+        ).count() if term.period_system == 'TERM' else 0
         
-        # Get next and previous terms
-        next_term = term.get_next_period()
-        previous_term = term.get_previous_period()
-        
-        # Get holidays/breaks for this term
-        # (You'll need to implement a Holiday model)
+        # Get next and previous terms in the same academic year and period system
+        if term.academic_year:
+            next_term = AcademicTerm.objects.filter(
+                academic_year=term.academic_year,
+                period_system=term.period_system,
+                sequence_num__gt=term.sequence_num
+            ).order_by('sequence_num').first()
+            
+            previous_term = AcademicTerm.objects.filter(
+                academic_year=term.academic_year,
+                period_system=term.period_system,
+                sequence_num__lt=term.sequence_num
+            ).order_by('-sequence_num').first()
+        else:
+            next_term = None
+            previous_term = None
         
         context.update({
             'progress': progress,
@@ -258,7 +281,6 @@ class AcademicTermDetailView(LoginRequiredMixin, DetailView):
             'previous_term': previous_term,
             'today': today,
             'remaining_days': term.get_remaining_days(),
-            'total_school_days': term.get_total_school_days(),
         })
         
         return context
@@ -289,7 +311,7 @@ class AcademicTermCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView
             period_system=term.period_system,
             start_date__lt=term.end_date,
             end_date__gt=term.start_date
-        ).exclude(pk=term.pk)
+        )
         
         if overlapping.exists():
             form.add_error(None, 
@@ -298,8 +320,8 @@ class AcademicTermCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView
             )
             return self.form_invalid(form)
         
-        # If setting as active, deactivate others
-        if term.is_active:
+        # If setting as active, deactivate others in the same academic year
+        if term.is_active and term.academic_year:
             AcademicTerm.objects.filter(
                 academic_year=term.academic_year,
                 is_active=True
@@ -359,8 +381,8 @@ class AcademicTermUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
             )
             return self.form_invalid(form)
         
-        # If setting as active, deactivate others
-        if term.is_active:
+        # If setting as active, deactivate others in the same academic year
+        if term.is_active and term.academic_year:
             AcademicTerm.objects.filter(
                 academic_year=term.academic_year,
                 is_active=True
@@ -398,14 +420,14 @@ class AcademicTermDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView
         # Check if term has associated data
         from core.models import Grade, Fee
         has_grades = Grade.objects.filter(
-            academic_year=term.academic_year,
+            academic_year=term.academic_year.name if term.academic_year else '',
             term=term.period_number
-        ).exists() if term.is_term_system else False
+        ).exists() if term.period_system == 'TERM' else False
         
         has_fees = Fee.objects.filter(
-            academic_year=term.academic_year,
+            academic_year=term.academic_year.name if term.academic_year else '',
             term=term.period_number
-        ).exists() if term.is_term_system else False
+        ).exists() if term.period_system == 'TERM' else False
         
         if has_grades or has_fees:
             messages.error(self.request,
@@ -434,62 +456,14 @@ class AcademicYearCreationView(LoginRequiredMixin, UserPassesTestMixin, FormView
         return self.request.user.is_staff
     
     def form_valid(self, form):
-        academic_year = form.cleaned_data['academic_year']
-        period_system = form.cleaned_data['period_system']
-        auto_generate = form.cleaned_data['auto_generate_dates']
-        
         try:
-            # Check if academic year already exists
-            existing_terms = AcademicTerm.objects.filter(
-                academic_year=academic_year,
-                period_system=period_system
-            )
-            
-            if existing_terms.exists():
-                messages.warning(self.request,
-                    f"Academic year {academic_year} ({period_system}) already exists. "
-                    f"Found {existing_terms.count()} existing terms."
-                )
-                return redirect('academic_term_list')
-            
-            # Create terms
-            if auto_generate:
-                terms = AcademicTerm.create_academic_year(
-                    academic_year=academic_year,
-                    period_system=period_system
-                )
-                term_count = len(terms)
-            else:
-                # Use custom dates from form
-                term_data = form.get_term_data()
-                terms = []
-                for term_info in term_data:
-                    term = AcademicTerm(
-                        period_system=period_system,
-                        period_number=term_info['number'],
-                        academic_year=academic_year,
-                        name=term_info.get('name', ''),
-                        start_date=term_info['start_date'],
-                        end_date=term_info['end_date'],
-                        is_active=False
-                    )
-                    term.save()
-                    terms.append(term)
-                term_count = len(terms)
+            # Use the new method from the form
+            academic_year, terms = form.create_academic_year_with_terms()
             
             messages.success(self.request,
-                f"Successfully created {term_count} terms for academic year "
-                f"{academic_year} ({period_system} system)"
+                f"Successfully created academic year {academic_year.name} "
+                f"with {len(terms)} terms"
             )
-            
-            # Set first term as active if requested
-            if form.cleaned_data['set_first_term_active'] and terms:
-                first_term = terms[0]
-                first_term.is_active = True
-                first_term.save()
-                messages.info(self.request,
-                    f"Set {first_term} as active term"
-                )
             
             return super().form_valid(form)
             
@@ -586,21 +560,23 @@ class AcademicCalendarView(LoginRequiredMixin, TemplateView):
         
         for year_offset in range(-1, 3):  # Previous year to next 2 years
             year = current_year + year_offset
-            academic_year = f"{year}/{year + 1}"
+            academic_year_str = f"{year}/{year + 1}"
             
-            terms = AcademicTerm.objects.filter(
-                academic_year=academic_year
-            ).order_by('sequence_num')
-            
-            if terms.exists():
-                academic_years.append({
-                    'academic_year': academic_year,
-                    'terms': terms,
-                    'is_current': academic_year == get_current_academic_year()
-                })
+            # Try to get the AcademicYear object
+            try:
+                academic_year_obj = AcademicYear.objects.get(name=academic_year_str)
+                terms = academic_year_obj.terms.all().order_by('sequence_num')
+                if terms.exists():
+                    academic_years.append({
+                        'academic_year': academic_year_obj,
+                        'terms': terms,
+                        'is_current': academic_year_obj.is_active
+                    })
+            except AcademicYear.DoesNotExist:
+                continue
         
         context['academic_years'] = academic_years
-        context['current_academic_year'] = get_current_academic_year()
+        context['current_academic_year'] = AcademicYear.get_current_year()
         
         return context
 
@@ -638,29 +614,49 @@ class TermBulkActionsView(LoginRequiredMixin, UserPassesTestMixin, FormView):
     
     def form_valid(self, form):
         action = form.cleaned_data['action']
-        academic_years = form.cleaned_data['academic_years']
+        academic_years_str = form.cleaned_data['academic_years']
         period_system = form.cleaned_data['period_system']
         
         if action == 'create':
             # Create multiple academic years
-            created = 0
-            for academic_year in academic_years:
-                # Check if exists
-                if not AcademicTerm.objects.filter(academic_year=academic_year).exists():
-                    terms = AcademicTerm.create_academic_year(
-                        academic_year=academic_year,
-                        period_system=period_system
+            created_terms = 0
+            for academic_year_str in academic_years_str:
+                # Check if AcademicYear exists
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year_str)
+                except AcademicYear.DoesNotExist:
+                    # Create the AcademicYear
+                    year1, year2 = map(int, academic_year_str.split('/'))
+                    academic_year_obj = AcademicYear.objects.create(
+                        name=academic_year_str,
+                        start_date=date(year1, 9, 1),
+                        end_date=date(year2, 8, 31)
                     )
-                    created += len(terms)
+                
+                # Check if terms already exist
+                existing_terms = academic_year_obj.terms.filter(period_system=period_system).count()
+                if existing_terms == 0:
+                    # Create default terms
+                    terms = AcademicTerm.create_default_terms(academic_year_obj, period_system)
+                    created_terms += len(terms)
             
             messages.success(self.request,
-                f"Created {created} terms across {len(academic_years)} academic years"
+                f"Created {created_terms} terms across {len(academic_years_str)} academic years"
             )
         
         elif action == 'lock':
             # Lock all terms in selected academic years
-            terms = AcademicTerm.objects.filter(academic_year__in=academic_years)
-            locked_count = terms.update(is_locked=True)
+            locked_count = 0
+            for academic_year_str in academic_years_str:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year_str)
+                    terms = academic_year_obj.terms.all()
+                    for term in terms:
+                        if term.end_date and term.end_date <= timezone.now().date():
+                            term.lock_term()
+                            locked_count += 1
+                except AcademicYear.DoesNotExist:
+                    continue
             
             messages.success(self.request,
                 f"Locked {locked_count} terms"
@@ -668,8 +664,16 @@ class TermBulkActionsView(LoginRequiredMixin, UserPassesTestMixin, FormView):
         
         elif action == 'unlock':
             # Unlock all terms in selected academic years
-            terms = AcademicTerm.objects.filter(academic_year__in=academic_years)
-            unlocked_count = terms.update(is_locked=False)
+            unlocked_count = 0
+            for academic_year_str in academic_years_str:
+                try:
+                    academic_year_obj = AcademicYear.objects.get(name=academic_year_str)
+                    terms = academic_year_obj.terms.all()
+                    for term in terms:
+                        term.unlock_term()
+                        unlocked_count += 1
+                except AcademicYear.DoesNotExist:
+                    continue
             
             messages.success(self.request,
                 f"Unlocked {unlocked_count} terms"
@@ -677,6 +681,63 @@ class TermBulkActionsView(LoginRequiredMixin, UserPassesTestMixin, FormView):
         
         return super().form_valid(form)
 
+
+class AutoSyncAcademicYearsView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """View to manually trigger academic year auto-sync"""
+    
+    def test_func(self):
+        return self.request.user.is_staff
+    
+    def get(self, request):
+        try:
+            created_years = AcademicYear.ensure_years_exist(years_ahead=2)
+            
+            if created_years:
+                messages.success(request, 
+                    f"✅ Successfully created {len(created_years)} academic years and their terms"
+                )
+            else:
+                messages.info(request, 
+                    "✅ Academic years are already up-to-date. No changes made."
+                )
+            
+        except Exception as e:
+            logger.error(f"Error in auto-sync view: {str(e)}")
+            messages.error(request, 
+                f"❌ Error syncing academic years: {str(e)}"
+            )
+        
+        return redirect('academic_dashboard')
+
+
+# Update the quick actions to include auto-sync
+def quick_sync_academic_years(request):
+    """Quick action to sync academic years"""
+    if not request.user.is_staff:
+        messages.error(request, "Permission denied")
+        return redirect('academic_term_list')
+    
+    try:
+        created_years = AcademicYear.ensure_years_exist(years_ahead=2)
+        
+        if created_years:
+            messages.success(request, 
+                f"✅ Successfully synced academic years. Created {len(created_years)} new years."
+            )
+        else:
+            messages.info(request, 
+                "✅ Academic years are already synced. No changes needed."
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in quick sync: {str(e)}")
+        messages.error(request, 
+            f"❌ Error syncing academic years: {str(e)}"
+        )
+    
+    if request.META.get('HTTP_REFERER'):
+        return redirect(request.META.get('HTTP_REFERER'))
+    return redirect('academic_dashboard')
 
 # Quick actions views
 def quick_set_active_term(request, pk):
@@ -687,7 +748,7 @@ def quick_set_active_term(request, pk):
     
     term = get_object_or_404(AcademicTerm, pk=pk)
     
-    # Deactivate all other terms
+    # Deactivate all other terms in the same academic year
     AcademicTerm.objects.filter(
         academic_year=term.academic_year
     ).exclude(pk=pk).update(is_active=False)
@@ -744,53 +805,63 @@ def quick_unlock_term(request, pk):
     return redirect('academic_term_detail', pk=pk)
 
 
-# AJAX/JSON endpoints
+# AJAX/JSON endpoints - UPDATED FOR STANDALONE SYSTEM
 def get_academic_years_json(request):
     """Get academic years for dropdowns"""
-    years = AcademicTerm.objects.values_list(
-        'academic_year', flat=True
-    ).distinct().order_by('-academic_year')
-    
-    return JsonResponse(list(years), safe=False)
-
-
-def get_terms_for_year_json(request, academic_year):
-    """Get terms for a specific academic year"""
-    terms = AcademicTerm.objects.filter(
-        academic_year=academic_year
-    ).order_by('sequence_num')
+    years = AcademicYear.objects.all().order_by('-start_date')
     
     data = [
         {
-            'id': term.id,
-            'name': str(term),
-            'period_number': term.period_number,
-            'period_system': term.period_system,
-            'start_date': term.start_date.isoformat() if term.start_date else None,
-            'end_date': term.end_date.isoformat() if term.end_date else None,
-            'is_active': term.is_active,
-            'is_locked': term.is_locked,
+            'id': year.id,
+            'name': year.name,
+            'is_active': year.is_active
         }
-        for term in terms
+        for year in years
     ]
     
     return JsonResponse(data, safe=False)
 
 
+def get_terms_for_year_json(request, year_id):
+    """Get terms for a specific academic year (using ID)"""
+    try:
+        academic_year = AcademicYear.objects.get(id=year_id)
+        terms = academic_year.terms.all().order_by('sequence_num')
+        
+        data = [
+            {
+                'id': term.id,
+                'name': str(term),
+                'period_number': term.period_number,
+                'period_system': term.period_system,
+                'start_date': term.start_date.isoformat() if term.start_date else None,
+                'end_date': term.end_date.isoformat() if term.end_date else None,
+                'is_active': term.is_active,
+                'is_locked': term.is_locked,
+            }
+            for term in terms
+        ]
+        
+        return JsonResponse(data, safe=False)
+    except AcademicYear.DoesNotExist:
+        return JsonResponse([], safe=False)
+
+
 def check_term_availability(request):
     """Check if a term period is available"""
-    academic_year = request.GET.get('academic_year')
+    academic_year_id = request.GET.get('academic_year')
     period_system = request.GET.get('period_system')
     period_number = request.GET.get('period_number')
     exclude_id = request.GET.get('exclude_id')
     
-    if not all([academic_year, period_system, period_number]):
+    if not all([academic_year_id, period_system, period_number]):
         return JsonResponse({'error': 'Missing parameters'}, status=400)
     
     try:
+        academic_year = AcademicYear.objects.get(id=int(academic_year_id))
         period_number = int(period_number)
-    except ValueError:
-        return JsonResponse({'error': 'Invalid period number'}, status=400)
+    except (ValueError, AcademicYear.DoesNotExist):
+        return JsonResponse({'error': 'Invalid parameters'}, status=400)
     
     queryset = AcademicTerm.objects.filter(
         academic_year=academic_year,

@@ -1,5 +1,5 @@
 """
-FORMS FOR ACADEMIC TERM MANAGEMENT
+FORMS FOR ACADEMIC TERM MANAGEMENT - UPDATED FOR STANDALONE SYSTEM
 """
 from django import forms
 from django.core.exceptions import ValidationError
@@ -11,16 +11,128 @@ from core.models.academic_term import AcademicTerm, AcademicYear
 from core.models.base import ACADEMIC_PERIOD_SYSTEM_CHOICES
 
 
+class AcademicYearForm(forms.ModelForm):
+    """Form for creating/editing academic years in standalone system"""
+    
+    auto_sync_terms = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text='Auto-create terms based on Ghana Education System (365 days)'
+    )
+    
+    class Meta:
+        model = AcademicYear
+        fields = ['name', 'start_date', 'end_date', 'is_active', 'auto_sync_terms', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'YYYY/YYYY'
+            }),
+            'start_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'end_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Optional description...'
+            }),
+        }
+        help_texts = {
+            'name': 'Format: YYYY/YYYY (e.g., 2024/2025)',
+            'start_date': 'Typically September 1st of first year',
+            'end_date': 'Typically August 31st of second year',
+            'auto_sync_terms': 'Creates 3 terms with Ghana Education System dates (108 + 84 + 94 = 286 teaching days)',
+        }
+    
+    def clean_name(self):
+        name = self.cleaned_data['name']
+        
+        # Validate format
+        if not re.match(r'^\d{4}/\d{4}$', name):
+            raise ValidationError('Academic year must be in format YYYY/YYYY')
+        
+        # Validate years
+        try:
+            year1, year2 = map(int, name.split('/'))
+            if year2 != year1 + 1:
+                raise ValidationError('The second year must be exactly one year after the first')
+            
+            # Check if academic year with this name already exists
+            if AcademicYear.objects.filter(name=name).exclude(pk=self.instance.pk if self.instance else None).exists():
+                raise ValidationError(f'Academic year {name} already exists')
+                
+        except (ValueError, IndexError):
+            raise ValidationError('Invalid academic year format')
+        
+        return name
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        name = cleaned_data.get('name')
+        
+        if start_date and end_date:
+            # Validate date order
+            if start_date >= end_date:
+                raise ValidationError({
+                    'end_date': 'End date must be after start date'
+                })
+            
+            # Validate dates match name
+            if name:
+                try:
+                    year1, year2 = map(int, name.split('/'))
+                    
+                    # Check if dates roughly match academic year
+                    if start_date.year != year1 or end_date.year != year2:
+                        self.add_warning('start_date', 
+                            f"Dates don't match academic year name {name}. "
+                            f"Expected year1={year1}, year2={year2}")
+                
+                except (ValueError, IndexError):
+                    pass
+        
+        return cleaned_data
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        if commit:
+            instance.save()
+            
+            # Auto-create terms if requested
+            if self.cleaned_data.get('auto_sync_terms', True):
+                terms_created = AcademicTerm.create_default_terms_for_year(instance, 'TERM')
+                if terms_created:
+                    self.add_success_message = f"Created {terms_created} terms for academic year {instance.name}"
+        
+        return instance
+
+
 class AcademicTermForm(forms.ModelForm):
     """Form for creating/editing academic terms"""
     
     class Meta:
         model = AcademicTerm
         fields = [
-            'period_system', 'period_number', 'academic_year',
+            'academic_year', 'period_system', 'period_number',
             'name', 'start_date', 'end_date', 'is_active'
         ]
         widgets = {
+            'academic_year': forms.Select(attrs={
+                'class': 'form-select',
+                'placeholder': 'Select academic year'
+            }),
             'period_system': forms.Select(attrs={
                 'class': 'form-select',
                 'onchange': 'updatePeriodNumberLimits(this.value)'
@@ -29,10 +141,6 @@ class AcademicTermForm(forms.ModelForm):
                 'class': 'form-control',
                 'min': 1,
                 'max': 6
-            }),
-            'academic_year': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'YYYY/YYYY'
             }),
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -51,7 +159,7 @@ class AcademicTermForm(forms.ModelForm):
             }),
         }
         help_texts = {
-            'academic_year': 'Format: YYYY/YYYY (e.g., 2024/2025)',
+            'academic_year': 'Select from existing academic years',
             'period_number': '1-3 for Terms, 1-2 for Semesters, 1-4 for Quarters',
         }
     
@@ -59,27 +167,14 @@ class AcademicTermForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
+        # Set queryset for academic_year field
+        self.fields['academic_year'].queryset = AcademicYear.objects.all().order_by('-name')
+        
         # Set initial academic year to current if not provided
         if not self.instance.pk and not self.initial.get('academic_year'):
-            from core.utils.academic_term import get_current_academic_year
-            self.initial['academic_year'] = get_current_academic_year()
-    
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data['academic_year']
-        
-        # Validate format
-        if not re.match(r'^\d{4}/\d{4}$', academic_year):
-            raise ValidationError('Academic year must be in format YYYY/YYYY')
-        
-        # Validate years
-        try:
-            year1, year2 = map(int, academic_year.split('/'))
-            if year2 != year1 + 1:
-                raise ValidationError('The second year must be exactly one year after the first')
-        except (ValueError, IndexError):
-            raise ValidationError('Invalid academic year format')
-        
-        return academic_year
+            current_year = AcademicYear.get_current_year()
+            if current_year:
+                self.initial['academic_year'] = current_year
     
     def clean_period_number(self):
         period_system = self.cleaned_data.get('period_system', self.instance.period_system if self.instance else 'TERM')
@@ -121,18 +216,11 @@ class AcademicTermForm(forms.ModelForm):
             
             # Validate dates within academic year
             if academic_year:
-                try:
-                    year1, year2 = map(int, academic_year.split('/'))
-                    year1_date = date(year1, 9, 1)  # Academic year starts Sep 1
-                    year2_date = date(year2, 8, 31)  # Ends Aug 31
-                    
-                    if start_date < year1_date or end_date > year2_date:
-                        raise ValidationError({
-                            'start_date': f'Dates must be within academic year {academic_year} '
-                                        f'(Sep {year1} - Aug {year2})'
-                        })
-                except (ValueError, IndexError):
-                    pass
+                if start_date < academic_year.start_date or end_date > academic_year.end_date:
+                    raise ValidationError({
+                        'start_date': f'Dates must be within academic year {academic_year.name} '
+                                    f'({academic_year.start_date} - {academic_year.end_date})'
+                    })
         
         # Check for overlapping terms
         if all([academic_year, period_system, start_date, end_date]):
@@ -156,9 +244,9 @@ class AcademicTermForm(forms.ModelForm):
 
 
 class AcademicYearCreationForm(forms.Form):
-    """Form for creating a complete academic year"""
+    """Form for creating a complete academic year with its terms"""
     
-    academic_year = forms.CharField(
+    name = forms.CharField(
         max_length=9,
         validators=[RegexValidator(r'^\d{4}/\d{4}$')],
         widget=forms.TextInput(attrs={
@@ -188,68 +276,64 @@ class AcademicYearCreationForm(forms.Form):
         help_text='Set the first term as active'
     )
     
-    def clean_academic_year(self):
-        academic_year = self.cleaned_data['academic_year']
+    def clean_name(self):
+        name = self.cleaned_data['name']
         
         # Check if academic year already exists
-        if AcademicTerm.objects.filter(academic_year=academic_year).exists():
+        if AcademicYear.objects.filter(name=name).exists():
             raise ValidationError(
-                f'Academic year {academic_year} already exists. '
-                f'Please delete existing terms first or choose a different year.'
+                f'Academic year {name} already exists. '
+                f'Please use the existing one or choose a different year.'
             )
         
-        return academic_year
+        return name
     
-    def get_term_data(self):
-        """Get term data based on form input"""
-        academic_year = self.cleaned_data['academic_year']
+    def create_academic_year_with_terms(self):
+        """Create academic year and its terms based on form data"""
+        name = self.cleaned_data['name']
         period_system = self.cleaned_data['period_system']
         auto_generate = self.cleaned_data['auto_generate_dates']
+        set_first_active = self.cleaned_data['set_first_term_active']
         
-        if auto_generate:
-            # Return default dates based on system
-            year1, year2 = map(int, academic_year.split('/'))
+        try:
+            year1, year2 = map(int, name.split('/'))
             
-            if period_system == 'TERM':
-                return [
-                    {
-                        'number': 1,
-                        'name': 'First Term',
-                        'start_date': date(year1, 9, 2),
-                        'end_date': date(year1, 12, 18),
-                    },
-                    {
-                        'number': 2,
-                        'name': 'Second Term',
-                        'start_date': date(year2, 1, 8),
-                        'end_date': date(year2, 4, 1),
-                    },
-                    {
-                        'number': 3,
-                        'name': 'Third Term',
-                        'start_date': date(year2, 4, 21),
-                        'end_date': date(year2, 7, 23),
-                    },
-                ]
-            elif period_system == 'SEMESTER':
-                return [
-                    {
-                        'number': 1,
-                        'name': 'First Semester',
-                        'start_date': date(year1, 9, 2),
-                        'end_date': date(year2, 1, 15),
-                    },
-                    {
-                        'number': 2,
-                        'name': 'Second Semester',
-                        'start_date': date(year2, 1, 22),
-                        'end_date': date(year2, 6, 15),
-                    },
-                ]
-            # Add other systems as needed
-        
-        # For custom dates, you'd need additional form fields
-        return []
+            # Create AcademicYear
+            if auto_generate:
+                academic_year = AcademicYear.objects.create(
+                    name=name,
+                    start_date=date(year1, 9, 1),
+                    end_date=date(year2, 8, 31)
+                )
+            else:
+                academic_year = AcademicYear.objects.create(name=name)
+            
+            # Create terms using the model's create_default_terms method
+            if auto_generate:
+                terms = AcademicTerm.create_default_terms(
+                    academic_year=academic_year,
+                    period_system=period_system
+                )
+            else:
+                # Just create the AcademicYear without terms
+                terms = []
+            
+            # Set first term as active if requested
+            if set_first_active and terms:
+                # Deactivate all other terms first
+                AcademicTerm.objects.filter(is_active=True).exclude(
+                    pk=terms[0].pk
+                ).update(is_active=False)
+                terms[0].is_active = True
+                terms[0].save()
+            
+            return academic_year, terms
+            
+        except Exception as e:
+            # Rollback if there's an error
+            if 'academic_year' in locals():
+                academic_year.delete()
+            raise ValidationError(f'Error creating academic year: {str(e)}')
 
 
 class TermLockForm(forms.ModelForm):
@@ -286,12 +370,12 @@ class TermLockForm(forms.ModelForm):
 
 
 class TermBulkCreationForm(forms.Form):
-    """Form for bulk academic term actions"""
+    """Form for bulk academic year actions"""
     
     ACTION_CHOICES = [
         ('create', 'Create Academic Years'),
-        ('lock', 'Lock Terms'),
-        ('unlock', 'Unlock Terms'),
+        ('activate', 'Activate Years'),
+        ('deactivate', 'Deactivate Years'),
     ]
     
     action = forms.ChoiceField(
@@ -342,3 +426,16 @@ class TermBulkCreationForm(forms.Form):
             raise ValidationError('Please enter at least one academic year')
         
         return valid_years
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        period_system = cleaned_data.get('period_system')
+        
+        # Validate period_system is provided for create action
+        if action == 'create' and not period_system:
+            raise ValidationError({
+                'period_system': 'Period system is required for creating academic years'
+            })
+        
+        return cleaned_data

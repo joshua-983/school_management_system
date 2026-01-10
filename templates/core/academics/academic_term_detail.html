@@ -26,6 +26,7 @@
             </h1>
             <p class="text-muted mb-0">
                 {{ term.academic_year.name }} • {{ term.get_period_system_display }}
+                <span class="badge bg-info ms-2">{{ term.get_total_days }} days</span>
             </p>
         </div>
         <div class="btn-group">
@@ -38,9 +39,9 @@
             </a>
             {% endif %}
             <div class="dropdown">
-                <button class="btn btn-secondary dropdown-toggle" type="button" 
+                <button class="btn btn-info dropdown-toggle" type="button" 
                         data-bs-toggle="dropdown">
-                    <i class="fas fa-cog me-1"></i> Actions
+                    <i class="fas fa-sync-alt me-1"></i> Sync Actions
                 </button>
                 <ul class="dropdown-menu">
                     {% if term.is_active %}
@@ -51,7 +52,7 @@
                     </li>
                     {% elif not term.is_active and not term.is_locked %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'quick_set_active_term' term.pk %}">
+                        <a class="dropdown-item" href="{% url 'academic_term_quick_active' term.pk %}">
                             <i class="fas fa-check-circle text-success me-2"></i> Set as Active
                         </a>
                     </li>
@@ -59,11 +60,17 @@
                     
                     {% if term.is_locked %}
                     <li>
-                        <a class="dropdown-item" href="{% url 'quick_unlock_term' term.pk %}">
+                        <a class="dropdown-item" href="{% url 'academic_term_quick_unlock' term.pk %}">
                             <i class="fas fa-unlock text-warning me-2"></i> Unlock Term
                         </a>
                     </li>
                     {% endif %}
+                    
+                    <li>
+                        <a class="dropdown-item" href="{% url 'academic_quick_sync' %}">
+                            <i class="fas fa-sync-alt text-info me-2"></i> Sync Academic System
+                        </a>
+                    </li>
                     
                     <li><hr class="dropdown-divider"></li>
                     
@@ -89,7 +96,10 @@
     <div class="card shadow mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="mb-0">Term Progress</h6>
+                <h6 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i> Term Progress
+                    <span class="badge bg-primary ms-2">{{ term.get_total_days }} total days</span>
+                </h6>
                 <span class="badge bg-primary">{{ progress|floatformat:1 }}% Complete</span>
             </div>
             <div class="progress" style="height: 10px;">
@@ -97,18 +107,39 @@
                      style="width: {{ progress }}%">
                 </div>
             </div>
-            <div class="row mt-2 text-center">
+            <div class="row mt-3 text-center">
                 <div class="col">
                     <small class="text-muted">Start Date</small>
                     <div class="fw-bold">{{ term.start_date|date:"M d, Y" }}</div>
+                    <small class="text-muted">
+                        {% if term.get_days_until_start < 0 %}
+                        {{ term.start_date|timesince }} ago
+                        {% endif %}
+                    </small>
                 </div>
                 <div class="col">
                     <small class="text-muted">Today</small>
                     <div class="fw-bold">{{ today|date:"M d, Y" }}</div>
+                    <small class="text-muted">
+                        {% if term.is_active %}
+                        <span class="text-success">Active</span>
+                        {% elif term.status == 'COMPLETED' %}
+                        <span class="text-secondary">Completed</span>
+                        {% else %}
+                        <span class="text-info">Planned</span>
+                        {% endif %}
+                    </small>
                 </div>
                 <div class="col">
                     <small class="text-muted">End Date</small>
                     <div class="fw-bold">{{ term.end_date|date:"M d, Y" }}</div>
+                    <small class="text-muted">
+                        {% if remaining_days > 0 %}
+                        {{ remaining_days }} days left
+                        {% else %}
+                        Term ended
+                        {% endif %}
+                    </small>
                 </div>
             </div>
         </div>
@@ -120,7 +151,12 @@
             <!-- Term Information Card -->
             <div class="card shadow mb-4">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i> Term Information</h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i> Term Information</h5>
+                        <span class="badge bg-{% if term.is_active %}success{% elif term.is_locked %}danger{% else %}info{% endif %}">
+                            {% if term.is_active %}Active{% elif term.is_locked %}Locked{% else %}{{ term.status }}{% endif %}
+                        </span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -150,20 +186,12 @@
                                         <td>{{ term.sequence_num }}</td>
                                     </tr>
                                     <tr>
-                                        <th>Status:</th>
+                                        <th>Duration:</th>
                                         <td>
-                                            {% if term.is_active %}
-                                            <span class="badge bg-success">Active</span>
-                                            <small class="text-muted ms-2">Currently active term</small>
-                                            {% elif term.status == 'LOCKED' %}
-                                            <span class="badge bg-danger">Locked</span>
-                                            {% elif term.status == 'COMPLETED' %}
-                                            <span class="badge bg-secondary">Completed</span>
-                                            {% elif term.status == 'PLANNED' %}
-                                            <span class="badge bg-info">Planned</span>
-                                            {% else %}
-                                            <span class="badge bg-warning">{{ term.status }}</span>
-                                            {% endif %}
+                                            <span class="fw-bold">{{ term.get_total_days }} days total</span>
+                                            <div class="text-muted small">
+                                                Ghana Education System: {{ term.name }}
+                                            </div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -177,7 +205,11 @@
                                         <td>
                                             {{ term.start_date|date:"l, F d, Y" }}
                                             <div class="text-muted small">
-                                                {{ term.start_date|timesince }} ago
+                                                {% if today < term.start_date %}
+                                                Starts in {{ term.get_days_until_start }} days
+                                                {% else %}
+                                                Started {{ term.start_date|timesince }} ago
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>
@@ -186,34 +218,76 @@
                                         <td>
                                             {{ term.end_date|date:"l, F d, Y" }}
                                             <div class="text-muted small">
-                                                {{ term.end_date|timeuntil }} from now
+                                                {% if term.end_date > today %}
+                                                Ends in {{ term.get_remaining_days }} days
+                                                {% else %}
+                                                Ended {{ term.end_date|timesince }} ago
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>
                                     <tr>
-                                        <th>Duration:</th>
-                                        <td>
-                                            {{ term.get_total_days }} days total
-                                            <div class="text-muted small">
-                                                {{ term.get_total_school_days }} school days
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th>Remaining:</th>
+                                        <th>Days Remaining:</th>
                                         <td>
                                             {% if remaining_days > 0 %}
                                             <span class="text-success fw-bold">{{ remaining_days }} days</span>
                                             {% else %}
-                                            <span class="text-muted">Term ended</span>
+                                            <span class="text-muted">Term has ended</span>
                                             {% endif %}
-                                            <div class="text-muted small">
-                                                Week {{ term.get_week_number }} of term
-                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Status:</th>
+                                        <td>
+                                            {% if term.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                            <small class="text-muted ms-2">Currently active term</small>
+                                            {% elif term.is_locked %}
+                                            <span class="badge bg-danger">Locked</span>
+                                            <small class="text-muted ms-2">Cannot be modified</small>
+                                            {% elif term.status == 'COMPLETED' %}
+                                            <span class="badge bg-secondary">Completed</span>
+                                            <small class="text-muted ms-2">Term has ended</small>
+                                            {% elif term.status == 'PLANNED' %}
+                                            <span class="badge bg-info">Planned</span>
+                                            <small class="text-muted ms-2">Starts in {{ term.get_days_until_start }} days</small>
+                                            {% else %}
+                                            <span class="badge bg-warning">{{ term.status }}</span>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Academic Year Summary -->
+                    <div class="card bg-light border mt-3">
+                        <div class="card-body py-2">
+                            <div class="row text-center">
+                                <div class="col">
+                                    <small class="text-muted">Academic Year</small>
+                                    <div class="fw-bold">{{ term.academic_year.name }}</div>
+                                </div>
+                                <div class="col">
+                                    <small class="text-muted">Total Days</small>
+                                    <div class="fw-bold">{{ term.academic_year.get_total_days|default:365 }} days</div>
+                                </div>
+                                <div class="col">
+                                    <small class="text-muted">Progress</small>
+                                    <div class="fw-bold">{{ term.academic_year.get_progress_percentage|floatformat:1 }}%</div>
+                                </div>
+                                <div class="col">
+                                    <small class="text-muted">Year Status</small>
+                                    <div>
+                                        {% if term.academic_year.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -297,13 +371,17 @@
                             Locking prevents all modifications to this term's data.
                         </div>
                         {% elif not term.is_active and not term.is_locked %}
-                        <a href="{% url 'quick_set_active_term' term.pk %}" class="btn btn-success btn-lg">
+                        <a href="{% url 'academic_term_quick_active' term.pk %}" class="btn btn-success btn-lg">
                             <i class="fas fa-check-circle me-2"></i> Set as Active Term
                         </a>
+                        <div class="alert alert-info small mb-0">
+                            <i class="fas fa-info-circle me-1"></i>
+                            This will deactivate any other active terms.
+                        </div>
                         {% endif %}
                         
                         {% if term.is_locked %}
-                        <a href="{% url 'quick_unlock_term' term.pk %}" class="btn btn-warning btn-lg">
+                        <a href="{% url 'academic_term_quick_unlock' term.pk %}" class="btn btn-warning btn-lg">
                             <i class="fas fa-unlock me-2"></i> Unlock This Term
                         </a>
                         <div class="alert alert-danger small mb-0">
@@ -311,6 +389,10 @@
                             Unlocking allows modifications. Use with caution!
                         </div>
                         {% endif %}
+                        
+                        <a href="{% url 'academic_quick_sync' %}" class="btn btn-info">
+                            <i class="fas fa-sync-alt me-2"></i> Sync Academic System
+                        </a>
                         
                         {% if not term.is_locked %}
                         <a href="{% url 'academic_term_update' term.pk %}" class="btn btn-primary">
@@ -342,7 +424,10 @@
                                 </div>
                                 <small class="text-muted">{{ previous_term.academic_year.name }}</small>
                             </div>
-                            <small class="text-muted">{{ previous_term.name }}</small>
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">{{ previous_term.name }}</small>
+                                <small class="text-muted">{{ previous_term.get_total_days }} days</small>
+                            </div>
                         </a>
                         {% endif %}
                         
@@ -356,11 +441,16 @@
                                 </div>
                                 <small class="text-muted">{{ next_term.academic_year.name }}</small>
                             </div>
-                            <small class="text-muted">{{ next_term.name }}</small>
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">{{ next_term.name }}</small>
+                                <small class="text-muted">{{ next_term.get_total_days }} days</small>
+                            </div>
                         </a>
                         {% endif %}
                         
-                        <a href="{% url 'academic_term_detail' term.academic_year.get_active_term.pk %}" 
+                        {% with active_term=term.academic_year.terms.filter(is_active=True).first %}
+                        {% if active_term and active_term.pk != term.pk %}
+                        <a href="{% url 'academic_term_detail' active_term.pk %}" 
                            class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <div>
@@ -369,10 +459,15 @@
                                 </div>
                                 <span class="badge bg-success">Current</span>
                             </div>
-                            <small class="text-muted">{{ term.academic_year.get_active_term.name }}</small>
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">{{ active_term.name }}</small>
+                                <small class="text-muted">{{ active_term.get_total_days }} days</small>
+                            </div>
                         </a>
+                        {% endif %}
+                        {% endwith %}
                         
-                        <a href="{% url 'academic_term_list' %}?academic_year={{ term.academic_year.name }}" 
+                        <a href="{% url 'academic_term_list' %}?academic_year={{ term.academic_year.id }}" 
                            class="list-group-item list-group-item-action">
                             <div class="d-flex w-100 justify-content-between">
                                 <div>
@@ -401,14 +496,22 @@
                     <table class="table table-sm">
                         <tr>
                             <th>Locked At:</th>
-                            <td>{{ term.locked_at|date:"M d, Y H:i" }}</td>
+                            <td>{{ term.updated_at|date:"M d, Y H:i" }}</td>
                         </tr>
-                        {% if term.locked_by %}
                         <tr>
-                            <th>Locked By:</th>
-                            <td>{{ term.locked_by.get_full_name|default:term.locked_by.username }}</td>
+                            <th>Duration:</th>
+                            <td>{{ term.get_total_days }} days</td>
                         </tr>
-                        {% endif %}
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if term.status == 'COMPLETED' %}
+                                <span class="badge bg-secondary">Completed</span>
+                                {% else %}
+                                <span class="badge bg-danger">Locked</span>
+                                {% endif %}
+                            </td>
+                        </tr>
                     </table>
                 </div>
             </div>

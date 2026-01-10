@@ -127,7 +127,9 @@ from .views.academic_term_views import (
     AcademicYearCreationView, TermLockUnlockView, SetActiveTermView,
     AcademicCalendarView, TermProgressAPIView, TermBulkActionsView,
     quick_set_active_term, quick_lock_term, quick_unlock_term,
-    get_academic_years_json, get_terms_for_year_json, check_term_availability
+    get_academic_years_json, get_terms_for_year_json, check_term_availability,
+    AutoSyncAcademicYearsView, quick_sync_academic_years
+    
 )
 
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
@@ -662,7 +664,10 @@ urlpatterns = [
         path('terms/<int:pk>/quick-active/', quick_set_active_term, name='academic_term_quick_active'),
         path('terms/<int:pk>/quick-lock/', quick_lock_term, name='academic_term_quick_lock'),
         path('terms/<int:pk>/quick-unlock/', quick_unlock_term, name='academic_term_quick_unlock'),
-    
+        # Auto-sync URLs
+        path('academic/auto-sync/', AutoSyncAcademicYearsView.as_view(), name='academic_auto_sync'),
+        path('academic/quick-sync/', quick_sync_academic_years, name='academic_quick_sync'),
+        
         # API endpoints
         path('api/years/', get_academic_years_json, name='academic_years_json'),
         path('api/years/<str:academic_year>/terms/', get_terms_for_year_json, name='terms_for_year_json'),

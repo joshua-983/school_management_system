@@ -25,6 +25,26 @@
                 </div>
                 
                 <div class="card-body p-4">
+                    <!-- Professional Notice -->
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex">
+                            <div class="me-3">
+                                <i class="fas fa-robot fa-2x"></i>
+                            </div>
+                            <div>
+                                <h5 class="alert-heading">Professional Auto-Generation Available</h5>
+                                <p class="mb-2">
+                                    The system can automatically create academic years based on the <strong>Ghana Education System</strong> calendar.
+                                    <br>
+                                    <strong>Total: 365 days</strong> • <strong>Teaching: 286 days</strong> • <strong>Vacation: 79 days</strong>
+                                </p>
+                                <a href="{% url 'academic_quick_sync' %}" class="btn btn-sm btn-outline-info">
+                                    <i class="fas fa-sync-alt me-1"></i> Auto-Sync Current Year
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Form Steps -->
                     <div class="mb-5">
                         <div class="row align-items-center">
@@ -95,10 +115,10 @@
                                     <div class="card-body">
                                         <div class="mb-3">
                                             <label class="form-label fw-bold">Academic Year *</label>
-                                            {{ form.academic_year }}
-                                            {% if form.academic_year.errors %}
+                                            {{ form.name }}
+                                            {% if form.name.errors %}
                                             <div class="text-danger small mt-1">
-                                                {{ form.academic_year.errors }}
+                                                {{ form.name.errors }}
                                             </div>
                                             {% endif %}
                                             <small class="text-muted">
@@ -156,12 +176,13 @@
                                                     <ul class="mb-0 mt-1">
                                                         {% if system_code == 'TERM' %}
                                                         <li>3 terms per academic year</li>
-                                                        <li>Common in Ghana Education System</li>
-                                                        <li>Terms: Sep-Dec, Jan-Apr, Apr-Jul</li>
+                                                        <li><strong>Ghana Education System:</strong> 365 days total</li>
+                                                        <li>Terms: Sep-Dec (108 days), Jan-Apr (84 days), Apr-Jul (94 days)</li>
+                                                        <li><strong>Total teaching days: 286</strong></li>
                                                         {% elif system_code == 'SEMESTER' %}
                                                         <li>2 semesters per academic year</li>
                                                         <li>Common in higher education</li>
-                                                        <li>Semesters: Sep-Jan, Feb-Jun</li>
+                                                        <li>Semesters: Sep-Jan (136 days), Feb-Jun (145 days)</li>
                                                         {% elif system_code == 'QUARTER' %}
                                                         <li>4 quarters per academic year</li>
                                                         <li>Common in some international schools</li>
@@ -221,9 +242,35 @@
                                     </div>
                                 </div>
                                 
+                                <!-- Ghana Education System Info -->
+                                <div class="alert alert-success mb-3">
+                                    <h6><i class="fas fa-graduation-cap me-2"></i> Ghana Education System (GES)</h6>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <small class="text-muted">Academic Year</small>
+                                            <div class="fw-bold">365 days</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small class="text-muted">Teaching Days</small>
+                                            <div class="fw-bold">286 days</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small class="text-muted">Vacation Days</small>
+                                            <div class="fw-bold">79 days</div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <small class="text-muted">Terms</small>
+                                            <div class="fw-bold">3 terms</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <!-- Term Preview -->
                                 <div class="mt-3" id="termPreview">
-                                    <h6 class="mb-3">Term Preview</h6>
+                                    <h6 class="mb-3">
+                                        <i class="fas fa-eye me-2"></i> Term Preview
+                                        <span class="badge bg-info ms-2" id="totalTeachingDays">286 teaching days</span>
+                                    </h6>
                                     <div class="table-responsive">
                                         <table class="table table-sm table-bordered">
                                             <thead class="table-light">
@@ -233,15 +280,22 @@
                                                     <th>Start Date</th>
                                                     <th>End Date</th>
                                                     <th>Duration</th>
+                                                    <th>Status</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="previewTableBody">
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted py-3">
+                                                    <td colspan="6" class="text-center text-muted py-3">
                                                         Select academic year and system to see preview
                                                     </td>
                                                 </tr>
                                             </tbody>
+                                            <tfoot id="previewTableFooter" style="display: none;">
+                                                <tr class="table-info">
+                                                    <td colspan="4" class="fw-bold">Total Teaching Days:</td>
+                                                    <td colspan="2" class="fw-bold" id="totalDaysPreview">286 days</td>
+                                                </tr>
+                                            </tfoot>
                                         </table>
                                     </div>
                                 </div>
@@ -250,9 +304,14 @@
                         
                         <!-- Form Actions -->
                         <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'academic_dashboard' %}" class="btn btn-outline-secondary">
-                                <i class="fas fa-times me-1"></i> Cancel
-                            </a>
+                            <div>
+                                <a href="{% url 'academic_dashboard' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-1"></i> Cancel
+                                </a>
+                                <a href="{% url 'academic_quick_sync' %}" class="btn btn-outline-info ms-2">
+                                    <i class="fas fa-sync-alt me-1"></i> Auto-Sync Instead
+                                </a>
+                            </div>
                             <div>
                                 <button type="submit" class="btn btn-primary btn-lg">
                                     <i class="fas fa-calendar-plus me-2"></i> Create Academic Year
@@ -269,16 +328,19 @@
             <!-- Existing Academic Years -->
             <div class="card shadow mt-4">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">
-                        <i class="fas fa-history me-2"></i>
-                        Existing Academic Years
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Existing Academic Years
+                        </h5>
+                        <span class="badge bg-primary">{{ existing_years|length }} years</span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         {% for year in existing_years|slice:":6" %}
                         <div class="col-md-4 mb-3">
-                            <div class="card h-100 border">
+                            <div class="card h-100 border {% if year.is_active %}border-primary{% endif %}">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-start mb-2">
                                         <h5 class="card-title mb-0">{{ year.name }}</h5>
@@ -286,22 +348,33 @@
                                         <span class="badge bg-success">Active</span>
                                         {% endif %}
                                     </div>
-                                    <p class="card-text small text-muted">
+                                    <p class="card-text small text-muted mb-2">
                                         {{ year.start_date|date:"M d, Y" }} - {{ year.end_date|date:"M d, Y" }}
+                                        <br>
+                                        <span class="badge bg-light text-dark">{{ year.get_total_days }} days</span>
                                     </p>
                                     <div class="progress mb-2" style="height: 4px;">
                                         <div class="progress-bar bg-success" 
                                              style="width: {{ year.get_progress_percentage }}%">
                                         </div>
                                     </div>
-                                    <div class="small text-muted">
+                                    <div class="small text-muted mb-3">
+                                        <i class="fas fa-book me-1"></i>
                                         {{ year.terms.count }} terms • 
                                         {{ year.get_progress_percentage|floatformat:0 }}% complete
                                     </div>
-                                    <a href="{% url 'academic_term_list' %}?academic_year={{ year.name }}" 
-                                       class="btn btn-sm btn-outline-primary mt-2">
-                                        View Terms
-                                    </a>
+                                    <div class="d-flex gap-2">
+                                        <a href="{% url 'academic_term_list' %}?academic_year={{ year.id }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            View Terms
+                                        </a>
+                                        {% if year.terms.count == 0 %}
+                                        <a href="{% url 'academic_quick_sync' %}" 
+                                           class="btn btn-sm btn-outline-info">
+                                            Auto-Create Terms
+                                        </a>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -311,6 +384,14 @@
                                 <i class="fas fa-calendar-alt fa-3x mb-3"></i>
                                 <h5>No academic years yet</h5>
                                 <p>Create your first academic year to get started</p>
+                                <div class="d-flex justify-content-center gap-2 mt-3">
+                                    <a href="{% url 'academic_year_create' %}" class="btn btn-primary">
+                                        <i class="fas fa-calendar-plus me-1"></i> Create Manually
+                                    </a>
+                                    <a href="{% url 'academic_quick_sync' %}" class="btn btn-info">
+                                        <i class="fas fa-sync-alt me-1"></i> Auto-Create
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -340,35 +421,46 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const yearInput = document.getElementById('{{ form.academic_year.id_for_label }}');
+    const yearInput = document.getElementById('{{ form.name.id_for_label }}');
     const periodSystem = document.getElementById('{{ form.period_system.id_for_label }}');
     const autoGenerate = document.getElementById('{{ form.auto_generate_dates.id_for_label }}');
     const previewTable = document.getElementById('previewTableBody');
+    const previewFooter = document.getElementById('previewTableFooter');
     const yearStartPreview = document.getElementById('yearStartPreview');
     const yearEndPreview = document.getElementById('yearEndPreview');
+    const totalTeachingDays = document.getElementById('totalTeachingDays');
+    const totalDaysPreview = document.getElementById('totalDaysPreview');
     
-    // Ghana Education System term dates
+    // Ghana Education System term dates with actual day counts
     const ghanaTermDates = {
         'TERM': [
-            {number: 1, name: 'First Term', startMonth: 9, startDay: 2, endMonth: 12, endDay: 18},
-            {number: 2, name: 'Second Term', startMonth: 1, startDay: 8, endMonth: 4, endDay: 1},
-            {number: 3, name: 'Third Term', startMonth: 4, startDay: 21, endMonth: 7, endDay: 23},
+            {number: 1, name: 'First Term', startMonth: 9, startDay: 2, endMonth: 12, endDay: 18, days: 108},
+            {number: 2, name: 'Second Term', startMonth: 1, startDay: 8, endMonth: 4, endDay: 1, days: 84},
+            {number: 3, name: 'Third Term', startMonth: 4, startDay: 21, endMonth: 7, endDay: 23, days: 94},
         ],
         'SEMESTER': [
-            {number: 1, name: 'First Semester', startMonth: 9, startDay: 2, endMonth: 1, endDay: 15},
-            {number: 2, name: 'Second Semester', startMonth: 1, startDay: 22, endMonth: 6, endDay: 15},
+            {number: 1, name: 'First Semester', startMonth: 9, startDay: 2, endMonth: 1, endDay: 15, days: 136},
+            {number: 2, name: 'Second Semester', startMonth: 1, startDay: 22, endMonth: 6, endDay: 15, days: 145},
         ],
         'QUARTER': [
-            {number: 1, name: 'First Quarter', startMonth: 9, startDay: 2, endMonth: 11, endDay: 15},
-            {number: 2, name: 'Second Quarter', startMonth: 11, startDay: 18, endMonth: 2, endDay: 1},
-            {number: 3, name: 'Third Quarter', startMonth: 2, startDay: 4, endMonth: 4, endDay: 15},
-            {number: 4, name: 'Fourth Quarter', startMonth: 4, startDay: 22, endMonth: 6, endDay: 30},
+            {number: 1, name: 'First Quarter', startMonth: 9, startDay: 2, endMonth: 11, endDay: 15, days: 75},
+            {number: 2, name: 'Second Quarter', startMonth: 11, startDay: 18, endMonth: 2, endDay: 1, days: 76},
+            {number: 3, name: 'Third Quarter', startMonth: 2, startDay: 4, endMonth: 4, endDay: 15, days: 71},
+            {number: 4, name: 'Fourth Quarter', startMonth: 4, startDay: 22, endMonth: 6, endDay: 30, days: 70},
         ],
         'TRIMESTER': [
-            {number: 1, name: 'First Trimester', startMonth: 9, startDay: 2, endMonth: 12, endDay: 6},
-            {number: 2, name: 'Second Trimester', startMonth: 1, startDay: 6, endMonth: 4, endDay: 11},
-            {number: 3, name: 'Third Trimester', startMonth: 4, startDay: 22, endMonth: 7, endDay: 25},
+            {number: 1, name: 'First Trimester', startMonth: 9, startDay: 2, endMonth: 12, endDay: 6, days: 96},
+            {number: 2, name: 'Second Trimester', startMonth: 1, startDay: 6, endMonth: 4, endDay: 11, days: 96},
+            {number: 3, name: 'Third Trimester', startMonth: 4, startDay: 22, endMonth: 7, endDay: 25, days: 95},
         ]
+    };
+    
+    // Days breakdown for each system
+    const systemTotals = {
+        'TERM': {total: 286, teaching: 286, vacation: 79},
+        'SEMESTER': {total: 281, teaching: 281, vacation: 84},
+        'QUARTER': {total: 292, teaching: 292, vacation: 73},
+        'TRIMESTER': {total: 287, teaching: 287, vacation: 78},
     };
     
     // Show system description
@@ -384,6 +476,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (descElement) {
             descElement.style.display = 'block';
         }
+        
+        // Update total teaching days
+        const systemTotal = systemTotals[selectedSystem] || systemTotals['TERM'];
+        totalTeachingDays.textContent = systemTotal.teaching + ' teaching days';
     }
     
     // Update year preview
@@ -391,8 +487,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const yearValue = yearInput.value;
         if (yearValue && yearValue.match(/^\d{4}\/\d{4}$/)) {
             const [year1, year2] = yearValue.split('/');
-            yearStartPreview.textContent = `September 1, ${year1}`;
-            yearEndPreview.textContent = `August 31, ${year2}`;
+            yearStartPreview.textContent = 'September 1, ' + year1;
+            yearEndPreview.textContent = 'August 31, ' + year2;
         } else {
             yearStartPreview.textContent = 'September 1';
             yearEndPreview.textContent = 'August 31';
@@ -405,13 +501,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const system = periodSystem.value;
         
         if (!yearValue || !system || !yearValue.match(/^\d{4}\/\d{4}$/)) {
-            previewTable.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center text-muted py-3">
-                        Select academic year and system to see preview
-                    </td>
-                </tr>
-            `;
+            previewTable.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Select academic year and system to see preview</td></tr>';
+            previewFooter.style.display = 'none';
             return;
         }
         
@@ -419,6 +510,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const terms = ghanaTermDates[system] || ghanaTermDates['TERM'];
         
         let html = '';
+        let totalDays = 0;
+        
         terms.forEach(term => {
             // Adjust year for start date
             const startYear = term.startMonth < 9 ? parseInt(year2) : parseInt(year1);
@@ -429,20 +522,37 @@ document.addEventListener('DOMContentLoaded', function() {
             const endDate = new Date(endYear, term.endMonth - 1, term.endDay);
             
             // Calculate duration
-            const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            const duration = term.days || Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            totalDays += duration;
             
-            html += `
-                <tr>
-                    <td>${term.number}</td>
-                    <td>${term.name}</td>
-                    <td>${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td>${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                    <td>${duration} days</td>
-                </tr>
-            `;
+            // Determine status
+            const now = new Date();
+            let status = 'Planned';
+            let statusClass = 'bg-info';
+            
+            if (now >= startDate && now <= endDate) {
+                status = 'Active';
+                statusClass = 'bg-success';
+            } else if (now > endDate) {
+                status = 'Completed';
+                statusClass = 'bg-secondary';
+            }
+            
+            html += '<tr>' +
+                    '<td>' + term.number + '</td>' +
+                    '<td><strong>' + term.name + '</strong></td>' +
+                    '<td>' + startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</td>' +
+                    '<td>' + endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</td>' +
+                    '<td><span class="badge bg-light text-dark">' + duration + ' days</span></td>' +
+                    '<td><span class="badge ' + statusClass + '">' + status + '</span></td>' +
+                    '</tr>';
         });
         
         previewTable.innerHTML = html;
+        previewFooter.style.display = '';
+        
+        const systemTotal = systemTotals[system] || systemTotals['TERM'];
+        totalDaysPreview.textContent = totalDays + ' days (Total: ' + systemTotal.total + ' days, Vacation: ' + systemTotal.vacation + ' days)';
     }
     
     // Validate academic year format
@@ -475,7 +585,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // This would require an AJAX call in a real implementation
         // For now, just proceed
         
-        if (confirm('Create academic year with all configured terms?')) {
+        const system = periodSystem.value;
+        const systemTotal = systemTotals[system] || systemTotals['TERM'];
+        
+        if (confirm('Create academic year with ' + systemTotal.teaching + ' teaching days?\n\n' +
+                   'Academic Year: ' + yearInput.value + '\n' +
+                   'Total Days: ' + systemTotal.total + '\n' +
+                   'Teaching Days: ' + systemTotal.teaching + '\n' +
+                   'Vacation Days: ' + systemTotal.vacation)) {
             return true;
         }
         
@@ -502,13 +619,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.checked) {
             generateTermPreview();
         } else {
-            previewTable.innerHTML = `
-                <tr>
-                    <td colspan="5" class="text-center text-muted py-3">
-                        Manual date entry will be available after form submission
-                    </td>
-                </tr>
-            `;
+            previewTable.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Manual date entry will be available after form submission</td></tr>';
+            previewFooter.style.display = 'none';
         }
     });
     

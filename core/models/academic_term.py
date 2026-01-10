@@ -1,4 +1,3 @@
-# core/models/academic_term.py
 """
 STANDALONE Academic Term Management System
 Only contains AcademicYear and AcademicTerm models
@@ -7,14 +6,12 @@ Only contains AcademicYear and AcademicTerm models
 import re
 import logging
 from django.db import models
+from django.db import transaction
 from django.core.validators import RegexValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from datetime import date, timedelta
-
-# REMOVE THIS CIRCULAR IMPORT:
-# from core.models.academic_term import AcademicYear, AcademicTerm  # DELETE THIS LINE!
 
 # Import only from base, not from itself
 from core.models.base import (
@@ -136,6 +133,103 @@ class AcademicYear(BaseModel, TimeStampedModel):
             start_date__lte=today,
             end_date__gte=today
         ).first()
+    
+    def get_active_term(self):
+        """Get the active term for this academic year"""
+        return self.terms.filter(is_active=True).first()
+    
+    def get_current_term(self):
+        """Get current term for this academic year (could be active or current date)"""
+        # Try active term first
+        active_term = self.get_active_term()
+        if active_term:
+            return active_term
+        
+        # Fallback: term containing today
+        today = timezone.now().date()
+        return self.terms.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+            status='ACTIVE'
+        ).first()
+    
+    @classmethod
+    def ensure_years_exist(cls, years_ahead=2):
+        """
+        PROFESSIONAL AUTO-GENERATION: Ensure we have the correct academic years
+        - Current academic year (based on today's date)
+        - Next years for planning
+        - Automatically creates terms based on Ghana Education System (365 days)
+        """
+        from datetime import date
+        
+        today = date.today()
+        
+        # Get current academic year based on date
+        # Ghana system: September (9) to August (8)
+        if today.month >= 9:  # Sep-Dec
+            current_start_year = today.year
+        else:  # Jan-Aug
+            current_start_year = today.year - 1
+        
+        current_year_str = f"{current_start_year}/{current_start_year + 1}"
+        
+        created_years = []
+        
+        try:
+            with transaction.atomic():
+                # Create years from current to future
+                for i in range(years_ahead + 1):
+                    start_year = current_start_year + i
+                    year_str = f"{start_year}/{start_year + 1}"
+                    
+                    # Check if year exists
+                    year_obj, created = cls.objects.get_or_create(
+                        name=year_str,
+                        defaults={
+                            'start_date': date(start_year, 9, 1),
+                            'end_date': date(start_year + 1, 8, 31),
+                            'is_active': (i == 0)  # First one is active
+                        }
+                    )
+                    
+                    if created:
+                        created_years.append(year_obj)
+                        logger.info(f"✅ Created academic year: {year_str}")
+                    else:
+                        # Update existing year's active status
+                        if i == 0 and not year_obj.is_active:
+                            year_obj.is_active = True
+                            year_obj.save()
+                            logger.info(f"✅ Set active academic year: {year_str}")
+                
+                # Deactivate all other years (not in our range)
+                cls.objects.exclude(name__in=[f"{current_start_year + i}/{current_start_year + i + 1}" 
+                                            for i in range(years_ahead + 1)]).update(is_active=False)
+                
+                # Create terms for all years (including existing ones)
+                for year_obj in cls.objects.filter(name__in=[f"{current_start_year + i}/{current_start_year + i + 1}" 
+                                                           for i in range(years_ahead + 1)]):
+                    terms_created = AcademicTerm.create_default_terms_for_year(year_obj, 'TERM')
+                    if terms_created:
+                        logger.info(f"✅ Created/verified terms for {year_obj.name}")
+            
+            return created_years
+            
+        except Exception as e:
+            logger.error(f"❌ Error ensuring academic years exist: {str(e)}")
+            raise
+    
+    @classmethod
+    def get_or_create_current(cls):
+        """
+        Get current academic year, create if doesn't exist
+        """
+        # First, ensure we have the right years
+        cls.ensure_years_exist(years_ahead=1)
+        
+        # Return current year
+        return cls.get_current_year()
 
 
 class AcademicTerm(BaseModel, TimeStampedModel):
@@ -316,7 +410,7 @@ class AcademicTerm(BaseModel, TimeStampedModel):
             return 100
         
         total_days = self.get_total_days()
-        days_passed = (today - self.start_date).days + 1
+        days_passed = (today - self.start_date).days
         return min(100, round((days_passed / total_days) * 100, 2))
     
     def get_remaining_days(self):
@@ -325,10 +419,17 @@ class AcademicTerm(BaseModel, TimeStampedModel):
             return 0
         
         today = timezone.now().date()
-        if today > self.end_date:
-            return 0
         
-        return (self.end_date - today).days + 1
+        # If term hasn't started yet, show days until end
+        if today < self.start_date:
+            return (self.end_date - today).days
+        
+        # If term is in progress
+        if self.start_date <= today <= self.end_date:
+            return (self.end_date - today).days
+        
+        # If term has ended
+        return 0
     
     def lock_term(self):
         """Lock the term"""
@@ -345,6 +446,17 @@ class AcademicTerm(BaseModel, TimeStampedModel):
             self.save()
             return True
         return False
+    
+    def get_days_until_start(self):
+        """Get days until term starts"""
+        if not self.start_date:
+            return 0
+        
+        today = timezone.now().date()
+        if today >= self.start_date:
+            return 0
+        
+        return (self.start_date - today).days
     
     @classmethod
     def get_current_term(cls):
@@ -369,14 +481,25 @@ class AcademicTerm(BaseModel, TimeStampedModel):
         
         term_data = {
             'TERM': [
-                {'number': 1, 'name': 'First Term', 'start': (9, 2), 'end': (12, 18)},
-                {'number': 2, 'name': 'Second Term', 'start': (1, 8), 'end': (4, 1)},
-                {'number': 3, 'name': 'Third Term', 'start': (4, 21), 'end': (7, 23)},
+                {'number': 1, 'name': 'First Term', 'start': (9, 2), 'end': (12, 18), 'total_days': 108},
+                {'number': 2, 'name': 'Second Term', 'start': (1, 8), 'end': (4, 1), 'total_days': 84},
+                {'number': 3, 'name': 'Third Term', 'start': (4, 21), 'end': (7, 23), 'total_days': 94},
             ],
             'SEMESTER': [
-                {'number': 1, 'name': 'First Semester', 'start': (9, 2), 'end': (1, 15)},
-                {'number': 2, 'name': 'Second Semester', 'start': (1, 22), 'end': (6, 15)},
+                {'number': 1, 'name': 'First Semester', 'start': (9, 2), 'end': (1, 15), 'total_days': 136},
+                {'number': 2, 'name': 'Second Semester', 'start': (1, 22), 'end': (6, 15), 'total_days': 145},
             ],
+            'QUARTER': [
+                {'number': 1, 'name': 'First Quarter', 'start': (9, 2), 'end': (11, 15), 'total_days': 75},
+                {'number': 2, 'name': 'Second Quarter', 'start': (11, 18), 'end': (2, 1), 'total_days': 76},
+                {'number': 3, 'name': 'Third Quarter', 'start': (2, 4), 'end': (4, 15), 'total_days': 71},
+                {'number': 4, 'name': 'Fourth Quarter', 'start': (4, 22), 'end': (6, 30), 'total_days': 70},
+            ],
+            'TRIMESTER': [
+                {'number': 1, 'name': 'First Trimester', 'start': (9, 2), 'end': (12, 6), 'total_days': 96},
+                {'number': 2, 'name': 'Second Trimester', 'start': (1, 6), 'end': (4, 11), 'total_days': 96},
+                {'number': 3, 'name': 'Third Trimester', 'start': (4, 22), 'end': (7, 25), 'total_days': 95},
+            ]
         }
         
         terms = []
@@ -384,9 +507,26 @@ class AcademicTerm(BaseModel, TimeStampedModel):
             start_month, start_day = term_info['start']
             end_month, end_day = term_info['end']
             
-            # Adjust years
+            # Adjust years correctly
+            # For start date: if month is before September (month 9), it's in year2
+            # For end date: if month is before September, it's in year2
             start_year = year2 if start_month < 9 else year1
             end_year = year2 if end_month < 9 else year1
+            
+            # Handle end dates that cross into next calendar year
+            if end_month < start_month:
+                end_year = year2 + 1 if end_year == year2 else year1 + 1
+            
+            # Check if term already exists
+            existing_term = cls.objects.filter(
+                academic_year=academic_year,
+                period_system=period_system,
+                period_number=term_info['number']
+            ).first()
+            
+            if existing_term:
+                terms.append(existing_term)
+                continue
             
             term = cls.objects.create(
                 academic_year=academic_year,
@@ -395,11 +535,45 @@ class AcademicTerm(BaseModel, TimeStampedModel):
                 name=term_info['name'],
                 start_date=date(start_year, start_month, start_day),
                 end_date=date(end_year, end_month, end_day),
-                is_active=False
+                is_active=False,
+                sequence_num=term_info['number']
             )
             terms.append(term)
         
         return terms
+    
+    @classmethod
+    def create_default_terms_for_year(cls, academic_year, period_system='TERM'):
+        """
+        Create default terms for a year (professional version)
+        Returns count of created terms
+        """
+        # Check how many terms already exist
+        existing_terms = cls.objects.filter(
+            academic_year=academic_year,
+            period_system=period_system
+        ).count()
+        
+        # If terms already exist, don't recreate
+        if existing_terms > 0:
+            logger.info(f"Terms already exist for {academic_year.name} ({existing_terms} terms)")
+            return 0
+        
+        # Create terms
+        terms = cls.create_default_terms(academic_year, period_system)
+        
+        # Set first term as active if academic year is active
+        if academic_year.is_active and terms:
+            # Deactivate all other terms in other years first
+            cls.objects.filter(is_active=True).exclude(
+                academic_year=academic_year
+            ).update(is_active=False)
+            
+            terms[0].is_active = True
+            terms[0].save()
+            logger.info(f"✅ Set {terms[0].name} as active term for {academic_year.name}")
+        
+        return len(terms)
 
 
 # Export only these two models
