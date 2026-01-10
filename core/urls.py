@@ -1,15 +1,14 @@
-# core/urls.py - COMPLETE CORRECTED VERSION
+# core/urls.py - PROFESSIONAL CLEANED VERSION (Preserves all functionality)
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from django.http import HttpResponseForbidden
-from datetime import timedelta
-from . import views
+from django.views.generic import TemplateView, RedirectView
+
+# Network and base views
 from .views.network_views import NetworkHealthView
 from accounts import views as accounts_views
 from .views.base_views import dashboard, home, admin_dashboard, teacher_dashboard, student_dashboard, parent_dashboard
-# Add this import
-from . import urls_financial
 
+# API Views - All are used in API endpoints
 from .api_views import (
     StudentListAPIView, AcademicTermAPIView, 
     ActiveStudentsAPIView, ParentChildrenAPIView, ParentDashboardAPIView,
@@ -37,10 +36,9 @@ from .views.student_views import (
 # PARENT MANAGEMENT VIEWS (Admin/Teacher)
 # ==============================
 from .parent_management_views import (
-    parent_management_dashboard, parent_account_management, parent_directory,
+    parent_management_dashboard, parent_account_management,
     admin_parent_create, bulk_parent_creation, bulk_parent_invite,
     activate_parent_account, suspend_parent_account, send_parent_message,
-    bulk_parent_message, parent_communication_log, parent_engagement_dashboard,
     export_parent_data, parent_registration_management
 )
 
@@ -65,13 +63,16 @@ from .parent_auth_views import (
     ParentProfileView, ParentRegistrationSuccessView, ParentPasswordResetView
 )
 
-
+# Budget views
 from .views.budget_views import (
     BudgetManagementView, BudgetCreateView, BudgetUpdateView, BudgetDeleteView,
     budget_summary_api, quick_budget_create
 )
 
+# Subject views
 from .views.subjects_views import SubjectListView, SubjectDetailView, SubjectCreateView, SubjectUpdateView, SubjectDeleteView
+
+# Class assignment views
 from .views.class_assignments import (
     ClassAssignmentListView, ClassAssignmentCreateView, ClassAssignmentUpdateView, 
     ClassAssignmentDeleteView, get_assignment_students, TeacherQualificationUpdateView,
@@ -79,6 +80,7 @@ from .views.class_assignments import (
     bulk_delete_assignments, toggle_assignment_status, ExportAssignmentsView, debug_database_stats
 )
 
+# Assignment views
 from .views.assignment_views import (
     AssignmentListView, AssignmentDetailView, AssignmentCreateView, 
     AssignmentUpdateView, AssignmentDeleteView, SubmitAssignmentView,
@@ -91,7 +93,7 @@ from .views.assignment_views import (
 # GRADE VIEWS
 # ==============================
 from .views.grade_views import (
-    GradeListView, GradeDetailView, GradeCreateView, GradeUpdateView, GradeDeleteView,
+    GradeListView, GradeDetailView, GradeUpdateView, GradeDeleteView,
     GradeEntryView, GradeReportView, BestStudentsView,
     PromotionListView, PromotionCheckView, PromoteStudentsView, PromotionConfigurationView,
     BulkGradeUploadView, GradeUploadTemplateView, BulkUploadProgressAPI,
@@ -103,8 +105,7 @@ from .views.grade_views import (
     GradeExportView,
     GradingQueueView, GradeCalculatorView,
     GradeValidationAPI, GradeStatisticsAPI, ClearGradeCacheView,
-    grade_delete,
-    student_subject_grades,
+    student_subject_grades
 )
 
 # ==============================
@@ -129,11 +130,12 @@ from .views.academic_term_views import (
     quick_set_active_term, quick_lock_term, quick_unlock_term,
     get_academic_years_json, get_terms_for_year_json, check_term_availability,
     AutoSyncAcademicYearsView, quick_sync_academic_years
-    
 )
 
+# Analytics views
 from .views.analytics_views import ComprehensiveAnalyticsDashboardView
 
+# Audit views
 from .views.audit_views import (
     AuditLogListView, AuditLogDetailView, AuditDashboardView, 
     audit_export_csv, audit_statistics_api, user_activity_report, 
@@ -151,9 +153,8 @@ from .views.audit_enhancements import (
     resolve_security_event, toggle_alert_rule
 )
 
+# Attendance views
 from .views.attendance_views import AttendanceDashboardView, AttendanceRecordView, load_periods, StudentAttendanceListView
-
-from django.views.generic import TemplateView, RedirectView
 
 # ==============================
 # TIMETABLE VIEWS
@@ -171,13 +172,13 @@ from .views.timetable_views import (
     export_student_list, get_attendance_form
 )
 
-# In core/urls.py
+# Group management
 from .views.group_management_views import (
     manage_timetable_groups, user_group_management, 
     assign_user_to_group, remove_user_from_group
 )
 
-
+# Notifications
 from .views.notifications_views import (
     NotificationListView, 
     mark_notification_read, 
@@ -186,7 +187,7 @@ from .views.notifications_views import (
 )
 
 # ==============================
-# FEE VIEW IMPORTS
+# FEE VIEWS
 # ==============================
 from .views.fee_views import (
     # Main fee views
@@ -194,13 +195,14 @@ from .views.fee_views import (
     FeeDashboardView,
     
     # Fee category views
-    FeeCategoryListView, FeeCategoryCreateView, FeeCategoryDetailView,
+    FeeCategoryListView, FeeCategoryCreateView,
     FeeCategoryUpdateView, FeeCategoryDeleteView,
     
     # Bulk operations
     BulkFeeImportView, BulkFeeCreationView, BulkFeeUpdateView,
     DownloadFeeTemplateView, GenerateTermFeesView, SendPaymentRemindersView,
     ReviewTermFeesView, GenerateBillsFromFeesView, FeeBatchListView, FeeBatchDetailView, CancelFeeBatchView,
+    
     # Reports and analytics
     FeeReportView, FeeStatusReportView, FeeAnalyticsView,
     FinanceDashboardView, RevenueAnalyticsView, FinancialHealthView,
@@ -213,7 +215,6 @@ from .views.fee_views import (
     ClearImportResultsView
 )
 
-
 # ==============================
 # BILL VIEWS
 # ==============================
@@ -223,6 +224,7 @@ from .views.bill_views import (
     BillPaymentCreateView
 )
 
+# Backup views
 from .views.backup_views import (
     backup_dashboard,
     create_backup, 
@@ -249,7 +251,7 @@ from .views.security_views import (
     security_dashboard, UserManagementView, BlockUserView,
     MaintenanceModeView, ScheduledMaintenanceView, maintenance_mode_page,
     user_blocked_page, security_stats_api, user_details_api, RateLimitExceededView,
-    SecuritySettingsView, security_events_api, maintenance_details_api, security_events, alert_rule_list,
+    SecuritySettingsView, security_events_api, maintenance_details_api, security_events,
     security_status_api, security_notifications_api, emergency_maintenance_bypass, clear_maintenance_bypass,
     axes_lockout_management, unlock_user_api, locked_users_api, unlock_all_users_api,
     system_health_api
@@ -896,12 +898,13 @@ urlpatterns = [
     ])),
     
     # ==============================
-    # ANNOUNCEMENTS
+    # ANNOUNCEMENTS - PROFESSIONAL VERSION WITH BOTH HTML AND API
     # ==============================
     path('announcements/', include([
         path('', AnnouncementListView.as_view(), name='announcement_list'),
         path('create/', CreateAnnouncementView.as_view(), name='create_announcement'),
-        path('active/', active_announcements, name='active_announcements'),
+        path('active/', active_announcements, name='active_announcements'),  # HTML View
+        path('active/api/', get_active_announcements, name='active_announcements_api'),  # JSON API
         path('<int:pk>/', announcement_detail, name='announcement_detail'),
         path('<int:pk>/update/', UpdateAnnouncementView.as_view(), name='update_announcement'),
         path('<int:pk>/delete/', DeleteAnnouncementView.as_view(), name='delete_announcement'),
@@ -961,6 +964,9 @@ urlpatterns = [
         
         # Timetable API
         path('timetable/entries/', get_timetable_entries, name='api_timetable_entries'),
+        
+        # Announcements API
+        path('announcements/active/', get_active_announcements, name='api_announcements_active'),
     ])),
     
     # Payment URLs
@@ -1020,11 +1026,11 @@ urlpatterns += [
     path('admin/backups/cleanup/', cleanup_old_backups, name='cleanup_old_backups'),
 ]
 
-
 urlpatterns += [
     # Redirect old student_attendance URL to the new one
     path('student/attendance/', RedirectView.as_view(pattern_name='student_portal_attendance', permanent=True), name='student_attendance'),
 ]
+
 # ==============================
 # BACKWARD COMPATIBILITY URLS
 # ==============================
@@ -1053,7 +1059,8 @@ urlpatterns += [
          name='student_assignment_detail'),
 ]
 
+
 urlpatterns += [
-    # Include financial URLs
+    # Include financial URLs (if you use this, keep the import at top)
     path('financial/', include('core.urls_financial')),
 ]
